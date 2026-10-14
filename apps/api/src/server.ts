@@ -1,0 +1,146 @@
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import rateLimit from '@fastify/rate-limit';
+import { schemas, type TicketType, type MeDto } from '@tq/shared';
+import { ROSTER, DEV_TOPUP_TICKETS } from '@tq/game-config';
+import { AppError, type GameContext } from './context.ts';
+import { register, login, logout, authenticate, getUsername } from './auth.ts';
+import { claimRecovery, devTopup, getTickets, syncRecovery } from './tickets.ts';
+import { draw, getGachaConfig } from './gacha.ts';
+import { previewUpgrade, attemptUpgrade, quickUpgrade } from './upgrade.ts';
+import { giftCards, listRecipients } from './gift.ts';
+import { listCards, listHistory, type CardsQuery, type HistoryQuery } from './queries.ts';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    userId: number;
+  }
+}
+
+function bearer(req: FastifyRequest): string | undefined {
+  const h = req.headers.authorization;
+  return h?.startsWith('Bearer ') ? h.slice(7) : undefined;
+}
+
+export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
+  const app = Fastify({
+    logger: {
+      level: process.env.LOG_LEVEL ?? 'info',
+      // Không ghi token/mật khẩu vào log
+      redact: ['req.headers.authorization', 'req.body.password'],
+    },
+  });
+
+  await app.register(rateLimit, { global: false });
+  app.decorateRequest('userId', 0);
+
+  // Định dạng lỗi thống nhất: { error: { code, message } }
+  app.setErrorHandler((err, req, reply) => {
+    if (err instanceof AppError) {
+      return reply.status(err.statusCode).send({ error: { code: err.code, message: err.message } });
+    }
+    const e = err as { validation?: unknown; statusCode?: number; message: string };
+    if (e.validation) {
+      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: e.message } });
+    }
+    if (e.statusCode === 429) {
+      return reply.status(429).send({ error: { code: 'RATE_LIMITED', message: 'Thao tác quá nhanh, thử lại sau.' } });
+    }
+    req.log.error(err);
+    return reply.status(500).send({ error: { code: 'INTERNAL', message: 'Lỗi máy chủ.' } });
+  });
+
+  const auth = async (req: FastifyRequest) => {
+    req.userId = authenticate(ctx, bearer(req));
+  };
+  const strictLimit = { rateLimit: { max: 60, timeWindow: '1 minute' } };
+  const authLimit = { rateLimit: { max: 20, timeWindow: '1 minute' } };
+
+  // ---------- Auth ----------
+  app.post('/api/auth/register', { schema: { body: schemas.credentials }, config: authLimit }, async (req) => {
+    const { username, password } = req.body as { username: string; password: string };
+    return register(ctx, username, password);
+  });
+  app.post('/api/auth/login', { schema: { body: schemas.credentials }, config: authLimit }, async (req) => {
+    const { username, password } = req.body as { username: string; password: string };
+    return login(ctx, username, password);
+  });
+  app.post('/api/auth/logout', { preHandler: auth }, async (req) => {
+    const t = bearer(req);
+    if (t) logout(ctx, t);
+    return { ok: true };
+  });
+
+  // ---------- Tài khoản & bộ sưu tập ----------
+  app.get('/api/me', { preHandler: auth }, async (req): Promise<MeDto> => {
+    syncRecovery(ctx, req.userId);
+    return {
+      id: req.userId,
+      username: getUsername(ctx, req.userId),
+      tickets: getTickets(ctx, req.userId),
+      features: { devTopup: !!ctx.features?.devTopup, devTopupAmount: DEV_TOPUP_TICKETS },
+    };
+  });
+  app.get('/api/generals', async () => ({ items: ROSTER }));
+  app.get('/api/cards', { preHandler: auth, schema: { querystring: schemas.cardsQuery } }, async (req) =>
+    listCards(ctx, req.userId, req.query as CardsQuery),
+  );
+
+  // ---------- Vé ----------
+  app.get('/api/tickets', { preHandler: auth }, async (req) => getTickets(ctx, req.userId));
+  app.post('/api/tickets/claim-recovery', { preHandler: auth }, async (req) => claimRecovery(ctx, req.userId));
+  // Nút cộng vé thử nghiệm — chỉ hoạt động khi ENABLE_DEV_TOPUP bật (service trả 404 nếu tắt)
+  app.post(
+    '/api/tickets/dev-topup',
+    { preHandler: auth, schema: { body: schemas.devTopupBody }, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (req) => devTopup(ctx, req.userId, (req.body as { idempotencyKey: string }).idempotencyKey),
+  );
+
+  // ---------- Gacha ----------
+  app.get('/api/gacha/config', async () => getGachaConfig());
+  app.post('/api/gacha/draw', { preHandler: auth, schema: { body: schemas.drawBody }, config: strictLimit }, async (req) => {
+    const { ticketType, idempotencyKey, count } = req.body as { ticketType: TicketType; idempotencyKey: string; count?: number };
+    return draw(ctx, req.userId, ticketType, idempotencyKey, count ?? 1);
+  });
+
+  // ---------- Nâng cấp ----------
+  app.post(
+    '/api/upgrades/preview',
+    { preHandler: auth, schema: { body: schemas.upgradePreviewBody }, config: strictLimit },
+    async (req) => previewUpgrade(ctx, req.userId, (req.body as { cardIds: number[] }).cardIds),
+  );
+  app.post(
+    '/api/upgrades/attempt',
+    { preHandler: auth, schema: { body: schemas.upgradeAttemptBody }, config: strictLimit },
+    async (req) => {
+      const { cardIds, idempotencyKey } = req.body as { cardIds: number[]; idempotencyKey: string };
+      return attemptUpgrade(ctx, req.userId, cardIds, idempotencyKey);
+    },
+  );
+
+  app.post(
+    '/api/upgrades/quick',
+    { preHandler: auth, schema: { body: schemas.quickUpgradeBody }, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (req) => quickUpgrade(ctx, req.userId, (req.body as { idempotencyKey: string }).idempotencyKey),
+  );
+
+  // ---------- Tặng thẻ ----------
+  app.get('/api/users', { preHandler: auth, schema: { querystring: schemas.usersQuery } }, async (req) => {
+    const { q, limit } = req.query as { q?: string; limit?: number };
+    return { items: listRecipients(ctx, req.userId, q ?? '', limit ?? 200) };
+  });
+  app.post(
+    '/api/gifts',
+    { preHandler: auth, schema: { body: schemas.giftBody }, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+    async (req) => {
+      const { toUsername, cardIds, idempotencyKey } = req.body as { toUsername: string; cardIds: number[]; idempotencyKey: string };
+      return giftCards(ctx, req.userId, toUsername, cardIds, idempotencyKey);
+    },
+  );
+
+  // ---------- Lịch sử ----------
+  app.get('/api/history', { preHandler: auth, schema: { querystring: schemas.historyQuery } }, async (req) =>
+    listHistory(ctx, req.userId, req.query as HistoryQuery),
+  );
+
+  return app;
+}

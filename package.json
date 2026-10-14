@@ -1,0 +1,22 @@
+{
+  "name": "tamquoc-gacha",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter @tq/api --filter @tq/web dev",
+    "dev:api": "pnpm --filter @tq/api dev",
+    "dev:web": "pnpm --filter @tq/web dev",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "build": "pnpm --filter @tq/web build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.8.3"
+  }
+}

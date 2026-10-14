@@ -1,0 +1,329 @@
+// ===== Enums (dùng const object + union type, không dùng TS enum) =====
+
+export const FACTIONS = ['wei', 'shu', 'wu', 'qun'] as const;
+export type Faction = (typeof FACTIONS)[number];
+
+export const TICKET_TYPES = ['normal', 'shu', 'wei', 'wu', 'qun'] as const;
+export type TicketType = (typeof TICKET_TYPES)[number];
+
+export const MIN_LEVEL = 1;
+export const MAX_LEVEL = 10;
+
+export const FACTION_LABELS: Record<Faction, string> = {
+  wei: 'Ngụy',
+  shu: 'Thục',
+  wu: 'Ngô',
+  qun: 'Quần',
+};
+
+export const TICKET_LABELS: Record<TicketType, string> = {
+  normal: 'Vé Thường',
+  shu: 'Vé Thục',
+  wei: 'Vé Ngụy',
+  wu: 'Vé Ngô',
+  qun: 'Vé Quần',
+};
+
+export const TICKET_REASONS = ['time_recovery', 'signup_bonus', 'dev_topup', 'gacha_draw'] as const;
+export type TicketReason = (typeof TICKET_REASONS)[number];
+
+export type UpgradeOutcome = 'success' | 'failure';
+
+// ===== DTO =====
+
+export interface GeneralDto {
+  id: string;
+  name: string;
+  faction: Faction;
+  artKey: string;
+}
+
+export interface CardDto {
+  id: number;
+  generalId: string;
+  level: number;
+  createdAt: string;
+}
+
+export type TicketBalances = Record<TicketType, number>;
+
+export interface TicketsDto {
+  balances: TicketBalances;
+  total: number;
+  lastProcessedRecoveryAt: string;
+  nextRecoveryAt: string;
+  serverNow: string;
+  msUntilNextRecovery: number;
+}
+
+export interface ClaimRecoveryDto extends TicketsDto {
+  granted: TicketBalances;
+  grantedTotal: number;
+}
+
+export interface MeDto {
+  id: number;
+  username: string;
+  tickets: TicketsDto;
+  /** Tính năng bật/tắt theo cấu hình server. */
+  features: { devTopup: boolean; devTopupAmount: number };
+}
+
+/** Kết quả bấm nút cộng vé thử nghiệm. */
+export interface DevTopupDto {
+  granted: TicketBalances;
+  grantedTotal: number;
+  tickets: TicketsDto;
+}
+
+/** Tỷ lệ dạng basis points: 10000 = 100% */
+export interface WeightEntry {
+  level: number;
+  bps: number;
+}
+
+export interface GachaConfigDto {
+  ticketTypes: { id: TicketType; label: string; pool: string[] }[];
+  levelRates: WeightEntry[];
+  bpsScale: number;
+  /** Các lựa chọn số lần quay mỗi request, VD [1, 10]. */
+  drawCountOptions: number[];
+  /** Số thẻ cùng tướng, cùng level cần cho mỗi lần ghép (hiện là 2). */
+  upgradeInputCount: number;
+  /** Số thẻ tối đa mỗi lần tặng. */
+  giftMaxCards: number;
+  /** Nâng cấp nhanh áp dụng cho thẻ có level ≤ mức này. */
+  quickUpgradeMaxLevel: number;
+  /** Tỷ lệ ghép công khai theo level đầu vào (để UI hiển thị trước khi xác nhận). */
+  upgradeRates: { level: number; successBps: number; failureDistribution: WeightEntry[] }[];
+}
+
+export interface DrawnCardDto {
+  drawId: number;
+  card: CardDto;
+  general: GeneralDto;
+}
+
+/**
+ * Kết quả quay. requested = số lần người chơi chọn (1 hoặc 10);
+ * drawn = số lần thực sự quay = min(requested, số vé loại đó đang có).
+ */
+export interface DrawResultDto {
+  ticketType: TicketType;
+  requested: number;
+  drawn: number;
+  results: DrawnCardDto[];
+  tickets: TicketsDto;
+}
+
+export interface UpgradePreviewDto {
+  generalId: string;
+  inputLevel: number;
+  successLevel: number;
+  successBps: number;
+  failureBps: number;
+  failureDistribution: WeightEntry[];
+  bpsScale: number;
+}
+
+export interface UpgradeResultDto {
+  upgradeId: number;
+  outcome: UpgradeOutcome;
+  inputCardIds: number[];
+  inputLevel: number;
+  resultCard: CardDto;
+  successBps: number;
+  failureBps: number;
+  failureDistribution: WeightEntry[];
+}
+
+/** Kết quả Nâng cấp nhanh: danh sách các lần ghép theo thứ tự thực hiện. */
+export interface QuickUpgradeResultDto {
+  maxLevel: number;
+  merges: number;
+  successes: number;
+  failures: number;
+  /** Chạm trần số lần ghép mỗi lần bấm nhưng vẫn còn cặp ghép được. */
+  hasMore: boolean;
+  results: {
+    upgradeId: number;
+    generalId: string;
+    inputLevel: number;
+    resultLevel: number;
+    resultCardId: number;
+    outcome: UpgradeOutcome;
+  }[];
+}
+
+/** Một thẻ trong giao dịch tặng (snapshot tại thời điểm tặng). */
+export interface GiftCardSnapshot {
+  id: number;
+  generalId: string;
+  level: number;
+}
+
+/** Người nhận có thể chọn khi tặng thẻ. lastGiftAt = lần tặng/nhận thẻ gần nhất giữa 2 người (null nếu chưa có). */
+export interface RecipientDto {
+  username: string;
+  lastGiftAt: string | null;
+}
+
+export interface GiftResultDto {
+  giftId: number;
+  toUsername: string;
+  cards: GiftCardSnapshot[];
+  createdAt: string;
+}
+
+export type HistoryEntryDto =
+  | {
+      kind: 'ticket';
+      id: number;
+      ticketType: TicketType;
+      amountDelta: number;
+      reason: TicketReason;
+      referenceId: string | null;
+      createdAt: string;
+    }
+  | {
+      kind: 'gacha';
+      id: number;
+      ticketType: TicketType;
+      generalId: string;
+      cardId: number;
+      cardLevel: number;
+      createdAt: string;
+    }
+  | {
+      kind: 'upgrade';
+      id: number;
+      generalId: string;
+      inputCardIds: number[];
+      inputLevel: number;
+      resultCardId: number;
+      resultLevel: number;
+      outcome: UpgradeOutcome;
+      successBps: number;
+      failureBps: number;
+      failureDistribution: WeightEntry[];
+      createdAt: string;
+    }
+  | {
+      kind: 'gift';
+      id: number;
+      direction: 'sent' | 'received';
+      /** Người nhận (nếu mình gửi) hoặc người gửi (nếu mình nhận). */
+      otherUsername: string;
+      cards: GiftCardSnapshot[];
+      createdAt: string;
+    };
+
+export interface Page<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+export interface ApiErrorBody {
+  error: { code: string; message: string };
+}
+
+// ===== JSON Schemas (Fastify validate) =====
+
+const idempotencyKey = { type: 'string', minLength: 8, maxLength: 100, pattern: '^[A-Za-z0-9_-]+$' } as const;
+
+export const schemas = {
+  credentials: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['username', 'password'],
+    properties: {
+      username: { type: 'string', minLength: 3, maxLength: 32, pattern: '^[A-Za-z0-9_]+$' },
+      password: { type: 'string', minLength: 6, maxLength: 128 },
+    },
+  },
+  drawBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['ticketType', 'idempotencyKey'],
+    properties: {
+      ticketType: { type: 'string', enum: [...TICKET_TYPES] },
+      // Giá trị hợp lệ cụ thể (1 hoặc 10) do server kiểm tra theo game-config.
+      count: { type: 'integer', minimum: 1, maximum: 100, default: 1 },
+      idempotencyKey,
+    },
+  },
+  usersQuery: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      q: { type: 'string', maxLength: 32 },
+      limit: { type: 'integer', minimum: 1, maximum: 500, default: 200 },
+    },
+  },
+  giftBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['toUsername', 'cardIds', 'idempotencyKey'],
+    properties: {
+      toUsername: { type: 'string', minLength: 3, maxLength: 32, pattern: '^[A-Za-z0-9_]+$' },
+      // Giới hạn chính xác (20) do server kiểm tra theo GIFT_MAX_CARDS
+      cardIds: { type: 'array', minItems: 1, maxItems: 100, items: { type: 'integer', minimum: 1 } },
+      idempotencyKey,
+    },
+  },
+  quickUpgradeBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['idempotencyKey'],
+    properties: { idempotencyKey },
+  },
+  devTopupBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['idempotencyKey'],
+    properties: { idempotencyKey },
+  },
+  upgradePreviewBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['cardIds'],
+    properties: {
+      // Số lượng chính xác do server kiểm tra theo UPGRADE_INPUT_COUNT
+      cardIds: { type: 'array', minItems: 2, maxItems: 10, items: { type: 'integer', minimum: 1 } },
+    },
+  },
+  upgradeAttemptBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['cardIds', 'idempotencyKey'],
+    properties: {
+      // Số lượng chính xác do server kiểm tra theo UPGRADE_INPUT_COUNT
+      cardIds: { type: 'array', minItems: 2, maxItems: 10, items: { type: 'integer', minimum: 1 } },
+      idempotencyKey,
+    },
+  },
+  cardsQuery: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      faction: { type: 'string', enum: [...FACTIONS] },
+      level: { type: 'integer', minimum: MIN_LEVEL, maximum: MAX_LEVEL },
+      generalId: { type: 'string', maxLength: 64 },
+      q: { type: 'string', maxLength: 64 },
+      sort: { type: 'string', enum: ['newest', 'level_desc', 'level_asc', 'name'] },
+      page: { type: 'integer', minimum: 1, default: 1 },
+      pageSize: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
+    },
+  },
+  historyQuery: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      kind: { type: 'string', enum: ['ticket', 'gacha', 'upgrade', 'gift'] },
+      page: { type: 'integer', minimum: 1, default: 1 },
+      pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+    },
+  },
+} as const;

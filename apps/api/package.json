@@ -1,0 +1,21 @@
+{
+  "name": "@tq/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "ENABLE_DEV_TOPUP=1 tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "node --test \"test/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@fastify/rate-limit": "^10.2.1",
+    "@tq/game-config": "workspace:*",
+    "@tq/shared": "workspace:*",
+    "fastify": "^5.2.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}

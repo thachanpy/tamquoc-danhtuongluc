@@ -1,0 +1,35 @@
+<svg viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0,650 L120,580 L280,630 L450,510 L680,610 L890,480 L1150,590 L1380,470 L1620,580 L1800,500 L1920,560 L1920,1080 L0,1080 Z" fill="#090f1d" opacity="0.75"/>
+        <polygon points="150,100 280,450 120,480" fill="url(#weiGlow)" opacity="0.6"/>
+        <circle cx="350" cy="720" r="280" fill="url(#shuGlow)" opacity="0.4"/>
+        <path d="M1400,1080 Q1550,600 1750,500 Q1850,750 1920,1080 Z" fill="url(#wuGlow)" opacity="0.65"/>
+        <circle cx="1580" cy="320" r="220" fill="url(#qunGlow)" opacity="0.5"/>
+        <path d="M820,680 L820,540 L850,540 L850,520 L870,520 L870,540 L900,540 L900,520 L920,520 L920,540 L950,540 L950,520 L970,520 L970,540 L1000,540 L1000,520 L1020,520 L1020,540 L1050,540 L1050,680 Q935,660 820,680 Z" fill="#030712"/>
+        <path d="M910,680 Q935,610 960,680 Z" fill="#b45309" opacity="0.6"/>
+        <path d="M-50,1080 L180,680 L380,820 L580,620 L800,850 L1100,690 L1350,880 L1600,630 L1850,780 L2000,1080 Z" fill="#040914"/>
+        <line x1="220" y1="720" x2="210" y2="600" stroke="#000" stroke-width="4"/>
+        <path d="M210,600 Q180,615 150,605 L150,640 Q180,650 210,630 Z" fill="#1e3a8a" opacity="0.8"/>
+
+        <line x1="1720" y1="700" x2="1735" y2="580" stroke="#000" stroke-width="4"/>
+        <path d="M1735,580 Q1765,595 1795,585 L1795,620 Q1765,630 1735,610 Z" fill="#991b1b" opacity="0.8"/>
+        <defs>
+            <radialGradient id="weiGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.9"/>
+                <stop offset="100%" stop-color="#1e3a8a" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="shuGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#4ade80" stop-opacity="0.8"/>
+                <stop offset="100%" stop-color="#14532d" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="wuGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#ef4444" stop-opacity="1"/>
+                <stop offset="60%" stop-color="#991b1b" stop-opacity="0.5"/>
+                <stop offset="100%" stop-color="#450a0a" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="qunGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#fef08a" stop-opacity="0.9"/>
+                <stop offset="70%" stop-color="#b45309" stop-opacity="0.3"/>
+                <stop offset="100%" stop-color="#78350f" stop-opacity="0"/>
+            </radialGradient>
+        </defs>
+    </svg>

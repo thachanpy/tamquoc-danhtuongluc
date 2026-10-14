@@ -1,0 +1,269 @@
+/* =========================================================================
+   Giao diện Tam Quốc: nền thủy mặc (núi, sương, mặt trời đỏ), sơn mài đỏ–đen,
+   viền vàng hoa văn 回 (hồi văn), con dấu son. Ảnh nền/viền ở public/theme/*.svg.
+   File này chỉ ghi đè thẩm mỹ, không đổi bố cục/chức năng của style.css.
+   ========================================================================= */
+:root {
+  --bg: #030712;
+  --panel: rgba(26, 16, 11, 0.84);
+  --panel-2: rgba(44, 29, 20, 0.92);
+  --line: #4d3824;
+  --text: #f1e4c6;
+  --muted: #a8957a;
+  --gold: #d4a84a;
+  --gold-2: #f3d58a;
+  --cinnabar: #b3261e;
+  --cinnabar-2: #d8432f;
+  --serif: 'Noto Serif', 'Times New Roman', Georgia, serif;
+  /* Chữ tiêu đề kiểu khắc bia/Trajan, có đủ dấu tiếng Việt */
+  --display: 'Playfair Display SC', 'Noto Serif', Georgia, serif;
+  /* Số, nút, nhãn level: chữ đứng đậm kiểu UI game */
+  --num: 'Oswald', 'Arial Narrow', system-ui, sans-serif;
+  /* Tên game & dòng kết quả mở thẻ: nét bút lông */
+  --script: 'Charm', 'Noto Serif', serif;
+  --brush: 'Ma Shan Zheng', 'STKaiti', 'KaiTi', 'Kaiti SC', serif;
+}
+
+body {
+  /* Nền chiến trường 4 phe (chủ dự án cung cấp): núi + thành lũy + cờ (SVG) trên các vầng sáng
+     Ngụy xanh dương / Thục xanh lá / Ngô đỏ / Quần vàng và nền tím-đen. */
+  background:
+    url(/theme/landscape.svg) center / cover no-repeat fixed,
+    radial-gradient(circle at 50% 50%, rgba(3, 7, 18, 0.2) 0%, rgba(3, 7, 18, 0.85) 100%) fixed,
+    linear-gradient(to bottom, rgba(3, 7, 18, 0.6) 0%, transparent 40%, transparent 70%, rgba(3, 7, 18, 0.95) 100%) fixed,
+    radial-gradient(circle at 18% 25%, rgba(30, 58, 138, 0.5) 0%, transparent 45%) fixed,
+    radial-gradient(circle at 22% 75%, rgba(20, 83, 45, 0.5) 0%, transparent 45%) fixed,
+    radial-gradient(circle at 82% 75%, rgba(153, 27, 27, 0.65) 0%, transparent 45%) fixed,
+    radial-gradient(circle at 80% 25%, rgba(180, 83, 9, 0.5) 0%, transparent 45%) fixed,
+    radial-gradient(ellipse at center, #1e1b4b 0%, #090d16 100%) fixed,
+    #030712;
+  font-family: var(--serif);
+}
+
+/* Tia lửa 4 màu phe bay lên (tạo trong main.ts), nằm sau nội dung, không bắt chuột */
+.sparks { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.spark { position: absolute; bottom: 0; border-radius: 50%; animation: tq-float-up 6s linear infinite; opacity: 0; }
+@keyframes tq-float-up {
+  0% { transform: translateY(0) scale(.5); opacity: 0; }
+  20% { opacity: .8; }
+  80% { opacity: .6; }
+  100% { transform: translateY(-110vh) scale(1.2); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .sparks { display: none; } }
+h1, h2, h3, .brand, .login h1 { font-family: var(--serif); letter-spacing: .3px; }
+
+/* ---------- tiêu đề panel: thoi son + gạch vàng ---------- */
+.panel > h2, .panel > h3, .coll-head h2 {
+  display: flex; align-items: center; gap: 10px; color: var(--gold-2);
+}
+.panel > h2::before, .panel > h3::before, .coll-head h2::before {
+  content: ''; width: 9px; height: 9px; transform: rotate(45deg); flex: none;
+  background: var(--cinnabar-2); box-shadow: 0 0 0 2px rgba(212, 168, 74, .55);
+}
+.panel > h2::after, .panel > h3::after {
+  content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(212, 168, 74, .55), transparent);
+}
+
+/* ---------- panel sơn mài + 4 góc hồi văn ---------- */
+.panel {
+  position: relative;
+  border: 1px solid rgba(212, 168, 74, .35);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(60, 22, 16, .35), rgba(0, 0, 0, 0) 120px),
+    var(--panel);
+  box-shadow: inset 0 0 0 4px rgba(18, 11, 7, .9), inset 0 0 0 5px rgba(212, 168, 74, .18), 0 10px 30px rgba(0, 0, 0, .45);
+  backdrop-filter: blur(2px);
+}
+.panel::before {
+  content: ''; position: absolute; inset: 3px; pointer-events: none;
+  background:
+    url(/theme/corner-tl.svg) left top / 26px no-repeat,
+    url(/theme/corner-tr.svg) right top / 26px no-repeat,
+    url(/theme/corner-bl.svg) left bottom / 26px no-repeat,
+    url(/theme/corner-br.svg) right bottom / 26px no-repeat;
+  z-index: -1;
+}
+.panel { isolation: isolate; }
+
+/* ---------- thanh trên: sơn mài đỏ + dải hồi văn ---------- */
+.top {
+  background: linear-gradient(180deg, rgba(74, 20, 14, .95), rgba(36, 12, 9, .95));
+  border-bottom: 0;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .5);
+}
+.top::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -10px; height: 10px; pointer-events: none;
+  background: url(/theme/fret.svg) left center / 20px 10px repeat-x, #1a0d09;
+  border-top: 1px solid rgba(212, 168, 74, .5); border-bottom: 1px solid rgba(212, 168, 74, .5);
+}
+.brand { display: flex; align-items: center; gap: 10px; font-size: 19px; color: var(--text); }
+.brand span, .login h1 span { color: var(--gold-2); }
+
+/* Con dấu son 三國 */
+.seal, .brand .seal, .login h1 .seal {
+  display: inline-grid; place-items: center; flex: none;
+  width: 38px; height: 38px; border-radius: 4px;
+  background: radial-gradient(circle at 30% 25%, var(--cinnabar-2), var(--cinnabar) 70%);
+  color: #fbe9c8 !important; font-family: var(--brush); font-size: 15px; line-height: 1; letter-spacing: 0;
+  writing-mode: vertical-rl; text-orientation: upright;
+  box-shadow: inset 0 0 0 2px rgba(251, 233, 200, .75), inset 0 0 0 4px var(--cinnabar), 0 2px 6px rgba(0, 0, 0, .5);
+  transform: rotate(-4deg);
+}
+.seal.big { width: 72px; height: 72px; font-size: 28px; border-radius: 6px; }
+
+.tb { background: rgba(20, 12, 8, .7); border-color: rgba(212, 168, 74, .3); }
+.tb.total, .tb.timer { border-color: rgba(212, 168, 74, .55); }
+
+/* ---------- tab: bảng hiệu treo ---------- */
+.tabs {
+  margin-top: 10px; border-bottom: 1px solid rgba(212, 168, 74, .25); gap: 6px; padding-top: 10px;
+  background: linear-gradient(180deg, rgba(10, 6, 4, .55), rgba(10, 6, 4, .25));
+}
+.tabs a {
+  font-family: var(--serif); font-weight: 700; letter-spacing: .5px; color: var(--muted);
+  border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; padding: 9px 18px;
+}
+.tabs a:hover { color: var(--gold-2); }
+.tabs a.on {
+  color: #fbe9c8; border-color: rgba(212, 168, 74, .6);
+  background: linear-gradient(180deg, var(--cinnabar-2), #7a1610);
+  box-shadow: inset 0 1px 0 rgba(255, 220, 160, .35);
+}
+
+/* ---------- nút ---------- */
+.btn { border-radius: 6px; border-color: rgba(212, 168, 74, .35); background: rgba(44, 29, 20, .9); }
+.btn.primary {
+  background: linear-gradient(180deg, var(--cinnabar-2), #8e1c15);
+  color: #fbe9c8; border: 1px solid var(--gold); letter-spacing: .4px;
+  box-shadow: inset 0 1px 0 rgba(255, 220, 160, .35), 0 2px 8px rgba(0, 0, 0, .4);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .5);
+}
+.btn.primary:hover:not(:disabled) { filter: brightness(1.1); border-color: var(--gold-2); }
+.btn.big { letter-spacing: 1px; }
+
+/* ---------- ô nhập ---------- */
+.filters input, .filters select, .login input, .gift-form input, .combo input {
+  background: rgba(14, 9, 6, .75); border-color: rgba(212, 168, 74, .3); border-radius: 4px; color: var(--text);
+}
+.filters input:focus, .filters select:focus, .login input:focus, .combo input:focus {
+  outline: none; border-color: var(--gold); box-shadow: 0 0 0 2px rgba(212, 168, 74, .2);
+}
+
+/* ---------- vé: thẻ bài tre ---------- */
+.ticket {
+  border-radius: 6px; border-width: 1px; border-color: rgba(212, 168, 74, .25);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--tcol) 18%, transparent), transparent 70%),
+    rgba(22, 14, 10, .85);
+}
+.ticket.on { border-color: var(--tcol); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tcol) 35%, transparent), 0 0 18px color-mix(in srgb, var(--tcol) 30%, transparent); }
+.t-count { font-family: var(--serif); }
+
+/* ---------- nhóm tướng, khối phụ ---------- */
+.gen-group, .quick-box, .odds > div, .slot.empty, .lv-run { border-radius: 6px; }
+.gen-group { background: rgba(30, 20, 14, .8); border-color: rgba(212, 168, 74, .2); }
+.lv-run.ready { border-color: rgba(63, 191, 127, .7); }
+.gift-panel { border-radius: 6px; background: rgba(60, 22, 16, .35); }
+.combo-list { background: #1c120d; border-color: rgba(212, 168, 74, .35); }
+.chip { background: rgba(20, 12, 8, .7); }
+
+/* ---------- đăng nhập ---------- */
+.login { max-width: 420px; margin: 9vh auto; }
+.login .seal.big { margin: 0 auto 14px; display: grid; }
+.login h1 { font-size: 34px; text-shadow: 0 2px 12px rgba(0, 0, 0, .8); }
+.login > p { text-shadow: 0 1px 6px rgba(0, 0, 0, .9); color: #cbb994; }
+
+/* ---------- popup mở thẻ & toast ---------- */
+.stage-overlay { background: radial-gradient(60% 60% at 50% 45%, rgba(90, 24, 14, .55), rgba(6, 4, 3, .92)); }
+.stage-caption { font-family: var(--serif); text-shadow: 0 2px 8px rgba(0, 0, 0, .8); }
+.toast { border-radius: 6px; background: linear-gradient(180deg, #3a1610, #1f0e0a); }
+
+/* Placeholder phe dùng nét bút lông */
+.tq-art .glyph { font-family: var(--brush); }
+
+/* ---------- Typography kiểu game Tam Quốc ----------
+   Playfair Display SC: tiêu đề, tab (chữ khắc bia)
+   Oswald: nút, số vé, Lv., số liệu (đứng, đậm)
+   Charm: tên game, dòng kết quả mở thẻ (bút lông)
+   Ma Shan Zheng: chữ Hán (con dấu, biểu tượng phe)
+   Tất cả đều có đủ dấu tiếng Việt (trừ font chữ Hán). */
+h1, h2, h3, .tabs a, .t-name, .quick-head b, .gen-head b {
+  font-family: var(--display);
+  letter-spacing: .06em;
+}
+.panel > h2, .panel > h3, .coll-head h2 { font-weight: 900; text-shadow: 0 1px 0 #000, 0 0 10px rgba(212, 168, 74, .35); }
+.tabs a { font-weight: 700; font-size: 15px; }
+
+.btn, .t-count, .tb b, .tq-sub .lv, .cid, .copy, .run-label, .odds b, .rates td:last-child, .summary {
+  font-family: var(--num);
+}
+.btn { font-weight: 500; letter-spacing: .04em; }
+.btn.primary { font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.btn.big { font-size: 18px; }
+.t-count { font-weight: 700; font-size: 30px; line-height: 1.1; }
+.tb b { font-weight: 600; font-size: 14px; }
+.tq-sub .lv { font-weight: 700; letter-spacing: .03em; }
+
+/* Tên game mạ vàng, nét bút lông */
+.brand, .login h1 { font-family: var(--script); font-weight: 700; letter-spacing: .02em; }
+.brand { font-size: 24px; }
+.brand > span:not(.seal), .login h1 > span,
+.login h1 {
+  background: linear-gradient(180deg, #fff6d6 0%, #f3d58a 38%, #d19a35 62%, #8a5a17 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .85)) drop-shadow(0 0 10px rgba(212, 168, 74, .35));
+}
+.login h1 { font-size: clamp(36px, 8vw, 54px); line-height: 1.25; }
+.stage-caption { font-family: var(--script); font-weight: 700; font-size: clamp(20px, 2.4vw, 28px); }
+
+/* Biểu tượng phe & con dấu dùng nét bút lông chữ Hán */
+.seal, .tq-art .glyph { font-family: var(--brush); }
+
+/* ---------- Popup ngắm thẻ (Bộ sưu tập) ---------- */
+.pick.view { cursor: zoom-in; transition: transform .15s ease; }
+.pick.view:hover { transform: translateY(-3px); }
+.viewer-overlay {
+  position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 24px 16px; cursor: zoom-out;
+  background: radial-gradient(60% 60% at 50% 42%, rgba(90, 24, 14, .55), rgba(6, 4, 3, .92));
+  animation: viewer-in .18s ease-out; outline: none;
+}
+.viewer-box { display: grid; justify-items: center; gap: 14px; perspective: 900px; max-height: 100%; }
+.viewer-tilt { transition: transform .12s ease-out; transform-style: preserve-3d; position: relative; }
+.viewer-tilt::after {
+  content: ''; position: absolute; inset: 6% 9% 8%; border-radius: 8px; pointer-events: none; z-index: 3;
+  background: radial-gradient(circle at var(--sx, 50%) var(--sy, 30%), rgba(255, 240, 200, .22), transparent 45%);
+  mix-blend-mode: screen;
+}
+.tq-card.viewer-card { width: min(340px, 78vw, calc((100vh - 190px) * 0.66)); }
+.tq-card.viewer-card .tq-name { font-size: 20px; }
+.tq-card.viewer-card .tq-sub { font-size: 15px; }
+.viewer-info { text-align: center; display: grid; gap: 4px; }
+.viewer-name { font-family: var(--script); font-weight: 700; font-size: 30px; line-height: 1.2;
+  background: linear-gradient(180deg, #fff6d6, #f3d58a 40%, #c98a2c); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .8)); }
+.viewer-sub { font-family: var(--num); font-size: 16px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.viewer-sub .fac.f-wei { color: var(--wei); } .viewer-sub .fac.f-shu { color: var(--shu); }
+.viewer-sub .fac.f-wu { color: var(--wu); } .viewer-sub .fac.f-qun { color: var(--qun); }
+.viewer-sub .dot { color: var(--muted); }
+.viewer-hint { opacity: .7; }
+@keyframes viewer-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+
+/* ---------- Nhạc nền: nút bật/tắt + thanh âm lượng ---------- */
+.music-ctl { display: flex; align-items: center; gap: 6px; }
+.music-toggle { min-width: 36px; padding: 4px 8px; line-height: 0; color: var(--gold-2); }
+.music-toggle .mute-slash { display: none; }
+.music-toggle.muted { color: var(--muted); }
+.music-toggle.muted .mute-slash { display: inline; }
+.music-toggle:not(.muted) svg { filter: drop-shadow(0 0 4px rgba(212, 168, 74, .5)); }
+.music-vol { -webkit-appearance: none; appearance: none; width: 90px; height: 6px; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(90deg, var(--gold) var(--p, 40%), rgba(212, 168, 74, .2) var(--p, 40%)); }
+.music-vol:disabled { opacity: .4; cursor: default; }
+.music-vol::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--gold-2); border: 2px solid #5a3a12; }
+.music-vol::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--gold-2); border: 2px solid #5a3a12; }
+@media (max-width: 640px) { .music-vol { width: 64px; } }
+
+/* ---------- Logo game (icon Gia Cát Lượng) ở thanh trên & trang đăng nhập ---------- */
+.logo { width: 42px; height: 42px; flex: none; border-radius: 9px; display: block;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .6)) drop-shadow(0 0 6px rgba(212, 168, 74, .35)); }
+.logo.big { width: 112px; height: 112px; border-radius: 22px; margin: 0 auto 14px; }

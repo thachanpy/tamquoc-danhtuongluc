@@ -1,0 +1,268 @@
+import type { DatabaseSync } from 'node:sqlite';
+
+/**
+ * Migration có version, chạy theo thứ tự, mỗi bản trong 1 transaction.
+ * KHÔNG sửa migration đã phát hành — thêm migration mới.
+ */
+const MIGRATIONS: { version: number; name: string; sql: string; disableForeignKeys?: boolean }[] = [
+  {
+    version: 1,
+    name: 'init',
+    sql: `
+CREATE TABLE users (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  password_hash TEXT NOT NULL,
+  created_at    TEXT NOT NULL
+);
+
+CREATE TABLE sessions (
+  token_hash TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX idx_sessions_user ON sessions(user_id);
+
+CREATE TABLE generals (
+  id       TEXT PRIMARY KEY,
+  name     TEXT NOT NULL,
+  faction  TEXT NOT NULL CHECK (faction IN ('wei','shu','wu','qun')),
+  art_key  TEXT NOT NULL,
+  metadata TEXT
+);
+
+CREATE TABLE user_cards (
+  id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id                INTEGER NOT NULL REFERENCES users(id),
+  general_id             TEXT NOT NULL REFERENCES generals(id),
+  level                  INTEGER NOT NULL CHECK (level BETWEEN 1 AND 10),
+  status                 TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','consumed')),
+  consumed_at            TEXT,
+  consumed_by_upgrade_id INTEGER,
+  created_at             TEXT NOT NULL,
+  updated_at             TEXT NOT NULL,
+  CHECK ((status = 'active' AND consumed_at IS NULL) OR (status = 'consumed' AND consumed_at IS NOT NULL))
+);
+CREATE INDEX idx_cards_user_status ON user_cards(user_id, status);
+CREATE INDEX idx_cards_user_general_level ON user_cards(user_id, general_id, level);
+
+CREATE TABLE user_tickets (
+  user_id     INTEGER NOT NULL REFERENCES users(id),
+  ticket_type TEXT NOT NULL CHECK (ticket_type IN ('normal','shu','wei','wu')),
+  balance     INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0 AND balance <= 9007199254740991),
+  updated_at  TEXT NOT NULL,
+  PRIMARY KEY (user_id, ticket_type)
+);
+
+CREATE TABLE ticket_recovery_state (
+  user_id                    INTEGER PRIMARY KEY REFERENCES users(id),
+  last_processed_recovery_at TEXT NOT NULL,
+  updated_at                 TEXT NOT NULL
+);
+
+CREATE TABLE ticket_transactions (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER NOT NULL REFERENCES users(id),
+  ticket_type     TEXT NOT NULL CHECK (ticket_type IN ('normal','shu','wei','wu')),
+  amount_delta    INTEGER NOT NULL CHECK (amount_delta <> 0),
+  reason          TEXT NOT NULL CHECK (reason IN ('time_recovery','gacha_draw')),
+  reference_id    TEXT,
+  idempotency_key TEXT,
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX idx_ttx_user ON ticket_transactions(user_id, id);
+-- Mỗi mốc hồi chỉ cấp 1 vé cho mỗi người chơi
+CREATE UNIQUE INDEX uq_ttx_recovery_slot ON ticket_transactions(user_id, reference_id) WHERE reason = 'time_recovery';
+
+CREATE TABLE gacha_history (
+  id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id               INTEGER NOT NULL REFERENCES users(id),
+  ticket_type           TEXT NOT NULL,
+  general_id            TEXT NOT NULL REFERENCES generals(id),
+  card_id               INTEGER NOT NULL REFERENCES user_cards(id),
+  card_level            INTEGER NOT NULL CHECK (card_level BETWEEN 1 AND 10),
+  ticket_transaction_id INTEGER NOT NULL REFERENCES ticket_transactions(id),
+  idempotency_key       TEXT NOT NULL,
+  created_at            TEXT NOT NULL,
+  UNIQUE (user_id, idempotency_key)
+);
+
+CREATE TABLE upgrade_history (
+  id                            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id                       INTEGER NOT NULL REFERENCES users(id),
+  input_card_ids_snapshot       TEXT NOT NULL,
+  input_general_id              TEXT NOT NULL REFERENCES generals(id),
+  input_level                   INTEGER NOT NULL CHECK (input_level BETWEEN 1 AND 9),
+  result_card_id                INTEGER NOT NULL REFERENCES user_cards(id),
+  result_level                  INTEGER NOT NULL CHECK (result_level BETWEEN 1 AND 10),
+  success_chance                INTEGER NOT NULL,
+  failure_chance                INTEGER NOT NULL,
+  outcome                       TEXT NOT NULL CHECK (outcome IN ('success','failure')),
+  failure_distribution_snapshot TEXT NOT NULL,
+  idempotency_key               TEXT NOT NULL,
+  created_at                    TEXT NOT NULL,
+  UNIQUE (user_id, idempotency_key)
+);
+
+CREATE TABLE idempotency_keys (
+  user_id       INTEGER NOT NULL REFERENCES users(id),
+  action        TEXT NOT NULL,
+  key           TEXT NOT NULL,
+  request_hash  TEXT NOT NULL,
+  response_json TEXT NOT NULL,
+  created_at    TEXT NOT NULL,
+  PRIMARY KEY (user_id, action, key)
+);
+`,
+  },
+  {
+    // Thêm reason 'signup_bonus' (quà đăng ký 100 vé). SQLite không sửa được CHECK,
+    // nên dựng lại bảng ledger theo quy trình chuẩn: tạo bảng mới -> copy -> drop -> rename.
+    // Giữ nguyên id để gacha_history.ticket_transaction_id vẫn đúng.
+    version: 2,
+    name: 'ledger_signup_bonus',
+    disableForeignKeys: true,
+    sql: `
+CREATE TABLE ticket_transactions_new (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER NOT NULL REFERENCES users(id),
+  ticket_type     TEXT NOT NULL CHECK (ticket_type IN ('normal','shu','wei','wu')),
+  amount_delta    INTEGER NOT NULL CHECK (amount_delta <> 0),
+  reason          TEXT NOT NULL CHECK (reason IN ('time_recovery','signup_bonus','gacha_draw')),
+  reference_id    TEXT,
+  idempotency_key TEXT,
+  created_at      TEXT NOT NULL
+);
+INSERT INTO ticket_transactions_new (id, user_id, ticket_type, amount_delta, reason, reference_id, idempotency_key, created_at)
+  SELECT id, user_id, ticket_type, amount_delta, reason, reference_id, idempotency_key, created_at FROM ticket_transactions;
+DROP TABLE ticket_transactions;
+ALTER TABLE ticket_transactions_new RENAME TO ticket_transactions;
+CREATE INDEX idx_ttx_user ON ticket_transactions(user_id, id);
+CREATE UNIQUE INDEX uq_ttx_recovery_slot ON ticket_transactions(user_id, reference_id) WHERE reason = 'time_recovery';
+-- Quà đăng ký chỉ cấp 1 lần mỗi người chơi (tối đa 1 dòng mỗi loại vé)
+CREATE UNIQUE INDEX uq_ttx_signup_bonus ON ticket_transactions(user_id, ticket_type) WHERE reason = 'signup_bonus';
+`,
+  },
+  {
+    // Thêm reason 'dev_topup' (nút cộng 50 vé thử nghiệm). Dựng lại bảng ledger như v2, giữ nguyên id & dữ liệu.
+    version: 3,
+    name: 'ledger_dev_topup',
+    disableForeignKeys: true,
+    sql: `
+CREATE TABLE ticket_transactions_new (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER NOT NULL REFERENCES users(id),
+  ticket_type     TEXT NOT NULL CHECK (ticket_type IN ('normal','shu','wei','wu')),
+  amount_delta    INTEGER NOT NULL CHECK (amount_delta <> 0),
+  reason          TEXT NOT NULL CHECK (reason IN ('time_recovery','signup_bonus','dev_topup','gacha_draw')),
+  reference_id    TEXT,
+  idempotency_key TEXT,
+  created_at      TEXT NOT NULL
+);
+INSERT INTO ticket_transactions_new (id, user_id, ticket_type, amount_delta, reason, reference_id, idempotency_key, created_at)
+  SELECT id, user_id, ticket_type, amount_delta, reason, reference_id, idempotency_key, created_at FROM ticket_transactions;
+DROP TABLE ticket_transactions;
+ALTER TABLE ticket_transactions_new RENAME TO ticket_transactions;
+CREATE INDEX idx_ttx_user ON ticket_transactions(user_id, id);
+CREATE UNIQUE INDEX uq_ttx_recovery_slot ON ticket_transactions(user_id, reference_id) WHERE reason = 'time_recovery';
+CREATE UNIQUE INDEX uq_ttx_signup_bonus ON ticket_transactions(user_id, ticket_type) WHERE reason = 'signup_bonus';
+-- Mỗi lần bấm nút (1 idempotency key) chỉ cấp 1 lần: tối đa 1 dòng mỗi loại vé cho mỗi reference
+CREATE UNIQUE INDEX uq_ttx_dev_topup ON ticket_transactions(user_id, reference_id, ticket_type) WHERE reason = 'dev_topup';
+`,
+  },
+  {
+    // Thêm loại vé 'qun' (Vé Quần). Dựng lại user_tickets & ticket_transactions để mở rộng CHECK,
+    // giữ nguyên toàn bộ số dư, id ledger và lịch sử. Tài khoản cũ nhận thêm dòng số dư Vé Quần = 0.
+    version: 4,
+    name: 'ticket_type_qun',
+    disableForeignKeys: true,
+    sql: `
+CREATE TABLE user_tickets_new (
+  user_id     INTEGER NOT NULL REFERENCES users(id),
+  ticket_type TEXT NOT NULL CHECK (ticket_type IN ('normal','shu','wei','wu','qun')),
+  balance     INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0 AND balance <= 9007199254740991),
+  updated_at  TEXT NOT NULL,
+  PRIMARY KEY (user_id, ticket_type)
+);
+INSERT INTO user_tickets_new (user_id, ticket_type, balance, updated_at)
+  SELECT user_id, ticket_type, balance, updated_at FROM user_tickets;
+INSERT INTO user_tickets_new (user_id, ticket_type, balance, updated_at)
+  SELECT id, 'qun', 0, strftime('%Y-%m-%dT%H:%M:%fZ', 'now') FROM users;
+DROP TABLE user_tickets;
+ALTER TABLE user_tickets_new RENAME TO user_tickets;
+
+CREATE TABLE ticket_transactions_new (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER NOT NULL REFERENCES users(id),
+  ticket_type     TEXT NOT NULL CHECK (ticket_type IN ('normal','shu','wei','wu','qun')),
+  amount_delta    INTEGER NOT NULL CHECK (amount_delta <> 0),
+  reason          TEXT NOT NULL CHECK (reason IN ('time_recovery','signup_bonus','dev_topup','gacha_draw')),
+  reference_id    TEXT,
+  idempotency_key TEXT,
+  created_at      TEXT NOT NULL
+);
+INSERT INTO ticket_transactions_new (id, user_id, ticket_type, amount_delta, reason, reference_id, idempotency_key, created_at)
+  SELECT id, user_id, ticket_type, amount_delta, reason, reference_id, idempotency_key, created_at FROM ticket_transactions;
+DROP TABLE ticket_transactions;
+ALTER TABLE ticket_transactions_new RENAME TO ticket_transactions;
+CREATE INDEX idx_ttx_user ON ticket_transactions(user_id, id);
+CREATE UNIQUE INDEX uq_ttx_recovery_slot ON ticket_transactions(user_id, reference_id) WHERE reason = 'time_recovery';
+CREATE UNIQUE INDEX uq_ttx_signup_bonus ON ticket_transactions(user_id, ticket_type) WHERE reason = 'signup_bonus';
+CREATE UNIQUE INDEX uq_ttx_dev_topup ON ticket_transactions(user_id, reference_id, ticket_type) WHERE reason = 'dev_topup';
+`,
+  },
+  {
+    // Tặng thẻ (mục 5.6). Thẻ đổi chủ bằng cách cập nhật user_cards.user_id; bảng này lưu lịch sử giao dịch.
+    version: 5,
+    name: 'card_gifts',
+    sql: `
+CREATE TABLE card_gifts (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  from_user_id    INTEGER NOT NULL REFERENCES users(id),
+  to_user_id      INTEGER NOT NULL REFERENCES users(id),
+  cards_snapshot  TEXT NOT NULL,
+  card_count      INTEGER NOT NULL CHECK (card_count >= 1),
+  idempotency_key TEXT NOT NULL,
+  created_at      TEXT NOT NULL,
+  CHECK (from_user_id <> to_user_id),
+  UNIQUE (from_user_id, idempotency_key)
+);
+CREATE INDEX idx_gifts_from ON card_gifts(from_user_id, id);
+CREATE INDEX idx_gifts_to ON card_gifts(to_user_id, id);
+`,
+  },
+];
+
+/** target: chỉ chạy tới version này (dùng khi test migration). */
+export function runMigrations(db: DatabaseSync, target = Infinity): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)`);
+  const applied = new Set(
+    (db.prepare('SELECT version FROM schema_migrations').all() as { version: number }[]).map((r) => r.version),
+  );
+  for (const m of [...MIGRATIONS].sort((a, b) => a.version - b.version)) {
+    if (applied.has(m.version) || m.version > target) continue;
+    // PRAGMA foreign_keys không đổi được bên trong transaction -> tắt trước, bật lại sau.
+    if (m.disableForeignKeys) db.exec('PRAGMA foreign_keys = OFF');
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.exec(m.sql);
+      if (m.disableForeignKeys) {
+        const violations = db.prepare('PRAGMA foreign_key_check').all();
+        if (violations.length) throw new Error(`Migration ${m.version}: vi phạm foreign key`);
+      }
+      db.prepare('INSERT INTO schema_migrations(version, name, applied_at) VALUES (?,?,?)').run(
+        m.version,
+        m.name,
+        new Date().toISOString(),
+      );
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    } finally {
+      if (m.disableForeignKeys) db.exec('PRAGMA foreign_keys = ON');
+    }
+  }
+}
