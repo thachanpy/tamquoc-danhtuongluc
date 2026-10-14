@@ -14,6 +14,9 @@ function row(e: HistoryEntryDto): string {
     if (e.reason === 'dev_topup') {
       return `<div class="h-row"><span class="tag ok">+${e.amountDelta} vé</span><div>Cộng vé thử nghiệm: nhận <b>${label} ×${e.amountDelta}</b></div><time>${fmt(e.createdAt)}</time></div>`;
     }
+    if (e.reason === 'admin_grant') {
+      return `<div class="h-row"><span class="tag ok">+${e.amountDelta} vé</span><div>Quản trị viên tặng: nhận <b>${label} ×${e.amountDelta}</b></div><time>${fmt(e.createdAt)}</time></div>`;
+    }
     if (e.reason === 'signup_bonus') {
       return `<div class="h-row"><span class="tag ok">+${e.amountDelta} vé</span><div>Quà tân thủ: nhận <b>${label} ×${e.amountDelta}</b></div><time>${fmt(e.createdAt)}</time></div>`;
     }

@@ -18,9 +18,131 @@ pnpm typecheck
 
 Database SQLite nằm ở `data/tamquoc.db` (đổi bằng biến `DB_PATH`). Khởi động không bao giờ reset dữ liệu.
 
-> Tài khoản mới nhận ngay **100 vé quà đăng ký** (loại vé random 20% mỗi loại, 5 loại gồm cả Vé Quần), có thể quay luôn sau khi đăng ký.
+> **Tài khoản mới phải chờ quản trị viên duyệt** mới đăng nhập được (màn đăng ký báo rõ). Khi được duyệt, tài khoản nhận
+> **100 vé quà đăng ký** (loại vé random 20% mỗi loại). **Tài khoản đầu tiên** tạo trên database mới tự thành admin và được duyệt ngay.
 > Sau đó hồi 1 vé ở mỗi mốc 5 phút (giờ :00, :05, :10…) theo đồng hồ server. Số vé quà chỉnh ở
 > `SIGNUP_BONUS_TICKETS` trong `packages/game-config/src/rates.ts`.
+
+## Triển khai lên server
+
+Mô hình: **nginx** phục vụ frontend đã build (`apps/web/dist`) và chuyển `/api/*` sang **API Fastify** chạy ở `127.0.0.1:3000` bằng **pm2**. Database SQLite nằm ở `data/tamquoc.db` trong thư mục repo.
+
+```
+Trình duyệt ──80/443──> nginx ──/api/*──> pm2: tamquoc-api (127.0.0.1:3000) ──> SQLite data/tamquoc.db
+                           └──── còn lại ──> apps/web/dist (file tĩnh)
+```
+
+File cấu hình ở gốc repo:
+
+- `nginx.conf` — site nginx: phục vụ `apps/web/dist`, proxy `/api/`, gzip, cache ảnh/JS.
+- `pm2.config.json` — chạy API (`apps/api/src/index.ts`) bằng Node, tự khởi động lại khi lỗi.
+
+Ví dụ dưới đây dùng Ubuntu/Debian và đặt repo ở `/opt/tamquoc-gacha`.
+
+### 1. Cài phần mềm (1 lần)
+
+```bash
+sudo apt update
+sudo apt install -y nginx git curl
+# Node.js 22 (cần >= 22.18: dùng node:sqlite và chạy thẳng TypeScript)
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs
+node -v                    # phải >= v22.18
+sudo corepack enable       # pnpm đúng version trong package.json
+sudo npm install -g pm2
+```
+
+### 2. Lấy code, cài dependency, build frontend
+
+```bash
+sudo mkdir -p /opt/tamquoc-gacha && sudo chown $USER:$USER /opt/tamquoc-gacha
+git clone <repo-url> /opt/tamquoc-gacha     # hoặc rsync/scp code lên (bỏ node_modules, dist)
+cd /opt/tamquoc-gacha
+pnpm install --frozen-lockfile
+pnpm test                  # tuỳ chọn
+pnpm build                 # tạo apps/web/dist
+mkdir -p data
+# nginx (user www-data) cần đọc được thư mục dist
+chmod o+x /opt/tamquoc-gacha /opt/tamquoc-gacha/apps /opt/tamquoc-gacha/apps/web
+chmod -R o+rX /opt/tamquoc-gacha/apps/web/dist
+```
+
+### 3. Chạy API bằng pm2
+
+```bash
+cd /opt/tamquoc-gacha
+pm2 start pm2.config.json          # chạy từ gốc repo
+pm2 status                         # tamquoc-api phải "online"
+curl -s http://127.0.0.1:3000/api/gacha/config | head -c 200   # phải ra JSON
+pm2 save                           # lưu danh sách app
+pm2 startup                        # in ra 1 lệnh sudo — chạy lệnh đó để pm2 tự bật khi reboot
+```
+
+Lệnh hay dùng: `pm2 logs tamquoc-api`, `pm2 restart tamquoc-api`, `pm2 stop tamquoc-api`.
+
+Ghi chú:
+
+- Giữ `instances: 1` (fork mode): SQLite chỉ có một tiến trình ghi và rate limit lưu trong bộ nhớ.
+- Biến môi trường chỉnh trong `env` của `pm2.config.json`: `PORT`, `HOST`, `DB_PATH` (mặc định `data/tamquoc.db`), `LOG_LEVEL`, `TRUST_PROXY`. **Không** đặt `ENABLE_DEV_TOPUP` khi chạy thật. Sửa xong chạy `pm2 restart pm2.config.json --update-env`.
+- Migration chạy tự động khi API khởi động, không bao giờ xoá dữ liệu.
+
+### 4. Cấu hình nginx
+
+```bash
+sudo cp nginx.conf /etc/nginx/sites-available/tamquoc
+sudo nano /etc/nginx/sites-available/tamquoc     # sửa server_name (tên miền/IP) và root nếu repo không ở /opt/tamquoc-gacha
+sudo ln -s /etc/nginx/sites-available/tamquoc /etc/nginx/sites-enabled/tamquoc
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Mở trình duyệt vào `http://tên-miền-hoặc-IP`.
+
+### 5. HTTPS (khi có tên miền trỏ về server)
+
+```bash
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d game.example.com
+```
+
+Certbot tự thêm cấu hình 443, chuyển hướng 80 → 443 và tự gia hạn. Tường lửa: `sudo ufw allow 'Nginx Full'`; **không** mở cổng 3000.
+
+### 6. Tài khoản admin đầu tiên
+
+- Database mới: người **đăng ký đầu tiên** tự thành admin — đăng ký tài khoản của bạn ngay sau khi chạy.
+- Dùng lại database cũ: dừng API (`pm2 stop tamquoc-api`), copy file `.db` vào `data/tamquoc.db`, rồi `pm2 start tamquoc-api`. Tài khoản id nhỏ nhất là admin.
+- Sau đó mọi đăng ký mới phải chờ admin duyệt ở tab **Quản trị**.
+
+### Cập nhật phiên bản mới
+
+```bash
+cd /opt/tamquoc-gacha
+git pull                         # hoặc rsync code mới
+pnpm install --frozen-lockfile
+pnpm build
+chmod -R o+rX apps/web/dist
+pm2 restart tamquoc-api
+```
+
+Không cần reload nginx khi chỉ cập nhật code.
+
+### Sao lưu database
+
+```bash
+sudo apt install -y sqlite3
+sqlite3 /opt/tamquoc-gacha/data/tamquoc.db ".backup '/opt/tamquoc-gacha/data/backup-$(date +%F).db'"
+```
+
+`.backup` an toàn khi API đang chạy (WAL). Có thể đặt cron chạy hằng ngày.
+
+### Xử lý sự cố
+
+| Triệu chứng | Kiểm tra |
+|---|---|
+| 502 Bad Gateway | API chưa chạy: `pm2 status`, `pm2 logs tamquoc-api --lines 100` |
+| 403/404 ở trang chủ | Chưa `pnpm build`, sai `root` trong nginx, hoặc nginx không có quyền đọc (chmod ở bước 2) |
+| pm2 báo lỗi ts-node / không chạy được `.ts` | Node < 22.18, hoặc thiếu `"interpreter": "node"` trong `pm2.config.json` |
+| "Thao tác quá nhanh" với mọi người | Rate limit đang thấy mọi người cùng IP: kiểm tra nginx gửi `X-Forwarded-For`, `TRUST_PROXY` (mặc định tin 127.0.0.1) |
 
 ## Cấu trúc
 
@@ -38,8 +160,8 @@ apps/web               Vite + PixiJS: quay thẻ, bộ sưu tập, nâng cấp, 
   unique index `(user_id, reference_id)` cho `time_recovery` chặn cấp trùng mốc. Không có trần tồn kho.
 - **Gacha / nâng cấp** chạy trong `BEGIN IMMEDIATE` transaction, có idempotency key gắn với người dùng + thao tác.
   Retry trả lại kết quả cũ; dùng cùng key cho yêu cầu khác → 409.
-- **Nút "+50 vé" thử nghiệm** ở thanh trên cùng: mỗi lần bấm cộng 50 vé, loại random. Chỉ bật khi server có
-  `ENABLE_DEV_TOPUP=1` — `pnpm dev` bật sẵn, `pnpm start` thì tắt. Số vé chỉnh ở `DEV_TOPUP_TICKETS`.
+- **Cộng vé thử nghiệm**: không còn nút trên UI; endpoint `/api/tickets/dev-topup` chỉ chạy khi server có
+  `ENABLE_DEV_TOPUP=1` (mặc định tắt, kể cả `pnpm dev`). Cộng vé cho người chơi dùng trang Quản trị.
 - **Quay thẻ tối đa Lv.9** (`GACHA_MAX_LEVEL`): 72 / 15 / 7 / 3.5 / 2 / 0.4 / 0.07 / 0.02 / 0.01% cho Lv.1–9 (Lv.8–9 cực hiếm). Lv.10 chỉ có qua ghép.
 - **Tỷ lệ ghép**: thành công 90% (Lv1) giảm đều 10% mỗi bậc tới 10% (Lv9); thất bại giữ nguyên 80% hoặc tụt đúng 1 bậc 20% (Lv2: 90/10, Lv1 luôn giữ).
 - **Trang Nâng cấp** gom thẻ theo tướng (bản sao cùng tướng luôn liền nhau, chia nhóm theo level, đánh dấu nhóm đủ 2 thẻ).
@@ -50,10 +172,13 @@ apps/web               Vite + PixiJS: quay thẻ, bộ sưu tập, nâng cấp, 
   1 idempotency key cho cả thao tác. Lựa chọn số lần ở `DRAW_COUNT_OPTIONS` trong `rates.ts`.
 - **Ghép 2 thẻ** (`UPGRADE_INPUT_COUNT`) cùng tướng + cùng level (1–9). Roll thành công trước; chỉ khi thất bại mới roll bảng phân phối thất bại.
   Snapshot tỷ lệ & phân phối lưu trong `upgrade_history`.
+- **Trang Quản trị** (tab chỉ admin thấy, `users.is_admin`): duyệt/từ chối đăng ký, danh sách người chơi (số vé, số thẻ),
+  cộng vé cho người chơi (chọn loại + số lượng, tối đa `ADMIN_GRANT_MAX_TICKETS` mỗi lần, ledger `admin_grant`),
+  cấp/thu quyền admin, xem mọi thẻ của mọi người chơi. Migration v6: tài khoản cũ coi như đã duyệt, tài khoản id nhỏ nhất thành admin.
 - Mọi thay đổi số dư vé đều có dòng ledger trong `ticket_transactions`.
-- **Quà đăng ký** 100 vé cấp trong cùng transaction tạo tài khoản, ledger reason `signup_bonus`,
+- **Quà đăng ký** 100 vé cấp trong cùng transaction duyệt tài khoản, ledger reason `signup_bonus`,
   unique index chặn cấp lần hai. Migration v2 dựng lại bảng ledger để thêm reason này, giữ nguyên dữ liệu cũ.
-- Không có Vàng, nạp tiền, cửa hàng, daily login (schema chỉ cho phép `time_recovery`/`signup_bonus`/`gacha_draw`).
+- Không có Vàng, nạp tiền, cửa hàng, daily login (ledger chỉ cho phép `time_recovery`/`signup_bonus`/`dev_topup`/`admin_grant`/`gacha_draw`).
 
 ## Artwork
 
@@ -64,7 +189,7 @@ thay ảnh thật bằng cách map `artKey` → file ảnh trong `apps/web/src/a
 
 | Method | Path | Mô tả |
 |---|---|---|
-| POST | `/api/auth/register`, `/api/auth/login`, `/api/auth/logout` | Tài khoản (Bearer token) |
+| POST | `/api/auth/register`, `/api/auth/login`, `/api/auth/logout` | Tài khoản (Bearer token). Đăng ký trả `status: pending`; đăng nhập khi chờ duyệt → 403 `ACCOUNT_PENDING` |
 | GET | `/api/me` | Người chơi + số dư vé + trạng thái hồi |
 | GET | `/api/generals` | 100 tướng |
 | GET | `/api/cards` | Bộ sưu tập (`faction`, `level`, `q`, `sort`, `page`, `pageSize`) |
@@ -79,5 +204,10 @@ thay ảnh thật bằng cách map `artKey` → file ảnh trong `apps/web/src/a
 | POST | `/api/upgrades/quick` | `{ idempotencyKey }` — Nâng cấp nhanh: tự ghép dây chuyền mọi cặp thẻ ≤ Lv.5 |
 | POST | `/api/upgrades/attempt` | `{ cardIds: [a,b,c], idempotencyKey }` |
 | GET | `/api/history` | Lịch sử phân trang (`kind`, `page`, `pageSize`) |
+| GET | `/api/admin/users` | (admin) Người chơi: `q`, `status=pending\|approved`, phân trang; chờ duyệt lên đầu |
+| POST | `/api/admin/users/:id/approve` · `/reject` | (admin) Duyệt (cấp quà đăng ký) / từ chối (xoá đăng ký chờ duyệt) |
+| POST | `/api/admin/users/:id/admin` | (admin) `{ isAdmin }` — cấp/thu quyền admin (không tự thu của mình) |
+| POST | `/api/admin/tickets/grant` | (admin) `{ userId, ticketType, amount, idempotencyKey }` — cộng vé |
+| GET | `/api/admin/cards` | (admin) Mọi thẻ của mọi người chơi: `userId`, `faction`, `level`, `q`, `sort`, phân trang |
 
 Lỗi có dạng `{ "error": { "code": "...", "message": "..." } }`. Endpoint gacha / nâng cấp / auth có rate limit.

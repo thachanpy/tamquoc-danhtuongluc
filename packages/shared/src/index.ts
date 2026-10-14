@@ -24,7 +24,7 @@ export const TICKET_LABELS: Record<TicketType, string> = {
   qun: 'Vé Quần',
 };
 
-export const TICKET_REASONS = ['time_recovery', 'signup_bonus', 'dev_topup', 'gacha_draw'] as const;
+export const TICKET_REASONS = ['time_recovery', 'signup_bonus', 'dev_topup', 'admin_grant', 'gacha_draw'] as const;
 export type TicketReason = (typeof TICKET_REASONS)[number];
 
 export type UpgradeOutcome = 'success' | 'failure';
@@ -64,6 +64,8 @@ export interface ClaimRecoveryDto extends TicketsDto {
 export interface MeDto {
   id: number;
   username: string;
+  /** Quản trị viên: thấy tab Quản trị. */
+  isAdmin: boolean;
   tickets: TicketsDto;
   /** Tính năng bật/tắt theo cấu hình server. */
   features: { devTopup: boolean; devTopupAmount: number };
@@ -218,6 +220,55 @@ export type HistoryEntryDto =
       createdAt: string;
     };
 
+// ===== Tài khoản & Quản trị =====
+
+export type UserStatus = 'pending' | 'approved';
+
+/**
+ * Kết quả đăng ký. Tài khoản mới ở trạng thái 'pending' (chờ admin duyệt, chưa có token, chưa có vé).
+ * Riêng tài khoản đầu tiên của hệ thống tự thành admin, được duyệt ngay và nhận quà đăng ký.
+ */
+export type RegisterResultDto =
+  | { status: 'pending'; userId: number }
+  | { status: 'approved'; userId: number; token: string; isAdmin: boolean; signupBonus: TicketBalances };
+
+export interface AdminUserDto {
+  id: number;
+  username: string;
+  status: UserStatus;
+  isAdmin: boolean;
+  createdAt: string;
+  approvedAt: string | null;
+  tickets: TicketBalances;
+  ticketTotal: number;
+  cardCount: number;
+  maxLevel: number | null;
+}
+
+export interface AdminUsersPage extends Page<AdminUserDto> {
+  pendingCount: number;
+  /** Số vé tối đa mỗi lần admin cộng (ADMIN_GRANT_MAX_TICKETS). */
+  grantMaxTickets: number;
+}
+
+export interface AdminCardDto extends CardDto {
+  userId: number;
+  username: string;
+}
+
+export interface AdminApproveDto {
+  user: AdminUserDto;
+  signupBonus: TicketBalances;
+}
+
+export interface AdminGrantDto {
+  userId: number;
+  username: string;
+  ticketType: TicketType;
+  amount: number;
+  balances: TicketBalances;
+}
+
 export interface Page<T> {
   items: T[];
   page: number;
@@ -315,6 +366,52 @@ export const schemas = {
       sort: { type: 'string', enum: ['newest', 'level_desc', 'level_asc', 'name'] },
       page: { type: 'integer', minimum: 1, default: 1 },
       pageSize: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
+    },
+  },
+  idParams: {
+    type: 'object',
+    required: ['id'],
+    properties: { id: { type: 'integer', minimum: 1 } },
+  },
+  adminUsersQuery: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      q: { type: 'string', maxLength: 32 },
+      status: { type: 'string', enum: ['pending', 'approved'] },
+      page: { type: 'integer', minimum: 1, default: 1 },
+      pageSize: { type: 'integer', minimum: 1, maximum: 500, default: 50 },
+    },
+  },
+  adminSetAdminBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['isAdmin'],
+    properties: { isAdmin: { type: 'boolean' } },
+  },
+  adminGrantBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['userId', 'ticketType', 'amount', 'idempotencyKey'],
+    properties: {
+      userId: { type: 'integer', minimum: 1 },
+      ticketType: { type: 'string', enum: [...TICKET_TYPES] },
+      // Trần chính xác (ADMIN_GRANT_MAX_TICKETS) do server kiểm tra theo game-config
+      amount: { type: 'integer', minimum: 1, maximum: 1000000 },
+      idempotencyKey,
+    },
+  },
+  adminCardsQuery: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      userId: { type: 'integer', minimum: 1 },
+      faction: { type: 'string', enum: [...FACTIONS] },
+      level: { type: 'integer', minimum: MIN_LEVEL, maximum: MAX_LEVEL },
+      q: { type: 'string', maxLength: 64 },
+      sort: { type: 'string', enum: ['newest', 'level_desc', 'level_asc', 'name', 'owner'] },
+      page: { type: 'integer', minimum: 1, default: 1 },
+      pageSize: { type: 'integer', minimum: 1, maximum: 500, default: 60 },
     },
   },
   historyQuery: {

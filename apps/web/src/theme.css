@@ -267,3 +267,35 @@ h1, h2, h3, .tabs a, .t-name, .quick-head b, .gen-head b {
 .logo { width: 42px; height: 42px; flex: none; border-radius: 9px; display: block;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .6)) drop-shadow(0 0 6px rgba(212, 168, 74, .35)); }
 .logo.big { width: 112px; height: 112px; border-radius: 22px; margin: 0 auto 14px; }
+
+/* ===== Đăng ký chờ duyệt & trang Quản trị (mục 3.8) ===== */
+.notice { background: rgba(212,168,74,.12); border: 1px solid rgba(212,168,74,.55); border-radius: 10px; padding: 10px 12px; font-size: 14px; line-height: 1.5; color: var(--text); }
+.notice b { color: var(--gold-2); }
+.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px; background: var(--bad); color: #fff; font: 700 11px/18px var(--num, sans-serif); text-align: center; vertical-align: 1px; }
+.tabs .badge[hidden] { display: none; }
+.sub-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.sub-tabs .btn.on { border-color: var(--gold); color: var(--gold-2); background: rgba(212,168,74,.12); }
+.adm-summary { margin: 2px 0 8px; }
+.adm-msg:empty { display: none; }
+.adm-msg { margin-bottom: 8px; }
+.warn-text { color: #f0b04a; }
+.tag.warn-tag { border-color: #f0b04a; color: #f0b04a; }
+.adm-head, .adm-row { display: grid; grid-template-columns: minmax(150px, 1.3fr) 90px minmax(160px, 1.6fr) 120px minmax(190px, 1.5fr); gap: 10px; align-items: center; }
+.adm-head { padding: 0 10px 6px; border-bottom: 1px solid var(--line); }
+.adm-row { padding: 10px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.adm-row.pending { background: rgba(240,176,74,.06); }
+.adm-tix { display: flex; flex-wrap: wrap; gap: 4px; }
+.adm-tix .tb { font-size: 12px; padding: 1px 8px; }
+.adm-act { display: flex; flex-wrap: wrap; gap: 6px; }
+.grant-form { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; align-items: end; padding: 10px; border: 1px dashed var(--gold); border-radius: 10px; background: rgba(212,168,74,.06); }
+.grant-form label { display: grid; gap: 4px; font-size: 13px; }
+.grant-form select, .grant-form input { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.grant-form input { width: 110px; }
+.adm-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
+.adm-grid .pick { width: 100%; }
+.adm-grid .owner { text-align: center; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1000px) {
+  .adm-head { display: none; }
+  .adm-row { grid-template-columns: 1fr auto; }
+  .adm-tix, .adm-cards, .adm-act { grid-column: 1 / -1; }
+}

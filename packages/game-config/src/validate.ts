@@ -5,6 +5,7 @@ import {
   SIGNUP_BONUS_TICKETS,
   DRAW_COUNT_OPTIONS,
   DEV_TOPUP_TICKETS,
+  ADMIN_GRANT_MAX_TICKETS,
   UPGRADE_INPUT_COUNT,
   QUICK_UPGRADE_MAX_LEVEL,
   GIFT_MAX_CARDS,
@@ -73,6 +74,10 @@ export function validateGameConfig(): void {
   assert(
     Number.isSafeInteger(DEV_TOPUP_TICKETS) && DEV_TOPUP_TICKETS > 0 && DEV_TOPUP_TICKETS <= 10_000,
     'DEV_TOPUP_TICKETS phải là số nguyên 1–10000',
+  );
+  assert(
+    Number.isSafeInteger(ADMIN_GRANT_MAX_TICKETS) && ADMIN_GRANT_MAX_TICKETS >= 1 && ADMIN_GRANT_MAX_TICKETS <= 1_000_000,
+    'ADMIN_GRANT_MAX_TICKETS phải là số nguyên 1–1000000',
   );
   assert(
     Number.isInteger(UPGRADE_INPUT_COUNT) && UPGRADE_INPUT_COUNT >= 2 && UPGRADE_INPUT_COUNT <= 10,

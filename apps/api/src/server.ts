@@ -3,7 +3,17 @@ import rateLimit from '@fastify/rate-limit';
 import { schemas, type TicketType, type MeDto } from '@tq/shared';
 import { ROSTER, DEV_TOPUP_TICKETS } from '@tq/game-config';
 import { AppError, type GameContext } from './context.ts';
-import { register, login, logout, authenticate, getUsername } from './auth.ts';
+import { register, login, logout, authenticate, getUsername, isAdmin } from './auth.ts';
+import {
+  adminListUsers,
+  adminListCards,
+  approveUser,
+  rejectUser,
+  setAdmin,
+  adminGrantTickets,
+  type AdminUsersQuery,
+  type AdminCardsQuery,
+} from './admin.ts';
 import { claimRecovery, devTopup, getTickets, syncRecovery } from './tickets.ts';
 import { draw, getGachaConfig } from './gacha.ts';
 import { previewUpgrade, attemptUpgrade, quickUpgrade } from './upgrade.ts';
@@ -23,6 +33,9 @@ function bearer(req: FastifyRequest): string | undefined {
 
 export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
   const app = Fastify({
+    // Chạy sau nginx: tin header X-Forwarded-For từ proxy cục bộ để rate limit theo IP thật của người chơi.
+    // Đổi bằng TRUST_PROXY (VD "10.0.0.5") nếu proxy ở máy khác; "false" để tắt.
+    trustProxy: process.env.TRUST_PROXY === 'false' ? false : (process.env.TRUST_PROXY ?? '127.0.0.1,::1'),
     logger: {
       level: process.env.LOG_LEVEL ?? 'info',
       // Không ghi token/mật khẩu vào log
@@ -52,6 +65,11 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
   const auth = async (req: FastifyRequest) => {
     req.userId = authenticate(ctx, bearer(req));
   };
+  // Chỉ admin (users.is_admin = 1). Kiểm tra ở server cho mọi route /api/admin/*.
+  const adminAuth = async (req: FastifyRequest) => {
+    req.userId = authenticate(ctx, bearer(req));
+    if (!isAdmin(ctx, req.userId)) throw new AppError(403, 'FORBIDDEN', 'Chỉ quản trị viên mới thực hiện được thao tác này.');
+  };
   const strictLimit = { rateLimit: { max: 60, timeWindow: '1 minute' } };
   const authLimit = { rateLimit: { max: 20, timeWindow: '1 minute' } };
 
@@ -76,6 +94,7 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
     return {
       id: req.userId,
       username: getUsername(ctx, req.userId),
+      isAdmin: isAdmin(ctx, req.userId),
       tickets: getTickets(ctx, req.userId),
       features: { devTopup: !!ctx.features?.devTopup, devTopupAmount: DEV_TOPUP_TICKETS },
     };
@@ -135,6 +154,35 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
       const { toUsername, cardIds, idempotencyKey } = req.body as { toUsername: string; cardIds: number[]; idempotencyKey: string };
       return giftCards(ctx, req.userId, toUsername, cardIds, idempotencyKey);
     },
+  );
+
+  // ---------- Quản trị (mục 3.8) ----------
+  const adminLimit = { rateLimit: { max: 120, timeWindow: '1 minute' } };
+  app.get('/api/admin/users', { preHandler: adminAuth, schema: { querystring: schemas.adminUsersQuery } }, async (req) =>
+    adminListUsers(ctx, req.query as AdminUsersQuery),
+  );
+  app.post('/api/admin/users/:id/approve', { preHandler: adminAuth, schema: { params: schemas.idParams }, config: adminLimit }, async (req) =>
+    approveUser(ctx, (req.params as { id: number }).id),
+  );
+  app.post('/api/admin/users/:id/reject', { preHandler: adminAuth, schema: { params: schemas.idParams }, config: adminLimit }, async (req) =>
+    rejectUser(ctx, (req.params as { id: number }).id),
+  );
+  app.post(
+    '/api/admin/users/:id/admin',
+    { preHandler: adminAuth, schema: { params: schemas.idParams, body: schemas.adminSetAdminBody }, config: adminLimit },
+    async (req) => setAdmin(ctx, req.userId, (req.params as { id: number }).id, (req.body as { isAdmin: boolean }).isAdmin),
+  );
+  app.post('/api/admin/tickets/grant', { preHandler: adminAuth, schema: { body: schemas.adminGrantBody }, config: adminLimit }, async (req) => {
+    const { userId, ticketType, amount, idempotencyKey } = req.body as {
+      userId: number;
+      ticketType: TicketType;
+      amount: number;
+      idempotencyKey: string;
+    };
+    return adminGrantTickets(ctx, req.userId, userId, ticketType, amount, idempotencyKey);
+  });
+  app.get('/api/admin/cards', { preHandler: adminAuth, schema: { querystring: schemas.adminCardsQuery } }, async (req) =>
+    adminListCards(ctx, req.query as AdminCardsQuery),
   );
 
   // ---------- Lịch sử ----------

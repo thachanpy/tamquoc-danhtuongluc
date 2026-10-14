@@ -1,7 +1,7 @@
 import './style.css';
 import './theme.css';
 import { TICKET_TYPES, TICKET_LABELS } from '@tq/shared';
-import { api, setToken, hasToken, newKey, type ApiError } from './api.ts';
+import { api, setToken, hasToken, type ApiError } from './api.ts';
 import { state, setTickets, onTickets } from './state.ts';
 import { esc } from './art.ts';
 import { initMusic, mountMusicControl } from './music.ts';
@@ -9,6 +9,7 @@ import { renderDraw } from './pages/draw.ts';
 import { renderCollection } from './pages/collection.ts';
 import { renderUpgrade } from './pages/upgrade.ts';
 import { renderHistory } from './pages/history.ts';
+import { renderAdmin } from './pages/admin.ts';
 
 const app = document.getElementById('app')!;
 
@@ -35,13 +36,14 @@ const PAGES = {
   draw: { label: 'Quay thẻ', render: renderDraw },
   upgrade: { label: 'Nâng cấp', render: renderUpgrade },
   history: { label: 'Lịch sử', render: renderHistory },
+  admin: { label: 'Quản trị', render: renderAdmin, adminOnly: true },
 } as const;
 type PageId = keyof typeof PAGES;
 
 let cleanupPage: (() => void) | null = null;
 let timer: number | null = null;
 
-function renderLogin(message = '') {
+function renderLogin(message = '', info = '') {
   if (timer) clearInterval(timer);
   app.innerHTML = `
     <div class="login">
@@ -54,6 +56,7 @@ function renderLogin(message = '') {
           <button class="btn primary" data-act="login">Đăng nhập</button>
           <button class="btn ghost" data-act="register">Tạo tài khoản</button>
         </div>
+        ${info ? `<div class="notice" role="status">${info}</div>` : ''}
         <div class="error" aria-live="polite">${esc(message)}</div>
       </form>
     </div>`;
@@ -69,6 +72,14 @@ function renderLogin(message = '') {
       try {
         if (b.dataset.act === 'register') {
           const r = await api.register(u, p);
+          if (r.status === 'pending') {
+            // Tài khoản mới phải chờ admin duyệt mới đăng nhập được (mục 3.8)
+            return renderLogin(
+              '',
+              `<b>Đăng ký thành công!</b> Tài khoản <b>${esc(u)}</b> đang <b>chờ quản trị viên duyệt</b>. ` +
+                `Bạn sẽ đăng nhập được sau khi được duyệt; vé quà tân thủ được cấp lúc duyệt.`,
+            );
+          }
           setToken(r.token);
           await boot();
           const total = TICKET_TYPES.reduce((s, k) => s + r.signupBonus[k], 0);
@@ -82,7 +93,11 @@ function renderLogin(message = '') {
           await boot();
         }
       } catch (e) {
-        renderLogin((e as ApiError).message);
+        const err = e as ApiError;
+        if (err.code === 'ACCOUNT_PENDING') {
+          return renderLogin('', `Tài khoản <b>${esc(u)}</b> đang <b>chờ quản trị viên duyệt</b>. Vui lòng quay lại sau khi được duyệt.`);
+        }
+        renderLogin(err.message);
       }
     };
   });
@@ -100,12 +115,12 @@ function renderShell() {
       <div class="brand"><img class="logo" src="/icons/icon-192.png" alt="" aria-hidden="true" />Tam Quốc: <span>Danh Tướng Lục</span></div>
       <div class="tickets-bar" aria-live="polite"></div>
       <div class="user">
-        ${state.features.devTopup ? `<button class="btn topup small" data-topup title="Tính năng thử nghiệm — cộng ${state.features.devTopupAmount} vé, loại vé ngẫu nhiên">+${state.features.devTopupAmount} vé</button>` : ''}
         <div data-music></div><span>${esc(state.username)}</span><button class="btn ghost small" data-logout>Đăng xuất</button>
       </div>
     </header>
     <nav class="tabs">${Object.entries(PAGES)
-      .map(([id, p]) => `<a href="#${id}" data-tab="${id}">${p.label}</a>`)
+      .filter(([, p]) => !('adminOnly' in p) || state.isAdmin)
+      .map(([id, p]) => `<a href="#${id}" data-tab="${id}">${p.label}${'adminOnly' in p ? ' <span class="badge" data-pending hidden></span>' : ''}</a>`)
       .join('')}</nav>
     <main id="page"></main>`;
   mountMusicControl(app.querySelector<HTMLDivElement>('[data-music]')!);
@@ -114,30 +129,6 @@ function renderShell() {
     setToken(null);
     renderLogin();
   };
-  // Nút cộng vé thử nghiệm: server quyết định số vé & loại vé; client chỉ gửi idempotency key.
-  const topupBtn = app.querySelector<HTMLButtonElement>('[data-topup]');
-  if (topupBtn) {
-    let pendingKey: string | null = null;
-    topupBtn.onclick = async () => {
-      if (topupBtn.disabled) return;
-      topupBtn.disabled = true;
-      pendingKey ??= newKey();
-      try {
-        const r = await api.devTopup(pendingKey);
-        pendingKey = null;
-        setTickets(r.tickets);
-        toast(
-          `+${r.grantedTotal} vé: ${TICKET_TYPES.filter((k) => r.granted[k]).map((k) => `${TICKET_LABELS[k]} ×${r.granted[k]}`).join(', ')}`,
-        );
-      } catch (e) {
-        const err = e as ApiError;
-        if (err.code !== 'NETWORK') pendingKey = null; // lỗi mạng: giữ key để bấm lại là retry an toàn
-        toast(err.message);
-      } finally {
-        topupBtn.disabled = false;
-      }
-    };
-  }
 
   const bar = app.querySelector<HTMLDivElement>('.tickets-bar')!;
   const drawBar = () => {
@@ -172,6 +163,19 @@ function renderShell() {
   }, 500);
 }
 
+/** Số tài khoản chờ duyệt trên tab Quản trị (chỉ admin). */
+async function refreshPendingBadge() {
+  const el = app.querySelector<HTMLSpanElement>('[data-pending]');
+  if (!el) return;
+  try {
+    const p = await api.admin.users({ status: 'pending', pageSize: 1 });
+    el.textContent = String(p.pendingCount);
+    el.hidden = p.pendingCount === 0;
+  } catch {
+    /* chỉ là badge hiển thị */
+  }
+}
+
 function toast(text: string, ms = 4000) {
   const el = document.createElement('div');
   el.className = 'toast';
@@ -183,11 +187,14 @@ function toast(text: string, ms = 4000) {
 function route() {
   const raw = location.hash.slice(1) || 'collection';
   const id = (raw === 'gift' ? 'collection' : raw) as PageId;
-  const page = PAGES[id] ?? PAGES.draw;
+  const page = PAGES[id] && (!('adminOnly' in PAGES[id]) || state.isAdmin) ? PAGES[id] : PAGES.collection;
   cleanupPage?.();
   app.querySelectorAll<HTMLAnchorElement>('[data-tab]').forEach((a) => a.classList.toggle('on', a.dataset.tab === id));
   cleanupPage = page.render(document.getElementById('page')!);
 }
+
+// Trang Quản trị báo khi duyệt/từ chối để cập nhật badge (tránh import vòng main <-> pages).
+window.addEventListener('tq:pending-changed', () => void refreshPendingBadge());
 
 async function boot() {
   if (!hasToken()) return renderLogin();
@@ -197,6 +204,7 @@ async function boot() {
     const claimed = await api.claimRecovery();
     const [me, generals, config] = await Promise.all([api.me(), api.generals(), api.gachaConfig()]);
     state.username = me.username;
+    state.isAdmin = me.isAdmin;
     state.features = me.features;
     state.generals = generals.items;
     state.generalsById = new Map(generals.items.map((g) => [g.id, g]));
@@ -206,6 +214,7 @@ async function boot() {
     if (claimed.grantedTotal > 0) toast(`Nhận ${claimed.grantedTotal} vé hồi trong lúc vắng mặt`);
     window.onhashchange = route;
     route();
+    if (state.isAdmin) void refreshPendingBadge();
   } catch (e) {
     const err = e as ApiError;
     if (err.status === 401) return renderLogin('Phiên đăng nhập đã hết hạn.');

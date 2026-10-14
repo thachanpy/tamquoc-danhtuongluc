@@ -13,6 +13,7 @@ Xây dựng game web gacha thu thập thẻ tướng Tam Quốc. Trọng tâm:
 - Nâng cấp thẻ bằng cách ghép 2 thẻ cùng level.
 - Quản lý bộ sưu tập.
 - Tặng thẻ cho người chơi khác (tối đa 20 thẻ mỗi lần).
+- Trang quản trị: duyệt tài khoản đăng ký, danh sách người chơi, cộng vé, xem mọi thẻ (mục 3.8).
 - Hiệu ứng hình ảnh và trải nghiệm mở thẻ.
 
 Không có chiến đấu, dàn trận, đội hình, PvP hoặc gameplay chiến thuật trong MVP.
@@ -23,8 +24,9 @@ Các nguyên tắc bắt buộc:
 
 - Backend là nguồn dữ liệu có thẩm quyền đối với vé, quyền sở hữu thẻ, tỷ lệ và kết quả ngẫu nhiên.
 - Không có tính năng nạp tiền, thanh toán thật, mua vé bằng Vàng hoặc trừ Vàng để quay trong MVP.
-- Vé miễn phí được cấp tự động theo thời gian, cộng 100 vé quà đăng ký một lần cho tài khoản mới.
-- Có nút cộng 50 vé thử nghiệm, chỉ hoạt động khi server bật `ENABLE_DEV_TOPUP` (mục 3.7).
+- Vé miễn phí được cấp tự động theo thời gian, cộng 100 vé quà đăng ký một lần cho tài khoản mới (cấp lúc được admin duyệt).
+- Tài khoản đăng ký mới phải chờ admin duyệt mới đăng nhập được (mục 3.8).
+- Không còn nút "+50 vé" trên UI (chủ dự án yêu cầu bỏ); endpoint cộng vé thử nghiệm chỉ còn ở server, mặc định tắt (mục 3.7). Cộng vé cho người chơi dùng trang Quản trị.
 - Không có thưởng đăng nhập hằng ngày trong MVP.
 - Vé được chia thành 5 loại (thường, Thục, Ngụy, Ngô, Quần) và được xác định ngẫu nhiên khi cấp.
 - Không giới hạn số lượng vé tích trữ.
@@ -53,6 +55,7 @@ Cấu trúc gợi ý:
 - `apps/api`: Fastify, authentication, game logic và persistence.
 - `packages/shared`: types, schemas, DTO và constants.
 - `packages/game-config`: roster 100 tướng và các cấu hình game.
+- Triển khai server (hướng dẫn ở `README.md`, mục "Triển khai lên server"): `nginx.conf` ở gốc repo (phục vụ `apps/web/dist`, proxy `/api/` sang `127.0.0.1:3000`), `pm2.config.json` ở gốc repo (chạy API `apps/api/src/index.ts` bằng `node`, fork 1 instance). API đặt `trustProxy` (biến `TRUST_PROXY`, mặc định tin 127.0.0.1) để rate limit theo IP thật sau nginx.
 
 Nếu repository đã có cấu trúc hợp lý, hãy giữ cấu trúc hiện tại và điều chỉnh theo thực tế.
 
@@ -334,32 +337,42 @@ Nếu cần xử lý lượng mốc rất lớn sau thời gian offline dài, c�
 
 ### 3.7. Nguồn vé trong MVP
 
-MVP có ba nguồn cấp vé:
+MVP có bốn nguồn cấp vé:
 
 1. **Hồi vé theo mốc 5 phút** (mục 3.6).
-2. **Quà đăng ký (tân thủ)**: khi tạo tài khoản lần đầu, người chơi nhận **100 vé** một lần duy nhất, có ngay sau khi đăng ký/đăng nhập.
-3. **Nút cộng vé thử nghiệm**: mỗi lần bấm cộng **50 vé**, chỉ hoạt động khi server bật cấu hình (xem bên dưới).
+2. **Quà đăng ký (tân thủ)**: khi tài khoản được admin duyệt, người chơi nhận **100 vé** một lần duy nhất.
+3. **Cộng vé thử nghiệm** (endpoint server, **không còn nút trên UI** — chủ dự án đã yêu cầu bỏ nút "+50 vé"): mỗi lần gọi cộng **50 vé**, chỉ hoạt động khi server bật cấu hình (xem bên dưới).
+4. **Admin cộng vé** (chủ dự án yêu cầu): admin chọn người chơi, loại vé và số lượng tại trang Quản trị (mục 3.8).
 
 Quy tắc quà đăng ký:
 
 - Số vé nằm trong cấu hình server (`SIGNUP_BONUS_TICKETS`, mặc định 100).
 - Mỗi vé được roll loại độc lập theo bảng xác suất tại mục 3.5, bằng RNG server.
-- Cấp trong cùng transaction tạo tài khoản; nếu tạo tài khoản thất bại thì không cấp vé.
+- Cấp trong cùng transaction **duyệt tài khoản** (tài khoản đầu tiên tự duyệt: cấp trong transaction tạo tài khoản); nếu thao tác thất bại thì không cấp vé.
+- Tài khoản chờ duyệt chưa có số dư vé; mốc hồi vé bắt đầu tính từ mốc 5 phút gần nhất đã qua tại lúc duyệt.
 - Ghi ledger với reason `signup_bonus`, mỗi loại vé một dòng (`amount_delta` = số vé loại đó).
-- Mỗi người chơi chỉ nhận một lần; đăng nhập lại không cấp thêm. Unique constraint chặn cấp lần hai.
+- Mỗi người chơi chỉ nhận một lần; đăng nhập lại hoặc duyệt lại không cấp thêm. Unique constraint chặn cấp lần hai.
 - Chỉ áp dụng cho tài khoản tạo mới, không cấp hồi tố cho tài khoản đã tồn tại.
 - Đây không phải thưởng đăng nhập hằng ngày.
 
 Quy tắc nút cộng vé thử nghiệm (dành cho giai đoạn mới chơi/playtest):
 
-- Bật/tắt bằng biến môi trường server `ENABLE_DEV_TOPUP` (`1`/`true`). Mặc định **tắt**. Script `pnpm dev` bật sẵn; `pnpm start` không bật. Phải tắt khi chạy thật.
-- Khi tắt: endpoint trả 404 `FEATURE_DISABLED`, UI không hiển thị nút.
+- Bật/tắt bằng biến môi trường server `ENABLE_DEV_TOPUP` (`1`/`true`). Mặc định **tắt**, kể cả `pnpm dev` và `pnpm start`. Phải tắt khi chạy thật.
+- Khi tắt: endpoint trả 404 `FEATURE_DISABLED`. UI không có nút này dù cờ bật hay tắt.
 - Số vé mỗi lần bấm nằm trong cấu hình server (`DEV_TOPUP_TICKETS`, mặc định 50). Client không gửi được số vé hay loại vé.
 - Mỗi vé được roll loại độc lập theo bảng xác suất mục 3.5, bằng RNG server.
 - Không giới hạn số lần bấm.
 - Mỗi lần bấm có một idempotency key; retry trả kết quả cũ, không cộng thêm.
 - Cấp vé và ghi ledger trong một transaction. Ledger reason `dev_topup`, mỗi loại vé một dòng.
 - Miễn phí; không liên quan Vàng, thanh toán hay cửa hàng.
+
+Quy tắc admin cộng vé:
+
+- Chỉ admin (mục 3.8); server kiểm tra quyền. Chỉ cộng cho tài khoản đã duyệt (`NOT_APPROVED`).
+- Admin chọn loại vé (1 trong 5 loại) và số lượng nguyên 1–`ADMIN_GRANT_MAX_TICKETS` (cấu hình game, mặc định 10.000) mỗi lần. Đây là trần mỗi thao tác chống nhập nhầm, không phải trần tồn kho. Không có thao tác trừ vé.
+- Cộng số dư và ghi ledger trong một transaction. Ledger reason `admin_grant`, `reference_id = admin:{adminId}:{key}`, unique index chặn ghi trùng.
+- Idempotency key gắn với admin; retry trả kết quả cũ; cùng key với yêu cầu khác → 409.
+- Người chơi thấy trong Lịch sử: "Quản trị viên tặng: nhận Vé X ×N".
 
 Các quy tắc khác:
 
@@ -368,6 +381,31 @@ Các quy tắc khác:
 - Không có phần thưởng Vàng.
 - Không có hệ thống mua hoặc đổi vé.
 - Nếu sau này bổ sung nguồn vé khác, phải được chủ dự án yêu cầu và cập nhật đặc tả.
+
+### 3.8. Duyệt tài khoản và trang Quản trị
+
+Do chủ dự án yêu cầu.
+
+Duyệt tài khoản:
+
+- Đăng ký tạo tài khoản trạng thái `pending`: chưa có token, chưa có vé, chưa đăng nhập được. Màn đăng ký hiển thị "Đăng ký thành công! Tài khoản đang chờ quản trị viên duyệt…".
+- Đăng nhập tài khoản `pending` (đúng mật khẩu) → 403 `ACCOUNT_PENDING`, UI báo đang chờ duyệt. Sai mật khẩu vẫn là `INVALID_CREDENTIALS`.
+- Session của tài khoản chưa duyệt không được chấp nhận.
+- Admin **Duyệt**: `pending → approved`, tạo số dư 5 loại vé, trạng thái hồi vé và cấp quà đăng ký trong một transaction. Duyệt lại → 409 `ALREADY_APPROVED`.
+- Admin **Từ chối**: xoá tài khoản đang chờ duyệt (chưa có dữ liệu game), tên đăng nhập được giải phóng. Không từ chối được tài khoản đã duyệt (`NOT_PENDING`).
+- Tài khoản chờ duyệt không xuất hiện trong danh sách người nhận và không nhận được thẻ tặng.
+- **Tài khoản đầu tiên** trên database rỗng tự thành admin và được duyệt ngay (có token, nhận quà đăng ký).
+- Migration v6: mọi tài khoản đã có được coi là đã duyệt (`approved_at = created_at`); tài khoản có id nhỏ nhất thành admin.
+
+Quyền admin:
+
+- Cột `users.is_admin`. Mọi route `/api/admin/*` kiểm tra ở server (chưa đăng nhập 401, không phải admin 403 `FORBIDDEN`).
+- Admin cấp/thu quyền admin cho người chơi đã duyệt; không tự thu quyền của chính mình (`ADMIN_SELF`), nên luôn còn ít nhất 1 admin.
+
+Trang Quản trị (`apps/web/src/pages/admin.ts`, tab "Quản trị" chỉ hiện với admin, có badge số tài khoản chờ duyệt):
+
+- **Người chơi**: tìm theo tên, lọc trạng thái; tài khoản chờ duyệt lên đầu. Mỗi dòng: tên, admin, ngày đăng ký/duyệt, trạng thái, số dư từng loại vé và tổng, số thẻ và level cao nhất. Thao tác: Duyệt, Từ chối (có bước xác nhận), Cộng vé (form chọn loại + số lượng), Xem thẻ, Cấp/Thu quyền admin. Khóa nút khi đang xử lý.
+- **Thẻ tướng**: mọi thẻ đang active của mọi người chơi, chỉ xem; lọc theo người chơi, tên tướng, phe, level; sắp xếp level cao nhất (mặc định) / mới nhất / tên tướng / theo người chơi; phân trang 60 thẻ; bấm thẻ mở popup ngắm thẻ.
 
 ## 4. Gacha
 
@@ -564,7 +602,7 @@ Yêu cầu triển khai:
 - Chọn đúng 2 thẻ.
 - Chỉ cho phép chọn 2 thẻ cùng level và cùng tướng.
 - Thẻ được gom theo tướng: mọi bản sao của cùng một tướng luôn nằm liền nhau (VD 2 thẻ Tào Tháo cạnh nhau). Trong mỗi tướng, thẻ chia nhóm theo level (cao → thấp); nhóm cùng level đủ 2 thẻ được đánh dấu "đủ ghép".
-- Sắp xếp áp dụng cho thứ tự các nhóm tướng: ghép được trước (mặc định), level cao nhất, nhiều thẻ nhất, tên A→Z. Không có kiểu sắp xếp nào làm tách rời thẻ cùng tướng.
+- Sắp xếp áp dụng cho thứ tự các nhóm tướng: level cao nhất (mặc định — mọi danh sách thẻ trong game mặc định sort level cao nhất), ghép được trước, nhiều thẻ nhất, tên A→Z. Không có kiểu sắp xếp nào làm tách rời thẻ cùng tướng.
 - Hỗ trợ lọc theo phe, level và sắp xếp.
 - Hiển thị tên, ảnh, phe và level từng thẻ.
 - Hiển thị xác suất thành công.
@@ -699,6 +737,9 @@ Tên bảng có thể điều chỉnh, nhưng phải giữ nguyên các quy tắ
 - `username`
 - `password_hash` nếu dùng đăng nhập bằng mật khẩu
 - `created_at`
+- `status` (`pending` | `approved`, migration v6)
+- `is_admin` (0/1)
+- `approved_at`
 
 ### 7.2. `generals`
 
@@ -783,6 +824,7 @@ Các reason tối thiểu:
 - `time_recovery`
 - `signup_bonus`
 - `dev_topup`
+- `admin_grant` (migration v6)
 - `gacha_draw`
 
 Quy tắc:
@@ -941,12 +983,23 @@ Server phải:
 - `GET /api/gacha/config` trả thêm `giftMaxCards`.
 - `GET /api/history?kind=gift` lọc lịch sử tặng/nhận thẻ.
 
+### 8.4c. Quản trị (chỉ admin, mục 3.8)
+
+- `POST /api/auth/register` trả `{ status: 'pending', userId }` (không token), hoặc `{ status: 'approved', token, isAdmin, signupBonus }` với tài khoản đầu tiên.
+- `GET /api/me` trả thêm `isAdmin`.
+- `GET /api/admin/users?q=&status=&page=&pageSize=`: danh sách người chơi + `pendingCount`, `grantMaxTickets`.
+- `POST /api/admin/users/:id/approve`, `POST /api/admin/users/:id/reject`.
+- `POST /api/admin/users/:id/admin`: body `{ isAdmin }`.
+- `POST /api/admin/tickets/grant`: body `{ userId, ticketType, amount, idempotencyKey }`. Lỗi: `INVALID_AMOUNT`, `NOT_APPROVED`, `IDEMPOTENCY_KEY_REUSED`.
+- `GET /api/admin/cards?userId=&faction=&level=&q=&sort=&page=&pageSize=`: thẻ active của mọi người chơi kèm `username`.
+- Có rate limit cho các thao tác ghi.
+
 ### 8.5. Lịch sử
 
 - `GET /api/history`: lịch sử phân trang.
 - Có thể bổ sung endpoint lịch sử vé nếu cần.
 
-Không tạo API ví Vàng, mua vé, nạp tiền hoặc daily claim trong MVP. Ngoại lệ duy nhất là `POST /api/tickets/dev-topup` (cộng vé thử nghiệm miễn phí, bật/tắt bằng cấu hình).
+Không tạo API ví Vàng, mua vé, nạp tiền hoặc daily claim trong MVP. Ngoại lệ: `POST /api/tickets/dev-topup` (cộng vé thử nghiệm miễn phí, bật/tắt bằng cấu hình) và `POST /api/admin/tickets/grant` (admin cộng vé, mục 3.7–3.8).
 
 ## 9. Bảo mật và tính đúng đắn
 
@@ -996,6 +1049,8 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc daily claim trong MVP. 
 - Không tồn tại logic thưởng đăng nhập hoặc cấp thêm 20 vé mỗi ngày.
 - Tài khoản mới nhận đúng 100 vé quà đăng ký, loại vé roll độc lập; ledger khớp số dư.
 - Đăng nhập lại hoặc đăng ký trùng tên không cấp thêm quà đăng ký.
+- Admin cộng vé: đúng loại + số lượng, ledger `admin_grant` khớp số dư; retry cùng key không cộng thêm; quá trần/số âm bị từ chối; không cộng cho tài khoản chờ duyệt; người không phải admin bị 403.
+- Quà đăng ký cấp lúc duyệt; duyệt lại không cấp thêm.
 - Nút cộng vé: tắt mặc định (404); khi bật, mỗi lần bấm cộng đúng 50 vé, loại vé roll độc lập; retry cùng key không cộng thêm; lỗi giữa chừng không cấp vé; ledger khớp số dư.
 
 ### 10.3. Vé hồi theo thời gian
@@ -1058,6 +1113,14 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc daily claim trong MVP. 
 - Lịch sử hiển thị đúng chiều gửi/nhận cho cả hai người.
 - Danh sách người nhận: không có chính mình; người giao dịch gần nhất lên đầu, còn lại A→Z; tìm kiếm không phân biệt hoa thường; ký tự `%`/`_` không thành wildcard.
 
+### 10.5c. Duyệt tài khoản và quản trị
+
+- Tài khoản đầu tiên là admin, được duyệt; tài khoản sau `pending`, không token, đăng nhập → `ACCOUNT_PENDING`.
+- Duyệt cấp đúng 100 vé, mốc hồi tính từ lúc duyệt; từ chối xoá đăng ký, tên dùng lại được.
+- Route admin: 401 khi chưa đăng nhập, 403 khi không phải admin; không tự thu quyền admin.
+- Admin xem được thẻ của mọi người chơi, lọc theo người chơi.
+- Migration v6 giữ nguyên dữ liệu, tài khoản cũ đã duyệt, id nhỏ nhất là admin.
+
 ### 10.6. Database và API
 
 - Migration chạy thành công trên database mới.
@@ -1085,9 +1148,11 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc daily claim trong MVP. 
 - Hoạt động trên desktop và mobile.
 - Hỗ trợ reduced motion.
 - Không có thưởng đăng nhập, nút nạp tiền, cửa hàng vé hoặc mua vé bằng Vàng.
-- Nút "+50 vé" chỉ hiện khi server bật `ENABLE_DEV_TOPUP`; khóa nút khi đang xử lý.
+- Không có nút "+50 vé" trên UI.
+- Mọi danh sách thẻ (Bộ sưu tập, Nâng cấp, Quản trị) mặc định sắp xếp level cao nhất.
 - Nút Nâng cấp nhanh hiển thị số cặp có thể ghép, bảng tỷ lệ Lv.1–5, bước xác nhận, khóa khi đang xử lý và tổng kết sau khi xong.
 - Bộ sưu tập gom thẻ theo tướng; tặng thẻ nằm trong Bộ sưu tập với dropdown người nhận có tìm kiếm, sắp theo giao dịch gần nhất.
+- Đăng ký hiển thị thông báo chờ duyệt; tab Quản trị chỉ hiện với admin.
 
 ## 11. Nguyên tắc triển khai cho Claude Code
 
@@ -1125,8 +1190,9 @@ Thứ tự ưu tiên:
 - 100 tướng, 25 tướng mỗi phe.
 - 5 loại vé: thường, Thục, Ngụy, Ngô, Quần.
 - Vé miễn phí hồi 1 vé mỗi 5 phút theo mốc đồng hồ server.
-- Tài khoản mới nhận 100 vé quà đăng ký một lần (loại vé random theo mục 3.5).
-- Nút cộng 50 vé thử nghiệm (loại vé random), chỉ khi server bật `ENABLE_DEV_TOPUP`.
+- Tài khoản mới phải được admin duyệt mới đăng nhập được; khi duyệt nhận 100 vé quà đăng ký một lần (loại vé random theo mục 3.5).
+- Trang Quản trị: duyệt/từ chối đăng ký, danh sách người chơi, admin cộng vé (chọn loại + số lượng), xem mọi thẻ của mọi người chơi.
+- Không có nút "+50 vé" trên UI; endpoint thử nghiệm chỉ chạy khi server bật `ENABLE_DEV_TOPUP` (mặc định tắt).
 - Người chơi offline vẫn tích lũy đầy đủ các mốc hợp lệ.
 - Không có thưởng đăng nhập hằng ngày.
 - Mỗi vé được cấp sẽ random loại với xác suất mặc định 20% cho mỗi loại.

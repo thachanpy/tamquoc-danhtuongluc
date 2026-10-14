@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { randomInt } from 'node:crypto';
 import { openDatabase } from '../src/db.ts';
 import { AppError, type GameContext } from '../src/context.ts';
-import { register } from '../src/auth.ts';
+import { register as rawRegister } from '../src/auth.ts';
+import { approveUser } from '../src/admin.ts';
 import { claimRecovery, devTopup, getTickets, readBalances, syncRecovery } from '../src/tickets.ts';
 import { draw } from '../src/gacha.ts';
 import { attemptUpgrade, previewUpgrade, quickUpgrade } from '../src/upgrade.ts';
@@ -13,6 +14,13 @@ import { seedGenerals } from '../src/seed.ts';
 import { runMigrations } from '../src/migrations.ts';
 import { DatabaseSync } from 'node:sqlite';
 import { SIGNUP_BONUS_TICKETS as BONUS, DEV_TOPUP_TICKETS, UPGRADE_INPUT_COUNT, RECOVERY_INTERVAL_MS, GIFT_MAX_CARDS } from '@tq/game-config';
+
+/** Đăng ký + duyệt ngay (tài khoản đầu tiên tự được duyệt; các tài khoản sau được admin duyệt). */
+function register(ctx: GameContext, username: string, password: string) {
+  const r = rawRegister(ctx, username, password);
+  if (r.status === 'approved') return { userId: r.userId, signupBonus: r.signupBonus };
+  return { userId: r.userId, signupBonus: approveUser(ctx, r.userId).signupBonus };
+}
 
 /** Một mốc hồi vé (hiện là 5 phút) — lấy từ cấu hình. */
 const SLOT = RECOVERY_INTERVAL_MS;
@@ -256,6 +264,50 @@ test('migration v4: thêm Vé Quần, giữ nguyên số dư & ledger cũ, tài 
     db.prepare("INSERT INTO user_tickets (user_id, ticket_type, balance, updated_at) VALUES (1, 'xyz', 0, 'x')").run(),
   );
   assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
+});
+
+test('migration v6: tài khoản cũ được coi là đã duyệt, id nhỏ nhất thành admin, ledger giữ nguyên, có reason admin_grant', () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec('PRAGMA foreign_keys = ON');
+  runMigrations(db, 5);
+  db.prepare("INSERT INTO users (id, username, password_hash, created_at) VALUES (3, 'first', 'x', '2026-01-01T00:00:00.000Z')").run();
+  db.prepare("INSERT INTO users (id, username, password_hash, created_at) VALUES (7, 'second', 'x', '2026-01-02T00:00:00.000Z')").run();
+  db.prepare("INSERT INTO user_tickets (user_id, ticket_type, balance, updated_at) VALUES (7, 'wu', 6, 'x')").run();
+  db.prepare("INSERT INTO ticket_transactions (id, user_id, ticket_type, amount_delta, reason, reference_id, created_at) VALUES (11, 7, 'wu', 6, 'signup_bonus', 'signup', 'x')").run();
+  assert.throws(() =>
+    db.prepare("INSERT INTO ticket_transactions (user_id, ticket_type, amount_delta, reason, created_at) VALUES (7, 'wu', 1, 'admin_grant', 'x')").run(),
+  );
+  runMigrations(db);
+  const users = db.prepare('SELECT id, status, is_admin, approved_at FROM users ORDER BY id').all() as {
+    id: number; status: string; is_admin: number; approved_at: string;
+  }[];
+  assert.deepEqual(users.map((u) => [u.id, u.status, u.is_admin]), [[3, 'approved', 1], [7, 'approved', 0]]);
+  assert.equal(users[1]!.approved_at, '2026-01-02T00:00:00.000Z');
+  assert.equal((db.prepare('SELECT amount_delta FROM ticket_transactions WHERE id = 11').get() as { amount_delta: number }).amount_delta, 6);
+  db.prepare("INSERT INTO ticket_transactions (user_id, ticket_type, amount_delta, reason, reference_id, created_at) VALUES (7, 'wu', 5, 'admin_grant', 'admin:3:k', 'x')").run();
+  assert.throws(() => db.prepare("UPDATE users SET status = 'banned' WHERE id = 7").run());
+  assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
+});
+
+test('đăng ký: tài khoản đầu tiên là admin & được duyệt; tài khoản sau chờ duyệt, chưa có vé, chưa đăng nhập được', async () => {
+  const h = makeCtx();
+  const { login } = await import('../src/auth.ts');
+  const first = rawRegister(h.ctx, 'boss', 'secret123');
+  assert.equal(first.status, 'approved');
+  const second = rawRegister(h.ctx, 'newbie', 'secret123');
+  assert.equal(second.status, 'pending');
+  assert.deepEqual(readBalances(h.ctx.db, second.userId), { normal: 0, shu: 0, wei: 0, wu: 0, qun: 0 });
+  assert.throws(() => login(h.ctx, 'newbie', 'secret123'), errCode('ACCOUNT_PENDING'));
+  // Duyệt lúc 10:23 => mốc hồi đã xử lý là 10:20, quà 100 vé tính từ lúc duyệt
+  h.advance(20 * 60 * 1000);
+  const { signupBonus } = approveUser(h.ctx, second.userId);
+  assert.equal(Object.values(signupBonus).reduce((a, b) => a + b, 0), BONUS);
+  const t = getTickets(h.ctx, second.userId);
+  assert.equal(t.total, BONUS);
+  assert.equal(t.lastProcessedRecoveryAt, new Date(Date.UTC(2026, 9, 14, 10, 20)).toISOString());
+  assert.ok(login(h.ctx, 'newbie', 'secret123').token);
+  assert.throws(() => approveUser(h.ctx, second.userId), errCode('ALREADY_APPROVED'));
+  assert.equal(getTickets(h.ctx, second.userId).total, BONUS);
 });
 
 test('tài khoản mới có đủ 5 loại vé, gồm Vé Quần', () => {

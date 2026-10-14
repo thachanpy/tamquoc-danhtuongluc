@@ -3,6 +3,7 @@ import type { GachaConfigDto, GeneralDto, TicketsDto } from '@tq/shared';
 /** Trạng thái client — chỉ là bản sao để hiển thị; server là nguồn sự thật. */
 export const state = {
   username: '',
+  isAdmin: false,
   features: { devTopup: false, devTopupAmount: 0 },
   generals: [] as GeneralDto[],
   generalsById: new Map<string, GeneralDto>(),

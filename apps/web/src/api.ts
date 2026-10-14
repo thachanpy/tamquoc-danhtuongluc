@@ -1,4 +1,10 @@
 import type {
+  AdminApproveDto,
+  AdminCardDto,
+  AdminGrantDto,
+  AdminUserDto,
+  AdminUsersPage,
+  RegisterResultDto,
   CardDto,
   ClaimRecoveryDto,
   DevTopupDto,
@@ -11,7 +17,6 @@ import type {
   Page,
   QuickUpgradeResultDto,
   RecipientDto,
-  TicketBalances,
   TicketType,
   TicketsDto,
   UpgradePreviewDto,
@@ -82,7 +87,7 @@ const qs = (o: Record<string, unknown>) =>
 
 export const api = {
   register: (username: string, password: string) =>
-    call<{ token: string; signupBonus: TicketBalances }>('POST', '/api/auth/register', { username, password }),
+    call<RegisterResultDto>('POST', '/api/auth/register', { username, password }),
   login: (username: string, password: string) => call<{ token: string }>('POST', '/api/auth/login', { username, password }),
   logout: () => call<{ ok: true }>('POST', '/api/auth/logout'),
   me: () => call<MeDto>('GET', '/api/me'),
@@ -102,6 +107,17 @@ export const api = {
   upgradeQuick: (idempotencyKey: string) => call<QuickUpgradeResultDto>('POST', '/api/upgrades/quick', { idempotencyKey }),
   upgradeAttempt: (cardIds: number[], idempotencyKey: string) =>
     call<UpgradeResultDto>('POST', '/api/upgrades/attempt', { cardIds, idempotencyKey }),
+  admin: {
+    users: (q: { q?: string; status?: string; page?: number; pageSize?: number }) =>
+      call<AdminUsersPage>('GET', '/api/admin/users?' + qs(q)),
+    approve: (id: number) => call<AdminApproveDto>('POST', `/api/admin/users/${id}/approve`),
+    reject: (id: number) => call<{ ok: true; username: string }>('POST', `/api/admin/users/${id}/reject`),
+    setAdmin: (id: number, isAdmin: boolean) => call<AdminUserDto>('POST', `/api/admin/users/${id}/admin`, { isAdmin }),
+    grant: (userId: number, ticketType: TicketType, amount: number, idempotencyKey: string) =>
+      call<AdminGrantDto>('POST', '/api/admin/tickets/grant', { userId, ticketType, amount, idempotencyKey }),
+    cards: (q: { userId?: number; faction?: Faction; level?: number; q?: string; sort?: string; page?: number; pageSize?: number }) =>
+      call<Page<AdminCardDto>>('GET', '/api/admin/cards?' + qs(q)),
+  },
   history: (q: { kind?: string; page?: number; pageSize?: number }) => call<Page<HistoryEntryDto>>('GET', '/api/history?' + qs(q)),
 };
 

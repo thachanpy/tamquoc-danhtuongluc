@@ -14,7 +14,7 @@ export function renderUpgrade(root: HTMLElement): () => void {
   let busy = false;
   let pendingKey: string | null = null;
   let alive = true;
-  const filter = { faction: '', level: '', sort: 'ready' as UpgradeSort };
+  const filter = { faction: '', level: '', sort: 'level_desc' as UpgradeSort };
 
   root.innerHTML = `
     <section class="panel">
@@ -28,7 +28,7 @@ export function renderUpgrade(root: HTMLElement): () => void {
         <div class="filters">
           <select data-f="faction" aria-label="Phe"><option value="">Mọi phe</option>${FACTIONS.map((f) => `<option value="${f}">${FACTION_LABELS[f]}</option>`).join('')}</select>
           <select data-f="level" aria-label="Level"><option value="">Mọi level</option>${Array.from({ length: 10 }, (_, i) => `<option value="${i + 1}">Lv.${i + 1}</option>`).join('')}</select>
-          <select data-f="sort" aria-label="Sắp xếp nhóm tướng"><option value="ready">Ghép được trước</option><option value="level_desc">Level cao nhất</option><option value="count">Nhiều thẻ nhất</option><option value="name">Tên A→Z</option></select>
+          <select data-f="sort" aria-label="Sắp xếp nhóm tướng"><option value="level_desc" selected>Level cao nhất</option><option value="ready">Ghép được trước</option><option value="count">Nhiều thẻ nhất</option><option value="name">Tên A→Z</option></select>
         </div>
         <div class="pick-grid"><div class="state-msg">Đang tải thẻ…</div></div>
       </section>

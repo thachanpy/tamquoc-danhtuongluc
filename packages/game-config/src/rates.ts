@@ -21,6 +21,12 @@ export const SIGNUP_BONUS_TICKETS = 100;
 export const DEV_TOPUP_TICKETS = 50;
 
 /**
+ * Admin cộng vé cho người chơi (mục 3.7): số vé tối đa mỗi lần cộng. Admin chọn loại vé và số lượng.
+ * Đây là trần mỗi thao tác để tránh nhập nhầm, KHÔNG phải trần tồn kho.
+ */
+export const ADMIN_GRANT_MAX_TICKETS = 10_000;
+
+/**
  * Các lựa chọn số lần quay trong 1 request (mục 4.4).
  * Nếu số vé loại đã chọn ít hơn số lần yêu cầu, server quay hết số vé còn lại.
  */

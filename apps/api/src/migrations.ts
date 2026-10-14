@@ -232,6 +232,42 @@ CREATE INDEX idx_gifts_from ON card_gifts(from_user_id, id);
 CREATE INDEX idx_gifts_to ON card_gifts(to_user_id, id);
 `,
   },
+  {
+    // Duyệt tài khoản & quản trị (mục 3.8). Tài khoản hiện có được coi là đã duyệt;
+    // tài khoản có id nhỏ nhất trở thành admin. Thêm reason ledger 'admin_grant' (admin cộng vé).
+    version: 6,
+    name: 'user_approval_admin',
+    disableForeignKeys: true,
+    sql: `
+ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'approved' CHECK (status IN ('pending','approved'));
+ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0 CHECK (is_admin IN (0,1));
+ALTER TABLE users ADD COLUMN approved_at TEXT;
+UPDATE users SET approved_at = created_at;
+UPDATE users SET is_admin = 1 WHERE id = (SELECT MIN(id) FROM users);
+CREATE INDEX idx_users_status ON users(status, id);
+
+CREATE TABLE ticket_transactions_new (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER NOT NULL REFERENCES users(id),
+  ticket_type     TEXT NOT NULL CHECK (ticket_type IN ('normal','shu','wei','wu','qun')),
+  amount_delta    INTEGER NOT NULL CHECK (amount_delta <> 0),
+  reason          TEXT NOT NULL CHECK (reason IN ('time_recovery','signup_bonus','dev_topup','admin_grant','gacha_draw')),
+  reference_id    TEXT,
+  idempotency_key TEXT,
+  created_at      TEXT NOT NULL
+);
+INSERT INTO ticket_transactions_new (id, user_id, ticket_type, amount_delta, reason, reference_id, idempotency_key, created_at)
+  SELECT id, user_id, ticket_type, amount_delta, reason, reference_id, idempotency_key, created_at FROM ticket_transactions;
+DROP TABLE ticket_transactions;
+ALTER TABLE ticket_transactions_new RENAME TO ticket_transactions;
+CREATE INDEX idx_ttx_user ON ticket_transactions(user_id, id);
+CREATE UNIQUE INDEX uq_ttx_recovery_slot ON ticket_transactions(user_id, reference_id) WHERE reason = 'time_recovery';
+CREATE UNIQUE INDEX uq_ttx_signup_bonus ON ticket_transactions(user_id, ticket_type) WHERE reason = 'signup_bonus';
+CREATE UNIQUE INDEX uq_ttx_dev_topup ON ticket_transactions(user_id, reference_id, ticket_type) WHERE reason = 'dev_topup';
+-- Mỗi lần admin cộng (1 idempotency key của admin) chỉ ghi 1 lần cho mỗi người chơi
+CREATE UNIQUE INDEX uq_ttx_admin_grant ON ticket_transactions(user_id, reference_id, ticket_type) WHERE reason = 'admin_grant';
+`,
+  },
 ];
 
 /** target: chỉ chạy tới version này (dùng khi test migration). */

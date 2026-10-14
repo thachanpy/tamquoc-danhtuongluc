@@ -1,0 +1,24 @@
+{
+  "apps": [
+    {
+      "name": "tamquoc-api",
+      "cwd": "./apps/api",
+      "script": "src/index.ts",
+      "interpreter": "node",
+      "exec_mode": "fork",
+      "instances": 1,
+      "autorestart": true,
+      "max_restarts": 20,
+      "restart_delay": 3000,
+      "max_memory_restart": "2Gi",
+      "time": true,
+      "env": {
+        "NODE_ENV": "production",
+        "NODE_NO_WARNINGS": "1",
+        "HOST": "127.0.0.1",
+        "PORT": "3000",
+        "LOG_LEVEL": "info"
+      }
+    }
+  ]
+}

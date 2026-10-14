@@ -14,6 +14,18 @@ async function setup(devTopup: boolean) {
   return { app, auth };
 }
 
+type App = Awaited<ReturnType<typeof setup>>['app'];
+
+/** Đăng ký qua HTTP (=> chờ duyệt), admin duyệt qua API, rồi đăng nhập. Trả header auth của người chơi mới. */
+async function regApproved(app: App, adminAuth: Record<string, string>, username: string) {
+  const reg = await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username, password: 'secret123' } });
+  assert.equal(reg.json().status, 'pending');
+  const ok = await app.inject({ method: 'POST', url: `/api/admin/users/${reg.json().userId}/approve`, headers: adminAuth });
+  assert.equal(ok.statusCode, 200);
+  const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username, password: 'secret123' } });
+  return { authorization: `Bearer ${login.json().token}` };
+}
+
 test('HTTP: dev-topup bật => +50 vé; /api/me báo tính năng bật', async () => {
   const { app, auth } = await setup(true);
   const me = (await app.inject({ method: 'GET', url: '/api/me', headers: auth })).json();
@@ -123,8 +135,7 @@ test('HTTP: Nâng cấp nhanh hoạt động qua API, chưa đăng nhập => 401
 
 test('HTTP: tặng thẻ qua API; quá 20 thẻ bị chặn; người nhận thấy thẻ trong bộ sưu tập', async () => {
   const { app, auth } = await setup(true);
-  const bobReg = await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username: 'bob_http', password: 'secret123' } });
-  const bobAuth = { authorization: `Bearer ${bobReg.json().token}` };
+  const bobAuth = await regApproved(app, auth, 'bob_http');
   // Quay để có thẻ
   const bal = (await app.inject({ method: 'GET', url: '/api/tickets', headers: auth })).json().balances as Record<string, number>;
   const type = Object.entries(bal).sort((a, b) => b[1] - a[1])[0]![0];
@@ -149,9 +160,9 @@ test('HTTP: tặng thẻ qua API; quá 20 thẻ bị chặn; người nhận th�
 
 test('HTTP: GET /api/users trả mọi người chơi trừ mình, người giao dịch gần nhất lên đầu, có tìm kiếm; cần đăng nhập', async () => {
   const { app, auth } = await setup(true);
-  for (const n of ['zed_user', 'amy_user']) {
-    await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username: n, password: 'secret123' } });
-  }
+  for (const n of ['zed_user', 'amy_user']) await regApproved(app, auth, n);
+  // Tài khoản chờ duyệt không xuất hiện trong danh sách người nhận
+  await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username: 'pend_user', password: 'secret123' } });
   let list = (await app.inject({ method: 'GET', url: '/api/users', headers: auth })).json().items as { username: string }[];
   assert.deepEqual(list.map((u) => u.username), ['amy_user', 'zed_user']);
   // Quay 1 thẻ rồi tặng zed => zed lên đầu
@@ -164,5 +175,136 @@ test('HTTP: GET /api/users trả mọi người chơi trừ mình, người giao
   const found = (await app.inject({ method: 'GET', url: '/api/users?q=AMY', headers: auth })).json().items;
   assert.deepEqual(found.map((u: { username: string }) => u.username), ['amy_user']);
   assert.equal((await app.inject({ method: 'GET', url: '/api/users' })).statusCode, 401);
+  await app.close();
+});
+
+test('HTTP: đăng ký mới => chờ duyệt, không token, không đăng nhập được; admin duyệt => nhận 100 vé quà', async () => {
+  const { app, auth } = await setup(false);
+  const me = (await app.inject({ method: 'GET', url: '/api/me', headers: auth })).json();
+  assert.equal(me.isAdmin, true); // tài khoản đầu tiên tự thành admin
+  const reg = await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username: 'newbie', password: 'secret123' } });
+  assert.equal(reg.statusCode, 200);
+  assert.equal(reg.json().status, 'pending');
+  assert.equal(reg.json().token, undefined);
+  const denied = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'newbie', password: 'secret123' } });
+  assert.equal(denied.statusCode, 403);
+  assert.equal(denied.json().error.code, 'ACCOUNT_PENDING');
+  // Sai mật khẩu vẫn là INVALID_CREDENTIALS (không lộ trạng thái)
+  const wrong = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'newbie', password: 'wrongpass' } });
+  assert.equal(wrong.json().error.code, 'INVALID_CREDENTIALS');
+  // Danh sách: pending lên đầu, chưa có vé
+  const list = (await app.inject({ method: 'GET', url: '/api/admin/users', headers: auth })).json();
+  assert.equal(list.pendingCount, 1);
+  assert.equal(list.items[0].username, 'newbie');
+  assert.equal(list.items[0].status, 'pending');
+  assert.equal(list.items[0].ticketTotal, 0);
+  // Duyệt
+  const ap = await app.inject({ method: 'POST', url: `/api/admin/users/${reg.json().userId}/approve`, headers: auth });
+  assert.equal(ap.statusCode, 200);
+  assert.equal(ap.json().user.status, 'approved');
+  assert.equal(ap.json().user.ticketTotal, 100);
+  // Duyệt lần 2 => 409, không cấp thêm
+  const again = await app.inject({ method: 'POST', url: `/api/admin/users/${reg.json().userId}/approve`, headers: auth });
+  assert.equal(again.json().error.code, 'ALREADY_APPROVED');
+  const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'newbie', password: 'secret123' } });
+  assert.equal(login.statusCode, 200);
+  const nAuth = { authorization: `Bearer ${login.json().token}` };
+  const nMe = (await app.inject({ method: 'GET', url: '/api/me', headers: nAuth })).json();
+  assert.equal(nMe.isAdmin, false);
+  assert.equal(nMe.tickets.total, 100);
+  await app.close();
+});
+
+test('HTTP: từ chối đăng ký xoá tài khoản chờ duyệt, tên dùng lại được; không từ chối tài khoản đã duyệt', async () => {
+  const { app, auth } = await setup(false);
+  const reg = (await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username: 'spam_user', password: 'secret123' } })).json();
+  const rj = await app.inject({ method: 'POST', url: `/api/admin/users/${reg.userId}/reject`, headers: auth });
+  assert.equal(rj.statusCode, 200);
+  const re = await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username: 'spam_user', password: 'secret123' } });
+  assert.equal(re.json().status, 'pending');
+  const me = (await app.inject({ method: 'GET', url: '/api/me', headers: auth })).json();
+  const bad = await app.inject({ method: 'POST', url: `/api/admin/users/${me.id}/reject`, headers: auth });
+  assert.equal(bad.json().error.code, 'NOT_PENDING');
+  await app.close();
+});
+
+test('HTTP: route admin chặn người không phải admin (403) và chưa đăng nhập (401)', async () => {
+  const { app, auth } = await setup(false);
+  const pAuth = await regApproved(app, auth, 'player_a');
+  for (const [method, url] of [
+    ['GET', '/api/admin/users'],
+    ['GET', '/api/admin/cards'],
+    ['POST', '/api/admin/users/1/approve'],
+    ['POST', '/api/admin/users/1/reject'],
+  ] as const) {
+    assert.equal((await app.inject({ method, url, headers: pAuth })).statusCode, 403, url);
+    assert.equal((await app.inject({ method, url })).statusCode, 401, url);
+  }
+  const g = await app.inject({
+    method: 'POST',
+    url: '/api/admin/tickets/grant',
+    headers: pAuth,
+    payload: { userId: 1, ticketType: 'normal', amount: 5, idempotencyKey: 'grant-forbid-1' },
+  });
+  assert.equal(g.statusCode, 403);
+  // Cấp quyền admin => truy cập được; không tự thu quyền của chính mình
+  const me = (await app.inject({ method: 'GET', url: '/api/me', headers: pAuth })).json();
+  const up = await app.inject({ method: 'POST', url: `/api/admin/users/${me.id}/admin`, headers: auth, payload: { isAdmin: true } });
+  assert.equal(up.json().isAdmin, true);
+  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/users', headers: pAuth })).statusCode, 200);
+  const self = await app.inject({ method: 'POST', url: `/api/admin/users/${me.id}/admin`, headers: pAuth, payload: { isAdmin: false } });
+  assert.equal(self.json().error.code, 'ADMIN_SELF');
+  await app.close();
+});
+
+test('HTTP: admin cộng vé đúng loại + số lượng, ledger admin_grant khớp; retry cùng key không cộng thêm', async () => {
+  const { app, auth } = await setup(false);
+  const pAuth = await regApproved(app, auth, 'player_b');
+  const me = (await app.inject({ method: 'GET', url: '/api/me', headers: pAuth })).json();
+  const before = me.tickets.balances.shu as number;
+  const body = { userId: me.id, ticketType: 'shu', amount: 37, idempotencyKey: 'grant-key-0001' };
+  const r = await app.inject({ method: 'POST', url: '/api/admin/tickets/grant', headers: auth, payload: body });
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.json().balances.shu, before + 37);
+  const r2 = await app.inject({ method: 'POST', url: '/api/admin/tickets/grant', headers: auth, payload: body });
+  assert.equal(r2.json().balances.shu, before + 37);
+  // Cùng key, yêu cầu khác => 409
+  const r3 = await app.inject({ method: 'POST', url: '/api/admin/tickets/grant', headers: auth, payload: { ...body, amount: 38 } });
+  assert.equal(r3.json().error.code, 'IDEMPOTENCY_KEY_REUSED');
+  // Quá trần mỗi lần / số âm bị chặn
+  const big = await app.inject({ method: 'POST', url: '/api/admin/tickets/grant', headers: auth, payload: { ...body, amount: 10001, idempotencyKey: 'grant-key-0002' } });
+  assert.equal(big.json().error.code, 'INVALID_AMOUNT');
+  const neg = await app.inject({ method: 'POST', url: '/api/admin/tickets/grant', headers: auth, payload: { ...body, amount: -5, idempotencyKey: 'grant-key-0003' } });
+  assert.equal(neg.statusCode, 400);
+  // Người chơi thấy trong lịch sử
+  const hist = (await app.inject({ method: 'GET', url: '/api/history?kind=ticket', headers: pAuth })).json();
+  const grant = (hist.items as { reason: string; amountDelta: number; ticketType: string }[]).filter((x) => x.reason === 'admin_grant');
+  assert.deepEqual(grant.map((x) => [x.ticketType, x.amountDelta]), [['shu', 37]]);
+  // Không cộng cho tài khoản chờ duyệt
+  const pend = (await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username: 'pend_b', password: 'secret123' } })).json();
+  const np = await app.inject({ method: 'POST', url: '/api/admin/tickets/grant', headers: auth, payload: { ...body, userId: pend.userId, idempotencyKey: 'grant-key-0004' } });
+  assert.equal(np.json().error.code, 'NOT_APPROVED');
+  await app.close();
+});
+
+test('HTTP: admin xem thẻ của mọi người chơi, lọc theo người chơi', async () => {
+  const { app, auth } = await setup(false);
+  const pAuth = await regApproved(app, auth, 'player_c');
+  for (const [a, k] of [[auth, 'adm-draw-1'], [pAuth, 'pc-draw-1']] as const) {
+    const bal = (await app.inject({ method: 'GET', url: '/api/tickets', headers: a })).json().balances as Record<string, number>;
+    const type = Object.entries(bal).sort((x, y) => y[1] - x[1])[0]![0];
+    await app.inject({ method: 'POST', url: '/api/gacha/draw', headers: a, payload: { ticketType: type, count: 10, idempotencyKey: k } });
+  }
+  const all = (await app.inject({ method: 'GET', url: '/api/admin/cards?pageSize=500', headers: auth })).json();
+  assert.equal(all.total, 20);
+  assert.deepEqual([...new Set((all.items as { username: string }[]).map((c) => c.username))].sort(), ['player_c', 'tester']);
+  const pId = (await app.inject({ method: 'GET', url: '/api/me', headers: pAuth })).json().id;
+  const mine = (await app.inject({ method: 'GET', url: `/api/admin/cards?userId=${pId}&sort=level_desc`, headers: auth })).json();
+  assert.equal(mine.total, 10);
+  assert.ok((mine.items as { username: string }[]).every((c) => c.username === 'player_c'));
+  const users = (await app.inject({ method: 'GET', url: '/api/admin/users?status=approved', headers: auth })).json();
+  const pc = (users.items as { username: string; cardCount: number; ticketTotal: number }[]).find((u) => u.username === 'player_c')!;
+  assert.equal(pc.cardCount, 10);
+  assert.equal(pc.ticketTotal, 90);
   await app.close();
 });
