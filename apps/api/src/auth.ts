@@ -4,8 +4,10 @@ import { RECOVERY_INTERVAL_MS } from '@tq/game-config';
 import { AppError, iso, sha256, type GameContext } from './context.ts';
 import { tx } from './db.ts';
 import { grantSignupBonus } from './tickets.ts';
+import { getRequireApproval } from './settings.ts';
 
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+/** Thời hạn phiên đăng nhập; null = không hết hạn (mặc định, chủ dự án yêu cầu). Phiên lưu trong SQLite nên khởi động lại server không mất. */
+const SESSION_TTL_MS: number | null = null;
 
 function hashPassword(password: string): string {
   const salt = randomBytes(16);
@@ -26,7 +28,7 @@ function createSession(ctx: GameContext, userId: number): string {
   const now = ctx.now();
   ctx.db
     .prepare('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?,?,?,?)')
-    .run(sha256(token), userId, iso(now), iso(now + SESSION_TTL_MS));
+    .run(sha256(token), userId, iso(now), SESSION_TTL_MS === null ? null : iso(now + SESSION_TTL_MS));
   return token;
 }
 
@@ -50,6 +52,7 @@ export function activateAccount(ctx: GameContext, userId: number, now: number): 
  * Đăng ký (mục 3.8): tài khoản mới ở trạng thái 'pending', chưa có vé, chưa đăng nhập được
  * cho đến khi admin duyệt (quà đăng ký và vé hồi tính từ lúc duyệt).
  * Ngoại lệ: tài khoản ĐẦU TIÊN của hệ thống tự thành admin, được duyệt và kích hoạt ngay.
+ * Khi cài đặt "Duyệt tài khoản" tắt (mặc định; admin bật/tắt ở trang Quản trị), mọi tài khoản mới được duyệt ngay.
  */
 export function register(ctx: GameContext, username: string, password: string): RegisterResultDto {
   const passwordHash = hashPassword(password);
@@ -57,15 +60,16 @@ export function register(ctx: GameContext, username: string, password: string): 
     const exists = ctx.db.prepare('SELECT 1 FROM users WHERE username = ?').get(username);
     if (exists) throw new AppError(409, 'USERNAME_TAKEN', 'Tên đăng nhập đã tồn tại.');
     const first = !ctx.db.prepare('SELECT 1 FROM users LIMIT 1').get();
+    const autoApprove = first || !getRequireApproval(ctx);
     const now = ctx.now();
     const nowIso = iso(now);
     const r = ctx.db
       .prepare('INSERT INTO users (username, password_hash, created_at, status, is_admin, approved_at) VALUES (?,?,?,?,?,?)')
-      .run(username, passwordHash, nowIso, first ? 'approved' : 'pending', first ? 1 : 0, first ? nowIso : null);
+      .run(username, passwordHash, nowIso, autoApprove ? 'approved' : 'pending', first ? 1 : 0, autoApprove ? nowIso : null);
     const userId = Number(r.lastInsertRowid);
-    if (!first) return { status: 'pending', userId };
+    if (!autoApprove) return { status: 'pending', userId };
     const signupBonus = activateAccount(ctx, userId, now);
-    return { status: 'approved', userId, isAdmin: true, token: createSession(ctx, userId), signupBonus };
+    return { status: 'approved', userId, isAdmin: first, token: createSession(ctx, userId), signupBonus };
   });
 }
 
@@ -92,8 +96,9 @@ export function authenticate(ctx: GameContext, token: string | undefined): numbe
     .prepare(
       `SELECT s.user_id, s.expires_at, u.status FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?`,
     )
-    .get(sha256(token)) as { user_id: number; expires_at: string; status: string } | undefined;
-  if (!row || Date.parse(row.expires_at) <= ctx.now() || row.status !== 'approved') {
+    .get(sha256(token)) as { user_id: number; expires_at: string | null; status: string } | undefined;
+  const expired = row?.expires_at != null && Date.parse(row.expires_at) <= ctx.now();
+  if (!row || expired || row.status !== 'approved') {
     throw new AppError(401, 'UNAUTHORIZED', 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.');
   }
   return row.user_id;

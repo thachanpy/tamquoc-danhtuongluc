@@ -3,6 +3,7 @@ import { api, newKey, type ApiError } from '../api.ts';
 import { gen, state } from '../state.ts';
 import { cardHtml, esc } from '../art.ts';
 import { openCardViewer } from '../viewer.ts';
+import { rewardText } from './giftcode.ts';
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('vi-VN');
 const pendingChanged = () => window.dispatchEvent(new Event('tq:pending-changed'));
@@ -11,6 +12,7 @@ const pendingChanged = () => window.dispatchEvent(new Event('tq:pending-changed'
  * Trang Quản trị (mục 3.8) — chỉ admin thấy tab này; server kiểm tra quyền ở mọi route /api/admin/*.
  * - Người chơi: duyệt/từ chối đăng ký, xem số vé & số thẻ, cộng vé (chọn loại + số lượng), cấp/thu quyền admin.
  * - Thẻ tướng: mọi thẻ của mọi người chơi, lọc theo người chơi/phe/level/tên.
+ * - Giftcode (mục 3.9): tạo code (vé quay nhiều loại + số lượng, hạn sử dụng tuỳ chọn), bật/tắt code.
  */
 export function renderAdmin(root: HTMLElement): () => void {
   let alive = true;
@@ -19,26 +21,31 @@ export function renderAdmin(root: HTMLElement): () => void {
       <div class="sub-tabs" role="tablist">
         <button class="btn small on" data-sub="users" role="tab">Người chơi</button>
         <button class="btn small" data-sub="cards" role="tab">Thẻ tướng</button>
+        <button class="btn small" data-sub="giftcode" role="tab">Giftcode</button>
       </div>
       <div data-pane="users"></div>
       <div data-pane="cards" hidden></div>
+      <div data-pane="giftcode" hidden></div>
     </section>`;
   const panes = {
     users: root.querySelector<HTMLDivElement>('[data-pane="users"]')!,
     cards: root.querySelector<HTMLDivElement>('[data-pane="cards"]')!,
+    giftcode: root.querySelector<HTMLDivElement>('[data-pane="giftcode"]')!,
   };
+  const giftcodes = giftCodePane(panes.giftcode, () => alive);
   const cards = cardsPane(panes.cards, () => alive);
   const users = usersPane(panes.users, () => alive, (userId) => {
     cards.showUser(userId);
     switchTo('cards');
   });
-  function switchTo(id: 'users' | 'cards') {
+  type Sub = keyof typeof panes;
+  function switchTo(id: Sub) {
     root.querySelectorAll<HTMLButtonElement>('[data-sub]').forEach((b) => b.classList.toggle('on', b.dataset.sub === id));
-    panes.users.hidden = id !== 'users';
-    panes.cards.hidden = id !== 'cards';
+    for (const k of Object.keys(panes) as Sub[]) panes[k].hidden = k !== id;
     if (id === 'cards') cards.ensureLoaded();
+    if (id === 'giftcode') giftcodes.ensureLoaded();
   }
-  root.querySelectorAll<HTMLButtonElement>('[data-sub]').forEach((b) => (b.onclick = () => switchTo(b.dataset.sub as 'users' | 'cards')));
+  root.querySelectorAll<HTMLButtonElement>('[data-sub]').forEach((b) => (b.onclick = () => switchTo(b.dataset.sub as Sub)));
   users.load();
   return () => (alive = false);
 }
@@ -56,6 +63,11 @@ function usersPane(el: HTMLElement, alive: () => boolean, viewCards: (userId: nu
   let busy = false;
 
   el.innerHTML = `
+    <label class="adm-setting">
+      <input type="checkbox" data-approval disabled />
+      <span><b>Duyệt tài khoản đăng ký</b> — bật: người đăng ký mới phải chờ admin duyệt mới vào được game; tắt: đăng ký là chơi ngay.</span>
+      <span class="adm-setting-state muted small"></span>
+    </label>
     <div class="filters">
       <input type="search" placeholder="Tìm tên đăng nhập…" data-f="q" maxlength="32" aria-label="Tìm người chơi" />
       <select data-f="status" aria-label="Trạng thái">
@@ -71,6 +83,39 @@ function usersPane(el: HTMLElement, alive: () => boolean, viewCards: (userId: nu
   const prev = el.querySelector<HTMLButtonElement>('[data-prev]')!;
   const next = el.querySelector<HTMLButtonElement>('[data-next]')!;
   const say = (text: string, ok = true) => (msg.innerHTML = text ? `<div class="${ok ? 'notice' : 'warn'}">${text}</div>` : '');
+
+  // Cài đặt "Duyệt tài khoản" (lưu ở server, áp dụng cho các lượt đăng ký sau đó)
+  const approval = el.querySelector<HTMLInputElement>('[data-approval]')!;
+  const approvalState = el.querySelector<HTMLSpanElement>('.adm-setting-state')!;
+  const showApproval = (on: boolean) => {
+    approval.checked = on;
+    approvalState.textContent = on ? 'Đang bật' : 'Đang tắt';
+  };
+  api.admin
+    .settings()
+    .then((s) => {
+      showApproval(s.requireApproval);
+      approval.disabled = false;
+    })
+    .catch((e) => say(esc((e as Error).message), false));
+  approval.onchange = async () => {
+    const want = approval.checked;
+    approval.disabled = true;
+    try {
+      const s = await api.admin.setSettings({ requireApproval: want });
+      showApproval(s.requireApproval);
+      say(
+        s.requireApproval
+          ? 'Đã <b>bật</b> duyệt tài khoản: người đăng ký mới sẽ chờ duyệt.'
+          : 'Đã <b>tắt</b> duyệt tài khoản: người đăng ký mới vào game ngay. Tài khoản đang chờ (nếu có) vẫn cần duyệt tay.',
+      );
+    } catch (e) {
+      showApproval(!want);
+      say(esc((e as ApiError).message), false);
+    } finally {
+      approval.disabled = false;
+    }
+  };
 
   const ticketChips = (u: AdminUserDto) =>
     TICKET_TYPES.filter((t) => u.tickets[t] > 0)
@@ -375,6 +420,132 @@ function cardsPane(el: HTMLElement, alive: () => boolean) {
       void loadUsers().then(() => (userSel.value = f.userId));
       userSel.value = f.userId;
       void load();
+    },
+  };
+}
+
+// ======================= Giftcode =======================
+
+function giftCodePane(el: HTMLElement, alive: () => boolean) {
+  let loaded = false;
+  let busy = false;
+  const MAX_T = state.config!.giftCodeMaxTickets; // server kiểm tra lại
+  el.innerHTML = `
+    <form class="gc-create">
+      <h3>Tạo giftcode</h3>
+      <label>Mã giftcode <input data-g="code" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_\\-]+" placeholder="VD: TET2027" autocapitalize="characters" /></label>
+      <div class="muted small">Số <b>vé quay</b> mỗi loại (để trống hoặc 0 nếu không tặng). Giftcode chỉ tặng vé.</div>
+      <div class="gc-rewards">${TICKET_TYPES.map(
+        (t) => `<label class="t-${t}">${TICKET_LABELS[t]} <input type="number" min="0" max="${MAX_T}" step="1" data-kind="ticket" data-pool="${t}" inputmode="numeric" placeholder="0" /></label>`,
+      ).join('')}</div>
+      <label>Hạn sử dụng (tuỳ chọn) <input type="datetime-local" data-g="expires" /></label>
+      <label class="check"><input type="checkbox" data-g="featured" /> Hiện trong popup chào người mới & mục gợi ý</label>
+      <div class="row"><button class="btn primary" data-create>Tạo giftcode</button><span class="gc-total muted small"></span></div>
+      <div class="gc-admin-msg" aria-live="polite"></div>
+    </form>
+    <h3>Danh sách giftcode</h3>
+    <div class="gc-admin-list"><div class="state-msg">Đang tải…</div></div>`;
+  const form = el.querySelector<HTMLFormElement>('.gc-create')!;
+  const listEl = el.querySelector<HTMLDivElement>('.gc-admin-list')!;
+  const msg = el.querySelector<HTMLDivElement>('.gc-admin-msg')!;
+  const totalEl = el.querySelector<HTMLSpanElement>('.gc-total')!;
+  const say = (html: string, ok = true) => (msg.innerHTML = html ? `<div class="${ok ? 'notice' : 'warn'}">${html}</div>` : '');
+
+  const readRewards = () =>
+    [...form.querySelectorAll<HTMLInputElement>('[data-pool]')]
+      .map((i) => ({ kind: 'ticket' as const, pool: i.dataset.pool as TicketType, count: Math.floor(Number(i.value) || 0) }))
+      .filter((r) => r.count > 0);
+  const totalOf = (rs: ReturnType<typeof readRewards>) => rs.reduce((s, r) => s + r.count, 0);
+  form.oninput = () => {
+    const t = totalOf(readRewards());
+    totalEl.textContent = t ? `Tổng ${t} vé${t > MAX_T ? ` — vượt tối đa ${MAX_T}` : ''}` : '';
+  };
+
+  async function load() {
+    loaded = true;
+    try {
+      const { items } = await api.admin.giftcodes();
+      if (!alive()) return;
+      const now = Date.now();
+      listEl.innerHTML = items.length
+        ? `<div class="gc-table">${items
+            .map((c) => {
+              const expired = c.expiresAt !== null && Date.parse(c.expiresAt) <= now;
+              const status = !c.isActive
+                ? '<span class="tag bad">Đã tắt</span>'
+                : expired
+                  ? '<span class="tag warn-tag">Hết hạn</span>'
+                  : '<span class="tag ok">Đang bật</span>';
+              return `<div class="gc-row">
+                <div><b class="gc-code">${esc(c.code)}</b>${c.featured ? ' <span class="tag gacha">Gợi ý</span>' : ''}
+                  <div class="muted small">${c.createdBy ? `bởi ${esc(c.createdBy)} · ` : 'mặc định · '}${fmt(c.createdAt)}</div></div>
+                <div>${esc(rewardText(c.rewards))}<div class="muted small">Tổng ${[c.totalTickets ? `${c.totalTickets} vé` : '', c.totalCards ? `${c.totalCards} thẻ` : ''].filter(Boolean).join(' + ')}</div></div>
+                <div class="small">${c.expiresAt ? `Hạn ${fmt(c.expiresAt)}` : 'Không hạn'}</div>
+                <div class="small"><b>${c.redemptionCount}</b> lượt nhập</div>
+                <div>${status}</div>
+                <div>${
+                  c.totalCards > 0 && !c.isActive
+                    ? '<span class="muted small" title="Giftcode chỉ tặng vé quay; code thẻ cũ không bật lại được">Code thẻ cũ</span>'
+                    : `<button class="btn ghost small" data-toggle="${c.id}" data-active="${c.isActive ? 1 : 0}">${c.isActive ? 'Tắt' : 'Bật'}</button>`
+                }</div>
+              </div>`;
+            })
+            .join('')}</div>`
+        : '<div class="state-msg">Chưa có giftcode.</div>';
+    } catch (e) {
+      if (alive()) listEl.innerHTML = `<div class="state-msg error">${esc((e as Error).message)}</div>`;
+    }
+  }
+
+  form.onsubmit = async (ev) => {
+    ev.preventDefault();
+    if (busy || !form.reportValidity()) return;
+    const rewards = readRewards();
+    if (!rewards.length) return say('Hãy nhập số vé cho ít nhất 1 loại.', false);
+    if (totalOf(rewards) > MAX_T) return say(`Mỗi giftcode tối đa ${MAX_T} vé.`, false);
+    const expiresRaw = form.querySelector<HTMLInputElement>('[data-g="expires"]')!.value;
+    const expiresAt = expiresRaw ? new Date(expiresRaw).toISOString() : null; // datetime-local theo giờ máy admin
+    const btn = form.querySelector<HTMLButtonElement>('[data-create]')!;
+    busy = true;
+    btn.disabled = true;
+    try {
+      const c = await api.admin.createGiftCode({
+        code: form.querySelector<HTMLInputElement>('[data-g="code"]')!.value.trim(),
+        rewards,
+        expiresAt,
+        featured: form.querySelector<HTMLInputElement>('[data-g="featured"]')!.checked,
+      });
+      form.reset();
+      totalEl.textContent = '';
+      say(`Đã tạo giftcode <b>${esc(c.code)}</b>: ${esc(rewardText(c.rewards))}${c.expiresAt ? `, hạn ${fmt(c.expiresAt)}` : ', không hạn'}.`);
+      void load();
+    } catch (e) {
+      say(esc((e as ApiError).message), false);
+    } finally {
+      busy = false;
+      btn.disabled = false;
+    }
+  };
+
+  listEl.onclick = async (ev) => {
+    const b = (ev.target as HTMLElement).closest<HTMLButtonElement>('[data-toggle]');
+    if (!b || busy) return;
+    busy = true;
+    b.disabled = true;
+    try {
+      const c = await api.admin.setGiftCodeActive(Number(b.dataset.toggle), b.dataset.active !== '1');
+      say(`Giftcode <b>${esc(c.code)}</b> đã ${c.isActive ? 'bật' : 'tắt'}.`);
+    } catch (e) {
+      say(esc((e as ApiError).message), false);
+    } finally {
+      busy = false;
+      void load();
+    }
+  };
+
+  return {
+    ensureLoaded() {
+      if (!loaded) void load();
     },
   };
 }

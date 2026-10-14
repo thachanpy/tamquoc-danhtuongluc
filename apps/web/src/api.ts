@@ -1,4 +1,9 @@
 import type {
+  AppSettingsDto,
+  AdminGiftCodeDto,
+  GiftCodePublicDto,
+  GiftCodeRedemptionDto,
+  GiftCodeReward,
   AdminApproveDto,
   AdminCardDto,
   AdminGrantDto,
@@ -107,7 +112,17 @@ export const api = {
   upgradeQuick: (idempotencyKey: string) => call<QuickUpgradeResultDto>('POST', '/api/upgrades/quick', { idempotencyKey }),
   upgradeAttempt: (cardIds: number[], idempotencyKey: string) =>
     call<UpgradeResultDto>('POST', '/api/upgrades/attempt', { cardIds, idempotencyKey }),
+  giftcodes: () =>
+    call<{ featured: GiftCodePublicDto[]; redeemed: { code: string; cardCount: number; ticketCount: number; createdAt: string }[] }>('GET', '/api/giftcodes'),
+  redeemGiftCode: (code: string) => call<GiftCodeRedemptionDto>('POST', '/api/giftcodes/redeem', { code }),
   admin: {
+    settings: () => call<AppSettingsDto>('GET', '/api/admin/settings'),
+    setSettings: (body: AppSettingsDto) => call<AppSettingsDto>('POST', '/api/admin/settings', body),
+    giftcodes: () => call<{ items: AdminGiftCodeDto[] }>('GET', '/api/admin/giftcodes'),
+    createGiftCode: (body: { code: string; rewards: GiftCodeReward[]; expiresAt: string | null; featured: boolean }) =>
+      call<AdminGiftCodeDto>('POST', '/api/admin/giftcodes', body),
+    setGiftCodeActive: (id: number, isActive: boolean) =>
+      call<AdminGiftCodeDto>('POST', `/api/admin/giftcodes/${id}/active`, { isActive }),
     users: (q: { q?: string; status?: string; page?: number; pageSize?: number }) =>
       call<AdminUsersPage>('GET', '/api/admin/users?' + qs(q)),
     approve: (id: number) => call<AdminApproveDto>('POST', `/api/admin/users/${id}/approve`),

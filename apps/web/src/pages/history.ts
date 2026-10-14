@@ -14,6 +14,9 @@ function row(e: HistoryEntryDto): string {
     if (e.reason === 'dev_topup') {
       return `<div class="h-row"><span class="tag ok">+${e.amountDelta} vé</span><div>Cộng vé thử nghiệm: nhận <b>${label} ×${e.amountDelta}</b></div><time>${fmt(e.createdAt)}</time></div>`;
     }
+    if (e.reason === 'giftcode') {
+      return `<div class="h-row"><span class="tag ok">+${e.amountDelta} vé</span><div>Giftcode: nhận <b>${label} ×${e.amountDelta}</b></div><time>${fmt(e.createdAt)}</time></div>`;
+    }
     if (e.reason === 'admin_grant') {
       return `<div class="h-row"><span class="tag ok">+${e.amountDelta} vé</span><div>Quản trị viên tặng: nhận <b>${label} ×${e.amountDelta}</b></div><time>${fmt(e.createdAt)}</time></div>`;
     }
@@ -21,6 +24,11 @@ function row(e: HistoryEntryDto): string {
       return `<div class="h-row"><span class="tag ok">+${e.amountDelta} vé</span><div>Quà tân thủ: nhận <b>${label} ×${e.amountDelta}</b></div><time>${fmt(e.createdAt)}</time></div>`;
     }
     return `<div class="h-row"><span class="tag">−1 vé</span><div>Dùng <b>${label}</b> để quay</div><time>${fmt(e.createdAt)}</time></div>`;
+  }
+  if (e.kind === 'giftcode') {
+    const list = e.cards.map((c) => `${esc(gen(c.generalId).name)} Lv.${c.level}`).join(', ');
+    const got = [...(e.tickets ?? []).map((t) => `${TICKET_LABELS[t.pool]} ×${t.count}`), e.cards.length ? `${e.cards.length} thẻ` : ''].filter(Boolean).join(', ');
+    return `<div class="h-row"><span class="tag ok">Giftcode</span><div>Nhập giftcode <b>${esc(e.code)}</b>: nhận <b>${got}</b>${e.cards.length ? `<details><summary class="muted small">Xem thẻ</summary><div class="small">${list}</div></details>` : ''}</div><time>${fmt(e.createdAt)}</time></div>`;
   }
   if (e.kind === 'gift') {
     const list = e.cards.map((c) => `${esc(gen(c.generalId).name)} Lv.${c.level}`).join(', ');
@@ -46,7 +54,7 @@ export function renderHistory(root: HTMLElement): () => void {
   root.innerHTML = `
     <section class="panel">
       <div class="filters">
-        <select data-kind aria-label="Loại"><option value="">Tất cả</option><option value="ticket">Vé (cấp/dùng)</option><option value="gacha">Quay thẻ</option><option value="upgrade">Nâng cấp</option><option value="gift">Tặng thẻ</option></select>
+        <select data-kind aria-label="Loại"><option value="">Tất cả</option><option value="ticket">Vé (cấp/dùng)</option><option value="gacha">Quay thẻ</option><option value="upgrade">Nâng cấp</option><option value="gift">Tặng thẻ</option><option value="giftcode">Giftcode</option></select>
       </div>
       <div class="h-list"><div class="state-msg">Đang tải…</div></div>
       <div class="pager"><button class="btn ghost" data-prev>‹ Trước</button><span class="pinfo muted"></span><button class="btn ghost" data-next>Sau ›</button></div>

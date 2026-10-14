@@ -13,7 +13,8 @@ Xây dựng game web gacha thu thập thẻ tướng Tam Quốc. Trọng tâm:
 - Nâng cấp thẻ bằng cách ghép 2 thẻ cùng level.
 - Quản lý bộ sưu tập.
 - Tặng thẻ cho người chơi khác (tối đa 20 thẻ mỗi lần).
-- Trang quản trị: duyệt tài khoản đăng ký, danh sách người chơi, cộng vé, xem mọi thẻ (mục 3.8).
+- Trang quản trị: duyệt tài khoản đăng ký, danh sách người chơi, cộng vé, xem mọi thẻ, tạo giftcode (mục 3.8).
+- Giftcode tặng vé quay (mục 3.9).
 - Hiệu ứng hình ảnh và trải nghiệm mở thẻ.
 
 Không có chiến đấu, dàn trận, đội hình, PvP hoặc gameplay chiến thuật trong MVP.
@@ -25,7 +26,7 @@ Các nguyên tắc bắt buộc:
 - Backend là nguồn dữ liệu có thẩm quyền đối với vé, quyền sở hữu thẻ, tỷ lệ và kết quả ngẫu nhiên.
 - Không có tính năng nạp tiền, thanh toán thật, mua vé bằng Vàng hoặc trừ Vàng để quay trong MVP.
 - Vé miễn phí được cấp tự động theo thời gian, cộng 100 vé quà đăng ký một lần cho tài khoản mới (cấp lúc được admin duyệt).
-- Tài khoản đăng ký mới phải chờ admin duyệt mới đăng nhập được (mục 3.8).
+- Duyệt tài khoản (mục 3.8) bật/tắt **trên trang Quản trị** (cài đặt lưu ở server, bảng `app_settings`); mặc định tắt: đăng ký là được duyệt ngay.
 - Không còn nút "+50 vé" trên UI (chủ dự án yêu cầu bỏ); endpoint cộng vé thử nghiệm chỉ còn ở server, mặc định tắt (mục 3.7). Cộng vé cho người chơi dùng trang Quản trị.
 - Không có thưởng đăng nhập hằng ngày trong MVP.
 - Vé được chia thành 5 loại (thường, Thục, Ngụy, Ngô, Quần) và được xác định ngẫu nhiên khi cấp.
@@ -337,12 +338,13 @@ Nếu cần xử lý lượng mốc rất lớn sau thời gian offline dài, c�
 
 ### 3.7. Nguồn vé trong MVP
 
-MVP có bốn nguồn cấp vé:
+MVP có năm nguồn cấp vé:
 
 1. **Hồi vé theo mốc 5 phút** (mục 3.6).
 2. **Quà đăng ký (tân thủ)**: khi tài khoản được admin duyệt, người chơi nhận **100 vé** một lần duy nhất.
 3. **Cộng vé thử nghiệm** (endpoint server, **không còn nút trên UI** — chủ dự án đã yêu cầu bỏ nút "+50 vé"): mỗi lần gọi cộng **50 vé**, chỉ hoạt động khi server bật cấu hình (xem bên dưới).
 4. **Admin cộng vé** (chủ dự án yêu cầu): admin chọn người chơi, loại vé và số lượng tại trang Quản trị (mục 3.8).
+5. **Giftcode** (chủ dự án yêu cầu): giftcode có dòng phần thưởng vé cộng đúng loại + số lượng đã cấu hình, mỗi người chơi 1 lần (mục 3.9). Ledger reason `giftcode`.
 
 Quy tắc quà đăng ký:
 
@@ -388,6 +390,7 @@ Do chủ dự án yêu cầu.
 
 Duyệt tài khoản:
 
+- **Bật/tắt trên trang Quản trị** (chủ dự án yêu cầu; trước đây là biến môi trường `REQUIRE_APPROVAL`, đã bỏ): cài đặt `require_approval` trong bảng `app_settings` (migration v10), mặc định **tắt**. Áp dụng cho các lượt đăng ký sau khi đổi; tài khoản đang chờ duyệt vẫn chờ (admin duyệt tay) khi tắt. Khi tắt, đăng ký tạo tài khoản `approved` ngay, trả token và cấp quà đăng ký trong cùng transaction tạo tài khoản; tài khoản mới không phải admin (trừ tài khoản đầu tiên). Các quy tắc dưới đây áp dụng khi bật.
 - Đăng ký tạo tài khoản trạng thái `pending`: chưa có token, chưa có vé, chưa đăng nhập được. Màn đăng ký hiển thị "Đăng ký thành công! Tài khoản đang chờ quản trị viên duyệt…".
 - Đăng nhập tài khoản `pending` (đúng mật khẩu) → 403 `ACCOUNT_PENDING`, UI báo đang chờ duyệt. Sai mật khẩu vẫn là `INVALID_CREDENTIALS`.
 - Session của tài khoản chưa duyệt không được chấp nhận.
@@ -404,8 +407,28 @@ Quyền admin:
 
 Trang Quản trị (`apps/web/src/pages/admin.ts`, tab "Quản trị" chỉ hiện với admin, có badge số tài khoản chờ duyệt):
 
-- **Người chơi**: tìm theo tên, lọc trạng thái; tài khoản chờ duyệt lên đầu. Mỗi dòng: tên, admin, ngày đăng ký/duyệt, trạng thái, số dư từng loại vé và tổng, số thẻ và level cao nhất. Thao tác: Duyệt, Từ chối (có bước xác nhận), Cộng vé (form chọn loại + số lượng), Xem thẻ, Cấp/Thu quyền admin. Khóa nút khi đang xử lý.
+- **Người chơi**: ô bật/tắt "Duyệt tài khoản đăng ký" ở đầu tab; tìm theo tên, lọc trạng thái; tài khoản chờ duyệt lên đầu. Mỗi dòng: tên, admin, ngày đăng ký/duyệt, trạng thái, số dư từng loại vé và tổng, số thẻ và level cao nhất. Thao tác: Duyệt, Từ chối (có bước xác nhận), Cộng vé (form chọn loại + số lượng), Xem thẻ, Cấp/Thu quyền admin. Khóa nút khi đang xử lý.
 - **Thẻ tướng**: mọi thẻ đang active của mọi người chơi, chỉ xem; lọc theo người chơi, tên tướng, phe, level; sắp xếp level cao nhất (mặc định) / mới nhất / tên tướng / theo người chơi; phân trang 60 thẻ; bấm thẻ mở popup ngắm thẻ.
+
+### 3.9. Giftcode
+
+Do chủ dự án yêu cầu. Giftcode **chỉ tặng vé quay**, không tặng thẻ tướng (chủ dự án đã bỏ phần thưởng thẻ).
+
+- Mỗi giftcode gồm một hoặc nhiều dòng phần thưởng `{ kind: 'ticket', pool, count }`: cộng `count` vé quay loại `pool` (Thường, Thục, Ngụy, Ngô, Quần). Các dòng cùng loại vé được gộp. Ví dụ: 200 Vé Thục; hoặc 10 Vé Thục + 20 Vé Ngụy.
+- Ghi ledger reason `giftcode`, `reference_id = giftcode:{codeId}`, mỗi loại vé một dòng; unique index chặn cộng lần 2.
+- Tạo code có phần thưởng thẻ (`kind = 'card'`) bị từ chối (`INVALID_REWARDS`).
+- Code thẻ cũ (tạo trước migration v9; dữ liệu trước v8 không có `kind` cũng là thẻ) bị tắt ở migration v9: không nhập được (`GIFTCODE_NOT_FOUND`), không bật lại được (`GIFTCODE_LEGACY`); lượt nhập và thẻ đã nhận trước đó giữ nguyên, lịch sử vẫn hiển thị.
+- Mỗi giftcode tối đa `GIFT_CODE_MAX_TICKETS` vé (mặc định 10.000); đây là trần mỗi code, không phải trần tồn kho.
+- Mã: chữ, số, `-`, `_`, dài 3–32; không phân biệt hoa thường, lưu IN HOA; duy nhất.
+- **Mỗi người chơi nhập mỗi giftcode đúng 1 lần** (UNIQUE `code_id, user_id`); nhập lại → 409 `GIFTCODE_ALREADY_REDEEMED`.
+- Hạn sử dụng tuỳ chọn (`expires_at`, null = không hạn, mặc định không hạn). Hết hạn → 410 `GIFTCODE_EXPIRED`. Code sai hoặc đã tắt → 404 `GIFTCODE_NOT_FOUND`.
+- Cộng vé và ghi lượt nhập trong một transaction; lỗi giữa chừng không cộng vé nào và chưa tính là đã nhập.
+- Admin tạo code (mã, số vé từng loại, hạn sử dụng tuỳ chọn, cờ "gợi ý"), bật/tắt code. Không sửa phần thưởng sau khi tạo; tắt code không thu hồi vé đã nhận.
+- **4 giftcode tân thủ mặc định**, không hạn, có cờ gợi ý — là **vé quay** (chủ dự án yêu cầu; migration v7 tạo nhầm là thẻ, migration v8 sửa thành vé): `THUCQUOC` 200 Vé Thục, `NGUYQUOC` 200 Vé Ngụy, `NGOQUOC` 200 Vé Ngô, `QUANQUOC` 200 Vé Quần. Người đã nhập trước v8 (nhận 200 thẻ) giữ nguyên thẻ và lượt nhập, không nhập lại được.
+- Trang **Giftcode** (tab `#giftcode`, `apps/web/src/pages/giftcode.ts`): ô nhập code, kết quả (số vé đã cộng theo loại — thanh vé cập nhật ngay), danh sách code gợi ý kèm trạng thái đã nhập, danh sách code đã nhập.
+- **Popup lần đầu đăng nhập**: nếu còn code gợi ý chưa nhập, hiện popup liệt kê các code đó; nút "Đến trang nhập Giftcode" chuyển sang tab Giftcode. Chỉ hiện 1 lần mỗi tài khoản trên mỗi trình duyệt (localStorage `tq.gcPopup.<username>`).
+- Lịch sử hiển thị "Nhập giftcode X: nhận Vé … ×N" (`GET /api/history?kind=giftcode`; lượt nhập code thẻ cũ vẫn hiện danh sách thẻ); dòng ledger vé hiển thị "Giftcode: nhận Vé X ×N".
+- Trang Quản trị có tab **Giftcode**: form tạo code (số vé từng loại), danh sách code (phần thưởng, hạn, số lượt nhập, trạng thái, nút Bật/Tắt; code thẻ cũ ghi "Code thẻ cũ", không có nút Bật).
 
 ## 4. Gacha
 
@@ -716,6 +739,7 @@ Hiển thị lịch sử phân trang:
 - UI hiện đại, tương phản tốt, responsive cho desktop và mobile.
 - Phân biệt phe bằng màu và biểu tượng nhất quán.
 - Khung thẻ theo cấp (chủ dự án cung cấp bộ khung tham chiếu): Cấp 1 Đồng, 2 Bạc, 3 Lục, 4 Vàng, 5 Đỏ, 6 Huyền, 7 Tử, 8 Cam, 9 Bạch kim, 10 Kim cương. Cấp 1–5 là khung kim loại (cấp 5 có đá đỏ phát sáng); cấp 6–10 có đá quý, hào quang, cánh/rồng/phượng. Phần trang trí cấp 6–10 được phép tràn ra ngoài thân thẻ.
+- Thân thẻ (avatar + tên) luôn cùng kích thước ở mọi cấp trong cùng một ô: thẻ Lv.6–10 cần chừa chỗ khung lớn hơn nên được phóng to (≈1,171×) kèm lề âm để thân thẻ trùng đúng vị trí/kích thước thân thẻ Lv.1–5; khung Lv.6+ tràn ra ngoài ô, ô chứa thẻ Lv.6+ được nới rộng. Thẻ luôn căn giữa ô; các ô nhóm level trong cùng một tướng cao bằng nhau và dùng chung đệm (nhóm có thẻ Lv.6+ thì mọi ô cùng nới), nên thân thẻ các cấp thẳng hàng. Kích thước ô đặt bằng biến CSS `--cw` (`style.css`).
 - Ảnh khung nằm ở `apps/web/public/frames/lv1.png` … `lv10.png` (PNG nền trong suốt, tách từ bộ khung tham chiếu bản 3 bằng color-to-alpha nên giữ được hào quang mờ; thân thẻ rộng 240px trong ảnh khung). Vị trí đặt khung so với thân thẻ khai báo ở `FRAME_LAYOUT` trong `apps/web/src/art.ts`; dùng chung cho thẻ DOM và thẻ PixiJS (animation mở thẻ, ghép thẻ). Thay khung = thay file PNG cùng tên (nếu tỉ lệ khung đổi thì cập nhật `FRAME_LAYOUT`).
 - Màu chữ level và chấm màu ở bảng tỷ lệ dùng màu của bậc khung tương ứng.
 - Chân dung tướng nằm ở `apps/web/public/generals/{artKey}.jpg` (cắt từ 4 bảng ảnh độ phân giải cao chủ dự án cung cấp, mỗi phe một bảng 5×5, bỏ khung và bảng tên; mỗi ảnh 286×378). Dùng chung cho thẻ DOM và thẻ PixiJS; hiển thị kiểu cover, canh phía trên. Thay artwork = thay file cùng tên.
@@ -740,6 +764,13 @@ Tên bảng có thể điều chỉnh, nhưng phải giữ nguyên các quy tắ
 - `status` (`pending` | `approved`, migration v6)
 - `is_admin` (0/1)
 - `approved_at`
+
+### 7.1b. `sessions`
+
+- `token_hash` (PK, SHA-256 của token; token gốc không lưu), `user_id`, `created_at`, `expires_at`.
+- Phiên đăng nhập lưu trong SQLite nên khởi động lại server **không** phải đăng nhập lại.
+- **Không hết hạn** (chủ dự án yêu cầu; migration v11 cho `expires_at` = NULL và bỏ hạn các phiên cũ). Thời hạn cấu hình ở `SESSION_TTL_MS` (`apps/api/src/auth.ts`, `null` = không hạn).
+- Đăng xuất xoá đúng phiên đó khỏi bảng; token cũ dùng lại → 401. Từ chối tài khoản chờ duyệt cũng xoá mọi phiên của tài khoản đó.
 
 ### 7.2. `generals`
 
@@ -825,6 +856,7 @@ Các reason tối thiểu:
 - `signup_bonus`
 - `dev_topup`
 - `admin_grant` (migration v6)
+- `giftcode` (migration v8)
 - `gacha_draw`
 
 Quy tắc:
@@ -883,6 +915,15 @@ Lịch sử tặng thẻ (migration v5).
 - `card_count` (≥ 1)
 - `idempotency_key` (UNIQUE theo người gửi)
 - `created_at`
+
+### 7.8c. `gift_codes`, `gift_code_redemptions` (migration v7)
+
+- `gift_codes`: `id`, `code` (UNIQUE NOCASE), `rewards` (JSON `[{kind,pool,count}]`), `total_cards`, `total_tickets` (v8), `expires_at` (null = không hạn), `is_active`, `featured`, `created_by` (null = mặc định), `created_at`.
+- `gift_code_redemptions`: `id`, `code_id`, `user_id`, `cards_snapshot` (JSON id/tướng/level), `card_count` (≥ 0), `tickets_snapshot` (v8, JSON `[{pool,count}]`), `created_at`; UNIQUE (`code_id`, `user_id`).
+
+### 7.8d. `app_settings` (migration v10)
+
+- `key` (PK), `value`, `updated_at`, `updated_by`. Hiện có `require_approval` (`'0'`/`'1'`, mặc định `'0'`).
 
 ### 7.9. Idempotency
 
@@ -990,9 +1031,19 @@ Server phải:
 - `GET /api/admin/users?q=&status=&page=&pageSize=`: danh sách người chơi + `pendingCount`, `grantMaxTickets`.
 - `POST /api/admin/users/:id/approve`, `POST /api/admin/users/:id/reject`.
 - `POST /api/admin/users/:id/admin`: body `{ isAdmin }`.
+- `GET /api/admin/settings` → `{ requireApproval }`; `POST /api/admin/settings` body `{ requireApproval }` (bật/tắt duyệt tài khoản).
 - `POST /api/admin/tickets/grant`: body `{ userId, ticketType, amount, idempotencyKey }`. Lỗi: `INVALID_AMOUNT`, `NOT_APPROVED`, `IDEMPOTENCY_KEY_REUSED`.
 - `GET /api/admin/cards?userId=&faction=&level=&q=&sort=&page=&pageSize=`: thẻ active của mọi người chơi kèm `username`.
 - Có rate limit cho các thao tác ghi.
+
+### 8.4d. Giftcode (mục 3.9)
+
+- `GET /api/giftcodes`: `featured[]` (code gợi ý còn hiệu lực + `redeemed`), `redeemed[]` (code mình đã nhập).
+- `POST /api/giftcodes/redeem`: body `{ code }`. Lỗi: `GIFTCODE_NOT_FOUND`, `GIFTCODE_EXPIRED`, `GIFTCODE_ALREADY_REDEEMED`. Có rate limit.
+- `GET /api/admin/giftcodes`, `POST /api/admin/giftcodes` (body `{ code, rewards[], expiresAt?, featured? }`; lỗi `INVALID_CODE`, `INVALID_REWARDS`, `INVALID_EXPIRY`, `GIFTCODE_EXISTS`), `POST /api/admin/giftcodes/:id/active` (body `{ isActive }`). Chỉ admin.
+- `POST /api/giftcodes/redeem` trả `tickets[]` và `balances` (số dư vé mới).
+- `POST /api/admin/giftcodes/:id/active` bật code thẻ cũ → 409 `GIFTCODE_LEGACY`.
+- `GET /api/gacha/config` trả thêm `giftCodeMaxTickets`.
 
 ### 8.5. Lịch sử
 
@@ -1115,13 +1166,28 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc daily claim trong MVP. 
 
 ### 10.5c. Duyệt tài khoản và quản trị
 
-- Tài khoản đầu tiên là admin, được duyệt; tài khoản sau `pending`, không token, đăng nhập → `ACCOUNT_PENDING`.
+- Cài đặt Duyệt tài khoản mặc định tắt; chỉ admin đổi được (401/403); đổi xong áp dụng ngay cho lượt đăng ký kế tiếp.
+- Tắt: đăng ký được duyệt ngay, có token, nhận 100 vé, không phải admin.
+- Bật: tài khoản đầu tiên là admin, được duyệt; tài khoản sau `pending`, không token, đăng nhập → `ACCOUNT_PENDING`.
 - Duyệt cấp đúng 100 vé, mốc hồi tính từ lúc duyệt; từ chối xoá đăng ký, tên dùng lại được.
 - Route admin: 401 khi chưa đăng nhập, 403 khi không phải admin; không tự thu quyền admin.
 - Admin xem được thẻ của mọi người chơi, lọc theo người chơi.
 - Migration v6 giữ nguyên dữ liệu, tài khoản cũ đã duyệt, id nhỏ nhất là admin.
 
+### 10.5d. Giftcode
+
+- 4 code tân thủ là 200 vé mỗi loại phe, không hạn; nhập cộng đúng loại vé, ledger `giftcode` khớp số dư, không tạo thẻ.
+- Code nhiều loại vé cộng đúng từng loại (gộp dòng cùng loại); không tạo thẻ; không phân biệt hoa thường.
+- Tạo code có thẻ bị từ chối; code thẻ cũ không nhập được, không bật lại được.
+- Lỗi giữa chừng không cộng vé nào.
+- Migration v8 giữ lượt nhập cũ, đổi 4 code tân thủ thành vé; migration v9 tắt code thẻ cũ.
+- Nhập lại cùng code bị chặn; người chơi khác vẫn nhập được.
+- Code hết hạn, đã tắt, không tồn tại bị từ chối, không cộng vé.
+- Admin tạo code chặn trùng mã, vượt trần, hạn trong quá khứ; người thường bị 403.
+
 ### 10.6. Database và API
+
+- Phiên đăng nhập còn sau khi khởi động lại server (mở lại file DB), không hết hạn; đăng xuất xoá phiên, token cũ → 401.
 
 - Migration chạy thành công trên database mới.
 - Migration không phá dữ liệu hiện có.
@@ -1153,6 +1219,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc daily claim trong MVP. 
 - Nút Nâng cấp nhanh hiển thị số cặp có thể ghép, bảng tỷ lệ Lv.1–5, bước xác nhận, khóa khi đang xử lý và tổng kết sau khi xong.
 - Bộ sưu tập gom thẻ theo tướng; tặng thẻ nằm trong Bộ sưu tập với dropdown người nhận có tìm kiếm, sắp theo giao dịch gần nhất.
 - Đăng ký hiển thị thông báo chờ duyệt; tab Quản trị chỉ hiện với admin.
+- Có tab Giftcode; popup lần đầu đăng nhập mời nhập code gợi ý.
 
 ## 11. Nguyên tắc triển khai cho Claude Code
 
@@ -1190,8 +1257,9 @@ Thứ tự ưu tiên:
 - 100 tướng, 25 tướng mỗi phe.
 - 5 loại vé: thường, Thục, Ngụy, Ngô, Quần.
 - Vé miễn phí hồi 1 vé mỗi 5 phút theo mốc đồng hồ server.
-- Tài khoản mới phải được admin duyệt mới đăng nhập được; khi duyệt nhận 100 vé quà đăng ký một lần (loại vé random theo mục 3.5).
-- Trang Quản trị: duyệt/từ chối đăng ký, danh sách người chơi, admin cộng vé (chọn loại + số lượng), xem mọi thẻ của mọi người chơi.
+- Duyệt tài khoản bật/tắt trên trang Quản trị (mặc định tắt: đăng ký là vào game ngay); tài khoản mới nhận 100 vé quà đăng ký một lần lúc được duyệt (loại vé random theo mục 3.5).
+- Trang Quản trị: duyệt/từ chối đăng ký, danh sách người chơi, admin cộng vé (chọn loại + số lượng), xem mọi thẻ của mọi người chơi, tạo/bật/tắt giftcode.
+- Giftcode chỉ tặng vé quay (nhiều loại + số lượng, hạn tuỳ chọn, mỗi người nhập 1 lần); 4 code tân thủ THUCQUOC/NGUYQUOC/NGOQUOC/QUANQUOC, mỗi code 200 vé phe tương ứng.
 - Không có nút "+50 vé" trên UI; endpoint thử nghiệm chỉ chạy khi server bật `ENABLE_DEV_TOPUP` (mặc định tắt).
 - Người chơi offline vẫn tích lũy đầy đủ các mốc hợp lệ.
 - Không có thưởng đăng nhập hằng ngày.

@@ -268,6 +268,154 @@ CREATE UNIQUE INDEX uq_ttx_dev_topup ON ticket_transactions(user_id, reference_i
 CREATE UNIQUE INDEX uq_ttx_admin_grant ON ticket_transactions(user_id, reference_id, ticket_type) WHERE reason = 'admin_grant';
 `,
   },
+  {
+    // Giftcode (mục 3.9): mỗi người chơi nhập mỗi code đúng 1 lần (UNIQUE code_id, user_id).
+    // Tạo sẵn 4 code mặc định, không hạn sử dụng, hiện trong popup người mới.
+    version: 7,
+    name: 'gift_codes',
+    sql: `
+CREATE TABLE gift_codes (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  code        TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  rewards     TEXT NOT NULL,
+  total_cards INTEGER NOT NULL CHECK (total_cards >= 1),
+  expires_at  TEXT,
+  is_active   INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+  featured    INTEGER NOT NULL DEFAULT 0 CHECK (featured IN (0,1)),
+  created_by  INTEGER REFERENCES users(id),
+  created_at  TEXT NOT NULL
+);
+
+CREATE TABLE gift_code_redemptions (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  code_id        INTEGER NOT NULL REFERENCES gift_codes(id),
+  user_id        INTEGER NOT NULL REFERENCES users(id),
+  cards_snapshot TEXT NOT NULL,
+  card_count     INTEGER NOT NULL CHECK (card_count >= 1),
+  created_at     TEXT NOT NULL,
+  UNIQUE (code_id, user_id)
+);
+CREATE INDEX idx_gcr_user ON gift_code_redemptions(user_id, id);
+
+INSERT INTO gift_codes (code, rewards, total_cards, expires_at, is_active, featured, created_by, created_at) VALUES
+  ('THUCQUOC', '[{"pool":"shu","count":200}]', 200, NULL, 1, 1, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('NGUYQUOC', '[{"pool":"wei","count":200}]', 200, NULL, 1, 1, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('NGOQUOC',  '[{"pool":"wu","count":200}]',  200, NULL, 1, 1, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  ('QUANQUOC', '[{"pool":"qun","count":200}]', 200, NULL, 1, 1, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+`,
+  },
+  {
+    // Giftcode tặng được VÉ QUAY (chủ dự án yêu cầu: 4 code tân thủ là vé, không phải thẻ).
+    // - Ledger thêm reason 'giftcode' (dựng lại bảng, giữ nguyên id và dữ liệu).
+    // - gift_code_redemptions: card_count cho phép 0 (code chỉ có vé), thêm tickets_snapshot.
+    // - gift_codes: thêm total_tickets, total_cards cho phép 0; 4 code mặc định đổi thành 200 vé mỗi loại.
+    //   Lượt nhập cũ (đã nhận thẻ) giữ nguyên, không thu hồi, không cho nhập lại.
+    version: 8,
+    name: 'gift_codes_tickets',
+    disableForeignKeys: true,
+    sql: `
+CREATE TABLE ticket_transactions_new (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER NOT NULL REFERENCES users(id),
+  ticket_type     TEXT NOT NULL CHECK (ticket_type IN ('normal','shu','wei','wu','qun')),
+  amount_delta    INTEGER NOT NULL CHECK (amount_delta <> 0),
+  reason          TEXT NOT NULL CHECK (reason IN ('time_recovery','signup_bonus','dev_topup','admin_grant','giftcode','gacha_draw')),
+  reference_id    TEXT,
+  idempotency_key TEXT,
+  created_at      TEXT NOT NULL
+);
+INSERT INTO ticket_transactions_new (id, user_id, ticket_type, amount_delta, reason, reference_id, idempotency_key, created_at)
+  SELECT id, user_id, ticket_type, amount_delta, reason, reference_id, idempotency_key, created_at FROM ticket_transactions;
+DROP TABLE ticket_transactions;
+ALTER TABLE ticket_transactions_new RENAME TO ticket_transactions;
+CREATE INDEX idx_ttx_user ON ticket_transactions(user_id, id);
+CREATE UNIQUE INDEX uq_ttx_recovery_slot ON ticket_transactions(user_id, reference_id) WHERE reason = 'time_recovery';
+CREATE UNIQUE INDEX uq_ttx_signup_bonus ON ticket_transactions(user_id, ticket_type) WHERE reason = 'signup_bonus';
+CREATE UNIQUE INDEX uq_ttx_dev_topup ON ticket_transactions(user_id, reference_id, ticket_type) WHERE reason = 'dev_topup';
+CREATE UNIQUE INDEX uq_ttx_admin_grant ON ticket_transactions(user_id, reference_id, ticket_type) WHERE reason = 'admin_grant';
+-- Mỗi giftcode cộng vé cho mỗi người chơi đúng 1 lần (reference_id = giftcode:{codeId})
+CREATE UNIQUE INDEX uq_ttx_giftcode ON ticket_transactions(user_id, reference_id, ticket_type) WHERE reason = 'giftcode';
+
+CREATE TABLE gift_codes_new (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  code          TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  rewards       TEXT NOT NULL,
+  total_cards   INTEGER NOT NULL CHECK (total_cards >= 0),
+  total_tickets INTEGER NOT NULL DEFAULT 0 CHECK (total_tickets >= 0),
+  expires_at    TEXT,
+  is_active     INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+  featured      INTEGER NOT NULL DEFAULT 0 CHECK (featured IN (0,1)),
+  created_by    INTEGER REFERENCES users(id),
+  created_at    TEXT NOT NULL,
+  CHECK (total_cards + total_tickets >= 1)
+);
+INSERT INTO gift_codes_new (id, code, rewards, total_cards, total_tickets, expires_at, is_active, featured, created_by, created_at)
+  SELECT id, code, rewards, total_cards, 0, expires_at, is_active, featured, created_by, created_at FROM gift_codes;
+DROP TABLE gift_codes;
+ALTER TABLE gift_codes_new RENAME TO gift_codes;
+UPDATE gift_codes SET rewards = '[{"kind":"ticket","pool":"shu","count":200}]', total_cards = 0, total_tickets = 200 WHERE code = 'THUCQUOC' AND created_by IS NULL;
+UPDATE gift_codes SET rewards = '[{"kind":"ticket","pool":"wei","count":200}]', total_cards = 0, total_tickets = 200 WHERE code = 'NGUYQUOC' AND created_by IS NULL;
+UPDATE gift_codes SET rewards = '[{"kind":"ticket","pool":"wu","count":200}]',  total_cards = 0, total_tickets = 200 WHERE code = 'NGOQUOC'  AND created_by IS NULL;
+UPDATE gift_codes SET rewards = '[{"kind":"ticket","pool":"qun","count":200}]', total_cards = 0, total_tickets = 200 WHERE code = 'QUANQUOC' AND created_by IS NULL;
+
+CREATE TABLE gift_code_redemptions_new (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  code_id          INTEGER NOT NULL REFERENCES gift_codes(id),
+  user_id          INTEGER NOT NULL REFERENCES users(id),
+  cards_snapshot   TEXT NOT NULL,
+  card_count       INTEGER NOT NULL CHECK (card_count >= 0),
+  tickets_snapshot TEXT NOT NULL DEFAULT '[]',
+  created_at       TEXT NOT NULL,
+  UNIQUE (code_id, user_id)
+);
+INSERT INTO gift_code_redemptions_new (id, code_id, user_id, cards_snapshot, card_count, tickets_snapshot, created_at)
+  SELECT id, code_id, user_id, cards_snapshot, card_count, '[]', created_at FROM gift_code_redemptions;
+DROP TABLE gift_code_redemptions;
+ALTER TABLE gift_code_redemptions_new RENAME TO gift_code_redemptions;
+CREATE INDEX idx_gcr_user ON gift_code_redemptions(user_id, id);
+`,
+  },
+  {
+    // Giftcode chỉ tặng vé quay (chủ dự án yêu cầu). Tắt mọi code còn phần thưởng thẻ;
+    // lượt nhập và thẻ đã nhận trước đó giữ nguyên.
+    version: 9,
+    name: 'gift_codes_tickets_only',
+    sql: `UPDATE gift_codes SET is_active = 0 WHERE total_cards > 0;`,
+  },
+  {
+    // Cài đặt game do admin chỉnh trên trang Quản trị (thay biến môi trường REQUIRE_APPROVAL).
+    // require_approval mặc định '0' (tắt): đăng ký là được duyệt ngay.
+    version: 10,
+    name: 'app_settings',
+    sql: `
+CREATE TABLE app_settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  updated_by INTEGER REFERENCES users(id)
+);
+INSERT INTO app_settings (key, value, updated_at) VALUES ('require_approval', '0', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+`,
+  },
+  {
+    // Phiên đăng nhập không hết hạn (chủ dự án yêu cầu): expires_at cho phép NULL (= không hạn).
+    // Phiên đang có giữ nguyên token và được bỏ hạn. Đăng xuất xoá phiên.
+    version: 11,
+    name: 'sessions_no_expiry',
+    disableForeignKeys: true,
+    sql: `
+CREATE TABLE sessions_new (
+  token_hash TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  expires_at TEXT
+);
+INSERT INTO sessions_new (token_hash, user_id, created_at, expires_at) SELECT token_hash, user_id, created_at, NULL FROM sessions;
+DROP TABLE sessions;
+ALTER TABLE sessions_new RENAME TO sessions;
+CREATE INDEX idx_sessions_user ON sessions(user_id);
+`,
+  },
 ];
 
 /** target: chỉ chạy tới version này (dùng khi test migration). */

@@ -18,6 +18,16 @@ import { claimRecovery, devTopup, getTickets, syncRecovery } from './tickets.ts'
 import { draw, getGachaConfig } from './gacha.ts';
 import { previewUpgrade, attemptUpgrade, quickUpgrade } from './upgrade.ts';
 import { giftCards, listRecipients } from './gift.ts';
+import {
+  redeemGiftCode,
+  listFeaturedGiftCodes,
+  listMyRedemptions,
+  adminListGiftCodes,
+  adminCreateGiftCode,
+  adminSetGiftCodeActive,
+} from './giftcode.ts';
+import type { GiftCodeReward } from '@tq/shared';
+import { getSettings, setRequireApproval } from './settings.ts';
 import { listCards, listHistory, type CardsQuery, type HistoryQuery } from './queries.ts';
 
 declare module 'fastify' {
@@ -156,6 +166,17 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
     },
   );
 
+  // ---------- Giftcode (mục 3.9) ----------
+  app.get('/api/giftcodes', { preHandler: auth }, async (req) => ({
+    featured: listFeaturedGiftCodes(ctx, req.userId),
+    redeemed: listMyRedemptions(ctx, req.userId),
+  }));
+  app.post(
+    '/api/giftcodes/redeem',
+    { preHandler: auth, schema: { body: schemas.giftCodeRedeemBody }, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (req) => redeemGiftCode(ctx, req.userId, (req.body as { code: string }).code),
+  );
+
   // ---------- Quản trị (mục 3.8) ----------
   const adminLimit = { rateLimit: { max: 120, timeWindow: '1 minute' } };
   app.get('/api/admin/users', { preHandler: adminAuth, schema: { querystring: schemas.adminUsersQuery } }, async (req) =>
@@ -183,6 +204,20 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
   });
   app.get('/api/admin/cards', { preHandler: adminAuth, schema: { querystring: schemas.adminCardsQuery } }, async (req) =>
     adminListCards(ctx, req.query as AdminCardsQuery),
+  );
+
+  app.get('/api/admin/settings', { preHandler: adminAuth }, async () => getSettings(ctx));
+  app.post('/api/admin/settings', { preHandler: adminAuth, schema: { body: schemas.adminSettingsBody }, config: adminLimit }, async (req) =>
+    setRequireApproval(ctx, (req.body as { requireApproval: boolean }).requireApproval, req.userId),
+  );
+  app.get('/api/admin/giftcodes', { preHandler: adminAuth }, async () => ({ items: adminListGiftCodes(ctx) }));
+  app.post('/api/admin/giftcodes', { preHandler: adminAuth, schema: { body: schemas.adminGiftCodeCreateBody }, config: adminLimit }, async (req) =>
+    adminCreateGiftCode(ctx, req.userId, req.body as { code: string; rewards: Partial<GiftCodeReward>[]; expiresAt?: string | null; featured?: boolean }),
+  );
+  app.post(
+    '/api/admin/giftcodes/:id/active',
+    { preHandler: adminAuth, schema: { params: schemas.idParams, body: schemas.adminGiftCodeActiveBody }, config: adminLimit },
+    async (req) => adminSetGiftCodeActive(ctx, (req.params as { id: number }).id, (req.body as { isActive: boolean }).isActive),
   );
 
   // ---------- Lịch sử ----------

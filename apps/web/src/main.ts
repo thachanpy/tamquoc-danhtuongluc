@@ -10,6 +10,7 @@ import { renderCollection } from './pages/collection.ts';
 import { renderUpgrade } from './pages/upgrade.ts';
 import { renderHistory } from './pages/history.ts';
 import { renderAdmin } from './pages/admin.ts';
+import { renderGiftCode, rewardText } from './pages/giftcode.ts';
 
 const app = document.getElementById('app')!;
 
@@ -36,6 +37,7 @@ const PAGES = {
   draw: { label: 'Quay thẻ', render: renderDraw },
   upgrade: { label: 'Nâng cấp', render: renderUpgrade },
   history: { label: 'Lịch sử', render: renderHistory },
+  giftcode: { label: 'Giftcode', render: renderGiftCode },
   admin: { label: 'Quản trị', render: renderAdmin, adminOnly: true },
 } as const;
 type PageId = keyof typeof PAGES;
@@ -48,7 +50,8 @@ function renderLogin(message = '', info = '') {
   app.innerHTML = `
     <div class="login">
       <img class="logo big" src="/icons/icon-192.png" alt="" aria-hidden="true" />
-      <h1>Tam Quốc: <span>Danh Tướng Lục</span></h1>
+      <h1>Tam Quốc: </h1>
+      <h1>Danh Tướng Lục</h1>
       <form class="panel">
         <label>Tên đăng nhập <input name="username" autocomplete="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" /></label>
         <label>Mật khẩu <input name="password" type="password" autocomplete="current-password" required minlength="6" /></label>
@@ -193,6 +196,62 @@ function route() {
   cleanupPage = page.render(document.getElementById('page')!);
 }
 
+/**
+ * Popup lần đầu đăng nhập (mục 3.9): mời nhập các giftcode gợi ý chưa nhập.
+ * Chỉ hiện 1 lần cho mỗi tài khoản trên trình duyệt này (localStorage); bấm nút thì sang trang Giftcode.
+ */
+async function maybeShowGiftCodePopup() {
+  const key = `tq.gcPopup.${state.username.toLowerCase()}`;
+  try {
+    if (localStorage.getItem(key)) return;
+  } catch {
+    return;
+  }
+  let codes;
+  try {
+    codes = (await api.giftcodes()).featured.filter((c) => !c.redeemed);
+  } catch {
+    return;
+  }
+  if (!codes.length) return;
+  const markSeen = () => {
+    try {
+      localStorage.setItem(key, '1');
+    } catch {
+      /* bỏ qua */
+    }
+  };
+  const overlay = document.createElement('div');
+  overlay.className = 'gc-popup';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.innerHTML = `
+    <div class="panel gc-popup-box">
+      <h2>Quà tân thủ</h2>
+      <p>Chào mừng chủ công! Hãy nhập ${codes.length} giftcode này để nhận quà:</p>
+      <ul>${codes.map((c) => `<li><b class="gc-code">${esc(c.code)}</b> — ${esc(rewardText(c.rewards))}</li>`).join('')}</ul>
+      <div class="row">
+        <button class="btn primary" data-go>Đến trang nhập Giftcode</button>
+        <button class="btn ghost" data-close>Để sau</button>
+      </div>
+    </div>`;
+  const close = () => {
+    markSeen();
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+  const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
+  overlay.querySelector<HTMLButtonElement>('[data-go]')!.onclick = () => {
+    close();
+    location.hash = 'giftcode';
+  };
+  overlay.querySelector<HTMLButtonElement>('[data-close]')!.onclick = close;
+  overlay.onclick = (e) => e.target === overlay && close();
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(overlay);
+  overlay.querySelector<HTMLButtonElement>('[data-go]')!.focus();
+}
+
 // Trang Quản trị báo khi duyệt/từ chối để cập nhật badge (tránh import vòng main <-> pages).
 window.addEventListener('tq:pending-changed', () => void refreshPendingBadge());
 
@@ -215,6 +274,7 @@ async function boot() {
     window.onhashchange = route;
     route();
     if (state.isAdmin) void refreshPendingBadge();
+    void maybeShowGiftCodePopup();
   } catch (e) {
     const err = e as ApiError;
     if (err.status === 401) return renderLogin('Phiên đăng nhập đã hết hạn.');

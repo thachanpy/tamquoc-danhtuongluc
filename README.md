@@ -18,7 +18,8 @@ pnpm typecheck
 
 Database SQLite nằm ở `data/tamquoc.db` (đổi bằng biến `DB_PATH`). Khởi động không bao giờ reset dữ liệu.
 
-> **Tài khoản mới phải chờ quản trị viên duyệt** mới đăng nhập được (màn đăng ký báo rõ). Khi được duyệt, tài khoản nhận
+> **Duyệt tài khoản** bật/tắt ở trang Quản trị → Người chơi (mặc định tắt: đăng ký là vào game ngay). Khi bật, tài khoản mới
+> phải chờ quản trị viên duyệt mới đăng nhập được (màn đăng ký báo rõ). Khi được duyệt, tài khoản nhận
 > **100 vé quà đăng ký** (loại vé random 20% mỗi loại). **Tài khoản đầu tiên** tạo trên database mới tự thành admin và được duyệt ngay.
 > Sau đó hồi 1 vé ở mỗi mốc 5 phút (giờ :00, :05, :10…) theo đồng hồ server. Số vé quà chỉnh ở
 > `SIGNUP_BONUS_TICKETS` trong `packages/game-config/src/rates.ts`.
@@ -83,7 +84,7 @@ Lệnh hay dùng: `pm2 logs tamquoc-api`, `pm2 restart tamquoc-api`, `pm2 stop t
 Ghi chú:
 
 - Giữ `instances: 1` (fork mode): SQLite chỉ có một tiến trình ghi và rate limit lưu trong bộ nhớ.
-- Biến môi trường chỉnh trong `env` của `pm2.config.json`: `PORT`, `HOST`, `DB_PATH` (mặc định `data/tamquoc.db`), `LOG_LEVEL`, `TRUST_PROXY`. **Không** đặt `ENABLE_DEV_TOPUP` khi chạy thật. Sửa xong chạy `pm2 restart pm2.config.json --update-env`.
+- Biến môi trường chỉnh trong `env` của `pm2.config.json`: `PORT`, `HOST`, `DB_PATH` (mặc định `data/tamquoc.db`), `LOG_LEVEL`, `TRUST_PROXY`. (Bật/tắt duyệt tài khoản nằm ở trang Quản trị, không phải biến môi trường.) **Không** đặt `ENABLE_DEV_TOPUP` khi chạy thật. Sửa xong chạy `pm2 restart pm2.config.json --update-env`.
 - Migration chạy tự động khi API khởi động, không bao giờ xoá dữ liệu.
 
 ### 4. Cấu hình nginx
@@ -175,6 +176,10 @@ apps/web               Vite + PixiJS: quay thẻ, bộ sưu tập, nâng cấp, 
 - **Trang Quản trị** (tab chỉ admin thấy, `users.is_admin`): duyệt/từ chối đăng ký, danh sách người chơi (số vé, số thẻ),
   cộng vé cho người chơi (chọn loại + số lượng, tối đa `ADMIN_GRANT_MAX_TICKETS` mỗi lần, ledger `admin_grant`),
   cấp/thu quyền admin, xem mọi thẻ của mọi người chơi. Migration v6: tài khoản cũ coi như đã duyệt, tài khoản id nhỏ nhất thành admin.
+- **Giftcode** (tab Giftcode): người chơi nhập code nhận **vé quay** (chỉ vé, không tặng thẻ), mỗi code 1 lần/người,
+  hạn sử dụng tuỳ chọn. Admin tạo/bật/tắt code ở tab Quản trị → Giftcode. Có sẵn 4 code tân thủ
+  `THUCQUOC`, `NGUYQUOC`, `NGOQUOC`, `QUANQUOC` (200 vé mỗi phe, không hạn); người chơi mới thấy popup mời nhập.
+- **Phiên đăng nhập** lưu trong SQLite (bảng `sessions`, chỉ lưu hash của token), không hết hạn; khởi động lại server không phải đăng nhập lại. Đăng xuất xoá phiên.
 - Mọi thay đổi số dư vé đều có dòng ledger trong `ticket_transactions`.
 - **Quà đăng ký** 100 vé cấp trong cùng transaction duyệt tài khoản, ledger reason `signup_bonus`,
   unique index chặn cấp lần hai. Migration v2 dựng lại bảng ledger để thêm reason này, giữ nguyên dữ liệu cũ.
@@ -206,8 +211,13 @@ thay ảnh thật bằng cách map `artKey` → file ảnh trong `apps/web/src/a
 | GET | `/api/history` | Lịch sử phân trang (`kind`, `page`, `pageSize`) |
 | GET | `/api/admin/users` | (admin) Người chơi: `q`, `status=pending\|approved`, phân trang; chờ duyệt lên đầu |
 | POST | `/api/admin/users/:id/approve` · `/reject` | (admin) Duyệt (cấp quà đăng ký) / từ chối (xoá đăng ký chờ duyệt) |
+| GET/POST | `/api/admin/settings` | (admin) `{ requireApproval }` — bật/tắt duyệt tài khoản đăng ký |
 | POST | `/api/admin/users/:id/admin` | (admin) `{ isAdmin }` — cấp/thu quyền admin (không tự thu của mình) |
 | POST | `/api/admin/tickets/grant` | (admin) `{ userId, ticketType, amount, idempotencyKey }` — cộng vé |
+| GET | `/api/giftcodes` | Code gợi ý (+ đã nhập chưa) và các code mình đã nhập |
+| POST | `/api/giftcodes/redeem` | `{ code }` — nhập giftcode, nhận vé quay |
+| GET/POST | `/api/admin/giftcodes` | (admin) Danh sách / tạo giftcode `{ code, rewards: [{pool,count}], expiresAt?, featured? }` (chỉ vé quay) |
+| POST | `/api/admin/giftcodes/:id/active` | (admin) `{ isActive }` — bật/tắt giftcode |
 | GET | `/api/admin/cards` | (admin) Mọi thẻ của mọi người chơi: `userId`, `faction`, `level`, `q`, `sort`, phân trang |
 
 Lỗi có dạng `{ "error": { "code": "...", "message": "..." } }`. Endpoint gacha / nâng cấp / auth có rate limit.

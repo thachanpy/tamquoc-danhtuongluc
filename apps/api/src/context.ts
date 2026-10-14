@@ -10,7 +10,9 @@ export interface GameContext {
   /** RNG phía server — số nguyên trong [0, max). */
   rand: RandomInt;
   /** Tính năng bật theo cấu hình server. Mặc định tắt. */
-  features?: { devTopup?: boolean };
+  features?: {
+    devTopup?: boolean;
+  };
 }
 
 export function createContext(db: DB, features: GameContext['features'] = {}): GameContext {

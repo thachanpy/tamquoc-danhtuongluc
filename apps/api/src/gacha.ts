@@ -6,7 +6,7 @@ import {
   type DrawResultDto,
   type DrawnCardDto,
 } from '@tq/shared';
-import { GACHA_LEVEL_RATES, BPS_SCALE, DRAW_COUNT_OPTIONS, UPGRADE_INPUT_COUNT, QUICK_UPGRADE_MAX_LEVEL, GIFT_MAX_CARDS, UPGRADE_SUCCESS_BPS, UPGRADE_FAILURE_DISTRIBUTION, GENERALS_BY_ID, poolForTicket, rollLevel } from '@tq/game-config';
+import { GACHA_LEVEL_RATES, BPS_SCALE, DRAW_COUNT_OPTIONS, UPGRADE_INPUT_COUNT, QUICK_UPGRADE_MAX_LEVEL, GIFT_MAX_CARDS, GIFT_CODE_MAX_TICKETS, UPGRADE_SUCCESS_BPS, UPGRADE_FAILURE_DISTRIBUTION, GENERALS_BY_ID, poolForTicket, rollLevel } from '@tq/game-config';
 import { AppError, iso, sha256, findIdempotent, saveIdempotent, type GameContext } from './context.ts';
 import { tx } from './db.ts';
 import { applyTicketDelta, getTickets, readBalances, syncRecovery } from './tickets.ts';
@@ -20,6 +20,7 @@ export function getGachaConfig(): GachaConfigDto {
     upgradeInputCount: UPGRADE_INPUT_COUNT,
     quickUpgradeMaxLevel: QUICK_UPGRADE_MAX_LEVEL,
     giftMaxCards: GIFT_MAX_CARDS,
+    giftCodeMaxTickets: GIFT_CODE_MAX_TICKETS,
     upgradeRates: Object.keys(UPGRADE_SUCCESS_BPS).map(Number).sort((a, b) => a - b).map((level) => ({
       level,
       successBps: UPGRADE_SUCCESS_BPS[level]!,

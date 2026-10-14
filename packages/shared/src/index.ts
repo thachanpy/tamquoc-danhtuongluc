@@ -24,7 +24,7 @@ export const TICKET_LABELS: Record<TicketType, string> = {
   qun: 'Vé Quần',
 };
 
-export const TICKET_REASONS = ['time_recovery', 'signup_bonus', 'dev_topup', 'admin_grant', 'gacha_draw'] as const;
+export const TICKET_REASONS = ['time_recovery', 'signup_bonus', 'dev_topup', 'admin_grant', 'giftcode', 'gacha_draw'] as const;
 export type TicketReason = (typeof TICKET_REASONS)[number];
 
 export type UpgradeOutcome = 'success' | 'failure';
@@ -94,6 +94,8 @@ export interface GachaConfigDto {
   upgradeInputCount: number;
   /** Số thẻ tối đa mỗi lần tặng. */
   giftMaxCards: number;
+  /** Tổng số vé tối đa của một giftcode. */
+  giftCodeMaxTickets: number;
   /** Nâng cấp nhanh áp dụng cho thẻ có level ≤ mức này. */
   quickUpgradeMaxLevel: number;
   /** Tỷ lệ ghép công khai theo level đầu vào (để UI hiển thị trước khi xác nhận). */
@@ -211,6 +213,15 @@ export type HistoryEntryDto =
       createdAt: string;
     }
   | {
+      kind: 'giftcode';
+      id: number;
+      code: string;
+      cards: GiftCardSnapshot[];
+      /** Vé quay nhận được (dòng phần thưởng loại 'ticket'). */
+      tickets: { pool: TicketType; count: number }[];
+      createdAt: string;
+    }
+  | {
       kind: 'gift';
       id: number;
       direction: 'sent' | 'received';
@@ -245,6 +256,12 @@ export interface AdminUserDto {
   maxLevel: number | null;
 }
 
+/** Cài đặt game admin chỉnh trên trang Quản trị. */
+export interface AppSettingsDto {
+  /** Tài khoản đăng ký mới phải chờ admin duyệt. */
+  requireApproval: boolean;
+}
+
 export interface AdminUsersPage extends Page<AdminUserDto> {
   pendingCount: number;
   /** Số vé tối đa mỗi lần admin cộng (ADMIN_GRANT_MAX_TICKETS). */
@@ -267,6 +284,53 @@ export interface AdminGrantDto {
   ticketType: TicketType;
   amount: number;
   balances: TicketBalances;
+}
+
+// ===== Giftcode (mục 3.9) =====
+
+/**
+ * Một dòng phần thưởng giftcode: cộng `count` vé quay loại `pool`.
+ * Giftcode CHỈ tặng vé quay (chủ dự án yêu cầu). `kind = 'card'` chỉ còn ở dữ liệu cũ (code thẻ đã bị tắt ở migration v9).
+ */
+export type GiftRewardKind = 'ticket' | 'card';
+
+export interface GiftCodeReward {
+  kind: GiftRewardKind;
+  pool: TicketType;
+  count: number;
+}
+
+/** Giftcode gợi ý cho người chơi (popup lần đầu + trang Giftcode). */
+export interface GiftCodePublicDto {
+  code: string;
+  rewards: GiftCodeReward[];
+  expiresAt: string | null;
+  redeemed: boolean;
+}
+
+export interface GiftCodeRedemptionDto {
+  code: string;
+  rewards: GiftCodeReward[];
+  /** Vé quay đã cộng (theo loại). */
+  tickets: { pool: TicketType; count: number }[];
+  /** Số dư vé sau khi nhập (để UI cập nhật thanh vé). */
+  balances: TicketsDto;
+  createdAt: string;
+}
+
+export interface AdminGiftCodeDto {
+  id: number;
+  code: string;
+  rewards: GiftCodeReward[];
+  /** Tổng số thẻ / tổng số vé của code. */
+  totalCards: number;
+  totalTickets: number;
+  expiresAt: string | null;
+  isActive: boolean;
+  featured: boolean;
+  redemptionCount: number;
+  createdBy: string | null;
+  createdAt: string;
 }
 
 export interface Page<T> {
@@ -414,11 +478,55 @@ export const schemas = {
       pageSize: { type: 'integer', minimum: 1, maximum: 500, default: 60 },
     },
   },
+  giftCodeRedeemBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['code'],
+    properties: { code: { type: 'string', minLength: 1, maxLength: 64 } },
+  },
+  adminGiftCodeCreateBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['code', 'rewards'],
+    properties: {
+      code: { type: 'string', minLength: 3, maxLength: 32, pattern: '^[A-Za-z0-9_-]+$' },
+      rewards: {
+        type: 'array',
+        minItems: 1,
+        maxItems: TICKET_TYPES.length,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['pool', 'count'],
+          properties: {
+            kind: { type: 'string', enum: ['ticket'], default: 'ticket' },
+            pool: { type: 'string', enum: [...TICKET_TYPES] },
+            // Trần tổng (GIFT_CODE_MAX_TICKETS) do server kiểm tra theo game-config
+            count: { type: 'integer', minimum: 1, maximum: 10000 },
+          },
+        },
+      },
+      expiresAt: { anyOf: [{ type: 'string', maxLength: 40 }, { type: 'null' }] },
+      featured: { type: 'boolean' },
+    },
+  },
+  adminSettingsBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['requireApproval'],
+    properties: { requireApproval: { type: 'boolean' } },
+  },
+  adminGiftCodeActiveBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['isActive'],
+    properties: { isActive: { type: 'boolean' } },
+  },
   historyQuery: {
     type: 'object',
     additionalProperties: false,
     properties: {
-      kind: { type: 'string', enum: ['ticket', 'gacha', 'upgrade', 'gift'] },
+      kind: { type: 'string', enum: ['ticket', 'gacha', 'upgrade', 'gift', 'giftcode'] },
       page: { type: 'integer', minimum: 1, default: 1 },
       pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
     },

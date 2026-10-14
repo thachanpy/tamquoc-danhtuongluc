@@ -3,11 +3,15 @@ import assert from 'node:assert/strict';
 import { openDatabase } from '../src/db.ts';
 import { createContext } from '../src/context.ts';
 import { buildServer } from '../src/server.ts';
+import { setRequireApproval } from '../src/settings.ts';
 
 /** Test HTTP thật qua Fastify inject (không mở cổng mạng). */
-async function setup(devTopup: boolean) {
+/** Các test duyệt tài khoản chạy với cài đặt "Duyệt tài khoản" bật; mặc định thật của server là tắt. */
+async function setup(devTopup: boolean, requireApproval = true) {
   process.env.LOG_LEVEL = 'silent';
-  const app = await buildServer(createContext(openDatabase(':memory:'), { devTopup }));
+  const ctx = createContext(openDatabase(':memory:'), { devTopup });
+  setRequireApproval(ctx, requireApproval);
+  const app = await buildServer(ctx);
   const reg = await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username: 'tester', password: 'secret123' } });
   const token = reg.json().token as string;
   const auth = { authorization: `Bearer ${token}` };
@@ -307,4 +311,114 @@ test('HTTP: admin xem thẻ của mọi người chơi, lọc theo người chơ
   assert.equal(pc.cardCount, 10);
   assert.equal(pc.ticketTotal, 90);
   await app.close();
+});
+
+test('HTTP: giftcode — người chơi nhập code, admin tạo/tắt code; người thường không vào được route admin', async () => {
+  const { app, auth } = await setup(false);
+  const pAuth = await regApproved(app, auth, 'player_gc');
+  const list = (await app.inject({ method: 'GET', url: '/api/giftcodes', headers: pAuth })).json();
+  assert.equal(list.featured.length, 4);
+  const qun0 = (await app.inject({ method: 'GET', url: '/api/tickets', headers: pAuth })).json().balances.qun as number;
+  const r = await app.inject({ method: 'POST', url: '/api/giftcodes/redeem', headers: pAuth, payload: { code: 'quanquoc' } });
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.json().balances.balances.qun, qun0 + 200);
+  const again = await app.inject({ method: 'POST', url: '/api/giftcodes/redeem', headers: pAuth, payload: { code: 'QUANQUOC' } });
+  assert.equal(again.statusCode, 409);
+  assert.equal(again.json().error.code, 'GIFTCODE_ALREADY_REDEEMED');
+  assert.equal((await app.inject({ method: 'GET', url: '/api/tickets', headers: pAuth })).json().balances.qun, qun0 + 200);
+
+  // Admin
+  const forbid = await app.inject({ method: 'POST', url: '/api/admin/giftcodes', headers: pAuth, payload: { code: 'HACK', rewards: [{ pool: 'shu', count: 5 }] } });
+  assert.equal(forbid.statusCode, 403);
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/admin/giftcodes',
+    headers: auth,
+    payload: { code: 'TET2027', rewards: [{ kind: 'ticket', pool: 'shu', count: 10 }, { pool: 'wei', count: 20 }], expiresAt: null },
+  });
+  assert.equal(created.statusCode, 200);
+  assert.equal(created.json().totalTickets, 30);
+  const cardCode = await app.inject({ method: 'POST', url: '/api/admin/giftcodes', headers: auth, payload: { code: 'THE01', rewards: [{ kind: 'card', pool: 'shu', count: 1 }] } });
+  assert.equal(cardCode.statusCode, 400);
+  const adminList = (await app.inject({ method: 'GET', url: '/api/admin/giftcodes', headers: auth })).json().items as { code: string; redemptionCount: number }[];
+  assert.equal(adminList.find((c) => c.code === 'QUANQUOC')!.redemptionCount, 1);
+  const off = await app.inject({ method: 'POST', url: `/api/admin/giftcodes/${created.json().id}/active`, headers: auth, payload: { isActive: false } });
+  assert.equal(off.json().isActive, false);
+  const r2 = await app.inject({ method: 'POST', url: '/api/giftcodes/redeem', headers: pAuth, payload: { code: 'TET2027' } });
+  assert.equal(r2.json().error.code, 'GIFTCODE_NOT_FOUND');
+  const hist = (await app.inject({ method: 'GET', url: '/api/history?kind=giftcode', headers: pAuth })).json();
+  assert.equal(hist.items[0].code, 'QUANQUOC');
+  assert.equal((await app.inject({ method: 'GET', url: '/api/giftcodes' })).statusCode, 401);
+  await app.close();
+});
+
+test('HTTP: cài đặt Duyệt tài khoản tắt (mặc định) => đăng ký là được duyệt ngay, có token, nhận 100 vé, không phải admin', async () => {
+  const { app } = await setup(false, false);
+  const r = await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username: 'quick_user', password: 'secret123' } });
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.json().status, 'approved');
+  assert.equal(r.json().isAdmin, false);
+  const me = (await app.inject({ method: 'GET', url: '/api/me', headers: { authorization: `Bearer ${r.json().token}` } })).json();
+  assert.equal(me.isAdmin, false);
+  assert.equal(me.tickets.total, 100);
+  const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'quick_user', password: 'secret123' } });
+  assert.equal(login.statusCode, 200);
+  await app.close();
+});
+
+test('HTTP: admin bật/tắt Duyệt tài khoản trên trang Quản trị; mặc định tắt; người thường bị 403', async () => {
+  const { app, auth } = await setup(false, false);
+  assert.deepEqual((await app.inject({ method: 'GET', url: '/api/admin/settings', headers: auth })).json(), { requireApproval: false });
+  const on = await app.inject({ method: 'POST', url: '/api/admin/settings', headers: auth, payload: { requireApproval: true } });
+  assert.deepEqual(on.json(), { requireApproval: true });
+  const p = await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username: 'wait_user', password: 'secret123' } });
+  assert.equal(p.json().status, 'pending');
+  await app.inject({ method: 'POST', url: '/api/admin/settings', headers: auth, payload: { requireApproval: false } });
+  const q = await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username: 'free_user', password: 'secret123' } });
+  assert.equal(q.json().status, 'approved');
+  // Tài khoản đã chờ trước đó vẫn chờ (admin duyệt tay)
+  const w = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'wait_user', password: 'secret123' } });
+  assert.equal(w.json().error.code, 'ACCOUNT_PENDING');
+  const uAuth = { authorization: `Bearer ${q.json().token}` };
+  assert.equal((await app.inject({ method: 'POST', url: '/api/admin/settings', headers: uAuth, payload: { requireApproval: true } })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/settings' })).statusCode, 401);
+  await app.close();
+});
+
+test('HTTP: phiên đăng nhập lưu SQLite — khởi động lại server vẫn còn, không hết hạn; đăng xuất xoá phiên', async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  process.env.LOG_LEVEL = 'silent';
+  const dir = mkdtempSync(join(tmpdir(), 'tq-sess-'));
+  const dbPath = join(dir, 'game.db');
+  try {
+    // Lần chạy 1: đăng ký => có token
+    let db = openDatabase(dbPath);
+    let app = await buildServer(createContext(db));
+    const token = (await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username: 'persist_u', password: 'secret123' } })).json().token as string;
+    const row = db.prepare('SELECT expires_at FROM sessions').get() as { expires_at: string | null };
+    assert.equal(row.expires_at, null); // không hết hạn
+    await app.close();
+    db.close();
+
+    // "Khởi động lại": mở lại file DB, token cũ vẫn dùng được (kể cả rất lâu sau)
+    db = openDatabase(dbPath);
+    const ctx = createContext(db);
+    ctx.now = () => Date.now() + 10 * 365 * 24 * 3600 * 1000;
+    app = await buildServer(ctx);
+    const auth = { authorization: `Bearer ${token}` };
+    const me = await app.inject({ method: 'GET', url: '/api/me', headers: auth });
+    assert.equal(me.statusCode, 200);
+    assert.equal(me.json().username, 'persist_u');
+
+    // Đăng xuất => xoá phiên khỏi DB, token không dùng được nữa
+    assert.equal((await app.inject({ method: 'POST', url: '/api/auth/logout', headers: auth })).statusCode, 200);
+    assert.equal((db.prepare('SELECT COUNT(*) AS n FROM sessions').get() as { n: number }).n, 0);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/me', headers: auth })).statusCode, 401);
+    await app.close();
+    db.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

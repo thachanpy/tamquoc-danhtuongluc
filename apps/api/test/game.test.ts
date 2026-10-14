@@ -291,6 +291,7 @@ test('migration v6: tài khoản cũ được coi là đã duyệt, id nhỏ nh�
 
 test('đăng ký: tài khoản đầu tiên là admin & được duyệt; tài khoản sau chờ duyệt, chưa có vé, chưa đăng nhập được', async () => {
   const h = makeCtx();
+  (await import('../src/settings.ts')).setRequireApproval(h.ctx, true);
   const { login } = await import('../src/auth.ts');
   const first = rawRegister(h.ctx, 'boss', 'secret123');
   assert.equal(first.status, 'approved');
@@ -308,6 +309,33 @@ test('đăng ký: tài khoản đầu tiên là admin & được duyệt; tài k
   assert.ok(login(h.ctx, 'newbie', 'secret123').token);
   assert.throws(() => approveUser(h.ctx, second.userId), errCode('ALREADY_APPROVED'));
   assert.equal(getTickets(h.ctx, second.userId).total, BONUS);
+});
+
+test('migration v8: lượt nhập giftcode cũ (thẻ) giữ nguyên; code tân thủ đổi thành vé; ledger có reason giftcode', () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec('PRAGMA foreign_keys = ON');
+  runMigrations(db, 7);
+  db.prepare("INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'old', 'x', 'x')").run();
+  db.prepare("INSERT INTO gift_code_redemptions (code_id, user_id, cards_snapshot, card_count, created_at) SELECT id, 1, '[]', 200, 'x' FROM gift_codes WHERE code = 'THUCQUOC'").run();
+  runMigrations(db);
+  const thuc = db.prepare("SELECT rewards, total_cards, total_tickets FROM gift_codes WHERE code = 'THUCQUOC'").get() as Record<string, unknown>;
+  assert.deepEqual(JSON.parse(thuc.rewards as string), [{ kind: 'ticket', pool: 'shu', count: 200 }]);
+  assert.equal(thuc.total_tickets, 200);
+  const red = db.prepare('SELECT card_count, tickets_snapshot FROM gift_code_redemptions WHERE user_id = 1').get() as Record<string, unknown>;
+  assert.deepEqual([red.card_count, red.tickets_snapshot], [200, '[]']);
+  db.prepare("INSERT INTO ticket_transactions (user_id, ticket_type, amount_delta, reason, reference_id, created_at) VALUES (1, 'shu', 200, 'giftcode', 'giftcode:1', 'x')").run();
+  assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
+});
+
+test('migration v11: phiên cũ giữ nguyên token, bỏ hạn (không hết hạn)', () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec('PRAGMA foreign_keys = ON');
+  runMigrations(db, 10);
+  db.prepare("INSERT INTO users (id, username, password_hash, created_at) VALUES (1, 'old', 'x', 'x')").run();
+  db.prepare("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES ('h1', 1, 'x', '2000-01-01T00:00:00.000Z')").run();
+  runMigrations(db);
+  assert.deepEqual({ ...(db.prepare('SELECT token_hash, expires_at FROM sessions').get() as object) }, { token_hash: 'h1', expires_at: null });
+  assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0);
 });
 
 test('tài khoản mới có đủ 5 loại vé, gồm Vé Quần', () => {
@@ -900,4 +928,127 @@ test('lịch sử gồm vé hồi, vé đã dùng, gacha', () => {
   assert.equal(all.total, signupRows + 4); // quà đăng ký + 2 vé hồi + 1 vé dùng + 1 gacha
   assert.ok(all.items.some((e) => e.kind === 'ticket' && e.reason === 'signup_bonus'))
   assert.equal(listHistory(h.ctx, h.userId, { kind: 'gacha' }).total, 1);
+});
+
+// ================= Giftcode (mục 3.9) =================
+
+test('giftcode: 4 code tân thủ là 200 VÉ mỗi loại, không hạn, featured', async () => {
+  const h = makeCtx();
+  const { userId } = register(h.ctx, 'alice', 'secret123');
+  const { listFeaturedGiftCodes } = await import('../src/giftcode.ts');
+  const list = listFeaturedGiftCodes(h.ctx, userId);
+  assert.deepEqual(
+    list.map((c) => [c.code, c.rewards, c.expiresAt, c.redeemed]),
+    [
+      ['THUCQUOC', [{ kind: 'ticket', pool: 'shu', count: 200 }], null, false],
+      ['NGUYQUOC', [{ kind: 'ticket', pool: 'wei', count: 200 }], null, false],
+      ['NGOQUOC', [{ kind: 'ticket', pool: 'wu', count: 200 }], null, false],
+      ['QUANQUOC', [{ kind: 'ticket', pool: 'qun', count: 200 }], null, false],
+    ],
+  );
+});
+
+test('giftcode: nhập THUCQUOC => +200 Vé Thục (ledger giftcode), không tạo thẻ; nhập lần 2 bị chặn', async () => {
+  const h = makeCtx();
+  const { userId } = register(h.ctx, 'alice', 'secret123');
+  const { redeemGiftCode, listFeaturedGiftCodes } = await import('../src/giftcode.ts');
+  const before = readBalances(h.ctx.db, userId);
+  const r = redeemGiftCode(h.ctx, userId, ' thucquoc ');
+  assert.equal(r.code, 'THUCQUOC');
+  assert.deepEqual(r.tickets, [{ pool: 'shu', count: 200 }]);
+  const after = readBalances(h.ctx.db, userId);
+  assert.equal(after.shu, before.shu + 200);
+  assert.equal(after.normal, before.normal);
+  assert.equal(r.balances.balances.shu, after.shu);
+  assert.deepEqual(ledgerSum(h.ctx, userId), after);
+  assert.equal(listCards(h.ctx, userId, {}).total, 0);
+  assert.throws(() => redeemGiftCode(h.ctx, userId, 'THUCQUOC'), errCode('GIFTCODE_ALREADY_REDEEMED'));
+  assert.equal(readBalances(h.ctx.db, userId).shu, after.shu);
+  assert.equal(listFeaturedGiftCodes(h.ctx, userId).find((c) => c.code === 'THUCQUOC')!.redeemed, true);
+  const hist = listHistory(h.ctx, userId, { kind: 'giftcode' });
+  assert.equal(hist.total, 1);
+  assert.deepEqual((hist.items[0] as { tickets: unknown }).tickets, [{ pool: 'shu', count: 200 }]);
+  // Người chơi khác vẫn nhập được; nhập cả 4 code => +200 mỗi loại phe
+  const bob = register(h.ctx, 'bob', 'secret123').userId;
+  const b0 = readBalances(h.ctx.db, bob);
+  for (const c of ['THUCQUOC', 'NGUYQUOC', 'NGOQUOC', 'QUANQUOC']) redeemGiftCode(h.ctx, bob, c);
+  const b1 = readBalances(h.ctx.db, bob);
+  assert.deepEqual(
+    [b1.shu - b0.shu, b1.wei - b0.wei, b1.wu - b0.wu, b1.qun - b0.qun, b1.normal - b0.normal],
+    [200, 200, 200, 200, 0],
+  );
+});
+
+test('giftcode chỉ tặng vé: tạo code có thẻ bị từ chối; code nhiều loại vé, hạn sử dụng, tắt code, code sai', async () => {
+  const h = makeCtx();
+  const { userId } = register(h.ctx, 'alice', 'secret123');
+  const { redeemGiftCode, adminCreateGiftCode, adminSetGiftCodeActive } = await import('../src/giftcode.ts');
+  assert.throws(() => adminCreateGiftCode(h.ctx, userId, { code: 'THE', rewards: [{ kind: 'card', pool: 'shu', count: 5 }] }), errCode('INVALID_REWARDS'));
+  const c = adminCreateGiftCode(h.ctx, userId, {
+    code: 'mix-01',
+    rewards: [{ pool: 'shu', count: 10 }, { kind: 'ticket', pool: 'wei', count: 20 }, { pool: 'shu', count: 5 }],
+    expiresAt: new Date(T0 + 60 * 60 * 1000).toISOString(),
+  });
+  assert.equal(c.code, 'MIX-01');
+  assert.deepEqual(c.rewards, [{ kind: 'ticket', pool: 'shu', count: 15 }, { kind: 'ticket', pool: 'wei', count: 20 }]);
+  assert.equal(c.totalTickets, 35);
+  assert.equal(c.totalCards, 0);
+  assert.throws(() => adminCreateGiftCode(h.ctx, userId, { code: 'MIX-01', rewards: [{ pool: 'wu', count: 1 }] }), errCode('GIFTCODE_EXISTS'));
+  assert.throws(() => adminCreateGiftCode(h.ctx, userId, { code: 'MANYT', rewards: [{ pool: 'wu', count: 10001 }] }), errCode('INVALID_REWARDS'));
+  assert.throws(() => adminCreateGiftCode(h.ctx, userId, { code: 'OLD', rewards: [{ pool: 'wu', count: 1 }], expiresAt: new Date(T0 - 1000).toISOString() }), errCode('INVALID_EXPIRY'));
+  assert.throws(() => redeemGiftCode(h.ctx, userId, 'KHONGCO'), errCode('GIFTCODE_NOT_FOUND'));
+
+  const bob = register(h.ctx, 'bob', 'secret123').userId;
+  const b0 = readBalances(h.ctx.db, bob);
+  const r = redeemGiftCode(h.ctx, bob, 'MIX-01');
+  assert.deepEqual(r.tickets, [{ pool: 'shu', count: 15 }, { pool: 'wei', count: 20 }]);
+  const b1 = readBalances(h.ctx.db, bob);
+  assert.deepEqual([b1.shu - b0.shu, b1.wei - b0.wei], [15, 20]);
+  assert.deepEqual(ledgerSum(h.ctx, bob), b1);
+  assert.equal(listCards(h.ctx, bob, {}).total, 0);
+
+  // Hết hạn
+  const carl = register(h.ctx, 'carl', 'secret123').userId;
+  const c0 = getTickets(h.ctx, carl).total;
+  h.advance(60 * 60 * 1000);
+  assert.throws(() => redeemGiftCode(h.ctx, carl, 'MIX-01'), errCode('GIFTCODE_EXPIRED'));
+  // Tắt code
+  const t = adminCreateGiftCode(h.ctx, userId, { code: 'OFF', rewards: [{ pool: 'normal', count: 3 }] });
+  adminSetGiftCodeActive(h.ctx, t.id, false);
+  assert.throws(() => redeemGiftCode(h.ctx, carl, 'OFF'), errCode('GIFTCODE_NOT_FOUND'));
+  assert.equal(getTickets(h.ctx, carl).total, c0); // code hết hạn / đã tắt không cộng vé
+  adminSetGiftCodeActive(h.ctx, t.id, true);
+  assert.deepEqual(redeemGiftCode(h.ctx, carl, 'OFF').tickets, [{ pool: 'normal', count: 3 }]);
+});
+
+test('giftcode thẻ cũ: bị tắt, không nhập được, không bật lại được', async () => {
+  const h = makeCtx();
+  const { userId } = register(h.ctx, 'alice', 'secret123');
+  const { redeemGiftCode, adminSetGiftCodeActive } = await import('../src/giftcode.ts');
+  // Code thẻ cũ (dữ liệu trước v9) — giả lập bằng cách ghi trực tiếp
+  const id = Number(
+    h.ctx.db
+      .prepare("INSERT INTO gift_codes (code, rewards, total_cards, total_tickets, is_active, created_at) VALUES ('THECU', '[{\"pool\":\"shu\",\"count\":5}]', 5, 0, 1, 'x')")
+      .run().lastInsertRowid,
+  );
+  assert.throws(() => redeemGiftCode(h.ctx, userId, 'THECU'), errCode('GIFTCODE_NOT_FOUND'));
+  assert.equal(listCards(h.ctx, userId, {}).total, 0);
+  adminSetGiftCodeActive(h.ctx, id, false);
+  assert.throws(() => adminSetGiftCodeActive(h.ctx, id, true), errCode('GIFTCODE_LEGACY'));
+});
+
+test('giftcode nguyên tử: lỗi giữa chừng => không cộng vé nào, chưa tính là đã nhập', async () => {
+  const h = makeCtx();
+  const { userId } = register(h.ctx, 'alice', 'secret123');
+  const { redeemGiftCode, adminCreateGiftCode } = await import('../src/giftcode.ts');
+  adminCreateGiftCode(h.ctx, userId, { code: 'ATOM', rewards: [{ pool: 'wu', count: 50 }, { pool: 'qun', count: 50 }] });
+  const b0 = readBalances(h.ctx.db, userId);
+  // Ép lỗi ở bước ghi lượt nhập (sau khi đã cộng vé) bằng trigger
+  h.ctx.db.exec("CREATE TEMP TRIGGER boom BEFORE INSERT ON gift_code_redemptions BEGIN SELECT RAISE(ABORT, 'boom'); END;");
+  assert.throws(() => redeemGiftCode(h.ctx, userId, 'ATOM'), /boom/);
+  assert.deepEqual(readBalances(h.ctx.db, userId), b0);
+  h.ctx.db.exec('DROP TRIGGER boom');
+  redeemGiftCode(h.ctx, userId, 'ATOM');
+  const b1 = readBalances(h.ctx.db, userId);
+  assert.deepEqual([b1.wu - b0.wu, b1.qun - b0.qun], [50, 50]);
 });

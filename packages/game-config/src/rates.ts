@@ -26,6 +26,9 @@ export const DEV_TOPUP_TICKETS = 50;
  */
 export const ADMIN_GRANT_MAX_TICKETS = 10_000;
 
+/** Giftcode (mục 3.9, chỉ tặng vé quay): tổng số vé tối đa một giftcode được cộng (trần mỗi code, không phải trần tồn kho). */
+export const GIFT_CODE_MAX_TICKETS = 10_000;
+
 /**
  * Các lựa chọn số lần quay trong 1 request (mục 4.4).
  * Nếu số vé loại đã chọn ít hơn số lần yêu cầu, server quay hết số vé còn lại.

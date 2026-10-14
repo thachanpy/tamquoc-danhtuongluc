@@ -63,7 +63,7 @@ export function listCards(ctx: GameContext, userId: number, query: CardsQuery): 
 }
 
 export interface HistoryQuery {
-  kind?: 'ticket' | 'gacha' | 'upgrade' | 'gift';
+  kind?: 'ticket' | 'gacha' | 'upgrade' | 'gift' | 'giftcode';
   page?: number;
   pageSize?: number;
 }
@@ -79,6 +79,9 @@ export function listHistory(ctx: GameContext, userId: number, query: HistoryQuer
   if (!query.kind || query.kind === 'gift') {
     parts.push(`SELECT 'gift' AS kind, id, created_at FROM card_gifts WHERE from_user_id = $u OR to_user_id = $u`);
   }
+  if (!query.kind || query.kind === 'giftcode') {
+    parts.push(`SELECT 'giftcode' AS kind, id, created_at FROM gift_code_redemptions WHERE user_id = $u`);
+  }
   const union = parts.join(' UNION ALL ');
   const total = (ctx.db.prepare(`SELECT COUNT(*) AS n FROM (${union})`).get({ u: userId }) as { n: number }).n;
   const refs = ctx.db
@@ -93,7 +96,22 @@ export function listHistory(ctx: GameContext, userId: number, query: HistoryQuer
      JOIN users uf ON uf.id = g.from_user_id JOIN users ut ON ut.id = g.to_user_id WHERE g.id = ?`,
   );
 
+  const gcStmt = ctx.db.prepare(
+    'SELECT r.*, g.code FROM gift_code_redemptions r JOIN gift_codes g ON g.id = r.code_id WHERE r.id = ?',
+  );
+
   const items: HistoryEntryDto[] = refs.map((ref) => {
+    if (ref.kind === 'giftcode') {
+      const r = gcStmt.get(ref.id) as Record<string, unknown>;
+      return {
+        kind: 'giftcode',
+        id: ref.id,
+        code: r.code as string,
+        cards: JSON.parse(r.cards_snapshot as string) as GiftCardSnapshot[],
+        tickets: JSON.parse((r.tickets_snapshot as string) ?? '[]') as { pool: TicketType; count: number }[],
+        createdAt: r.created_at as string,
+      };
+    }
     if (ref.kind === 'ticket') {
       const r = tStmt.get(ref.id) as Record<string, unknown>;
       return {
