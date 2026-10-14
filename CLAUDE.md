@@ -632,6 +632,8 @@ Yêu cầu triển khai:
 - Hiển thị xác suất thất bại và phân phối level nhận được sau thất bại.
 - Cảnh báo cả 2 thẻ đầu vào sẽ bị tiêu thụ bất kể thành công hay thất bại.
 - Có bước xác nhận trước khi gửi request.
+- Có nút **Huỷ** để bỏ chọn toàn bộ thẻ đang chọn ghép; bấm vào thẻ trong ô "Đã chọn" để bỏ riêng thẻ đó. Ở bước xác nhận có nút "Quay lại".
+- Mỗi thẻ trong ô "Đã chọn" hiển thị khung riêng của thẻ (kể cả Lv.6+), không tràn chiếm cả khung panel.
 - Khóa nút khi request đang xử lý.
 - Animation chỉ chạy sau khi server xác nhận kết quả.
 - Khi animation ghép xong, chạm/bấm bất kỳ đâu (hoặc Esc) để đóng popup (giống màn mở thẻ).
@@ -697,6 +699,7 @@ Người chơi có thể tặng thẻ cho bất kỳ người chơi nào khác, 
 - Quay ×10 hiển thị animation lật lần lượt từng thẻ (2 hàng × 5 thẻ) theo đúng kết quả server, có thể bỏ qua.
 - Kết quả chỉ hiện trong màn mở thẻ; trang quay không hiện trước danh sách thẻ vừa quay (tránh lộ kết quả). Sau khi đóng chỉ còn dòng tóm tắt loại vé đã dùng.
 - Khi animation xong, chạm/bấm bất kỳ đâu (hoặc Esc) để đóng màn mở thẻ.
+- Màn kết quả có nút **"Quay tiếp 1 vé"** và **"Quay tiếp 10 vé"** (cùng loại vé vừa dùng; còn ít hơn 10 vé thì "Quay hết N vé"; còn 1 vé chỉ có nút 1 vé; hết vé thì nút bị khoá). Bấm là đóng màn và quay ngay, giống hệt bấm nút quay ở trang (cùng kiểm tra, idempotency key, chặn bấm lặp).
 - Hiển thị số dư từng loại vé và tổng số vé.
 - Không hiển thị giá Vàng, nút nạp tiền hoặc cửa hàng vé.
 - Hiển thị pool tướng có thể nhận của loại vé đang chọn.
@@ -737,6 +740,7 @@ Hiển thị lịch sử phân trang:
 - Chủ đề sưu tầm tướng Tam Quốc, tạo cảm giác thẻ có giá trị.
 - Giao diện chủ đề Tam Quốc nằm ở `apps/web/src/theme.css` (ghi đè thẩm mỹ của `style.css`): nền chiến trường 4 phe theo mẫu chủ dự án cung cấp (núi, thành lũy, cờ Ngụy/Ngô trong `public/theme/landscape.svg`; vầng sáng 4 màu phe và vignette bằng CSS gradient; 40 tia lửa màu phe bay lên do `main.ts` tạo, tắt khi `prefers-reduced-motion`), panel sơn mài đỏ–đen viền vàng với góc hồi văn (`public/theme/corner-*.svg`), dải hồi văn dưới thanh trên (`public/theme/fret.svg`), tab đang chọn và nút chính màu son; logo game là icon Gia Cát Lượng. Font từ Google Fonts (đều có đủ dấu tiếng Việt trừ font chữ Hán): Playfair Display SC cho tiêu đề và tab (chữ hoa nhỏ kiểu khắc bia); Oswald cho nút, số vé, nhãn Lv. và số liệu; Charm (nét bút lông) cho tên game mạ vàng gradient và dòng kết quả mở thẻ; Noto Serif cho nội dung; Ma Shan Zheng (bút lông) cho chữ Hán biểu tượng phe, có font dự phòng khi offline.
 - UI hiện đại, tương phản tốt, responsive cho desktop và mobile.
+- Thanh trên (tên game, vé, nhạc, tài khoản) và thanh tab luôn dính trên cùng khi cuộn (`.app-head`, sticky); chiều cao đo bằng JS vào biến CSS `--head-h` để khung "Đã chọn" ở trang Nâng cấp dính ngay bên dưới.
 - Phân biệt phe bằng màu và biểu tượng nhất quán.
 - Khung thẻ theo cấp (chủ dự án cung cấp bộ khung tham chiếu): Cấp 1 Đồng, 2 Bạc, 3 Lục, 4 Vàng, 5 Đỏ, 6 Huyền, 7 Tử, 8 Cam, 9 Bạch kim, 10 Kim cương. Cấp 1–5 là khung kim loại (cấp 5 có đá đỏ phát sáng); cấp 6–10 có đá quý, hào quang, cánh/rồng/phượng. Phần trang trí cấp 6–10 được phép tràn ra ngoài thân thẻ.
 - Thân thẻ (avatar + tên) luôn cùng kích thước ở mọi cấp trong cùng một ô: thẻ Lv.6–10 cần chừa chỗ khung lớn hơn nên được phóng to (≈1,171×) kèm lề âm để thân thẻ trùng đúng vị trí/kích thước thân thẻ Lv.1–5; khung Lv.6+ tràn ra ngoài ô, ô chứa thẻ Lv.6+ được nới rộng. Thẻ luôn căn giữa ô; các ô nhóm level trong cùng một tướng cao bằng nhau và dùng chung đệm (nhóm có thẻ Lv.6+ thì mọi ô cùng nới), nên thân thẻ các cấp thẳng hàng. Kích thước ô đặt bằng biến CSS `--cw` (`style.css`).
@@ -745,7 +749,7 @@ Hiển thị lịch sử phân trang:
 - Chân dung tướng nằm ở `apps/web/public/generals/{artKey}.jpg` (cắt từ 4 bảng ảnh độ phân giải cao chủ dự án cung cấp, mỗi phe một bảng 5×5, bỏ khung và bảng tên; mỗi ảnh 286×378). Dùng chung cho thẻ DOM và thẻ PixiJS; hiển thị kiểu cover, canh phía trên. Thay artwork = thay file cùng tên.
 - Tướng thiếu ảnh chân dung tự rơi về placeholder (biểu tượng phe + chữ viết tắt).
 - Mặt sau thẻ trong animation quay thẻ là ảnh `apps/web/public/theme/card-back.jpg` (chủ dự án cung cấp: khung đồng, rồng, bát quái; 360×568, ~40 KB). Thay mặt sau = thay file cùng tên; thiếu ảnh thì dùng mặt sau vẽ dự phòng.
-- Nhạc nền (chủ dự án cung cấp): 4 bài `apps/web/public/audio/b1.mp3`, `b2.mp3`, `b3.mp3`, `b4.mp3` (MP3 64 kbps, ~1,4 MB/bài), khai báo trong `TRACKS` ở `apps/web/src/music.ts`; phát ngẫu nhiên, hết bài thì chọn ngẫu nhiên bài khác (không lặp lại ngay bài vừa nghe). Thanh trên có nút bật/tắt hình trống trận (SVG; khi tắt có vạch son chéo) và thanh âm lượng; lựa chọn lưu trong localStorage của trình duyệt (mặc định bật, 40%). Do trình duyệt chặn tự phát, nhạc chỉ bắt đầu sau lần chạm/bấm đầu tiên.
+- Nhạc nền (chủ dự án cung cấp): 4 bài `apps/web/public/audio/b1.mp3`, `b2.mp3`, `b3.mp3`, `b4.mp3` (MP3 64 kbps, ~1,4 MB/bài), khai báo trong `TRACKS` ở `apps/web/src/music.ts`; phát kiểu xào bài: trộn ngẫu nhiên cả danh sách, nghe hết các bài rồi mới trộn lại; bài vừa nghe được nhớ trong localStorage (`tq.music.last`) nên lần mở game sau không bắt đầu bằng bài đó. Thanh trên có nút bật/tắt hình trống trận (SVG; khi tắt có vạch son chéo) và thanh âm lượng; lựa chọn lưu trong localStorage của trình duyệt (mặc định bật, 40%). Do trình duyệt chặn tự phát, nhạc chỉ bắt đầu sau lần chạm/bấm đầu tiên.
 - PixiJS quản lý stage, texture, animation và hiệu ứng.
 - Giải phóng texture/tài nguyên khi đổi màn hình để tránh rò rỉ bộ nhớ.
 - Hiệu ứng không được cản trở thao tác.

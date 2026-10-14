@@ -12,13 +12,22 @@ const CARD_H = 260;
  * Animation chỉ HIỂN THỊ kết quả server đã xác nhận; lỗi animation không ảnh hưởng dữ liệu.
  * Mỗi lần mở tạo Application mới và destroy toàn bộ (texture, children) khi đóng.
  */
+/** Nút hành động thêm ở màn kết quả (VD "Quay tiếp 1 vé"). */
+export interface StageAction {
+  label: string;
+  value: string;
+  primary?: boolean;
+  disabled?: boolean;
+}
+
 class Stage {
   app = new Application();
   root = new Container();
   overlay: HTMLDivElement;
   skipping = prefersReducedMotion();
-  private closed: Promise<void>;
-  private resolveClosed!: () => void;
+  private closed: Promise<string | null>;
+  private resolveClosed!: (choice: string | null) => void;
+  private done = false;
   private skipBtn: HTMLButtonElement;
   private closeBtn: HTMLButtonElement;
   caption: HTMLDivElement;
@@ -32,6 +41,7 @@ class Stage {
         <div class="stage-caption" aria-live="polite"></div>
         <div class="stage-actions">
           <button class="btn ghost" data-skip>Bỏ qua</button>
+          <span class="stage-extra"></span>
           <button class="btn primary" data-close hidden>Đóng</button>
         </div>
       </div>`;
@@ -40,7 +50,7 @@ class Stage {
     this.caption = this.overlay.querySelector('.stage-caption')!;
     this.skipBtn.onclick = () => (this.skipping = true);
     this.closed = new Promise((r) => (this.resolveClosed = r));
-    this.closeBtn.onclick = () => this.destroy();
+    this.closeBtn.onclick = () => this.destroy(null);
     document.body.appendChild(this.overlay);
   }
 
@@ -83,20 +93,36 @@ class Stage {
 
   wait = (ms: number) => this.tween(ms, () => {});
 
-  /** Kết thúc animation. tapToClose: bấm bất kỳ đâu trên màn che (hoặc Esc/Enter) để đóng. */
-  finish(caption: string, tapToClose = false) {
+  /**
+   * Kết thúc animation. tapToClose: bấm bất kỳ đâu trên màn che (hoặc Esc) để đóng.
+   * actions: các nút thêm (VD "Quay tiếp"); bấm nút => đóng màn và waitClosed() trả về `value` của nút.
+   */
+  finish(caption: string, tapToClose = false, actions: StageAction[] = []) {
     this.caption.textContent = caption;
     this.skipBtn.hidden = true;
     this.closeBtn.hidden = false;
+    const extra = this.overlay.querySelector<HTMLSpanElement>('.stage-extra')!;
+    extra.innerHTML = '';
+    for (const a of actions) {
+      const b = document.createElement('button');
+      b.className = `btn ${a.primary ? 'primary' : 'ghost'}`;
+      b.textContent = a.label;
+      b.disabled = !!a.disabled;
+      b.onclick = (e) => {
+        e.stopPropagation(); // không để cú bấm lan ra màn che (tap-to-close)
+        this.destroy(a.value);
+      };
+      extra.appendChild(b);
+    }
     this.closeBtn.focus();
     if (tapToClose) {
       this.overlay.classList.add('tap-close');
       this.closeBtn.textContent = 'Đóng';
       // Gắn sau 1 nhịp để cú bấm "Bỏ qua" vừa rồi không đóng luôn màn hình
       setTimeout(() => {
-        this.overlay.addEventListener('click', () => this.destroy(), { once: true });
+        this.overlay.addEventListener('click', () => this.destroy(null), { once: true });
         this.overlay.addEventListener('keydown', (e) => {
-          if (e.key === 'Escape') this.destroy();
+          if (e.key === 'Escape') this.destroy(null);
         });
       }, 0);
     }
@@ -106,14 +132,16 @@ class Stage {
     return this.closed;
   }
 
-  destroy() {
+  destroy(choice: string | null = null) {
+    if (this.done) return;
+    this.done = true;
     try {
       this.app.destroy(true, { children: true, texture: true });
     } catch {
       /* ignore */
     }
     this.overlay.remove();
-    this.resolveClosed();
+    this.resolveClosed(choice);
   }
 }
 
@@ -274,7 +302,7 @@ function burst(stage: Stage, color: number, count: number) {
 }
 
 /** Animation mở thẻ sau khi /api/gacha/draw trả kết quả. */
-export async function playReveal(general: GeneralDto, level: number, caption: string): Promise<void> {
+export async function playReveal(general: GeneralDto, level: number, caption: string, actions: StageAction[] = []): Promise<string | null> {
   const stage = new Stage();
   try {
     await stage.init();
@@ -301,16 +329,20 @@ export async function playReveal(general: GeneralDto, level: number, caption: st
     rays.alpha = level >= 3 ? 1 : 0.4;
     burst(stage, tier.color, 12 + level * 8);
     if (!stage.skipping) stage.app.ticker.add(() => (rays.rotation += 0.004));
-    stage.finish(caption, true);
+    stage.finish(caption, true, actions);
   } catch {
     // Lỗi render không đổi kết quả server — vẫn hiển thị chú thích để người chơi biết.
-    stage.finish(caption, true);
+    stage.finish(caption, true, actions);
   }
-  await stage.waitClosed();
+  return stage.waitClosed();
 }
 
 /** Animation mở nhiều thẻ (quay ×10) — lật lần lượt từng thẻ theo đúng thứ tự server trả về. */
-export async function playRevealMany(items: { general: GeneralDto; level: number }[], caption: string): Promise<void> {
+export async function playRevealMany(
+  items: { general: GeneralDto; level: number }[],
+  caption: string,
+  actions: StageAction[] = [],
+): Promise<string | null> {
   const stage = new Stage();
   try {
     await stage.init();
@@ -374,11 +406,11 @@ export async function playRevealMany(items: { general: GeneralDto; level: number
     rays.alpha = best >= 3 ? 1 : 0.35;
     burst(stage, levelTier(best).color, 10 + best * 8);
     if (!stage.skipping) stage.app.ticker.add(() => (rays.rotation += 0.004));
-    stage.finish(caption, true);
+    stage.finish(caption, true, actions);
   } catch {
-    stage.finish(caption, true);
+    stage.finish(caption, true, actions);
   }
-  await stage.waitClosed();
+  return stage.waitClosed();
 }
 
 /** Animation ghép thẻ sau khi /api/upgrades/attempt trả kết quả. */

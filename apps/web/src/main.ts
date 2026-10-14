@@ -114,6 +114,7 @@ function fmtCountdown(ms: number) {
 function renderShell() {
   state.listeners.clear();
   app.innerHTML = `
+    <div class="app-head">
     <header class="top">
       <div class="brand"><img class="logo" src="/icons/icon-192.png" alt="" aria-hidden="true" />Tam Quốc: <span>Danh Tướng Lục</span></div>
       <div class="tickets-bar" aria-live="polite"></div>
@@ -125,7 +126,13 @@ function renderShell() {
       .filter(([, p]) => !('adminOnly' in p) || state.isAdmin)
       .map(([id, p]) => `<a href="#${id}" data-tab="${id}">${p.label}${'adminOnly' in p ? ' <span class="badge" data-pending hidden></span>' : ''}</a>`)
       .join('')}</nav>
+    </div>
     <main id="page"></main>`;
+  // Thanh trên + tab dính trên cùng; đo chiều cao để các phần dính khác (VD khung "Đã chọn" ở Nâng cấp) nằm ngay dưới
+  const head = app.querySelector<HTMLDivElement>('.app-head')!;
+  const syncHeadH = () => document.documentElement.style.setProperty('--head-h', `${head.offsetHeight}px`);
+  syncHeadH();
+  new ResizeObserver(syncHeadH).observe(head);
   mountMusicControl(app.querySelector<HTMLDivElement>('[data-music]')!);
   app.querySelector<HTMLButtonElement>('[data-logout]')!.onclick = async () => {
     await api.logout().catch(() => {});

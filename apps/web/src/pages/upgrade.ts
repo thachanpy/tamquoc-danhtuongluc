@@ -211,16 +211,38 @@ export function renderUpgrade(root: HTMLElement): () => void {
     slotsEl.innerHTML = Array.from({ length: N }, (_, i) => i)
       .map((i) => {
         const c = m.get(selected[i] ?? -1);
-        return c ? `<div class="slot">${cardHtml(gen(c.generalId), c.level, 'small')}</div>` : `<div class="slot empty">Trống</div>`;
+        return c
+          ? `<button class="slot" data-unpick="${c.id}" title="Bỏ chọn thẻ này" ${busy ? 'disabled' : ''}>${cardHtml(gen(c.generalId), c.level, 'small')}</button>`
+          : `<div class="slot empty">Trống</div>`;
       })
       .join('');
+    slotsEl.querySelectorAll<HTMLButtonElement>('[data-unpick]').forEach((b) => {
+      b.onclick = () => {
+        if (busy) return;
+        selected = selected.filter((id) => id !== Number(b.dataset.unpick));
+        void onSelectionChange();
+      };
+    });
+
+    const cancelBtn = selected.length ? `<button class="btn ghost" data-clear ${busy ? 'disabled' : ''}>Huỷ</button>` : '';
+    const wireClear = () => {
+      const b = previewEl.querySelector<HTMLButtonElement>('[data-clear]');
+      if (b)
+        b.onclick = () => {
+          if (busy) return;
+          selected = [];
+          void onSelectionChange();
+        };
+    };
 
     if (selected.length < N) {
-      previewEl.innerHTML = `<p class="muted">Chọn thêm ${N - selected.length} thẻ.</p>`;
+      previewEl.innerHTML = `<p class="muted">Chọn thêm ${N - selected.length} thẻ.</p>${cancelBtn ? `<div class="confirm-area">${cancelBtn}</div>` : ''}`;
+      wireClear();
       return;
     }
     if (!preview) {
-      previewEl.innerHTML = `<p class="muted">Đang tính tỷ lệ…</p>`;
+      previewEl.innerHTML = `<p class="muted">Đang tính tỷ lệ…</p><div class="confirm-area">${cancelBtn}</div>`;
+      wireClear();
       return;
     }
     const p = preview;
@@ -235,15 +257,16 @@ export function renderUpgrade(root: HTMLElement): () => void {
         .join('')}</tbody></table>
       <p class="warn">⚠ Cả ${N} thẻ đầu vào sẽ bị tiêu thụ dù thành công hay thất bại. Bạn luôn nhận lại đúng 1 thẻ ${esc(gen(p.generalId).name)}.</p>
       <p class="muted small">Tỷ lệ chỉ để tham khảo; server tính lại khi thực hiện.</p>
-      <div class="confirm-area"><button class="btn primary" data-go ${busy ? 'disabled' : ''}>Ghép thẻ</button></div>
+      <div class="confirm-area">${cancelBtn} <button class="btn primary" data-go ${busy ? 'disabled' : ''}>Ghép thẻ</button></div>
       <div class="up-msg error" aria-live="polite"></div>`;
     previewEl.querySelector<HTMLButtonElement>('[data-go]')!.onclick = showConfirm;
+    wireClear();
   }
 
   function showConfirm() {
     const area = previewEl.querySelector<HTMLDivElement>('.confirm-area')!;
     area.innerHTML = `<p><b>Xác nhận ghép?</b> ${N} thẻ sẽ bị tiêu thụ.</p>
-      <button class="btn ghost" data-no>Huỷ</button> <button class="btn danger" data-yes>Xác nhận ghép</button>`;
+      <button class="btn ghost" data-no>Quay lại</button> <button class="btn danger" data-yes>Xác nhận ghép</button>`;
     area.querySelector<HTMLButtonElement>('[data-no]')!.onclick = renderSide;
     area.querySelector<HTMLButtonElement>('[data-yes]')!.onclick = attempt;
   }

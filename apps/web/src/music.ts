@@ -1,6 +1,7 @@
 /**
  * Nhạc nền (chỉ trải nghiệm, không liên quan dữ liệu game).
- * - Danh sách bài trong TRACKS, phát ngẫu nhiên: hết bài thì chọn ngẫu nhiên bài khác (không lặp lại bài vừa nghe).
+ * - Danh sách bài trong TRACKS, phát kiểu xào bài: trộn ngẫu nhiên, nghe hết các bài rồi mới lặp; lần mở game sau
+ *   không bắt đầu bằng bài vừa nghe lần trước.
  * - Bật/tắt và âm lượng được nhớ theo trình duyệt (localStorage).
  * - Trình duyệt chặn tự phát nhạc, nên nhạc chỉ bắt đầu sau lần chạm/bấm đầu tiên của người chơi.
  */
@@ -25,13 +26,45 @@ function savePrefs(p: Prefs) {
 
 /** Thêm/bớt bài = thêm/bớt file trong public/audio và sửa danh sách này. */
 const TRACKS = ['/audio/b1.mp3', '/audio/b2.mp3', '/audio/b3.mp3', '/audio/b4.mp3'];
-let current = -1;
+const LAST_KEY = 'tq.music.last';
+
+/**
+ * Phát kiểu "xào bài": trộn ngẫu nhiên toàn bộ danh sách, nghe hết lượt rồi mới trộn lại.
+ * Bài đầu tiên của lượt mới không trùng bài vừa nghe; bài vừa nghe được nhớ qua các lần mở game
+ * (localStorage) nên mỗi lần vào game không bắt đầu bằng cùng một bài.
+ */
+let queue: number[] = [];
+let current = readLast();
+
+function readLast(): number {
+  try {
+    const i = Number(localStorage.getItem(LAST_KEY));
+    return Number.isInteger(i) && i >= 0 && i < TRACKS.length ? i : -1;
+  } catch {
+    return -1;
+  }
+}
+
+function shuffled(): number[] {
+  const a = TRACKS.map((_, i) => i);
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j]!, a[i]!];
+  }
+  // Không mở lượt mới bằng đúng bài vừa nghe
+  if (a.length > 1 && a[0] === current) [a[0], a[a.length - 1]] = [a[a.length - 1]!, a[0]!];
+  return a;
+}
 
 function pickNext(): string {
-  let i = Math.floor(Math.random() * TRACKS.length);
-  if (TRACKS.length > 1 && i === current) i = (i + 1 + Math.floor(Math.random() * (TRACKS.length - 1))) % TRACKS.length;
-  current = i;
-  return TRACKS[i]!;
+  if (!queue.length) queue = shuffled();
+  current = queue.shift()!;
+  try {
+    localStorage.setItem(LAST_KEY, String(current));
+  } catch {
+    /* bỏ qua */
+  }
+  return TRACKS[current]!;
 }
 
 const prefs = loadPrefs();

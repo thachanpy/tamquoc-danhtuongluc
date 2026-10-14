@@ -109,9 +109,9 @@ button.chip { cursor: pointer; margin: 4px 4px 0 0; }
 
 /* ---------- cards ---------- */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
-.grid-item { display: grid; gap: 6px; }
+.grid-item { display: grid; gap: 6px; min-width: 0; } /* không để tên dài làm ô (và thẻ) phình to hơn cột */
 /* Thẻ: thân (.tq-body) + khung theo cấp (.tq-frame, ảnh /frames/lvN.png) phủ lên trên.
-   Khung Lv.6+ có cánh/tua/hào quang tràn ra ngoài thân thẻ. */
+   Khung Lv.6+ có cánh/tua/hào quang tràn ra ngoài thân thẻ.
    Kích thước ô thẻ đặt bằng biến --cw (mặc định 100% chỗ chứa). Khoảng chừa cho khung là margin % của .tq-body (= % bề rộng thẻ).
    Lv.6+ cần chừa rộng hơn (9%/12%) => thẻ được phóng to 1/0.76×0.89 ≈ 1.1711 lần và kéo lề âm để THÂN THẺ (avatar)
    luôn đúng bằng kích thước & vị trí thân thẻ Lv.1–5 trong cùng ô; khung Lv.6+ tràn ra ngoài ô. */
@@ -169,8 +169,11 @@ button.chip { cursor: pointer; margin: 4px 4px 0 0; }
 .pick.on { border-color: var(--gold); box-shadow: 0 0 12px rgba(212,168,74,.6); }
 .pick:disabled { opacity: .3; cursor: not-allowed; }
 .pick .cid { position: absolute; top: 6px; left: 8px; font-size: 11px; background: rgba(0,0,0,.6); padding: 0 5px; border-radius: 4px; }
-.sel-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.sel-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; padding: 14px 14px 10px; }
 .slot .tq-card.small { --cw: 100%; }
+button.slot { background: none; border: 0; padding: 0; color: inherit; cursor: pointer; display: block; width: 100%; position: relative; }
+button.slot:hover:not(:disabled) { filter: brightness(1.1); }
+button.slot:disabled { cursor: not-allowed; }
 .slot.empty { border: 2px dashed var(--line); border-radius: 12px; aspect-ratio: 3/4.3; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
 .odds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
 .odds > div { padding: 10px; border-radius: 10px; background: var(--panel-2); font-size: 14px; }

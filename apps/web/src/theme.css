@@ -291,7 +291,7 @@ h1, h2, h3, .tabs a, .t-name, .quick-head b, .gen-head b {
 .grant-form label { display: grid; gap: 4px; font-size: 13px; }
 .grant-form select, .grant-form input { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
 .grant-form input { width: 110px; }
-.adm-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
+.adm-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 22px 30px; padding: 12px 14px; }
 .adm-grid .pick { width: 100%; }
 .adm-grid .owner { text-align: center; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 1000px) {
@@ -332,3 +332,8 @@ h1, h2, h3, .tabs a, .t-name, .quick-head b, .gen-head b {
 .adm-setting { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); font-size: 14px; cursor: pointer; }
 .adm-setting input { width: 18px; height: 18px; accent-color: var(--gold); }
 .adm-setting-state { margin-left: auto; }
+
+/* ---------- thanh trên + tab luôn dính trên cùng ---------- */
+.app-head { position: sticky; top: 0; z-index: 30; background: rgba(6, 5, 8, .92); backdrop-filter: blur(8px); }
+.app-head .top { position: relative; top: auto; }
+.upgrade-layout .side { top: calc(var(--head-h, 120px) + 12px); }

@@ -2,11 +2,12 @@ import { TICKET_LABELS, TICKET_TYPES, FACTION_LABELS, type TicketType } from '@t
 import { api, newKey, type ApiError } from '../api.ts';
 import { state, setTickets, onTickets, gen } from '../state.ts';
 import { esc, pct, levelTier } from '../art.ts';
-import { playReveal, playRevealMany } from '../pixi/stage.ts';
+import { playReveal, playRevealMany, type StageAction } from '../pixi/stage.ts';
 
 export function renderDraw(root: HTMLElement): () => void {
   let selected: TicketType = 'normal';
   let busy = false;
+  let alive = true;
   /**
    * Key giữ nguyên cho tới khi request có phản hồi xác định -> retry an toàn sau lỗi mạng.
    * Gắn với (loại vé, số lần) để không dùng lại key cho một yêu cầu khác.
@@ -45,6 +46,18 @@ export function renderDraw(root: HTMLElement): () => void {
   root.querySelector('.rates tbody')!.innerHTML = cfg.levelRates
     .map((r) => `<tr><td><span class="lv-dot" style="--tc:${levelTier(r.level).css}"></span>Lv.${r.level}</td><td>${pct(r.bps, cfg.bpsScale)}</td></tr>`)
     .join('');
+
+  /** Nút "Quay tiếp" trong màn kết quả: cùng loại vé, cùng các lựa chọn số lần như ở trang. */
+  function againActions(balance: number): StageAction[] {
+    if (balance <= 0) return [{ label: `Hết ${TICKET_LABELS[selected]}`, value: '', disabled: true }];
+    return counts
+      .filter((n) => n === 1 || balance !== 1)
+      .map((n) => ({
+        label: n === 1 ? 'Quay tiếp 1 vé' : balance < n ? `Quay hết ${balance} vé` : `Quay tiếp ${n} vé`,
+        value: String(n),
+        primary: n !== 1,
+      }));
+  }
 
   /** Nhãn nút: "Quay ×10", hoặc "Quay hết 3 vé" khi số dư ít hơn số lần. Server vẫn là bên quyết định số lượt thật. */
   function btnLabel(n: number, balance: number): string {
@@ -125,9 +138,14 @@ export function renderDraw(root: HTMLElement): () => void {
       busy = false;
       renderPicker();
       // Chỉ hiện kết quả trong màn mở thẻ (không lộ trước ở trang); sau khi đóng chỉ còn dòng tóm tắt.
-      if (r.results.length === 1) await playReveal(r.results[0]!.general, r.results[0]!.card.level, caption);
-      else await playRevealMany(r.results.map((x) => ({ general: x.general, level: x.card.level })), caption);
+      const actions = againActions(r.tickets.balances[r.ticketType]);
+      const choice =
+        r.results.length === 1
+          ? await playReveal(r.results[0]!.general, r.results[0]!.card.level, caption, actions)
+          : await playRevealMany(r.results.map((x) => ({ general: x.general, level: x.card.level })), caption, actions);
       last.innerHTML = `<div class="muted small">${esc(caption)}</div>`;
+      // "Quay tiếp": quay ngay cùng loại vé, y như bấm nút quay ở trang
+      if (choice && alive) void doDraw(Number(choice));
     } catch (e) {
       const err = e as ApiError;
       // Lỗi mạng: giữ key để lần bấm lại là retry an toàn (server trả kết quả cũ nếu đã ghi).
@@ -142,5 +160,9 @@ export function renderDraw(root: HTMLElement): () => void {
 
   renderPicker();
   renderPool();
-  return onTickets(renderPicker);
+  const off = onTickets(renderPicker);
+  return () => {
+    alive = false;
+    off();
+  };
 }
