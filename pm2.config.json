@@ -10,7 +10,7 @@
       "autorestart": true,
       "max_restarts": 20,
       "restart_delay": 3000,
-      "max_memory_restart": "2Gi",
+      "max_memory_restart": "2G",
       "time": true,
       "env": {
         "NODE_ENV": "production",
