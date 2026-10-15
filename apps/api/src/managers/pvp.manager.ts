@@ -14,6 +14,7 @@ import {
   pvpBaseHp,
   pvpLc,
   pvpProfile,
+  pvpStyleBonus,
   ROSTER,
 } from '@tq/game-config';
 import type {
@@ -204,6 +205,9 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
   const heal =
     (def.healBps > 0 ? Math.round((damage * def.healBps) / BPS_SCALE) : 0) +
     (def.selfHealBps > 0 ? Math.round((maxHp * def.selfHealBps) / BPS_SCALE) : 0);
+  // Chỉ số cộng thêm theo phong cách của CHÍNH tướng (mục 1): Tấn công +25% ST, Phòng thủ +25% HP,
+  // Hỗ trợ là aura +10% HP & +10% ST — ở đây tính 1 lớp của chính tướng; khi vào trận cộng dồn theo đội.
+  const styleBonus = pvpStyleBonus(profile.style, profile.style === 'support' ? 1 : 0);
   return {
     generalId,
     level,
@@ -240,18 +244,18 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
       purify: def.purify,
       dispel: def.dispel,
       dispelChanceBps: def.dispelChanceBps,
-      buff: def.buff,
-      buffScope: def.buffScope,
+      buffs: def.buffs,
       debuff: def.debuff,
       counter: def.counter,
       selfBurn: def.selfBurn,
       selfBurnRounds: def.selfBurnRounds,
       burnCritMulBps: def.burnCritMulBps,
       burnLifesteal: def.burnLifesteal,
+      burnCritDamageBps: def.burnCritDamageBps,
     },
-    // Buff tăng sức mạnh kỹ năng phát mỗi lượt; tất cả 0 = kỹ năng không buff.
-    buff: def.buff,
-    buffScope: def.buffScope,
+    // Các kênh buff tăng sức mạnh kỹ năng phát mỗi lượt; rỗng = kỹ năng không buff.
+    buffs: def.buffs,
+    styleBonus,
     rowBonus: { frontHpBps: PVP_FRONT_HP_BPS, backDamageBps: PVP_BACK_DAMAGE_BPS },
     bpsScale: BPS_SCALE,
   };

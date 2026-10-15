@@ -812,13 +812,14 @@ export const PVP_TARGETING_LABELS: Record<PvpTargeting, string> = {
 };
 
 /** Phạm vi nhận hiệu ứng có lợi (buff/hồi máu) của kỹ năng. */
-export const PVP_BUFF_SCOPES = ['none', 'self', 'all_allies', 'lowest_ally', 'front_allies', 'back_allies'] as const;
+export const PVP_BUFF_SCOPES = ['none', 'self', 'all_allies', 'same_row_allies', 'lowest_ally', 'front_allies', 'back_allies'] as const;
 export type PvpBuffScope = (typeof PVP_BUFF_SCOPES)[number];
 
 export const PVP_BUFF_SCOPE_LABELS: Record<PvpBuffScope, string> = {
   none: 'không nhắm ai',
   self: 'bản thân',
   all_allies: 'toàn bộ đồng minh (kể cả bản thân)',
+  same_row_allies: 'đồng minh cùng hàng (kể cả bản thân)',
   lowest_ally: 'đồng minh thấp máu nhất',
   front_allies: 'các tướng hàng trước',
   back_allies: 'các tướng hàng sau',
@@ -884,10 +885,8 @@ export interface PvpUnitStateDto {
   stunBps: number;
   /** Hút máu ở cấp hiện tại: hồi bản thân theo % sát thương thực tế gây ra (bps; 0 = không hút máu). */
   lifestealBps: number;
-  /** Hiệu ứng có lợi mà kỹ năng của tướng phát (client mô tả khi thi triển). Rỗng = không buff. */
-  buff?: PvpBuffDto;
-  /** Phạm vi nhận buff của kỹ năng. */
-  buffScope?: PvpBuffScope;
+  /** Các kênh buff có lợi mà kỹ năng của tướng phát (client mô tả khi thi triển). Rỗng = không buff. */
+  buffs?: PvpBuffEntryDto[];
   /** Hiệu ứng bất lợi mà kỹ năng của tướng áp lên địch (client mô tả khi thi triển). */
   debuff?: PvpDebuffDto;
   /** Phản kích của tướng khi gánh sát thương chủ động (rỗng = không phản kích). */
@@ -1012,6 +1011,15 @@ export interface PvpBuffDto {
 }
 
 /**
+ * Một kênh buff của kỹ năng: phát hiệu ứng `buff` cho phạm vi `scope` mỗi lần tướng tới lượt.
+ * Một kỹ năng có thể có NHIỀU kênh (ví dụ vừa tự buff lấy mình vừa buff đồng minh cùng hàng).
+ */
+export interface PvpBuffEntryDto {
+  scope: PvpBuffScope;
+  buff: PvpBuffDto;
+}
+
+/**
  * Hiệu ứng bất lợi mà một kỹ năng áp lên mục tiêu địch (SKILLS.md). Giá trị là MỨC GIẢM (dương).
  * Tất cả bằng 0 = kỹ năng không gây hiệu ứng bất lợi.
  */
@@ -1077,10 +1085,8 @@ export interface PvpSkillDefDto {
   dispel: boolean;
   /** Xác suất xóa hiệu ứng có lợi thành công (bps; 10000 = chắc chắn). */
   dispelChanceBps: number;
-  /** Buff tăng sức mạnh phát cho `buffScope` mỗi lần tướng tới lượt (rỗng = không buff). */
-  buff: PvpBuffDto;
-  /** Phạm vi nhận buff của kỹ năng. */
-  buffScope: PvpBuffScope;
+  /** Các kênh buff tăng sức mạnh phát mỗi lần tướng tới lượt (rỗng = không buff). */
+  buffs: PvpBuffEntryDto[];
   /** Hiệu ứng bất lợi áp lên địch (rỗng = không có). */
   debuff: PvpDebuffDto;
   /** Phản kích của bản thân khi gánh chịu sát thương (rỗng = không phản kích). */
@@ -1093,6 +1099,8 @@ export interface PvpSkillDefDto {
   burnCritMulBps: number;
   /** Hút máu cả từ sát thương thiêu đốt gây ra (không chỉ đòn đánh trực tiếp). */
   burnLifesteal: boolean;
+  /** Cộng thêm % ST chí mạng khi đánh trúng mục tiêu ĐANG bị Thiêu đốt (Lăng Thống). */
+  burnCritDamageBps: number;
 }
 
 /**
@@ -1114,10 +1122,10 @@ export interface PvpCombatDto {
   self: { maxHp: number; damage: number; lc: number; critBps: number; critDamageBps: number; stunBps: number; cleanseBps: number; heal: number; lifestealBps: number };
   passiveEffect: PvpPassiveEffectDto;
   skillDef: PvpSkillDefDto;
-  /** Buff tăng sức mạnh kỹ năng phát mỗi lượt; tất cả 0 = kỹ năng không buff. */
-  buff: PvpBuffDto;
-  /** Phạm vi nhận buff của kỹ năng. */
-  buffScope: PvpBuffScope;
+  /** Các kênh buff tăng sức mạnh kỹ năng phát mỗi lượt; rỗng = kỹ năng không buff. */
+  buffs: PvpBuffEntryDto[];
+  /** Chỉ số cộng thêm theo phong cách của chính tướng (Tấn công/Phòng thủ/Hỗ trợ). */
+  styleBonus: { damageBps: number; hpBps: number };
   /** Buff theo vị trí khi vào trận. */
   rowBonus: { frontHpBps: number; backDamageBps: number };
   bpsScale: number;

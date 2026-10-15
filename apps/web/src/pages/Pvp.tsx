@@ -62,14 +62,18 @@ const TEAM_BUFF_FIELDS: { key: 'damageBps' | 'hpBps' | 'critBps' | 'critDamageBp
   { key: 'critDamageBps', text: (v) => `+${pct(v)} ST chí mạng` },
   { key: 'takenDownBps', text: (v) => `−${pct(v)} sát thương gánh chịu` },
 ];
-function teamBuffText(buff?: PvpUnitStateDto['buff'], scope?: PvpUnitStateDto['buffScope']): string {
-  if (!buff) return '';
-  const gains = TEAM_BUFF_FIELDS.filter((f) => (buff[f.key] ?? 0) > 0)
-    .map((f) => f.text(buff[f.key]))
-    .join(' · ');
-  if (!gains) return '';
-  const who = scope ? PVP_BUFF_SCOPE_LABELS[scope] : 'cả đội';
-  return `${who} ${gains} (tối đa ${buff.maxLayers} lớp, mỗi lớp ${buff.rounds} lượt)`;
+function teamBuffText(buffs?: PvpUnitStateDto['buffs']): string {
+  if (!buffs?.length) return '';
+  const parts = buffs
+    .map((e) => {
+      const gains = TEAM_BUFF_FIELDS.filter((f) => (e.buff[f.key] ?? 0) > 0)
+        .map((f) => f.text(e.buff[f.key]))
+        .join(' · ');
+      if (!gains) return '';
+      return `${PVP_BUFF_SCOPE_LABELS[e.scope]} ${gains} (tối đa ${e.buff.maxLayers} lớp, mỗi lớp ${e.buff.rounds} lượt)`;
+    })
+    .filter(Boolean);
+  return parts.join(' · ');
 }
 
 /** Mô tả hiệu ứng bất lợi mà kỹ năng của tướng áp lên địch (hiện kèm khi tướng thi triển). */
@@ -640,7 +644,7 @@ function createDetailBuilder(units: PvpUnitStateDto[]) {
         // Kỹ năng buff tăng sức mạnh (nhóm TEAM_/BUFF_ALLIES) và/hoặc hiệu ứng bất lợi (phe Ngụy):
         // hiện kèm LƯỢNG tăng/giảm mỗi lớp.
         const u = unitByIdx.get(ev.idx);
-        const extra = [teamBuffText(u?.buff, u?.buffScope), debuffText(u?.debuff)].filter(Boolean).join(' · ');
+        const extra = [teamBuffText(u?.buffs), debuffText(u?.debuff)].filter(Boolean).join(' · ');
         const sk = u?.skillName ?? PVP_SKILL_LABELS[ev.skill];
         return push({ kind: 'act', actor: ev.idx, text: `${nameOf(ev.idx)} dùng ${sk}${extra ? ` (${extra})` : ''}` });
       }

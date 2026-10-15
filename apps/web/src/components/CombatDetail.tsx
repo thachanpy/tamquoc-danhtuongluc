@@ -12,20 +12,20 @@ import { StyleIcon } from './StyleIcon.tsx';
 
 /** Các dòng chỉ số chi tiết: giá trị thực tế, kèm ghi chú chỉ số nền + phần % được cộng. */
 export function statRows(c: PvpCombatDto): { label: string; value: string; note?: string }[] {
-  // Phần % cộng thêm vào chỉ số của riêng tướng chỉ đến từ nội tại (buff theo hàng và buff
-  // đồng minh phát mỗi lượt do engine áp khi vào trận, không cộng sẵn ở chỉ số "self").
-  const hpPct = c.passiveEffect.stat === 'maxHp' ? c.passiveEffect.bps : 0;
-  const dmgPct = c.passiveEffect.stat === 'damage' ? c.passiveEffect.bps : 0;
+  // Phần % cộng thêm vào chỉ số của riêng tướng gồm nội tại (mục 10.1) + chỉ số theo phong cách (mục 1);
+  // buff theo hàng và buff đồng minh phát mỗi lượt do engine áp khi vào trận, không cộng sẵn ở đây.
+  const hpPct = (c.passiveEffect.stat === 'maxHp' ? c.passiveEffect.bps : 0) + c.styleBonus.hpBps;
+  const dmgPct = (c.passiveEffect.stat === 'damage' ? c.passiveEffect.bps : 0) + c.styleBonus.damageBps;
   const note = (p: number, base: number) => (p > 0 ? `nền ${base} · +${pct(p)}` : undefined);
   const rows: { label: string; value: string; note?: string }[] = [
-    { label: 'HP tối đa', value: `${c.self.maxHp}`, note: note(hpPct, c.base.maxHp) },
-    { label: 'Sát thương', value: `${c.self.damage}`, note: note(dmgPct, c.base.damage) },
+    { label: 'HP tối đa', value: `${Math.round(c.base.maxHp * (1 + hpPct / c.bpsScale))}`, note: note(hpPct, c.base.maxHp) },
+    { label: 'Sát thương', value: `${Math.round(c.base.damage * (1 + dmgPct / c.bpsScale))}`, note: note(dmgPct, c.base.damage) },
     { label: 'Lực chiến (LC)', value: `${c.self.lc}` },
     { label: 'Chí mạng', value: pct(c.self.critBps) },
     { label: 'ST chí mạng', value: pct(c.self.critDamageBps) },
   ];
   if (c.skillDef.stun !== 'none') rows.push({ label: 'Choáng', value: pct(c.self.stunBps) });
-  if (c.skillDef.cleanse) rows.push({ label: 'Giải choáng', value: pct(c.self.cleanseBps) });
+  if (c.skillDef.cleanse) rows.push({ label: 'Giải choáng & thiêu đốt', value: pct(c.self.cleanseBps) });
   if (c.self.heal) rows.push({ label: 'Hồi máu', value: `${c.self.heal} HP` });
   if (c.self.lifestealBps) rows.push({ label: 'Hút máu', value: `${pct(c.self.lifestealBps)} sát thương gây ra` });
   return rows;

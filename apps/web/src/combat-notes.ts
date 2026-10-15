@@ -6,20 +6,25 @@ import { pct } from './art.ts';
  * Dùng chung cho popup ngắm thẻ (Bộ sưu tập) và bảng chọn tướng (Đấu trường) để hai nơi luôn khớp nhau.
  */
 
-/** Mô tả buff tăng sức mạnh theo kỹ năng: phát cho phạm vi `buffScope` mỗi lượt, cộng dồn lớp. */
+/** Mô tả các KÊNH buff tăng sức mạnh theo kỹ năng: mỗi kênh phát cho phạm vi `scope` mỗi lượt, cộng dồn lớp. */
 export function teamBuffNote(c: PvpCombatDto): string {
-  const b = c.buff;
-  if (!b.damageBps && !b.hpBps && !b.critBps && !b.critDamageBps && !b.takenDownBps) return '';
-  const gains = [
-    b.damageBps ? `+${pct(b.damageBps)} sát thương` : '',
-    b.hpBps ? `+${pct(b.hpBps)} HP tối đa` : '',
-    b.critBps ? `+${b.critBps / 100} điểm chí mạng` : '',
-    b.critDamageBps ? `+${pct(b.critDamageBps)} ST chí mạng` : '',
-    b.takenDownBps ? `−${pct(b.takenDownBps)} sát thương gánh chịu` : '',
-  ]
+  return c.buffs
+    .map((e) => {
+      const b = e.buff;
+      const gains = [
+        b.damageBps ? `+${pct(b.damageBps)} sát thương` : '',
+        b.hpBps ? `+${pct(b.hpBps)} HP tối đa` : '',
+        b.critBps ? `+${b.critBps / 100} điểm chí mạng` : '',
+        b.critDamageBps ? `+${pct(b.critDamageBps)} ST chí mạng` : '',
+        b.takenDownBps ? `−${pct(b.takenDownBps)} sát thương gánh chịu` : '',
+      ]
+        .filter(Boolean)
+        .join(', ');
+      if (!gains) return '';
+      return `mỗi lượt: ${PVP_BUFF_SCOPE_LABELS[e.scope]} ${gains} · tối đa ${b.maxLayers} lớp, mỗi lớp ${b.rounds} lượt`;
+    })
     .filter(Boolean)
-    .join(', ');
-  return `mỗi lượt: ${PVP_BUFF_SCOPE_LABELS[c.buffScope]} ${gains} · tối đa ${b.maxLayers} lớp, mỗi lớp ${b.rounds} lượt`;
+    .join(' · ');
 }
 
 /** Mô tả hiệu ứng bất lợi kỹ năng áp lên địch (SKILLS.md — phe Ngụy, thiêu đốt phe Ngô). */
@@ -49,7 +54,7 @@ export function skillNote(c: PvpCombatDto): string {
   // Hút máu theo sát thương gây ra (vài tướng riêng) — cấp hiện tại.
   if (c.self.lifestealBps) parts.push(`hút ${pct(c.self.lifestealBps)} sát thương gây ra`);
   if (d.stun !== 'none') parts.push(`choáng ${pct(c.self.stunBps)}`);
-  if (d.cleanse) parts.push(`giải choáng ${pct(c.self.cleanseBps)}`);
+  if (d.cleanse) parts.push(`giải choáng & thiêu đốt ${pct(c.self.cleanseBps)}`);
   if (d.purify) parts.push('thanh tẩy hiệu ứng bất lợi cho đồng minh (trừ choáng, thiêu đốt)');
   if (d.dispel) parts.push(d.dispelChanceBps < 10000 ? `xóa hiệu ứng có lợi của địch ${pct(d.dispelChanceBps)}` : 'xóa hiệu ứng có lợi của địch');
   // Phản kích bị động: đánh trả khi gánh sát thương chủ động (không tính thiêu đốt/giảm máu tối đa).
@@ -58,9 +63,11 @@ export function skillNote(c: PvpCombatDto): string {
     parts.push(`phản kích bị động ${pct(d.counter.damageBps)} sát thương cơ bản lên ${scope}`);
   }
   if (d.selfBurn) parts.push(`tự thiêu đốt bản thân ${d.selfBurnRounds} lượt`);
-  // Thiêu đốt đặc biệt: Chu Du nhân thêm chí mạng cho đòn thiêu đốt, Lục Tốn hút máu cả từ thiêu đốt.
+  // Thiêu đốt đặc biệt: Chu Du nhân thêm chí mạng cho đòn thiêu đốt, Lục Tốn hút máu (50% hiệu suất) cả từ thiêu đốt,
+  // Lăng Thống cộng thêm ST chí mạng khi đánh mục tiêu đang thiêu đốt.
   if (d.burnCritMulBps) parts.push(`sát thương thiêu đốt +${pct(d.burnCritMulBps - 10000)} tỷ lệ chí mạng và ST chí mạng`);
-  if (d.burnLifesteal) parts.push('hút máu cả từ sát thương thiêu đốt');
+  if (d.burnLifesteal) parts.push('hút máu 50% hiệu suất từ sát thương thiêu đốt');
+  if (d.burnCritDamageBps) parts.push(`+${pct(d.burnCritDamageBps)} ST chí mạng khi đánh mục tiêu đang thiêu đốt`);
   const buff = teamBuffNote(c);
   if (buff) parts.push(buff);
   const debuff = debuffNote(c);
