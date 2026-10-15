@@ -18,9 +18,10 @@ Xây dựng game web gacha thu thập thẻ tướng Tam Quốc. Trọng tâm:
 - Nhiệm vụ hằng ngày, thưởng reset 05:00, điểm danh theo tháng và thành tựu — chỉ thưởng vé (mục 3.10).
 - Bảng xếp hạng Lực chiến (mục 6.6).
 - Hồ sơ người chơi: đổi ảnh đại diện, tên hiển thị và mật khẩu (mục 3.11).
+- Đấu trường PvP: dàn đội 6 tướng rồi khiêu chiến người chơi khác (chọn từ bảng xếp hạng), server mô phỏng trọn trận và trả dữ liệu để client phát lại; không thưởng, chỉ thắng/thua (mục 6.7).
 - Hiệu ứng hình ảnh và trải nghiệm mở thẻ.
 
-Không có chiến đấu, dàn trận, đội hình, PvP hoặc gameplay chiến thuật trong MVP.
+Ngoài Đấu trường PvP (mục 6.7), không có gameplay chiến thuật nào khác trong MVP.
 
 Claude Code phải đọc file này trước khi sửa code. Trước khi triển khai, hãy kiểm tra repository, cấu trúc, package manager, scripts và quy ước hiện có. Ưu tiên tái sử dụng cấu trúc hiện tại, không viết lại toàn bộ dự án nếu không cần thiết.
 
@@ -64,7 +65,7 @@ Cấu trúc gợi ý:
 Cấu trúc frontend (SolidJS, `apps/web/src`):
 
 - `main.tsx`: nạp CSS, tia lửa nền, nhạc, `render(<App/>)`. `App.tsx`: đăng nhập/đăng ký, khung game (thanh trên, thanh vé + đồng hồ hồi vé, tab, router theo hash `#id`), popup giftcode lần đầu, toast sự kiện ngày mới.
-- `pages/*.tsx`: mỗi tab một component (`CollectionPage`, `DrawPage`, `UpgradePage`, `QuestsPage`, `LeaderboardPage`, `HistoryPage`, `GiftCodePage`, `ProfilePage`, `AdminPage`); router mount/unmount bằng `<Dynamic>`, rời trang thì component bị dispose (timer/listener dọn trong `onCleanup`).
+- `pages/*.tsx`: mỗi tab một component (`CollectionPage`, `DrawPage`, `UpgradePage`, `QuestsPage`, `LeaderboardPage`, `PvpPage`, `HistoryPage`, `GiftCodePage`, `ProfilePage`, `AdminPage`); router mount/unmount bằng `<Dynamic>`, rời trang thì component bị dispose (timer/listener dọn trong `onCleanup`).
 - `state.ts`: dữ liệu nạp lúc vào game (object `state`) + signal `tickets()` (số dư vé), `profile()` (tên hiển thị + ảnh đại diện), `questBadge`/`pendingBadge`; `badges.ts` tải lại badge; `ui.ts` toast.
 - `components/Card.tsx` (thẻ tướng DOM, dùng chung mọi trang), `components/Avatar.tsx` (ảnh đại diện, dùng ở thanh trên + trang Hồ sơ), `components/MusicControl.tsx`, `viewer.tsx` (popup ngắm thẻ, `openCardViewer`).
 - `art.ts` (màu phe, bậc khung, `FRAME_LAYOUT`, URL ảnh), `upgrade-groups.ts` (gom thẻ, có test), `api.ts`, `pixi/stage.ts` (PixiJS, gọi từ trang) giữ dạng TypeScript thường.
@@ -226,7 +227,7 @@ Game có chính xác 100 tướng, chia đều thành 4 phe, mỗi phe 25 tướ
 - Level từ 1 đến 10.
 - Mỗi bản thẻ người chơi sở hữu có level riêng.
 - Người chơi có thể sở hữu nhiều bản thẻ của cùng một tướng, mỗi bản có level riêng.
-- Không có chỉ số chiến đấu, đội hình hoặc trận đấu.
+- Thẻ không có chỉ số chiến đấu riêng; level là cơ sở tính Lực chiến (mục 6.6) và sức mạnh khi vào trận (Đấu trường PvP, mục 6.7).
 - Level 10 là tối đa và không thể nâng cấp thành level cao hơn.
 - Quay thẻ ra level 1–9; level 10 chỉ có qua ghép thẻ.
 
@@ -762,11 +763,11 @@ Người chơi có thể tặng thẻ cho bất kỳ người chơi nào khác, 
 
 ### 6.1. Bộ sưu tập
 
-- Thẻ gom theo tướng giống trang Nâng cấp: mỗi tướng một khung, mọi bản sao nằm liền nhau; trong khung chia nhóm theo level (cao → thấp) có nhãn số lượng (VD `Lv.1 ×3`), mỗi thẻ hiển thị số thẻ `#id` như trang Nâng cấp.
+- Thẻ gom theo tướng giống trang Nâng cấp: mỗi tướng một khung, mọi bản sao nằm liền nhau; trong khung chia nhóm theo level (cao → thấp) có nhãn số lượng (VD `Lv.1 ×3`).
 - Sắp xếp các khung tướng: level cao nhất (mặc định), tên A→Z, nhiều thẻ nhất.
 - Chế độ xem "Thẻ của tôi" (mặc định) và "Tướng chưa có" (các tướng chưa sở hữu hiển thị mờ).
 - Tích hợp tặng thẻ (mục 5.6).
-- Bấm một thẻ (khi không ở chế độ tặng) mở popup ngắm thẻ phóng to: tên, phe, Lv, `#id` (không hiện tên bậc khung Đồng/Bạc/…), thời điểm nhận; thẻ nghiêng nhẹ theo chuột (tắt khi reduced motion); bấm bất kỳ đâu hoặc Esc để đóng. Popup chỉ hiển thị, không gọi API (`apps/web/src/viewer.tsx`).
+- Bấm một thẻ (khi không ở chế độ tặng) mở popup ngắm thẻ phóng to: tên, phe, Lv (không hiện tên bậc khung Đồng/Bạc/… cũng không hiện số thẻ), thời điểm nhận; kèm **kỹ năng và chỉ số chi tiết** của tướng ở đúng cấp (phong cách, kỹ năng, nội tại, HP/sát thương/LC/chí mạng…, nạp từ `GET /api/pvp/generals/:id/combat`); thẻ nghiêng nhẹ theo chuột (tắt khi reduced motion); bấm bất kỳ đâu hoặc Esc để đóng. Popup chỉ hiển thị, không đổi dữ liệu (`apps/web/src/viewer.tsx`).
 - Hiển thị lưới thẻ.
 - Tìm kiếm theo tên.
 - Lọc theo phe và level.
@@ -850,6 +851,18 @@ Do chủ dự án yêu cầu. Tab **Xếp hạng** (`#leaderboard`, `apps/web/sr
 - Trả tối đa `LEADERBOARD_SIZE` (100) người; UI làm nổi bật top `LEADERBOARD_TOP` (10), cột hạng dùng **huy hiệu trống chữ do chủ dự án cung cấp** (`apps/web/public/theme/rank/r1…r4.png`, tách nền đen thành trong suốt, 128px): hạng 1 (khiên vàng rồng), 2 (khiên bạc cánh), 3 (khiên đồng ngọc lục) mỗi hạng một huy hiệu; hạng 4 trở đi dùng chung `r4` (khiên sắt tròn); **app tự ghi số hạng** giữa mặt huy hiệu bằng CSS (`.lb-rank-no`, màu chữ theo huy hiệu, tự thu nhỏ khi 3–4 chữ số); khung danh sách cao vừa top 10, cuộn trong khung để xem tới top 100.
 - Hiện **hạng của tôi** ở **cuối bảng** (kể cả ngoài top 100) kèm nút "Xem vị trí của tôi" khi nằm trong danh sách nhưng ngoài top 10. Admin thấy "Tài khoản quản trị không tham gia xếp hạng"; người chưa có thẻ thấy "chưa có thẻ".
 - Mỗi dòng: hạng (huy hiệu), ảnh đại diện + tên hiển thị (mục 3.11; mặc định là tên đăng nhập), level cao nhất (màu bậc khung), Lực chiến. Không hiện số thẻ. Có nút Làm mới.
+
+### 6.7. Đấu trường PvP
+
+Do chủ dự án yêu cầu, theo GDD `PVP.md`. Tab **Đấu trường** (`#pvp`, `apps/web/src/pages/Pvp.tsx`). Đối thủ là người chơi khác; **không thưởng**, chỉ thắng/thua. Đấu với AI đang để sau.
+
+- **Đội hình**: 6 slot tướng chia **2 hàng** — slot 1–3 hàng trước (được +10% HP), slot 4–6 hàng sau (được +10% damage). Người chơi tự lưu đội hình; chưa lưu thì server tự xếp 6 tướng mạnh nhất (theo Lực chiến/level) làm gợi ý. Lưu theo cặp (tướng, cấp) đang sở hữu — thẻ bị tiêu thụ lúc ghép không làm hỏng đội hình (mục 7.8g).
+- **Vào trận**: chọn đối thủ bằng cách bấm vào người chơi trên **bảng xếp hạng** (mục 6.6) hoặc mở từ Đấu trường (`#pvp/<id>`); không được tự khiêu chiến chính mình. Trận giữa hai người được ghi lại và **xem lại được** từ cả hai phía (dữ liệu đối xứng).
+- **Mô phỏng ở server**: `simulatePvp(sides, rand)` trong `apps/api/src/managers/pvp.engine.ts` là hàm thuần, chạy hết trận ngay khi khiêu chiến (client không gửi kết quả). Engine tất định theo seed nên lưu seed là tái dựng được (không cần lưu từng bước — SKILLS.md). Thứ tự hành động theo **LC** giảm dần (LC do phong cách + cấp quyết định), rồi slot, rồi bên.
+- **Phát lại ở client**: server trả `units` (snapshot đầu trận) + `events` (danh sách sự kiện có thứ tự) + `rounds`/`winner`; client dựng bàn đấu từ `units` rồi áp `events` tuần tự, có chỉnh tốc độ, thanh tiến trình và nhật ký. Không gửi lại server trong lúc phát.
+- **Cân bằng**: `packages/game-config/src/pvp.ts` (`PVP_MAX_ROUNDS` = 30, `pvpBaseHp`/`pvpBaseDamage`, `PVP_SKILL_DEF` — kèm `aura` theo kỹ năng, `PVP_CRIT_*`, `pvpProfile` — hệ số đã nhân hot ×1.1); nguồn cân bằng là `SKILLS.md`. Validate khi khởi động qua `validate.ts` (`validatePvpConfig(assert)` — mỗi phe đúng 10 tướng hot). Hết 30 vòng không phân thắng bại → hoà.
+- **Không ảnh hưởng vé/thẻ**: PvP không tiêu vé, không tạo thẻ, không thưởng; chỉ ghi nhật ký trận (`pvp_battles`).
+- **Admin không tham gia**: mọi route PvP dùng `playerGuard` → admin bị 403 `ADMIN_NOT_PLAYER` (mục 3.8).
 
 ## 7. Database SQLite
 
@@ -1040,6 +1053,12 @@ Lịch sử tặng thẻ (migration v5).
 
 - Thêm cột `users.display_name` và `users.avatar`; `UPDATE users SET display_name = username` để tài khoản cũ có tên hiển thị mặc định (mục 3.11). `avatar` mặc định `NULL`.
 
+### 7.8g. Đấu trường PvP (migration v14)
+
+- `pvp_teams`: `user_id`, `slot` (1–6, CHECK), `general_id`, `level` (1–10, CHECK), `updated_at`; PK (`user_id`, `slot`). Lưu cặp (tướng, cấp) chứ không lưu `card_id` để đội hình không hỏng khi thẻ bị tiêu thụ lúc ghép (mục 6.7).
+- `pvp_battles`: `id`, `attacker_id`, `defender_id`, `winner` (`a`|`b`|`draw`), `rounds`, `attacker_power`, `defender_power`, `data` (JSON: seed + `units` + `events` để phát lại), `created_at`. Index `(attacker_id, id)`, `(defender_id, id)`.
+- Không thêm bảng/ledger vé: PvP không tiêu vé, không tạo thẻ.
+
 ### 7.9. Idempotency
 
 Có thể dùng bảng idempotency riêng hoặc các unique constraint phù hợp để bảo đảm:
@@ -1069,7 +1088,7 @@ Tất cả API phải có schema validation, authentication phù hợp và đị
 ### 8.1. Tài khoản và bộ sưu tập
 
 - `GET /api/me`: thông tin người chơi, số dư từng loại vé và trạng thái hồi vé.
-- `GET /api/generals`: danh mục 100 tướng.
+- `GET /api/generals`: danh mục 100 tướng + `styles` (phong cách chiến đấu `attack`/`defense`/`support` của từng tướng — client hiện nhãn Tấn công/Phòng thủ/Hỗ trợ trên mọi thẻ tướng; mục 6.7).
 - `GET /api/cards`: bộ sưu tập, filter và pagination.
 
 ### 8.2. Vé
@@ -1178,6 +1197,18 @@ Server phải:
 - `POST /api/me/profile`: body `{ displayName?, avatar? }` (bỏ trống = giữ nguyên; `avatar: null` = xoá ảnh). Chỉ cập nhật field có mặt; không có field nào → 400 `NOTHING_TO_UPDATE`. Lỗi: `INVALID_DISPLAY_NAME`, `INVALID_AVATAR`, `AVATAR_TOO_LARGE`. Trả hồ sơ mới. Có rate limit.
 - `POST /api/me/password`: body `{ currentPassword, newPassword }` (mỗi trường 6–128). Lỗi: `INVALID_PASSWORD`, `SAME_PASSWORD`. Trả `{ ok: true }`. Có rate limit.
 - `GET /api/me` trả thêm `displayName` và `avatar` (mục 3.11).
+
+### 8.4h. Đấu trường PvP (mục 6.7)
+
+Mọi route dưới `/api/pvp` (trừ route chi tiết chiến đấu) dùng `playerGuard` (admin → 403 `ADMIN_NOT_PLAYER`), cần đăng nhập và có rate limit.
+
+- `GET /api/pvp`: tổng quan — đội hình đang lưu (hoặc gợi ý tự xếp) + `saved`, thành tích thắng/thua/hoà, `powerByLevel`.
+- `POST /api/pvp/team`: body `{ units: [{ slot, generalId, level }] }`. Lỗi: `CARD_NOT_OWNED`, `DUPLICATE_GENERAL`, `DUPLICATE_SLOT`, `INVALID_GENERAL`. Lưu trong transaction sau khi xác thực quyền sở hữu.
+- `GET /api/pvp/opponent/:id`: xem đội hình + hồ sơ đối thủ. Lỗi: `SELF_CHALLENGE`, `OPPONENT_NOT_FOUND`.
+- `POST /api/pvp/challenge`: body `{ opponentId }`. Server mô phỏng trọn trận rồi trả `units` + `events` + `rounds`/`winner` để phát lại. Lỗi: `TEAM_EMPTY`, `OPPONENT_NO_TEAM`, `SELF_CHALLENGE`, `OPPONENT_NOT_FOUND`.
+- `GET /api/pvp/battles?page=&pageSize=`: lịch sử trận (mình là bên khiêu chiến hoặc bị khiêu chiến).
+- `GET /api/pvp/battles/:id`: chi tiết một trận để phát lại; người ngoài cuộc → 404. Trả thêm `mySide` để client hiển thị đúng phía.
+- `GET /api/pvp/generals/:id/combat?level=`: chi tiết chiến đấu của một tướng ở một cấp (`PvpCombatDto`: phong cách, kỹ năng, nội tại, chỉ số nền/riêng tướng, buff hàng) — modal xem thẻ ở Bộ sưu tập. Chỉ số `self` là của riêng tướng, **đã gồm buff hỗ trợ mà tướng tự hưởng** (Hỗ trợ cộng +10% damage/+10% HP cho toàn đội, kể cả bản thân — mục 4.3); buff theo hàng chỉ áp khi vào trận. Chỉ là dữ liệu cấu hình nên dùng `authGuard` (không cần đăng nhập thao tác chơi). Lỗi: `GENERAL_NOT_FOUND`.
 
 ### 8.5. Lịch sử
 
@@ -1342,6 +1373,19 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 - Thành tựu sở hữu thẻ: mỗi mốc 1 lần, bỏ thẻ ra rồi đưa lại không nhận lần nữa.
 - Thành tựu tính cả lịch sử cũ.
 
+### 10.5g. Đấu trường PvP
+
+- Engine tất định: cùng seed + cùng đội hình → cùng kết quả; idx theo slot (A = 0–5, B = 6–11); hàng trước +10% HP, hàng sau +10% damage; thứ tự hành động theo LC giảm dần (LC do phong cách + cấp) rồi slot.
+- Aura theo kỹ năng áp trước trận (tự buff + buff toàn đội, kể cả tướng sở hữu); tướng hot ×1.1 hệ số kỹ năng; tướng chỉ có aura đánh thường 100% (hot 110%).
+- Chí mạng ×1,5 xảy ra đúng theo RNG; choáng làm mục tiêu mất lượt kế tiếp; buff tác động lên đồng minh đúng như định nghĩa.
+- Đánh bại toàn bộ một bên → bên kia thắng; hết `PVP_MAX_ROUNDS` (30) mà cả hai còn sống → `draw`/`timeout`.
+- Mọi kỹ năng trong roster đều có định nghĩa (`PVP_SKILL_DEF`); `validatePvpConfig()` chạy khi khởi động.
+- HTTP: 401 khi chưa đăng nhập, 403 `ADMIN_NOT_PLAYER` với admin; tự xếp đội gợi ý khi chưa lưu.
+- Lưu đội: từ chối `CARD_NOT_OWNED`, `DUPLICATE_GENERAL`, `DUPLICATE_SLOT`, `INVALID_GENERAL`.
+- Xem đối thủ: chặn `SELF_CHALLENGE`, `OPPONENT_NOT_FOUND`.
+- Khiêu chiến: mô phỏng trọn trận, ghi lịch sử, xem lại được; người ngoài cuộc 404; `mySide` và thành tích đối xứng; đội trống → `TEAM_EMPTY` hoặc `OPPONENT_NO_TEAM`.
+- PvP không tiêu vé, không tạo thẻ, không thưởng.
+
 ### 10.6. Database và API
 
 - Phiên đăng nhập còn sau khi khởi động lại server (mở lại file DB), không hết hạn; đăng xuất xoá phiên, token cũ → 401.
@@ -1441,6 +1485,7 @@ Thứ tự ưu tiên:
 - Nâng cấp thất bại tiêu thụ 2 thẻ và tạo 1 thẻ cùng tướng theo phân phối kết quả thất bại riêng theo level đầu vào.
 - Bảng phân phối thất bại ưu tiên giảm cảm giác mất tiến trình, nhất là ở level cao.
 - Bảng xếp hạng Lực chiến (tổng 2^(lv−1), mỗi tướng + cấp tính 1 lần), top 100, ẩn admin.
+- Đấu trường PvP: dàn 6 tướng (2 hàng), khiêu chiến người chơi khác chọn từ bảng xếp hạng; server mô phỏng trọn trận rồi client phát lại; không thưởng, không tiêu vé, không tạo thẻ.
 - Mọi kết quả game do backend xác định.
 - Database SQLite, API Fastify, frontend PixiJS.
 - Mọi thao tác quan trọng có transaction, lịch sử và cơ chế chống request trùng.

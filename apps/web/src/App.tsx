@@ -2,7 +2,7 @@ import { For, Show, createEffect, createSignal, onCleanup, onMount, type JSX } f
 import { Dynamic, render } from 'solid-js/web';
 import { TICKET_LABELS, TICKET_TYPES, type DailyEventsDto, type GiftCodePublicDto, type TicketType } from '@tq/shared';
 import { api, hasToken, setToken, type ApiError } from './api.ts';
-import { pendingBadge, profile, questBadge, setPendingBadge, setProfile, setQuestBadge, setTickets, state, tickets } from './state.ts';
+import { pendingBadge, profile, questBadge, setPendingBadge, setProfile, setPvpTarget, setQuestBadge, setTickets, state, tickets } from './state.ts';
 import { refreshPendingBadge, refreshQuestBadge } from './badges.ts';
 import { toast } from './ui.ts';
 import { rewardText } from './giftcode-text.ts';
@@ -13,6 +13,7 @@ import { DrawPage } from './pages/Draw.tsx';
 import { UpgradePage } from './pages/Upgrade.tsx';
 import { QuestsPage } from './pages/Quests.tsx';
 import { LeaderboardPage } from './pages/Leaderboard.tsx';
+import { PvpPage } from './pages/Pvp.tsx';
 import { HistoryPage } from './pages/History.tsx';
 import { GiftCodePage } from './pages/GiftCode.tsx';
 import { ProfilePage } from './pages/Profile.tsx';
@@ -25,6 +26,7 @@ const PAGES = {
   upgrade: { label: 'Nâng cấp', component: UpgradePage },
   quests: { label: 'Nhiệm vụ', component: QuestsPage },
   leaderboard: { label: 'Xếp hạng', component: LeaderboardPage },
+  pvp: { label: 'Đấu trường', component: PvpPage },
   history: { label: 'Lịch sử', component: HistoryPage },
   giftcode: { label: 'Giftcode', component: GiftCodePage },
   profile: { label: 'Hồ sơ', component: ProfilePage },
@@ -72,6 +74,7 @@ export function App() {
       setProfile({ displayName: me.displayName, avatar: me.avatar });
       state.generals = generals.items;
       state.generalsById = new Map(generals.items.map((g) => [g.id, g]));
+      state.generalStyles = generals.styles;
       state.config = config;
       setTickets(claimed ?? me.tickets);
       setPhase({ kind: 'game' });
@@ -213,9 +216,13 @@ function readRoute(): PageId {
   // Tài khoản quản trị chỉ thấy trang Quản trị (chủ dự án yêu cầu)
   if (state.isAdmin) return 'admin';
   const raw = location.hash.slice(1) || 'collection';
-  const id = (raw === 'gift' ? 'collection' : raw) as PageId;
+  // Đấu trường nhận thêm id đối thủ: #pvp/<id> (bấm người chơi ở bảng xếp hạng, mục 6.7)
+  const [base, arg] = raw.split('/');
+  const id = (base === 'gift' ? 'collection' : base) as PageId;
   const p = PAGES[id] as PageDef | undefined;
-  return p && !p.adminOnly ? id : 'collection';
+  if (!p || p.adminOnly) return 'collection';
+  setPvpTarget(id === 'pvp' && arg ? Number(arg) || null : null);
+  return id;
 }
 
 function Shell(props: { onLogout: () => void }) {

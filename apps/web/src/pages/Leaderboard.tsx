@@ -1,11 +1,18 @@
 import { For, Show, createSignal, onCleanup, onMount } from 'solid-js';
 import type { LeaderboardDto, LeaderboardEntryDto } from '@tq/shared';
 import { api } from '../api.ts';
+import { setPvpTarget } from '../state.ts';
 import { levelTier } from '../art.ts';
 import { Avatar } from '../components/Avatar.tsx';
 
 const num = (n: number) => n.toLocaleString('vi-VN');
 const time = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
+/** Mở Đấu trường với đối thủ đã chọn (#pvp/<id>, mục 6.7). */
+function challenge(id: number) {
+  setPvpTarget(id);
+  location.hash = `pvp/${id}`;
+}
 
 /**
  * Huy hiệu hạng (ảnh trống chữ do chủ dự án cung cấp, public/theme/rank/r1..r4.png):
@@ -39,8 +46,23 @@ function Meta(props: { maxLevel: number | null }) {
 
 function Row(props: { e: LeaderboardEntryDto }) {
   const podium = () => props.e.rank !== null && props.e.rank <= 3;
+  const canFight = () => !props.e.isMe;
   return (
-    <div class={`lb-row ${props.e.isMe ? 'me' : ''} ${podium() ? `podium p${props.e.rank}` : ''}`} data-me={props.e.isMe ? '' : undefined}>
+    <div
+      class={`lb-row ${props.e.isMe ? 'me' : ''} ${podium() ? `podium p${props.e.rank}` : ''}`}
+      classList={{ clickable: canFight() }}
+      data-me={props.e.isMe ? '' : undefined}
+      role={canFight() ? 'button' : undefined}
+      tabIndex={canFight() ? 0 : undefined}
+      title={canFight() ? `Khiêu chiến ${props.e.displayName}` : undefined}
+      onClick={() => canFight() && challenge(props.e.id)}
+      onKeyDown={(e) => {
+        if (canFight() && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          challenge(props.e.id);
+        }
+      }}
+    >
       <RankBadge rank={props.e.rank} />
       <span class="lb-name">
         <Avatar avatar={props.e.avatar} name={props.e.displayName} class="lb-avatar" />
@@ -52,6 +74,11 @@ function Row(props: { e: LeaderboardEntryDto }) {
       </span>
       <Meta maxLevel={props.e.maxLevel} />
       <b class="lb-power">{num(props.e.power)}</b>
+      <Show when={canFight()}>
+        <span class="lb-fight" aria-hidden="true">
+          ⚔
+        </span>
+      </Show>
     </div>
   );
 }
@@ -97,7 +124,7 @@ export function LeaderboardPage() {
     const lv = d.powerByLevel;
     return (
       `Lực chiến = tổng điểm các thẻ đang có, mỗi tướng + cấp chỉ tính 1 lần (5 thẻ Tào Tháo Lv.5 tính như 1): Lv.1 = ${lv[1]} · Lv.2 = ${lv[2]} · Lv.3 = ${lv[3]} · … · Lv.10 = ${num(lv[10] ?? 0)}. ` +
-      `Ghép thẻ lên level cao để leo hạng. Đồng điểm thì đồng hạng.`
+      `Ghép thẻ lên level cao để leo hạng. Đồng điểm thì đồng hạng. Bấm vào một người chơi để khiêu chiến ở Đấu trường.`
     );
   };
 

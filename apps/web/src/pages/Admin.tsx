@@ -645,7 +645,6 @@ function CardsPane(props: { alive: () => boolean; ctl: (c: CardsCtl) => void }) 
                   <div class="grid-item">
                     <button class="pick view" data-view={c.id} title="Xem thẻ" onClick={() => openCardViewer(gen(c.generalId), c)}>
                       <Card general={gen(c.generalId)} level={c.level} extra="small" />
-                      <span class="cid">#{c.id}</span>
                     </button>
                     <div class="owner small">👤 {c.username}</div>
                   </div>

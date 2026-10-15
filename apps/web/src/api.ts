@@ -24,6 +24,14 @@ import type {
   MeDto,
   Page,
   ProfileDto,
+  PvpBattleDto,
+  PvpBattleSummaryDto,
+  PvpCombatDto,
+  PvpOpponentDto,
+  PvpOverviewDto,
+  PvpStyle,
+  PvpTeamDto,
+  PvpUnitDto,
   QuickUpgradeResultDto,
   RecipientDto,
   TicketType,
@@ -104,7 +112,7 @@ export const api = {
   updateProfile: (patch: { displayName?: string; avatar?: string | null }) => call<ProfileDto>('POST', '/api/me/profile', patch),
   changePassword: (currentPassword: string, newPassword: string) =>
     call<{ ok: true }>('POST', '/api/me/password', { currentPassword, newPassword }),
-  generals: () => call<{ items: GeneralDto[] }>('GET', '/api/generals'),
+  generals: () => call<{ items: GeneralDto[]; styles: Record<string, PvpStyle> }>('GET', '/api/generals'),
   cards: (q: { faction?: Faction; level?: number; q?: string; sort?: string; page?: number; pageSize?: number }) =>
     call<Page<CardDto>>('GET', '/api/cards?' + qs(q)),
   tickets: () => call<TicketsDto>('GET', '/api/tickets'),
@@ -144,6 +152,16 @@ export const api = {
   quests: () => call<QuestsDto>('GET', '/api/quests'),
   claimQuests: (keys?: string[]) => call<QuestClaimResultDto>('POST', '/api/quests/claim', keys ? { keys } : {}),
   leaderboard: () => call<LeaderboardDto>('GET', '/api/leaderboard'),
+  // Đấu trường PvP (mục 6.7) — server mô phỏng trận, client chỉ phát lại.
+  pvp: () => call<PvpOverviewDto>('GET', '/api/pvp'),
+  pvpSaveTeam: (units: PvpUnitDto[]) => call<PvpTeamDto>('POST', '/api/pvp/team', { units }),
+  pvpOpponent: (id: number) => call<PvpOpponentDto>('GET', `/api/pvp/opponent/${id}`),
+  pvpChallenge: (opponentId: number) => call<PvpBattleDto>('POST', '/api/pvp/challenge', { opponentId }),
+  pvpBattles: (q: { page?: number; pageSize?: number }) => call<Page<PvpBattleSummaryDto>>('GET', '/api/pvp/battles?' + qs(q)),
+  pvpBattle: (id: number) => call<PvpBattleDto>('GET', `/api/pvp/battles/${id}`),
+  /** Kỹ năng + chỉ số chi tiết của một tướng ở một cấp (mục 6.7) — modal xem thẻ. */
+  generalCombat: (generalId: string, level: number) =>
+    call<PvpCombatDto>('GET', `/api/pvp/generals/${encodeURIComponent(generalId)}/combat?` + qs({ level })),
   history: (q: { kind?: string; page?: number; pageSize?: number }) => call<Page<HistoryEntryDto>>('GET', '/api/history?' + qs(q)),
 };
 

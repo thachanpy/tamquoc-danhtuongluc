@@ -9,6 +9,7 @@ import { registerGiftRoutes } from './controllers/gift.controller.ts';
 import { registerGiftCodeRoutes } from './controllers/giftcode.controller.ts';
 import { registerLeaderboardRoutes } from './controllers/leaderboard.controller.ts';
 import { registerProfileRoutes } from './controllers/profile.controller.ts';
+import { registerPvpRoutes } from './controllers/pvp.controller.ts';
 import { registerQuestRoutes } from './controllers/quest.controller.ts';
 import { registerTicketRoutes } from './controllers/ticket.controller.ts';
 import { registerUpgradeRoutes } from './controllers/upgrade.controller.ts';
@@ -58,6 +59,7 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
   registerGiftCodeRoutes(app, ctx);
   registerQuestRoutes(app, ctx);
   registerLeaderboardRoutes(app, ctx);
+  registerPvpRoutes(app, ctx);
   registerAdminRoutes(app, ctx);
 
   return app;

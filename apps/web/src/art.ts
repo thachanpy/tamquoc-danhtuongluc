@@ -1,4 +1,4 @@
-import type { Faction } from '@tq/shared';
+import type { Faction, PvpStyle } from '@tq/shared';
 
 /** Màu & biểu tượng phe — dùng thống nhất cho DOM và PixiJS. */
 export const FACTION_STYLE: Record<Faction, { color: number; css: string; dark: string; glyph: string }> = {
@@ -6,6 +6,13 @@ export const FACTION_STYLE: Record<Faction, { color: number; css: string; dark: 
   shu: { color: 0x3fae6a, css: '#3fae6a', dark: '#163d27', glyph: '蜀' },
   wu: { color: 0xd9534f, css: '#d9534f', dark: '#4d1b1a', glyph: '吳' },
   qun: { color: 0xa47ad6, css: '#a47ad6', dark: '#33224a', glyph: '群' },
+};
+
+/** Màu huy hiệu phong cách chiến đấu (mục 6.7) — nhãn lấy từ PVP_STYLE_LABELS. */
+export const STYLE_COLOR: Record<PvpStyle, string> = {
+  attack: '#ef6f6a',
+  defense: '#5aa2ff',
+  support: '#3fbf7f',
 };
 
 /** Bậc thẻ theo level (khung + màu chữ), theo bộ khung chủ dự án cung cấp. */

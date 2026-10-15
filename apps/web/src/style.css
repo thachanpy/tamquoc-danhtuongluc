@@ -130,6 +130,11 @@ button.chip { cursor: pointer; margin: 4px 4px 0 0; }
 .tq-art .glyph { position: absolute; font-size: 72px; font-weight: 800; color: rgba(255,255,255,.22); }
 .tq-art .portrait { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
 .tq-art .ini { position: relative; font-size: 22px; font-weight: 800; letter-spacing: 2px; text-shadow: 0 2px 6px rgba(0,0,0,.5); }
+/* Huy hiệu phong cách chiến đấu (mục 6.7) — màu theo phong cách, đặt ở góc trên-trái ảnh thẻ. */
+.tq-role { position: absolute; top: 3px; left: 3px; z-index: 3; padding: 0 5px; border: 1px solid currentColor; border-radius: 999px;
+  background: rgba(8, 6, 4, .72); font: 600 9px/1.7 var(--num); white-space: nowrap; letter-spacing: .2px; }
+.tq-card.framed.tier-6 .tq-role, .tq-card.framed.tier-7 .tq-role, .tq-card.framed.tier-8 .tq-role,
+.tq-card.framed.tier-9 .tq-role, .tq-card.framed.tier-10 .tq-role { top: 6%; left: 6%; }
 /* Tên + phe/Lv nằm đè lên phần dưới chân dung (giống bảng tên trên ảnh gốc), nên thân thẻ giữ đúng tỉ lệ ảnh 286×378 và tỉ lệ khung */
 .tq-meta { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; padding: 18px 7px 5px; background: linear-gradient(to top, rgba(10,11,15,.94) 0%, rgba(10,11,15,.82) 55%, rgba(10,11,15,0) 100%); text-shadow: 0 1px 3px rgba(0,0,0,.9); }
 /* Chừa chỗ cho thanh khung đè lên mép dưới/hai bên thân thẻ (khung Lv.6+ dày hơn, có đá ở giữa đáy) */
@@ -173,7 +178,6 @@ button.chip { cursor: pointer; margin: 4px 4px 0 0; }
 .pick .tq-card.small { --cw: 100%; }
 .pick.on { border-color: var(--gold); box-shadow: 0 0 12px rgba(212,168,74,.6); }
 .pick:disabled { opacity: .3; cursor: not-allowed; }
-.pick .cid { position: absolute; top: 6px; left: 8px; font-size: 11px; background: rgba(0,0,0,.6); padding: 0 5px; border-radius: 4px; }
 .sel-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; padding: 14px 14px 10px; }
 .slot .tq-card.small { --cw: 100%; }
 button.slot { background: none; border: 0; padding: 0; color: inherit; cursor: pointer; display: block; width: 100%; position: relative; }

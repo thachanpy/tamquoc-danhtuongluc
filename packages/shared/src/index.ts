@@ -9,6 +9,9 @@ export type TicketType = (typeof TICKET_TYPES)[number];
 export const MIN_LEVEL = 1;
 export const MAX_LEVEL = 10;
 
+/** Số tướng tối đa mỗi đội PvP (PVP.md mục 2.1). */
+export const PVP_TEAM_SIZE = 6;
+
 export const FACTION_LABELS: Record<Faction, string> = {
   wei: 'Ngụy',
   shu: 'Thục',
@@ -576,6 +579,54 @@ export const schemas = {
       pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
     },
   },
+  pvpTeamBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['units'],
+    properties: {
+      // Số tướng tối đa do PVP_TEAM_SIZE quyết định; server kiểm tra trùng slot/trùng tướng và quyền sở hữu.
+      units: {
+        type: 'array',
+        maxItems: PVP_TEAM_SIZE,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['slot', 'generalId', 'level'],
+          properties: {
+            slot: { type: 'integer', minimum: 1, maximum: PVP_TEAM_SIZE },
+            generalId: { type: 'string', minLength: 1, maxLength: 64 },
+            level: { type: 'integer', minimum: MIN_LEVEL, maximum: MAX_LEVEL },
+          },
+        },
+      },
+    },
+  },
+  pvpChallengeBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['opponentId'],
+    properties: { opponentId: { type: 'integer', minimum: 1 } },
+  },
+  pvpBattlesQuery: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      page: { type: 'integer', minimum: 1, default: 1 },
+      pageSize: { type: 'integer', minimum: 1, maximum: 50, default: 10 },
+    },
+  },
+  /** Chi tiết chiến đấu của một tướng: id là slug tướng (không phải số). */
+  generalCombatParams: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id'],
+    properties: { id: { type: 'string', minLength: 1, maxLength: 64 } },
+  },
+  generalCombatQuery: {
+    type: 'object',
+    additionalProperties: false,
+    properties: { level: { type: 'integer', minimum: MIN_LEVEL, maximum: MAX_LEVEL, default: MIN_LEVEL } },
+  },
   profileBody: {
     type: 'object',
     additionalProperties: false,
@@ -600,6 +651,8 @@ export const schemas = {
 // ======================= Bảng xếp hạng (mục 6.6) =======================
 
 export interface LeaderboardEntryDto {
+  /** Id người chơi (dùng để mời thi đấu PvP, mục 6.7). */
+  id: number;
   /** Hạng theo Lực chiến (đồng điểm => đồng hạng). null = chưa có thẻ nên chưa xếp hạng. */
   rank: number | null;
   /** Tên đăng nhập (dùng phân định nội bộ / sắp xếp). */
@@ -699,3 +752,267 @@ export interface DailyEventsDto {
   /** Nhiệm vụ ngày cũ đạt nhưng chưa nhận, server đã tự cộng. */
   autoClaimed: QuestClaimedDto[];
 }
+
+// ======================= Đấu trường PvP (mục 6.7 — PVP.md) =======================
+
+/** Hai phía trên chiến trường: A (bên trái) và B (bên phải) theo PVP.md mục 2.2. */
+export const PVP_SIDES = ['a', 'b'] as const;
+export type PvpSide = (typeof PVP_SIDES)[number];
+
+/** Phong cách chiến đấu (PVP.md mục 4). */
+export const PVP_STYLES = ['attack', 'defense', 'support'] as const;
+export type PvpStyle = (typeof PVP_STYLES)[number];
+
+export const PVP_STYLE_LABELS: Record<PvpStyle, string> = {
+  attack: 'Tấn công',
+  defense: 'Phòng thủ',
+  support: 'Hỗ trợ',
+};
+
+/** Mã kỹ năng chiến đấu (SKILLS.md — bảng kỹ năng theo từng tướng). */
+export const PVP_SKILLS = [
+  // Sát thương thuần
+  'SINGLE',
+  'HORIZONTAL',
+  'VERTICAL',
+  'BACK_ROW',
+  'ALL_ENEMIES',
+  // Sát thương kèm choáng
+  'STUN_SINGLE',
+  'STUN_HORIZONTAL',
+  'STUN_VERTICAL',
+  'STUN_ALL',
+  // Sát thương kèm hồi máu/hiệu ứng bản thân
+  'SELF_HEAL',
+  // Hồi máu / giải choáng / buff đồng minh
+  'ALL_ALLIES_HEAL',
+  'CLEANSE_ALL',
+  'CLEANSE_DAMAGE_ALL',
+  'BUFF_ALLIES',
+  // Hiệu ứng toàn đội/bản thân (khi tới lượt sẽ đánh thường 100%)
+  'SELF_HP',
+  'TEAM_DAMAGE',
+  'TEAM_HP',
+  'TEAM_DAMAGE_HP',
+  'TEAM_CRIT',
+] as const;
+export type PvpSkill = (typeof PVP_SKILLS)[number];
+
+export const PVP_SKILL_LABELS: Record<PvpSkill, string> = {
+  SINGLE: 'Đơn mục tiêu',
+  HORIZONTAL: 'Hàng ngang',
+  VERTICAL: 'Hàng dọc',
+  BACK_ROW: 'Đánh hàng sau',
+  ALL_ENEMIES: 'Đánh toàn bộ',
+  STUN_SINGLE: 'Đơn mục tiêu + choáng',
+  STUN_HORIZONTAL: 'Hàng ngang + choáng',
+  STUN_VERTICAL: 'Hàng dọc + choáng',
+  STUN_ALL: 'Toàn bộ địch + choáng',
+  SELF_HEAL: 'Đơn mục tiêu + tự hồi máu',
+  ALL_ALLIES_HEAL: 'Hồi máu toàn đội',
+  CLEANSE_ALL: 'Giải choáng',
+  CLEANSE_DAMAGE_ALL: 'Sát thương + giải choáng',
+  BUFF_ALLIES: 'Tăng damage & chí mạng',
+  SELF_HP: 'Bản thân tăng HP',
+  TEAM_DAMAGE: 'Toàn đội tăng sát thương',
+  TEAM_HP: 'Toàn đội tăng HP',
+  TEAM_DAMAGE_HP: 'Toàn đội tăng sát thương & HP',
+  TEAM_CRIT: 'Toàn đội tăng chí mạng',
+};
+
+/** Cách chọn mục tiêu của kỹ năng (PVP.md mục 2.4). */
+export const PVP_TARGETINGS = ['single', 'lane', 'row', 'back_row', 'all_enemies', 'all_allies'] as const;
+export type PvpTargeting = (typeof PVP_TARGETINGS)[number];
+
+export const PVP_TARGETING_LABELS: Record<PvpTargeting, string> = {
+  single: 'một mục tiêu (ưu tiên cùng hàng dọc)',
+  lane: 'toàn bộ hàng ngang',
+  row: 'toàn bộ hàng dọc',
+  back_row: 'các tướng ở hàng sau',
+  all_enemies: 'toàn bộ tướng địch',
+  all_allies: 'toàn bộ đồng minh',
+};
+
+/** Nội tại tướng (PVP.md mục 10.1). */
+export const PVP_PASSIVES = ['CRIT_5', 'DAMAGE_10', 'HP_10', 'STUN_5', 'STUN_10', 'CLEANSE_10'] as const;
+export type PvpPassive = (typeof PVP_PASSIVES)[number];
+
+export const PVP_PASSIVE_LABELS: Record<PvpPassive, string> = {
+  CRIT_5: '+5 điểm chí mạng',
+  DAMAGE_10: '+10% damage',
+  HP_10: '+10% HP tối đa',
+  STUN_5: '+5 điểm choáng',
+  STUN_10: '+10 điểm choáng',
+  CLEANSE_10: '+10 điểm giải choáng',
+};
+
+/** Một tướng trong đội hình: slot 1–3 hàng trước (trên → dưới), slot 4–6 hàng sau. */
+export interface PvpUnitDto {
+  slot: number;
+  generalId: string;
+  level: number;
+}
+
+/** Đội hình PvP đã lưu. units rỗng = chưa xếp; power = tổng điểm Lực chiến của đội. */
+export interface PvpTeamDto {
+  units: PvpUnitDto[];
+  power: number;
+}
+
+/** Người chơi trong trận (thông tin hiển thị). */
+export interface PvpFighterDto extends ProfileDto {
+  id: number;
+}
+
+/** Kết quả theo góc nhìn của người đang xem. */
+export type PvpOutcome = 'win' | 'loss' | 'draw';
+/** Người thắng trận: 'a' (đội tấn công) / 'b' (đội phòng thủ) / 'draw' (hòa). */
+export type PvpWinner = PvpSide | 'draw';
+
+/** Trạng thái đầu trận của một tướng — client dùng để dựng bàn đấu trước khi phát lại. */
+export interface PvpUnitStateDto {
+  /** 0–5 = đội A (theo slot 1–6); 6–11 = đội B. Vị trí trống thì không có phần tử. */
+  idx: number;
+  side: PvpSide;
+  slot: number;
+  generalId: string;
+  level: number;
+  style: PvpStyle;
+  skill: PvpSkill;
+  passive: PvpPassive;
+  maxHp: number;
+  hp: number;
+  lc: number;
+  /** Tỉ lệ chí mạng cuối cùng (bps, 10000 = 100%). */
+  critBps: number;
+  /** Tỉ lệ choáng cuối cùng của kỹ năng (bps). */
+  stunBps: number;
+}
+
+/** Sự kiện trong trận, theo thứ tự phát lại. */
+export type PvpEventDto =
+  | { t: 'round'; round: number }
+  | { t: 'act'; idx: number; skill: PvpSkill; targets: number[] }
+  | { t: 'skip'; idx: number }
+  | { t: 'damage'; from: number; idx: number; amount: number; crit: boolean; hp: number }
+  | { t: 'heal'; from: number; idx: number; amount: number; hp: number }
+  | { t: 'stun'; idx: number }
+  | { t: 'cleanse'; idx: number }
+  | { t: 'buff'; idx: number }
+  | { t: 'down'; idx: number }
+  | { t: 'end'; winner: PvpWinner; rounds: number; reason: 'wipe' | 'timeout' };
+
+/** Bản ghi một trận đấu — đủ dữ liệu để phát lại (mục 15: kết quả tái dựng được từ dữ liệu server). */
+export interface PvpBattleDto {
+  id: number;
+  createdAt: string;
+  attacker: PvpFighterDto;
+  defender: PvpFighterDto;
+  /** Phía của người đang xem (luôn 'a' nếu mình là người khiêu chiến). */
+  mySide: PvpSide;
+  winner: PvpWinner;
+  result: PvpOutcome;
+  rounds: number;
+  units: PvpUnitStateDto[];
+  events: PvpEventDto[];
+}
+
+/** Một dòng lịch sử trận đấu. */
+export interface PvpBattleSummaryDto {
+  id: number;
+  createdAt: string;
+  /** Vai của mình trong trận: khiêu chiến hay bị khiêu chiến. */
+  role: 'attack' | 'defense';
+  opponent: PvpFighterDto;
+  winner: PvpWinner;
+  result: PvpOutcome;
+  rounds: number;
+  myPower: number;
+  opponentPower: number;
+}
+
+/** Tổng quan trang Đấu trường. */
+export interface PvpOverviewDto {
+  me: PvpFighterDto;
+  team: PvpTeamDto;
+  /** true = đội hình do người chơi tự lưu; false = server tự xếp từ thẻ mạnh nhất. */
+  saved: boolean;
+  wins: number;
+  losses: number;
+  draws: number;
+  maxRounds: number;
+  /** Điểm Lực chiến mỗi thẻ theo level (dùng hiển thị sức mạnh tướng khi xếp đội). */
+  powerByLevel: Record<number, number>;
+}
+
+/** Xem trước đối thủ trước khi khiêu chiến. */
+export interface PvpOpponentDto {
+  opponent: PvpFighterDto;
+  team: PvpTeamDto;
+  saved: boolean;
+}
+
+/** Hiệu ứng nền (aura) của tướng theo kỹ năng (SKILLS.md). Đơn vị bps: 10000 = 100%. */
+export interface PvpAuraDto {
+  /** Tăng sát thương của chính tướng. */
+  damageBps: number;
+  /** Tăng HP tối đa của chính tướng. */
+  hpBps: number;
+  /** Tăng sát thương cho toàn đội (kể cả bản thân). */
+  teamDamageBps: number;
+  /** Tăng HP tối đa cho toàn đội (kể cả bản thân). */
+  teamHpBps: number;
+  /** Cộng điểm chí mạng cho toàn đội (bps: 500 = +5 điểm phần trăm). */
+  teamCritPointsBps: number;
+}
+
+/** Hiệu ứng nội tại tướng (SKILLS.md). */
+export interface PvpPassiveEffectDto {
+  stat: 'crit' | 'damage' | 'maxHp' | 'stun' | 'cleanse';
+  /** Với damage/maxHp: phần trăm của chỉ số nền. */
+  bps: number;
+  /** Với crit/stun/cleanse: điểm phần trăm. */
+  pointsBps: number;
+}
+
+/** Định nghĩa kỹ năng chiến đấu (SKILLS.md). */
+export interface PvpSkillDefDto {
+  targeting: PvpTargeting;
+  /** Hệ số sát thương theo damage cơ bản (bps). 0 = không gây sát thương. */
+  damageBps: number;
+  /** Hệ số hồi máu cho đồng minh theo damage cơ bản của người thi triển (bps). 0 = không hồi. */
+  healBps: number;
+  /** Hồi máu cho bản thân theo HP tối đa (bps). 0 = không tự hồi. */
+  selfHealBps: number;
+  stun: 'none' | 'single' | 'row';
+  cleanse: boolean;
+  buff: boolean;
+  /** Hiệu ứng nền áp trước trận (không cộng dồn lặp lại). */
+  aura: PvpAuraDto;
+}
+
+/**
+ * Chi tiết chiến đấu của một tướng ở một cấp — modal xem thẻ ở Bộ sưu tập.
+ * Chỉ số là CỦA RIÊNG tướng (đã gồm hiệu ứng nền theo kỹ năng mà tướng tự hưởng);
+ * khi vào trận còn cộng hiệu ứng đồng minh khác và buff theo vị trí (hàng trước/sau).
+ */
+export interface PvpCombatDto {
+  generalId: string;
+  level: number;
+  style: PvpStyle;
+  skill: PvpSkill;
+  passive: PvpPassive;
+  /** Chỉ số nền theo cấp — chưa tính hiệu ứng kỹ năng, nội tại, vị trí. */
+  base: { maxHp: number; damage: number };
+  /** Chỉ số của riêng tướng sau khi áp hiệu ứng kỹ năng + nội tại. */
+  self: { maxHp: number; damage: number; lc: number; critBps: number; stunBps: number; cleanseBps: number; heal: number };
+  aura: PvpAuraDto;
+  passiveEffect: PvpPassiveEffectDto;
+  skillDef: PvpSkillDefDto;
+  /** Hệ số buff đồng minh của kỹ năng đặc biệt; 0 = kỹ năng không buff. */
+  teamBuff: { damageBps: number; critPointsBps: number };
+  /** Buff theo vị trí khi vào trận. */
+  rowBonus: { frontHpBps: number; backDamageBps: number };
+  bpsScale: number;
+}
+

@@ -231,7 +231,6 @@ export function UpgradePage(): JSX.Element {
         onClick={() => togglePick(c.id)}
       >
         <Card general={gen(c.generalId)} level={c.level} extra="small" />
-        <span class="cid">#{c.id}</span>
       </button>
     );
   };

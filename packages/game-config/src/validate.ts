@@ -24,6 +24,7 @@ import {
   UPGRADE_FAILURE_DISTRIBUTION,
 } from './rates.ts';
 import { validateQuestConfig } from './quests.ts';
+import { validatePvpConfig } from './pvp.ts';
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`[game-config] ${msg}`);
@@ -140,5 +141,6 @@ export function validateGameConfig(): void {
     assert(Number.isSafeInteger(c) && c >= 1, `RECOVERY_CAP_PER_TYPE.${t} phải là số nguyên ≥ 1`);
   }
   validateQuestConfig(assert);
+  validatePvpConfig(assert);
   assert(Number.isInteger(LEADERBOARD_TOP) && LEADERBOARD_TOP >= 1 && LEADERBOARD_TOP <= LEADERBOARD_SIZE, 'LEADERBOARD_TOP không hợp lệ');
 }

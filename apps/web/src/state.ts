@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import type { GachaConfigDto, GeneralDto, ProfileDto, TicketsDto } from '@tq/shared';
+import type { GachaConfigDto, GeneralDto, ProfileDto, PvpStyle, TicketsDto } from '@tq/shared';
 
 /**
  * Trạng thái client — chỉ là bản sao để hiển thị; server là nguồn sự thật.
@@ -12,6 +12,8 @@ export const state = {
   features: { devTopup: false, devTopupAmount: 0, gift: false },
   generals: [] as GeneralDto[],
   generalsById: new Map<string, GeneralDto>(),
+  /** Phong cách chiến đấu từng tướng (mục 6.7) — server quyết định, client chỉ hiển thị. */
+  generalStyles: {} as Record<string, PvpStyle>,
   config: null as GachaConfigDto | null,
   /** Mốc local (performance.now) khi tới lượt hồi kế tiếp — tính từ msUntilNextRecovery của server. */
   nextRecoveryLocal: 0,
@@ -30,6 +32,9 @@ export function setTickets(t: TicketsDto) {
 export const [questBadge, setQuestBadge] = createSignal(0);
 export const [pendingBadge, setPendingBadge] = createSignal(0);
 
+/** Đối thủ PvP được chọn từ bảng xếp hạng (điều hướng tới #pvp/<id>, mục 6.7). */
+export const [pvpTarget, setPvpTarget] = createSignal<number | null>(null);
+
 const [profileSig, setProfileSig] = createSignal<ProfileDto>({ displayName: '', avatar: null });
 /** Hồ sơ hiển thị (tên hiển thị + ảnh đại diện) — reactive vì đổi được ở trang Hồ sơ. */
 export const profile = profileSig;
@@ -37,3 +42,6 @@ export const setProfile = setProfileSig;
 
 export const gen = (id: string): GeneralDto =>
   state.generalsById.get(id) ?? { id, name: id, faction: 'qun', artKey: id };
+
+/** Phong cách chiến đấu của tướng (mục 6.7); tướng lạ (không có trong roster) coi như Tấn công. */
+export const genStyle = (id: string): PvpStyle => state.generalStyles[id] ?? 'attack';

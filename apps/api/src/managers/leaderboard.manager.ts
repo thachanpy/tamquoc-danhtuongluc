@@ -13,6 +13,7 @@ import { findUserRow } from '../repositories/user.repository.ts';
  */
 
 const toEntry = (r: RankedRow, meId: number): LeaderboardEntryDto => ({
+  id: r.id,
   rank: r.rnk,
   username: r.username,
   displayName: r.display_name ?? r.username,
@@ -34,6 +35,7 @@ export function getLeaderboard(ctx: GameContext, userId: number): LeaderboardDto
     me = mine
       ? toEntry(mine, userId)
       : {
+          id: userId,
           rank: null,
           username: user.username,
           displayName: user.display_name ?? user.username,

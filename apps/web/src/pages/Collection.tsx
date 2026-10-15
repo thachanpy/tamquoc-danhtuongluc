@@ -89,14 +89,13 @@ export function CollectionPage(): JSX.Element {
     redraw();
   }
 
-  // Giống trang Nâng cấp: chia nhóm theo level ("Lv.1 ×3"), mỗi thẻ hiện số thẻ #id
+  // Giống trang Nâng cấp: chia nhóm theo level ("Lv.1 ×3")
   const CardButton = (p: { card: CardDto }) => (
     <Show
       when={giftMode()}
       fallback={
         <button class="pick view" title="Xem thẻ" onClick={() => openCardViewer(gen(p.card.generalId), p.card)}>
           <Card general={gen(p.card.generalId)} level={p.card.level} extra="small" />
-          <span class="cid">#{p.card.id}</span>
         </button>
       }
     >
@@ -110,7 +109,6 @@ export function CollectionPage(): JSX.Element {
             onClick={() => toggleCard(p.card.id)}
           >
             <Card general={gen(p.card.generalId)} level={p.card.level} extra="small" />
-            <span class="cid">#{p.card.id}</span>
           </button>
         );
       })()}

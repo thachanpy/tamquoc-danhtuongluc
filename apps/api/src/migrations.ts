@@ -485,6 +485,38 @@ ALTER TABLE users ADD COLUMN avatar TEXT;
 UPDATE users SET display_name = username;
 `,
   },
+  {
+    // Đấu trường PvP (mục 6.7 — PVP.md): đội hình 6 tướng + nhật ký trận đấu.
+    // - pvp_teams: đội hình đang lưu; mỗi slot một tướng (1–3 hàng trước, 4–6 hàng sau).
+    //   Lưu general_id + level (không lưu card_id) để đội hình không hỏng khi thẻ bị tiêu thụ lúc ghép.
+    // - pvp_battles: toàn bộ dữ liệu phát lại nằm trong cột data (JSON) để tái dựng kết quả (PVP.md mục 15).
+    version: 14,
+    name: 'pvp',
+    sql: `
+CREATE TABLE pvp_teams (
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  slot       INTEGER NOT NULL CHECK (slot BETWEEN 1 AND 6),
+  general_id TEXT NOT NULL,
+  level      INTEGER NOT NULL CHECK (level BETWEEN 1 AND 10),
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, slot)
+);
+
+CREATE TABLE pvp_battles (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  attacker_id    INTEGER NOT NULL REFERENCES users(id),
+  defender_id    INTEGER NOT NULL REFERENCES users(id),
+  winner         TEXT NOT NULL CHECK (winner IN ('a','b','draw')),
+  rounds         INTEGER NOT NULL,
+  attacker_power INTEGER NOT NULL,
+  defender_power INTEGER NOT NULL,
+  data           TEXT NOT NULL,
+  created_at     TEXT NOT NULL
+);
+CREATE INDEX idx_pvp_battles_attacker ON pvp_battles(attacker_id, id);
+CREATE INDEX idx_pvp_battles_defender ON pvp_battles(defender_id, id);
+`,
+  },
 ];
 
 /** target: chỉ chạy tới version này (dùng khi test migration). */

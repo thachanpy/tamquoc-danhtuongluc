@@ -1164,6 +1164,7 @@ test('leaderboard: Lực chiến = tổng 2^(lv-1) mỗi (tướng, cấp) tính
   assert.equal(lb.items.find((e) => e.username === 'alice')!.avatar, null);
   assert.equal(lb.items.find((e) => e.isMe)?.username, 'bob');
   assert.deepEqual(lb.me, {
+    id: b,
     rank: 2,
     username: 'bob',
     displayName: 'Lưu Bị',
@@ -1182,8 +1183,10 @@ test('leaderboard: Lực chiến = tổng 2^(lv-1) mỗi (tướng, cấp) tính
   assert.ok(!asAdmin.items.some((e) => e.username === 'boss'));
 
   // Người chưa có thẻ: chưa xếp hạng
-  const none = getLeaderboard(ctx, Number((ctx.db.prepare("SELECT id FROM users WHERE username='nocards'").get() as { id: number }).id));
+  const nocards = Number((ctx.db.prepare("SELECT id FROM users WHERE username='nocards'").get() as { id: number }).id);
+  const none = getLeaderboard(ctx, nocards);
   assert.deepEqual(none.me, {
+    id: nocards,
     rank: null,
     username: 'nocards',
     displayName: 'nocards',

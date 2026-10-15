@@ -1,10 +1,12 @@
 import { Show, createSignal } from 'solid-js';
-import { FACTION_LABELS, type GeneralDto } from '@tq/shared';
-import { FACTION_STYLE, FRAME_LAYOUT, frameUrl, initials, levelTier, portraitUrl } from '../art.ts';
+import { FACTION_LABELS, PVP_STYLE_LABELS, type GeneralDto } from '@tq/shared';
+import { FACTION_STYLE, FRAME_LAYOUT, STYLE_COLOR, frameUrl, initials, levelTier, portraitUrl } from '../art.ts';
+import { genStyle } from '../state.ts';
 
 /**
  * Thẻ tướng (lưới DOM): chân dung tướng, placeholder (glyph phe + chữ viết tắt) nằm dưới làm dự phòng,
  * khung theo cấp phủ lên trên. level = null => tướng chưa sở hữu (hiển thị mờ).
+ * Huy hiệu góc trên-trái cho biết phong cách chiến đấu (mục 6.7): Tấn công / Phòng thủ / Hỗ trợ.
  * Class CSS giữ nguyên như bản HTML cũ (.tq-card, .framed, .tier-N, .unowned …).
  */
 export function Card(props: { general: GeneralDto; level: number | null; extra?: string }) {
@@ -12,6 +14,7 @@ export function Card(props: { general: GeneralDto; level: number | null; extra?:
   const [failedArt, setFailedArt] = createSignal<string | null>(null);
   const imgFailed = () => failedArt() === props.general.artKey;
   const f = () => FACTION_STYLE[props.general.faction];
+  const style = () => genStyle(props.general.id);
   const lv = () => (props.level ? Math.min(Math.max(props.level, 1), 10) : null);
   const tier = () => (props.level ? levelTier(props.level) : null);
   return (
@@ -34,6 +37,7 @@ export function Card(props: { general: GeneralDto; level: number | null; extra?:
               onError={() => setFailedArt(props.general.artKey)}
             />
           </Show>
+          <span class="tq-role" style={{ color: STYLE_COLOR[style()] }}>{PVP_STYLE_LABELS[style()]}</span>
         </div>
         <div class="tq-meta">
           <div class="tq-name">{props.general.name}</div>
