@@ -1,16 +1,22 @@
 import { musicPrefs, setMusicVolume, toggleMusic } from '../music.ts';
+import { setSfxVolume, sfxPrefs, toggleSfx } from '../sfx.ts';
 
-/** Nút bật/tắt nhạc nền hình trống trận (SVG; khi tắt có vạch son chéo) + thanh âm lượng. */
+/**
+ * Cụm điều khiển âm thanh ở thanh trên: nhạc nền (trống trận) và hiệu ứng trận đấu.
+ * Mỗi nhóm có nút bật/tắt (khi tắt hiện vạch son chéo) + thanh âm lượng riêng.
+ */
 export function MusicControl() {
-  const playing = () => musicPrefs().on && musicPrefs().volume > 0;
-  const vol = () => Math.round(musicPrefs().volume * 100);
+  const musicOn = () => musicPrefs().on && musicPrefs().volume > 0;
+  const musicVol = () => Math.round(musicPrefs().volume * 100);
+  const sfxOn = () => sfxPrefs().on && sfxPrefs().volume > 0;
+  const sfxVol = () => Math.round(sfxPrefs().volume * 100);
   return (
     <div class="music-ctl">
       <button
-        class={`btn ghost small music-toggle ${playing() ? '' : 'muted'}`}
+        class={`btn ghost small music-toggle ${musicOn() ? '' : 'muted'}`}
         type="button"
-        title={playing() ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
-        aria-pressed={playing() ? 'true' : 'false'}
+        title={musicOn() ? 'Tắt nhạc nền' : 'Bật nhạc nền'}
+        aria-pressed={musicOn() ? 'true' : 'false'}
         onClick={toggleMusic}
       >
         <svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">
@@ -32,10 +38,37 @@ export function MusicControl() {
         max="100"
         step="1"
         aria-label="Âm lượng nhạc nền"
-        value={vol()}
+        value={musicVol()}
         disabled={!musicPrefs().on}
-        style={{ '--p': `${vol()}%` }}
+        style={{ '--p': `${musicVol()}%` }}
         onInput={(e) => setMusicVolume(Number(e.currentTarget.value) / 100)}
+      />
+      <button
+        class={`btn ghost small sfx-toggle ${sfxOn() ? '' : 'muted'}`}
+        type="button"
+        title={sfxOn() ? 'Tắt hiệu ứng âm thanh trận đấu' : 'Bật hiệu ứng âm thanh trận đấu'}
+        aria-pressed={sfxOn() ? 'true' : 'false'}
+        onClick={toggleSfx}
+      >
+        <svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">
+          <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <path d="M6 12v8h5l6 5V7l-6 5H6z" fill="currentColor" fill-opacity=".18" />
+            <path d="M21 12.5a6 6 0 0 1 0 7M24.5 9.5a10.5 10.5 0 0 1 0 13" stroke-width="1.6" />
+          </g>
+          <path class="mute-slash" d="M4 28L28 4" stroke="#d8432f" stroke-width="3" stroke-linecap="round" />
+        </svg>
+      </button>
+      <input
+        class="sfx-vol"
+        type="range"
+        min="0"
+        max="100"
+        step="1"
+        aria-label="Âm lượng hiệu ứng trận đấu"
+        value={sfxVol()}
+        disabled={!sfxPrefs().on}
+        style={{ '--p': `${sfxVol()}%` }}
+        onInput={(e) => setSfxVolume(Number(e.currentTarget.value) / 100)}
       />
     </div>
   );

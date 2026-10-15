@@ -901,7 +901,8 @@ export type PvpEventDto =
   | { t: 'act'; idx: number; skill: PvpSkill; targets: number[] }
   | { t: 'skip'; idx: number }
   | { t: 'damage'; from: number; idx: number; amount: number; crit: boolean; hp: number }
-  | { t: 'heal'; from: number; idx: number; amount: number; crit: boolean; hp: number }
+  /** Hồi máu. `lifesteal` = hồi nhờ Hút máu (từ đòn đánh hoặc từ Thiêu đốt) để client chọn âm thanh đúng. */
+  | { t: 'heal'; from: number; idx: number; amount: number; crit: boolean; hp: number; lifesteal?: boolean }
   /** Phản kích: `from` đánh trả `idx` (kẻ vừa gây sát thương cho `from`). Có thể Chí mạng. */
   | { t: 'counter'; from: number; idx: number; amount: number; crit: boolean; hp: number }
   /**

@@ -2,6 +2,7 @@ import './style.css';
 import './theme.css';
 import { render } from 'solid-js/web';
 import { initMusic } from './music.ts';
+import { initSfx } from './sfx.ts';
 import { App } from './App.tsx';
 
 /** Tia lửa trang trí trên nền (chỉ hiệu ứng, không ảnh hưởng dữ liệu). */
@@ -22,4 +23,5 @@ function addSparks(count = 40) {
 }
 addSparks();
 initMusic();
+initSfx();
 render(() => <App />, document.getElementById('app')!);

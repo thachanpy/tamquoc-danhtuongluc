@@ -24,6 +24,7 @@ import { StyleIcon } from '../components/StyleIcon.tsx';
 import { FACTION_STYLE, initials, levelTier, pct, portraitUrl } from '../art.ts';
 import { createArena, type ArenaHandle, type ArenaUnit, type ArenaView } from '../pixi/arena.ts';
 import { toast } from '../ui.ts';
+import { playSfx, sfxPrefs, stopAllSfx, toggleSfx, type SfxName } from '../sfx.ts';
 
 /**
  * Đấu trường PvP (mục 6.7 — PVP.md).
@@ -40,6 +41,31 @@ const OUTCOME_LABEL: Record<PvpOutcome, string> = { win: 'Thắng', loss: 'Thua'
 const outcomeClass = (r: PvpOutcome) => (r === 'win' ? 'win' : r === 'loss' ? 'loss' : 'draw');
 const mySideOfWinner = (b: PvpBattleDto): PvpOutcome => b.result;
 const time = (isoStr: string) => new Date(isoStr).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+/** Tiếng ứng với một sự kiện trận (null = sự kiện không có âm thanh riêng). */
+function sfxOf(ev: PvpEventDto): SfxName | null {
+  switch (ev.t) {
+    case 'damage':
+      return ev.crit ? 'attackCrit' : 'attackNormal';
+    case 'counter':
+      return 'counter';
+    case 'heal':
+      return ev.lifesteal ? 'lifesteal' : 'heal';
+    case 'buff':
+      return ev.damageFlat > 0 ? 'buff' : 'heal';
+    case 'burn':
+      return 'burn';
+    case 'stun':
+      return 'stun';
+    case 'dispel':
+    case 'purify':
+      return 'dispel';
+    case 'down':
+      return 'death';
+    default:
+      return null;
+  }
+}
 
 /** Chỉ số cơ bản của một tướng để hiển thị ở bước chuẩn bị (server tính, client chỉ hiện). */
 interface UnitStat {
@@ -964,6 +990,10 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   function apply(ev: PvpEventDto) {
     builder.add(ev);
     if (!fastForward) setDetail(builder.rows.slice());
+    if (!fastForward) {
+      const s = sfxOf(ev);
+      if (s) playSfx(s);
+    }
     switch (ev.t) {
       case 'round':
         setRound(ev.round);
@@ -1161,6 +1191,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   }
   function reset() {
     clearTimeout(timer);
+    stopAllSfx();
     builder = createDetailBuilder(units);
     setView(initView());
     setCursor(0);
@@ -1228,6 +1259,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   onCleanup(() => {
     disposed = true;
     clearTimeout(timer);
+    stopAllSfx();
     arena?.destroy();
   });
   // Canvas PixiJS dựng bất đồng bộ; xong thì đẩy trạng thái đầu trận rồi tự phát lại
@@ -1332,6 +1364,16 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
                 )}
               </For>
             </span>
+            <button class={`btn ghost small rp-sfx ${sfxPrefs().on ? '' : 'muted'}`} onClick={toggleSfx} title={sfxPrefs().on ? 'Tắt âm thanh trận đấu' : 'Bật âm thanh trận đấu'} aria-pressed={sfxPrefs().on ? 'true' : 'false'}>
+              <svg viewBox="0 0 32 32" width="16" height="16" aria-hidden="true">
+                <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                  <path d="M6 12v8h5l6 5V7l-6 5H6z" fill="currentColor" fill-opacity=".18" />
+                  <path d="M21 12.5a6 6 0 0 1 0 7M24.5 9.5a10.5 10.5 0 0 1 0 13" stroke-width="1.6" />
+                </g>
+                <path class="mute-slash" d="M4 28L28 4" stroke="#d8432f" stroke-width="3" stroke-linecap="round" />
+              </svg>
+              {sfxPrefs().on ? 'Âm thanh' : 'Tắt tiếng'}
+            </button>
             <button class="btn primary small" onClick={showResult}>
               Kết quả
             </button>

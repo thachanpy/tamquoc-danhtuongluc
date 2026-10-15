@@ -514,6 +514,8 @@ test('engine: hút máu — tướng hồi bản thân theo % sát thương gây
   assert.equal(hit.t, 'damage');
   const heal = res.events[hi] as Extract<PvpEventDto, { t: 'heal' }>;
   assert.equal(heal.crit, false);
+  // Đánh dấu là hút máu để client phát đúng âm thanh (khác hồi máu bằng kỹ năng).
+  assert.equal(heal.lifesteal, true);
   const dealt = hit.t === 'damage' ? hit.amount : 0;
   assert.equal(heal.amount, Math.round((dealt * u.lifestealBps) / BPS_SCALE));
 });

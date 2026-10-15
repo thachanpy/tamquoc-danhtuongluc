@@ -453,10 +453,10 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
   }
 
   /** Hồi máu (không vượt trần); đẩy sự kiện khi có hồi thực tế. */
-  function healUnit(from: Unit, to: Unit, amount: number, crit: boolean): void {
+  function healUnit(from: Unit, to: Unit, amount: number, crit: boolean, lifesteal = false): void {
     const before = to.hp;
     to.hp = Math.min(to.maxHp, to.hp + amount);
-    if (to.hp > before) events.push({ t: 'heal', from: from.idx, idx: to.idx, amount: to.hp - before, crit, hp: to.hp });
+    if (to.hp > before) events.push({ t: 'heal', from: from.idx, idx: to.idx, amount: to.hp - before, crit, hp: to.hp, ...(lifesteal ? { lifesteal: true } : {}) });
   }
 
   /** Sát thương (có thể ăn chí mạng) của người thi triển với hệ số cho trước.
@@ -545,7 +545,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
       let heal = Math.round((dealt * u.lifestealBps) / BPS_SCALE);
       const crit = rand(BPS_SCALE) < critBpsOf(u);
       if (crit) heal = Math.round((heal * (BPS_SCALE + critDamageBpsOf(u))) / BPS_SCALE);
-      healUnit(u, u, heal, crit);
+      healUnit(u, u, heal, crit, true);
     }
 
     // Hồi máu đồng minh (mục 3): không vượt HP tối đa, có thể chí mạng theo tỉ lệ chí mạng người thi triển.
@@ -710,7 +710,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
           const burnLifestealBps = Math.round((p.src.lifestealBps * PVP_BURN_LIFESTEAL_BPS) / BPS_SCALE);
           let heal = Math.round((p.damage * burnLifestealBps) / BPS_SCALE);
           if (p.crit) heal = Math.round((heal * (BPS_SCALE + critDamageBpsOf(p.src))) / BPS_SCALE);
-          healUnit(p.src, p.src, heal, p.crit);
+          healUnit(p.src, p.src, heal, p.crit, true);
         }
         if (u.hp === 0 && u.alive) {
           u.alive = false;

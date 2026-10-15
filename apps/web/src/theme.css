@@ -281,19 +281,19 @@ h1, h2, h3, .tabs a, .t-name, .quick-head b, .gen-head b {
 .cmb-foot { font-size: 11px; color: var(--muted); }
 @keyframes viewer-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
 
-/* ---------- Nhạc nền: nút bật/tắt + thanh âm lượng ---------- */
+/* ---------- Nhạc nền & hiệu ứng trận đấu: nút bật/tắt + thanh âm lượng ---------- */
 .music-ctl { display: flex; align-items: center; gap: 6px; }
-.music-toggle { min-width: 36px; padding: 4px 8px; line-height: 0; color: var(--gold-2); }
-.music-toggle .mute-slash { display: none; }
-.music-toggle.muted { color: var(--muted); }
-.music-toggle.muted .mute-slash { display: inline; }
-.music-toggle:not(.muted) svg { filter: drop-shadow(0 0 4px rgba(212, 168, 74, .5)); }
-.music-vol { -webkit-appearance: none; appearance: none; width: 90px; height: 6px; border-radius: 999px; cursor: pointer;
+.music-toggle, .sfx-toggle { min-width: 36px; padding: 4px 8px; line-height: 0; color: var(--gold-2); }
+.music-toggle .mute-slash, .sfx-toggle .mute-slash { display: none; }
+.music-toggle.muted, .sfx-toggle.muted { color: var(--muted); }
+.music-toggle.muted .mute-slash, .sfx-toggle.muted .mute-slash { display: inline; }
+.music-toggle:not(.muted) svg, .sfx-toggle:not(.muted) svg { filter: drop-shadow(0 0 4px rgba(212, 168, 74, .5)); }
+.music-vol, .sfx-vol { -webkit-appearance: none; appearance: none; width: 90px; height: 6px; border-radius: 999px; cursor: pointer;
   background: linear-gradient(90deg, var(--gold) var(--p, 40%), rgba(212, 168, 74, .2) var(--p, 40%)); }
-.music-vol:disabled { opacity: .4; cursor: default; }
-.music-vol::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--gold-2); border: 2px solid #5a3a12; }
-.music-vol::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--gold-2); border: 2px solid #5a3a12; }
-@media (max-width: 640px) { .music-vol { width: 64px; } }
+.music-vol:disabled, .sfx-vol:disabled { opacity: .4; cursor: default; }
+.music-vol::-webkit-slider-thumb, .sfx-vol::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--gold-2); border: 2px solid #5a3a12; }
+.music-vol::-moz-range-thumb, .sfx-vol::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--gold-2); border: 2px solid #5a3a12; }
+@media (max-width: 640px) { .music-vol, .sfx-vol { width: 64px; } }
 
 /* ---------- Logo game (icon Gia Cát Lượng) ở thanh trên & trang đăng nhập ---------- */
 .logo { width: 42px; height: 42px; flex: none; border-radius: 9px; display: block;
@@ -390,7 +390,7 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
   .logo { width: 32px; height: 32px; border-radius: 7px; }
   .user { gap: 6px; }
   .user > span { display: none; } /* tên tài khoản: ẩn trên mobile */
-  .music-vol { display: none; } /* điện thoại chỉnh âm lượng bằng phím cứng */
+  .music-vol, .sfx-vol { display: none; } /* điện thoại chỉnh âm lượng bằng phím cứng */
   .tickets-bar { order: 3; flex: 1 0 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 5px; margin: 0 -10px; padding: 0 10px; }
   .tickets-bar::-webkit-scrollbar, .tabs::-webkit-scrollbar { display: none; }
   .tb { flex: none; padding: 2px 8px; font-size: 12px; }
@@ -781,6 +781,10 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .rp-speeds { display: flex; gap: 4px; }
 .rp-controls .btn.on { border-color: var(--gold); color: var(--gold-2); background: rgba(212, 168, 74, .12); }
+.rp-sfx { display: inline-flex; align-items: center; gap: 5px; }
+.rp-sfx .mute-slash { display: none; }
+.rp-sfx.muted { color: var(--muted); }
+.rp-sfx.muted .mute-slash { display: inline; }
 .rp-close { margin-left: auto; }
 
 /* Bảng kết quả trận: tab Tổng kết chỉ số / Diễn biến chi tiết */
