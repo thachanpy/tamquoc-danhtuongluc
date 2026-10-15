@@ -5,7 +5,7 @@ import type { GameContext } from '../context.ts';
 import { getProfile, getUsername, isAdmin } from '../managers/auth.manager.ts';
 import { getTickets, syncRecovery } from '../managers/ticket.manager.ts';
 import { listCards, listHistory, type CardsQuery, type HistoryQuery } from '../managers/collection.manager.ts';
-import { rosterStyles } from '../managers/pvp.manager.ts';
+import { rosterSkillNames, rosterSkills, rosterStyles } from '../managers/pvp.manager.ts';
 import { authGuard } from '../middleware/guards.ts';
 
 /** Routes tài khoản, bộ sưu tập và lịch sử của người chơi (mục 6.3, 6.4). */
@@ -25,8 +25,10 @@ export function registerCollectionRoutes(app: FastifyInstance, ctx: GameContext)
       ...(req.dailyEvents ? { dailyEvents: req.dailyEvents } : {}),
     };
   });
-  // styles: phong cách chiến đấu từng tướng (mục 6.7) — client hiện nhãn Tấn công/Phòng thủ/Hỗ trợ trên mọi thẻ tướng
-  app.get('/api/generals', async () => ({ items: ROSTER, styles: rosterStyles() }));
+  // styles/skills/skillNames: phong cách + kỹ năng chiến đấu + tên chiêu thật từng tướng (mục 6.7).
+  // Client hiện nhãn Tấn công/Phòng thủ/Hỗ trợ trên mọi thẻ, hiện kỹ năng khi chọn tướng PvP,
+  // và hiện tên chiêu thay cho nhãn chung (ví dụ "Hiệu lệnh thiên hạ").
+  app.get('/api/generals', async () => ({ items: ROSTER, styles: rosterStyles(), skills: rosterSkills(), skillNames: rosterSkillNames() }));
   app.get('/api/cards', { preHandler: auth, schema: { querystring: schemas.cardsQuery } }, async (req) =>
     listCards(ctx, req.userId, req.query as CardsQuery),
   );

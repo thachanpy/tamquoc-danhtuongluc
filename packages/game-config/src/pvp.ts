@@ -18,18 +18,18 @@ export const PVP_ROWS = 2;
 export { PVP_TEAM_SIZE };
 
 /** Giới hạn số vòng để tránh trận bất tử. Quá số vòng: xét theo tổng % HP còn lại. */
-export const PVP_MAX_ROUNDS = 30;
+export const PVP_MAX_ROUNDS = 50;
 
 // ===== Chỉ số nền theo cấp (cùng cấp => chỉ số nền tương đương) =====
 
-/** HP tối đa nền theo cấp: 1000 ở cấp 1, +250 mỗi cấp. */
-export const pvpBaseHp = (level: number) => 1000 + 250 * (level - 1);
 /** Damage cơ bản nền theo cấp: 200 ở cấp 1, +50 mỗi cấp. */
 export const pvpBaseDamage = (level: number) => 200 + 50 * (level - 1);
+/** HP tối đa nền theo cấp: luôn gấp 10 lần sát thương nền (2000 ở cấp 1, +500 mỗi cấp). */
+export const pvpBaseHp = (level: number) => 10 * pvpBaseDamage(level);
 
 /**
- * LC (chỉ số xác định thứ tự hành động) theo phong cách + cấp.
- * Tấn công nhanh nhất, rồi Hỗ trợ, cuối là Phòng thủ; bằng LC thì xét slot rồi tới phía A.
+ * LC (lực chiến từng tướng, dùng để cộng thành tổng LC của đội) theo phong cách + cấp.
+ * Tấn công cao nhất, rồi Hỗ trợ, cuối là Phòng thủ.
  */
 export const PVP_LC_BY_STYLE: Record<PvpStyle, number> = { attack: 130, support: 120, defense: 110 };
 export const pvpLc = (style: PvpStyle, level: number) => PVP_LC_BY_STYLE[style] + (level - 1) * 2;
@@ -38,7 +38,7 @@ export const pvpLc = (style: PvpStyle, level: number) => PVP_LC_BY_STYLE[style] 
 
 /**
  * Hiệu ứng nền áp trước trận cho từng tướng theo KỸ NĂNG của tướng đó (SKILLS.md).
- * Phong cách chỉ còn quyết định thứ tự hành động (LC) và nhãn hiển thị.
+ * Phong cách chỉ còn quyết định lực chiến (LC) và nhãn hiển thị.
  */
 export interface PvpAura {
   /** Tăng sát thương của chính tướng. */
@@ -109,21 +109,32 @@ export interface PvpSkillDef {
  * nên khi tới lượt sẽ đánh thường đơn mục tiêu 100% (damageBps = 10000).
  */
 export const PVP_SKILL_DEF: Record<PvpSkill, PvpSkillDef> = {
-  SINGLE: { targeting: 'single', damageBps: 20000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  HORIZONTAL: { targeting: 'lane', damageBps: 15000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  VERTICAL: { targeting: 'row', damageBps: 15000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  BACK_ROW: { targeting: 'back_row', damageBps: 15000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
+  // Sát thương đánh đơn/hàng được nâng để bù việc đánh diện rộng có tổng sát thương cao hơn:
+  // đơn mục tiêu 250% (dứt điểm nhanh 1 mục tiêu), hàng ngang/dọc/hàng sau 180% × ~3 mục tiêu,
+  // đánh toàn bộ giữ 100% × tối đa 6 mục tiêu. Kỹ năng kèm choáng hạ nhẹ (210%) vì đã có khống chế.
+  SINGLE: { targeting: 'single', damageBps: 25000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
+  HORIZONTAL: { targeting: 'lane', damageBps: 18000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
+  VERTICAL: { targeting: 'row', damageBps: 18000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
+  BACK_ROW: { targeting: 'back_row', damageBps: 18000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
   ALL_ENEMIES: { targeting: 'all_enemies', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  STUN_SINGLE: { targeting: 'single', damageBps: 20000, healBps: 0, selfHealBps: 0, stun: 'single', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  STUN_HORIZONTAL: { targeting: 'lane', damageBps: 15000, healBps: 0, selfHealBps: 0, stun: 'row', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  STUN_VERTICAL: { targeting: 'row', damageBps: 15000, healBps: 0, selfHealBps: 0, stun: 'row', cleanse: false, buff: false, aura: PVP_NO_AURA },
+  STUN_SINGLE: { targeting: 'single', damageBps: 21000, healBps: 0, selfHealBps: 0, stun: 'single', cleanse: false, buff: false, aura: PVP_NO_AURA },
+  STUN_HORIZONTAL: { targeting: 'lane', damageBps: 18000, healBps: 0, selfHealBps: 0, stun: 'row', cleanse: false, buff: false, aura: PVP_NO_AURA },
+  STUN_VERTICAL: { targeting: 'row', damageBps: 18000, healBps: 0, selfHealBps: 0, stun: 'row', cleanse: false, buff: false, aura: PVP_NO_AURA },
   STUN_ALL: { targeting: 'all_enemies', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'row', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  SELF_HEAL: { targeting: 'single', damageBps: 20000, healBps: 0, selfHealBps: 1000, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  ALL_ALLIES_HEAL: { targeting: 'all_allies', damageBps: 0, healBps: 15000, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
+  SELF_HEAL: { targeting: 'single', damageBps: 21000, healBps: 0, selfHealBps: 1000, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
+  // Cân bằng hồi máu: tính theo sát thương cơ bản của người thi triển × hệ số × số mục tiêu hồi.
+  // Toàn đội (tối đa 6) hạ còn 110%; hàng trước/sau (tối đa 3) nâng lên 220%; 1 người thấp máu
+  // nhất nâng lên 330% để đủ sức cứu nguy (tổng mỗi lần ~660% cho nhóm nhiều mục tiêu).
+  ALL_ALLIES_HEAL: { targeting: 'all_allies', damageBps: 0, healBps: 11000, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
+  // Hồi máu chọn theo mục tiêu: 1 đồng minh thấp máu nhất / hàng trước / hàng sau (mục 6.4).
+  ALLY_LOWEST_HEAL: { targeting: 'lowest_ally', damageBps: 0, healBps: 33000, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
+  FRONT_ROW_HEAL: { targeting: 'front_allies', damageBps: 0, healBps: 22000, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
+  BACK_ROW_HEAL: { targeting: 'back_allies', damageBps: 0, healBps: 22000, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
   CLEANSE_ALL: { targeting: 'all_allies', damageBps: 0, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: true, buff: false, aura: PVP_NO_AURA },
   CLEANSE_DAMAGE_ALL: { targeting: 'all_enemies', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: true, buff: false, aura: PVP_NO_AURA },
   BUFF_ALLIES: { targeting: 'all_allies', damageBps: 0, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: true, aura: PVP_NO_AURA },
-  SELF_HP: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: { ...PVP_NO_AURA, hpBps: 2500 } },
+  // "Bản thân +25% HP tối đa" trong SKILLS.md nghĩa là HỒI 25% HP tối đa mỗi lượt ra đòn (kèm đánh thường 100%).
+  SELF_HP: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 2500, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
   TEAM_DAMAGE: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: { ...PVP_NO_AURA, teamDamageBps: 1000 } },
   TEAM_HP: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: { ...PVP_NO_AURA, teamHpBps: 1000 } },
   TEAM_DAMAGE_HP: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: { ...PVP_NO_AURA, teamDamageBps: 1000, teamHpBps: 1000 } },
@@ -134,21 +145,43 @@ export const PVP_SKILL_DEF: Record<PvpSkill, PvpSkillDef> = {
 
 /** Chí mạng: Cấp độ × 3%. */
 export const PVP_CRIT_BPS_PER_LEVEL = 300;
-/** Choáng đơn mục tiêu: Cấp độ × 5% (tối đa 50% ở cấp 10). */
-export const PVP_STUN_SINGLE_BPS_PER_LEVEL = 500;
+/** Choáng đơn mục tiêu: Cấp độ × 7% (tối đa 70% ở cấp 10) — đủ để khống chế chủ lực địch. */
+export const PVP_STUN_SINGLE_BPS_PER_LEVEL = 700;
 /** Choáng hàng ngang/dọc/diện rộng: Cấp độ × 3% (tối đa 30% ở cấp 10) — mặc định. */
 export const PVP_STUN_ROW_BPS_PER_LEVEL = 300;
-/** Giải choáng: Cấp độ × 4%. */
-export const PVP_CLEANSE_BPS_PER_LEVEL = 400;
+/**
+ * Choáng kéo dài tối đa 2 lượt: gây choáng ở lượt nào thì mục tiêu bỏ lượt ở lượt đó (nếu chưa ra đòn)
+ * và lượt kế tiếp, đầu lượt thứ ba thì hết choáng. Ví dụ: choáng ở hiệp 2 → đầu hiệp 4 đã hết.
+ */
+export const PVP_STUN_ROUNDS = 2;
+/**
+ * Giải choáng: cấp 1 = 30%, +5% mỗi cấp (cấp 10 = 75%) — dãy 30/35/40/45/50/55/60/65/70/75%.
+ * Nội tại CLEANSE_10 (+10 điểm) cộng sẵn vào mốc nền nên vẫn cho ra đúng dãy trên.
+ */
+export const PVP_CLEANSE_BASE_BPS = 2000;
+export const PVP_CLEANSE_BPS_PER_LEVEL = 500;
 
 /** Damage chí mạng = damage trước chí mạng × 1.5 => cộng thêm 50%. */
 export const PVP_CRIT_DAMAGE_BPS = 5000;
 
+// ===== Hút máu theo sát thương gây ra (vài tướng riêng) =====
+
+/** Hút máu: hồi cho bản thân 2% sát thương gây ra mỗi cấp (cấp 1 = 2% … cấp 10 = 20%). */
+export const PVP_LIFESTEAL_BPS_PER_LEVEL = 200;
+/** Tướng có hút máu bị giảm 10% hệ số sát thương kỹ năng để bù lại lượng máu hồi thêm. */
+export const PVP_LIFESTEAL_DAMAGE_PENALTY_BPS = 1000;
+
 // ===== Buff từ kỹ năng đặc biệt (BUFF_ALLIES) =====
 
-/** Mỗi đồng minh còn sống nhận thêm damage bằng 10% damage cơ bản của chính mình. */
+/**
+ * Buff chỉ số chủ động (BUFF_ALLIES) CỘNG DỒN được, mỗi lần thi triển có hiệu lực tối đa
+ * `PVP_SKILL_BUFF_ROUNDS` lượt (kể cả lượt thi triển). Nhờ vậy tướng buff đánh liên tục sẽ
+ * đạt tối đa 3 lớp chồng nhau rồi dừng (lớp cũ tự hết hạn).
+ */
+export const PVP_SKILL_BUFF_ROUNDS = 3;
+/** Mỗi lớp buff: đồng minh còn sống nhận thêm damage bằng 10% damage cơ bản của chính mình. */
 export const PVP_SKILL_BUFF_DAMAGE_BPS = 1000;
-/** Mỗi đồng minh còn sống nhận thêm 5 điểm phần trăm chí mạng. */
+/** Mỗi lớp buff: đồng minh còn sống nhận thêm 5 điểm phần trăm chí mạng. */
 export const PVP_SKILL_BUFF_CRIT_POINTS_BPS = 500;
 
 // ===== Tướng hot (SKILLS.md) =====
@@ -171,124 +204,131 @@ export const isHotGeneral = (generalId: string) => HOT_GENERALS.has(generalId);
 
 interface RosterPvpRow {
   id: string;
+  /** Tên kỹ năng hiển thị — lấy nguyên văn phần trước dấu hai chấm của SKILLS.md. */
+  skillName: string;
   style: PvpStyle;
   skill: PvpSkill;
   /** Ghi đè hệ số sát thương kỹ năng (bps) — tướng có hệ số riêng trong SKILLS.md. */
   damageBps?: number;
   /** Ghi đè tỉ lệ choáng mỗi cấp (bps) cho kỹ năng choáng hàng/diện rộng. */
   stunPerLevelBps?: number;
+  /** Hút máu: hồi bản thân theo % sát thương gây ra mỗi cấp (bps); có thì damage bị giảm nhẹ. */
+  lifestealPerLevelBps?: number;
 }
 
+/** Tướng hút máu: hồi bản thân theo sát thương gây ra (mục 6.5 — SKILLS.md). */
+const LIFESTEAL = PVP_LIFESTEAL_BPS_PER_LEVEL;
+
 const WEI_PVP: RosterPvpRow[] = [
-  { id: 'cao-cao', style: 'support', skill: 'TEAM_DAMAGE_HP' },
-  { id: 'cao-pi', style: 'attack', skill: 'SINGLE' },
-  { id: 'cao-ren', style: 'defense', skill: 'SELF_HP' },
-  { id: 'cao-hong', style: 'defense', skill: 'SELF_HEAL' },
-  { id: 'cao-zhen', style: 'attack', skill: 'HORIZONTAL' },
-  { id: 'xiahou-dun', style: 'attack', skill: 'STUN_SINGLE' },
-  { id: 'xiahou-yuan', style: 'attack', skill: 'BACK_ROW' },
-  { id: 'zhang-liao', style: 'attack', skill: 'HORIZONTAL', damageBps: 16000 },
-  { id: 'yue-jin', style: 'attack', skill: 'SINGLE' },
-  { id: 'yu-jin', style: 'defense', skill: 'SELF_HP', damageBps: 20000 },
-  { id: 'zhang-he', style: 'attack', skill: 'BACK_ROW' },
-  { id: 'xu-huang', style: 'attack', skill: 'SINGLE' },
-  { id: 'dian-wei', style: 'defense', skill: 'SELF_HP' },
-  { id: 'xu-chu', style: 'defense', skill: 'SINGLE' },
-  { id: 'guo-jia', style: 'support', skill: 'BUFF_ALLIES' },
-  { id: 'xun-yu', style: 'support', skill: 'TEAM_DAMAGE' },
-  { id: 'xun-you', style: 'support', skill: 'STUN_VERTICAL' },
-  { id: 'jia-xu', style: 'support', skill: 'STUN_SINGLE' },
-  { id: 'sima-yi', style: 'support', skill: 'ALL_ENEMIES' },
-  { id: 'pang-de', style: 'attack', skill: 'SINGLE' },
-  { id: 'zhen-ji', style: 'support', skill: 'ALL_ALLIES_HEAL' },
-  { id: 'bian-yuer', style: 'support', skill: 'TEAM_HP' },
-  { id: 'cao-hua', style: 'support', skill: 'ALL_ALLIES_HEAL' },
-  { id: 'cao-jie', style: 'support', skill: 'TEAM_CRIT' },
-  { id: 'xin-xianying', style: 'support', skill: 'CLEANSE_DAMAGE_ALL' },
+  { id: 'cao-cao', skillName: 'Hiệu lệnh thiên hạ', style: 'support', skill: 'TEAM_DAMAGE_HP' },
+  { id: 'cao-pi', skillName: 'Đế vương trảm', style: 'attack', skill: 'SINGLE' },
+  { id: 'cao-ren', skillName: 'Thiết bích', style: 'defense', skill: 'SELF_HP' },
+  { id: 'cao-hong', skillName: 'Hộ chủ', style: 'defense', skill: 'SELF_HEAL' },
+  { id: 'cao-zhen', skillName: 'Phá trận', style: 'attack', skill: 'HORIZONTAL' },
+  { id: 'xiahou-dun', skillName: 'Độc nhãn cuồng đao', style: 'attack', skill: 'STUN_SINGLE' },
+  { id: 'xiahou-yuan', skillName: 'Thần tốc tập kích', style: 'attack', skill: 'BACK_ROW' },
+  { id: 'zhang-liao', skillName: 'Uy chấn Tiêu Dao', style: 'attack', skill: 'HORIZONTAL', damageBps: 16000, lifestealPerLevelBps: LIFESTEAL },
+  { id: 'yue-jin', skillName: 'Tiên phong phá địch', style: 'attack', skill: 'SINGLE', lifestealPerLevelBps: LIFESTEAL },
+  { id: 'yu-jin', skillName: 'Nghiêm trận', style: 'defense', skill: 'SELF_HP', damageBps: 20000 },
+  { id: 'zhang-he', skillName: 'Kỳ binh đột kích', style: 'attack', skill: 'BACK_ROW' },
+  { id: 'xu-huang', skillName: 'Khai sơn phủ', style: 'attack', skill: 'SINGLE' },
+  { id: 'dian-wei', skillName: 'Ác Lai hộ vệ', style: 'defense', skill: 'SELF_HP' },
+  { id: 'xu-chu', skillName: 'Hổ si cuồng kích', style: 'defense', skill: 'SINGLE', lifestealPerLevelBps: LIFESTEAL },
+  { id: 'guo-jia', skillName: 'Diệu kế thiên cơ', style: 'support', skill: 'BUFF_ALLIES' },
+  { id: 'xun-yu', skillName: 'Vương tá chi sách', style: 'support', skill: 'TEAM_DAMAGE' },
+  { id: 'xun-you', skillName: 'Liên hoàn kế', style: 'support', skill: 'STUN_VERTICAL' },
+  { id: 'jia-xu', skillName: 'Độc kế', style: 'support', skill: 'STUN_SINGLE' },
+  { id: 'sima-yi', skillName: 'Ẩn nhẫn phản kích', style: 'support', skill: 'ALL_ENEMIES' },
+  { id: 'pang-de', skillName: 'Quan tài quyết chiến', style: 'attack', skill: 'SINGLE' },
+  { id: 'zhen-ji', skillName: 'Lạc Thần', style: 'support', skill: 'ALL_ALLIES_HEAL' },
+  { id: 'bian-yuer', skillName: 'Hậu cung an định', style: 'support', skill: 'TEAM_HP' },
+  { id: 'cao-hua', skillName: 'Nhu tình hộ mệnh', style: 'support', skill: 'ALLY_LOWEST_HEAL' },
+  { id: 'cao-jie', skillName: 'Trung trinh', style: 'support', skill: 'TEAM_CRIT' },
+  { id: 'xin-xianying', skillName: 'Tuệ nhãn phá cục', style: 'support', skill: 'CLEANSE_DAMAGE_ALL' },
 ];
 
 const SHU_PVP: RosterPvpRow[] = [
-  { id: 'liu-bei', style: 'support', skill: 'TEAM_DAMAGE_HP' },
-  { id: 'guan-yu', style: 'attack', skill: 'SINGLE' },
-  { id: 'zhang-fei', style: 'attack', skill: 'HORIZONTAL' },
-  { id: 'zhuge-liang', style: 'support', skill: 'STUN_ALL' },
-  { id: 'zhao-yun', style: 'attack', skill: 'SINGLE' },
-  { id: 'ma-chao', style: 'attack', skill: 'BACK_ROW' },
-  { id: 'huang-zhong', style: 'attack', skill: 'BACK_ROW' },
-  { id: 'wei-yan', style: 'attack', skill: 'VERTICAL' },
-  { id: 'jiang-wei', style: 'attack', skill: 'STUN_SINGLE' },
-  { id: 'pang-tong', style: 'support', skill: 'ALL_ENEMIES' },
-  { id: 'fa-zheng', style: 'support', skill: 'BUFF_ALLIES' },
-  { id: 'xu-shu', style: 'support', skill: 'STUN_HORIZONTAL' },
-  { id: 'huang-yueying', style: 'support', skill: 'ALL_ENEMIES' },
-  { id: 'guan-ping', style: 'attack', skill: 'SINGLE' },
-  { id: 'guan-xing', style: 'attack', skill: 'HORIZONTAL' },
-  { id: 'ma-dai', style: 'attack', skill: 'BACK_ROW' },
-  { id: 'wang-ping', style: 'defense', skill: 'SELF_HP' },
-  { id: 'liao-hua', style: 'defense', skill: 'SINGLE' },
-  { id: 'jian-yong', style: 'support', skill: 'TEAM_HP' },
-  { id: 'mi-zhu', style: 'support', skill: 'ALL_ALLIES_HEAL' },
-  { id: 'guan-yinping', style: 'attack', skill: 'STUN_SINGLE' },
-  { id: 'mi-zhen', style: 'support', skill: 'TEAM_HP' },
-  { id: 'zhuge-guo', style: 'support', skill: 'ALL_ALLIES_HEAL' },
-  { id: 'bao-sanniang', style: 'attack', skill: 'HORIZONTAL' },
-  { id: 'wu-yi', style: 'defense', skill: 'SELF_HP' },
+  { id: 'liu-bei', skillName: 'Nhân đức', style: 'support', skill: 'TEAM_DAMAGE_HP' },
+  { id: 'guan-yu', skillName: 'Thanh Long Yển Nguyệt', style: 'attack', skill: 'SINGLE' },
+  { id: 'zhang-fei', skillName: 'Hổ Khiếu Trường Bản', style: 'attack', skill: 'HORIZONTAL' },
+  { id: 'zhuge-liang', skillName: 'Bát trận đồ', style: 'support', skill: 'STUN_ALL' },
+  { id: 'zhao-yun', skillName: 'Thất Tiến Thất Xuất', style: 'attack', skill: 'SINGLE', lifestealPerLevelBps: LIFESTEAL },
+  { id: 'ma-chao', skillName: 'Cẩm Mã Siêu', style: 'attack', skill: 'BACK_ROW', lifestealPerLevelBps: LIFESTEAL },
+  { id: 'huang-zhong', skillName: 'Lão Đương Ích Tráng', style: 'attack', skill: 'BACK_ROW' },
+  { id: 'wei-yan', skillName: 'Kỳ phong đột kích', style: 'attack', skill: 'VERTICAL' },
+  { id: 'jiang-wei', skillName: 'Kế thừa Khổng Minh', style: 'attack', skill: 'STUN_SINGLE' },
+  { id: 'pang-tong', skillName: 'Phượng Sồ liên hoàn', style: 'support', skill: 'ALL_ENEMIES' },
+  { id: 'fa-zheng', skillName: 'Tiên liệu chiến cơ', style: 'support', skill: 'BUFF_ALLIES' },
+  { id: 'xu-shu', skillName: 'Kiếm hiệp phá trận', style: 'support', skill: 'STUN_HORIZONTAL' },
+  { id: 'huang-yueying', skillName: 'Cơ quan bát quái', style: 'support', skill: 'ALL_ENEMIES' },
+  { id: 'guan-ping', skillName: 'Thanh Long kế thừa', style: 'attack', skill: 'SINGLE', lifestealPerLevelBps: LIFESTEAL },
+  { id: 'guan-xing', skillName: 'Hưng binh trảm tướng', style: 'attack', skill: 'HORIZONTAL' },
+  { id: 'ma-dai', skillName: 'Truy kích Tây Lương', style: 'attack', skill: 'BACK_ROW' },
+  { id: 'wang-ping', skillName: 'Kiên thủ Hán Trung', style: 'defense', skill: 'SELF_HP' },
+  { id: 'liao-hua', skillName: 'Lão tướng tiên phong', style: 'defense', skill: 'SINGLE' },
+  { id: 'jian-yong', skillName: 'Du thuyết', style: 'support', skill: 'TEAM_HP' },
+  { id: 'mi-zhu', skillName: 'Hậu cần vững chắc', style: 'support', skill: 'BACK_ROW_HEAL' },
+  { id: 'guan-yinping', skillName: 'Nữ tướng phá quân', style: 'attack', skill: 'STUN_SINGLE' },
+  { id: 'mi-zhen', skillName: 'Tương trợ', style: 'support', skill: 'TEAM_HP' },
+  { id: 'zhuge-guo', skillName: 'Tiên thuật', style: 'support', skill: 'FRONT_ROW_HEAL' },
+  { id: 'bao-sanniang', skillName: 'Hoa vũ song đao', style: 'attack', skill: 'HORIZONTAL' },
+  { id: 'wu-yi', skillName: 'Trấn thủ Ích Châu', style: 'defense', skill: 'SELF_HP' },
 ];
 
 const WU_PVP: RosterPvpRow[] = [
-  { id: 'sun-jian', style: 'attack', skill: 'HORIZONTAL', damageBps: 15500 },
-  { id: 'sun-ce', style: 'attack', skill: 'SINGLE', damageBps: 22000 },
-  { id: 'sun-quan', style: 'support', skill: 'TEAM_DAMAGE_HP' },
-  { id: 'zhou-yu', style: 'support', skill: 'ALL_ENEMIES', damageBps: 12000 },
-  { id: 'lu-xun', style: 'support', skill: 'HORIZONTAL' },
-  { id: 'lu-meng', style: 'attack', skill: 'SINGLE' },
-  { id: 'huang-gai', style: 'defense', skill: 'SELF_HP' },
-  { id: 'cheng-pu', style: 'defense', skill: 'SELF_HP' },
-  { id: 'han-dang', style: 'attack', skill: 'BACK_ROW' },
-  { id: 'taishi-ci', style: 'attack', skill: 'SINGLE' },
-  { id: 'gan-ning', style: 'attack', skill: 'BACK_ROW' },
-  { id: 'ling-tong', style: 'attack', skill: 'HORIZONTAL' },
-  { id: 'zhou-tai', style: 'defense', skill: 'SELF_HP' },
-  { id: 'xu-sheng', style: 'defense', skill: 'SELF_HP' },
-  { id: 'ding-feng', style: 'attack', skill: 'SINGLE' },
-  { id: 'zhu-huan', style: 'attack', skill: 'HORIZONTAL' },
-  { id: 'zhang-zhao', style: 'support', skill: 'TEAM_DAMAGE' },
-  { id: 'zhang-hong', style: 'support', skill: 'BUFF_ALLIES' },
-  { id: 'lu-su', style: 'support', skill: 'TEAM_DAMAGE_HP' },
-  { id: 'sun-shangxiang', style: 'attack', skill: 'BACK_ROW' },
-  { id: 'da-qiao', style: 'support', skill: 'ALL_ALLIES_HEAL' },
-  { id: 'xiao-qiao', style: 'support', skill: 'TEAM_CRIT' },
-  { id: 'bu-lianshi', style: 'support', skill: 'ALL_ALLIES_HEAL' },
-  { id: 'sun-luyu', style: 'support', skill: 'CLEANSE_ALL' },
-  { id: 'sun-luban', style: 'support', skill: 'TEAM_HP' },
+  { id: 'sun-jian', skillName: 'Giang Đông mãnh hổ', style: 'attack', skill: 'HORIZONTAL', damageBps: 15500 },
+  { id: 'sun-ce', skillName: 'Tiểu Bá Vương', style: 'attack', skill: 'SINGLE', damageBps: 22000, lifestealPerLevelBps: LIFESTEAL },
+  { id: 'sun-quan', skillName: 'Đế nghiệp Giang Đông', style: 'support', skill: 'TEAM_DAMAGE_HP' },
+  { id: 'zhou-yu', skillName: 'Hỏa thiêu Xích Bích', style: 'support', skill: 'ALL_ENEMIES', damageBps: 12000, lifestealPerLevelBps: LIFESTEAL },
+  { id: 'lu-xun', skillName: 'Hỏa kế liên doanh', style: 'support', skill: 'HORIZONTAL' },
+  { id: 'lu-meng', skillName: 'Bạch y độ giang', style: 'attack', skill: 'SINGLE' },
+  { id: 'huang-gai', skillName: 'Khổ nhục kế', style: 'defense', skill: 'SELF_HP', lifestealPerLevelBps: LIFESTEAL },
+  { id: 'cheng-pu', skillName: 'Lão tướng trấn quân', style: 'defense', skill: 'SELF_HP' },
+  { id: 'han-dang', skillName: 'Cung kỵ hợp kích', style: 'attack', skill: 'BACK_ROW' },
+  { id: 'taishi-ci', skillName: 'Thần xạ', style: 'attack', skill: 'SINGLE' },
+  { id: 'gan-ning', skillName: 'Cẩm Phàm tập kích', style: 'attack', skill: 'BACK_ROW' },
+  { id: 'ling-tong', skillName: 'Liên kích', style: 'attack', skill: 'HORIZONTAL' },
+  { id: 'zhou-tai', skillName: 'Hộ chủ bất khuất', style: 'defense', skill: 'SELF_HP' },
+  { id: 'xu-sheng', skillName: 'Giang phòng thiết thủ', style: 'defense', skill: 'SELF_HP' },
+  { id: 'ding-feng', skillName: 'Tuyết trung đột kích', style: 'attack', skill: 'SINGLE' },
+  { id: 'zhu-huan', skillName: 'Hỏa công phá trận', style: 'attack', skill: 'HORIZONTAL' },
+  { id: 'zhang-zhao', skillName: 'Ổn định triều chính', style: 'support', skill: 'TEAM_DAMAGE' },
+  { id: 'zhang-hong', skillName: 'Hoành sách', style: 'support', skill: 'BUFF_ALLIES' },
+  { id: 'lu-su', skillName: 'Liên minh Tôn Lưu', style: 'support', skill: 'TEAM_DAMAGE_HP' },
+  { id: 'sun-shangxiang', skillName: 'Kiêu cơ cung vũ', style: 'attack', skill: 'BACK_ROW' },
+  { id: 'da-qiao', skillName: 'Quốc sắc', style: 'support', skill: 'ALL_ALLIES_HEAL' },
+  { id: 'xiao-qiao', skillName: 'Thiên hương', style: 'support', skill: 'TEAM_CRIT' },
+  { id: 'bu-lianshi', skillName: 'Hiền hậu hộ quân', style: 'support', skill: 'ALLY_LOWEST_HEAL' },
+  { id: 'sun-luyu', skillName: 'Hòa giải', style: 'support', skill: 'CLEANSE_ALL' },
+  { id: 'sun-luban', skillName: 'An định Giang Đông', style: 'support', skill: 'TEAM_HP' },
 ];
 
 const QUN_PVP: RosterPvpRow[] = [
-  { id: 'dong-zhuo', style: 'defense', skill: 'SELF_HP' },
-  { id: 'lu-bu', style: 'attack', skill: 'STUN_ALL', damageBps: 11500, stunPerLevelBps: 200 },
-  { id: 'diao-chan', style: 'support', skill: 'STUN_SINGLE' },
-  { id: 'yuan-shao', style: 'support', skill: 'TEAM_DAMAGE_HP' },
-  { id: 'yuan-shu', style: 'support', skill: 'TEAM_DAMAGE' },
-  { id: 'gongsun-zan', style: 'attack', skill: 'BACK_ROW' },
-  { id: 'zhang-jiao', style: 'support', skill: 'STUN_ALL' },
-  { id: 'zhang-bao', style: 'support', skill: 'HORIZONTAL' },
-  { id: 'zhang-liang', style: 'support', skill: 'VERTICAL' },
-  { id: 'hua-xiong', style: 'attack', skill: 'SINGLE' },
-  { id: 'gao-shun', style: 'defense', skill: 'SELF_HP' },
-  { id: 'chen-gong', style: 'support', skill: 'BUFF_ALLIES' },
-  { id: 'yan-liang', style: 'attack', skill: 'SINGLE' },
-  { id: 'wen-chou', style: 'attack', skill: 'HORIZONTAL' },
-  { id: 'tian-feng', style: 'support', skill: 'STUN_HORIZONTAL' },
-  { id: 'meng-huo', style: 'support', skill: 'ALL_ENEMIES' },
-  { id: 'ma-teng', style: 'attack', skill: 'BACK_ROW' },
-  { id: 'han-sui', style: 'support', skill: 'TEAM_DAMAGE' },
-  { id: 'tao-qian', style: 'support', skill: 'ALL_ALLIES_HEAL' },
-  { id: 'zhang-lu', style: 'support', skill: 'ALL_ALLIES_HEAL' },
-  { id: 'cai-wenji', style: 'support', skill: 'ALL_ALLIES_HEAL' },
-  { id: 'zou-yu', style: 'support', skill: 'STUN_SINGLE' },
-  { id: 'zhurong', style: 'attack', skill: 'HORIZONTAL' },
-  { id: 'dong-bai', style: 'attack', skill: 'SINGLE' },
-  { id: 'zhang-chunhua', style: 'support', skill: 'STUN_SINGLE' },
+  { id: 'dong-zhuo', skillName: 'Bạo chúa', style: 'defense', skill: 'SELF_HP' },
+  { id: 'lu-bu', skillName: 'Vô song', style: 'attack', skill: 'STUN_ALL', damageBps: 11500, stunPerLevelBps: 200, lifestealPerLevelBps: LIFESTEAL },
+  { id: 'diao-chan', skillName: 'Bế nguyệt', style: 'support', skill: 'STUN_SINGLE' },
+  { id: 'yuan-shao', skillName: 'Thế gia hào tộc', style: 'support', skill: 'TEAM_DAMAGE_HP' },
+  { id: 'yuan-shu', skillName: 'Trọng thị đế nghiệp', style: 'support', skill: 'TEAM_DAMAGE' },
+  { id: 'gongsun-zan', skillName: 'Bạch mã nghĩa tùng', style: 'attack', skill: 'BACK_ROW' },
+  { id: 'zhang-jiao', skillName: 'Thái Bình đạo', style: 'support', skill: 'STUN_ALL' },
+  { id: 'zhang-bao', skillName: 'Địa công tướng quân', style: 'support', skill: 'HORIZONTAL' },
+  { id: 'zhang-liang', skillName: 'Nhân công tướng quân', style: 'support', skill: 'VERTICAL' },
+  { id: 'hua-xiong', skillName: 'Uy chấn Hổ Lao', style: 'attack', skill: 'SINGLE', lifestealPerLevelBps: LIFESTEAL },
+  { id: 'gao-shun', skillName: 'Hãm Trận Doanh', style: 'defense', skill: 'SELF_HP' },
+  { id: 'chen-gong', skillName: 'Mưu định', style: 'support', skill: 'BUFF_ALLIES' },
+  { id: 'yan-liang', skillName: 'Danh tướng Hà Bắc', style: 'attack', skill: 'SINGLE' },
+  { id: 'wen-chou', skillName: 'Mãnh tướng Hà Bắc', style: 'attack', skill: 'HORIZONTAL' },
+  { id: 'tian-feng', skillName: 'Trực gián', style: 'support', skill: 'STUN_HORIZONTAL' },
+  { id: 'meng-huo', skillName: 'Viễn mưu', style: 'support', skill: 'ALL_ENEMIES' },
+  { id: 'ma-teng', skillName: 'Tây Lương thiết kỵ', style: 'attack', skill: 'BACK_ROW' },
+  { id: 'han-sui', skillName: 'Liên hoành', style: 'support', skill: 'TEAM_DAMAGE' },
+  { id: 'tao-qian', skillName: 'Nhân nghĩa Từ Châu', style: 'support', skill: 'ALL_ALLIES_HEAL' },
+  { id: 'zhang-lu', skillName: 'Ngũ Đấu Mễ Đạo', style: 'support', skill: 'FRONT_ROW_HEAL' },
+  { id: 'cai-wenji', skillName: 'Bi ca', style: 'support', skill: 'BACK_ROW_HEAL' },
+  { id: 'zou-yu', skillName: 'Mị ảnh', style: 'support', skill: 'STUN_SINGLE' },
+  { id: 'zhurong', skillName: 'Phi đao Nam Man', style: 'attack', skill: 'HORIZONTAL' },
+  { id: 'dong-bai', skillName: 'Quý tộc tàn bạo', style: 'attack', skill: 'SINGLE' },
+  { id: 'zhang-chunhua', skillName: 'Lãnh tâm', style: 'support', skill: 'STUN_SINGLE' },
 ];
 
 /** Toàn bộ bảng phong cách + kỹ năng tường minh của roster (SKILLS.md). */
@@ -310,6 +350,8 @@ function passiveForSkill(skill: PvpSkill): PvpPassive {
 export interface PvpProfile {
   style: PvpStyle;
   skill: PvpSkill;
+  /** Tên kỹ năng hiển thị (nguyên văn SKILLS.md) — dùng cho nhãn "bay lên" khi tướng ra đòn. */
+  skillName: string;
   passive: PvpPassive;
   /** Tướng hot: hệ số kỹ năng đã nhân +10%. */
   hot: boolean;
@@ -321,6 +363,8 @@ export interface PvpProfile {
   selfHealBps: number;
   /** Tỉ lệ choáng mỗi cấp của kỹ năng (bps; 0 = kỹ năng không choáng). */
   stunPerLevelBps: number;
+  /** Hút máu theo sát thương gây ra mỗi cấp (bps; 0 = không hút máu). */
+  lifestealPerLevelBps: number;
 }
 
 function buildProfile(row: RosterPvpRow): PvpProfile {
@@ -333,15 +377,23 @@ function buildProfile(row: RosterPvpRow): PvpProfile {
       : def.stun === 'row'
         ? (row.stunPerLevelBps ?? PVP_STUN_ROW_BPS_PER_LEVEL)
         : 0;
+  const lifestealPerLevelBps = row.lifestealPerLevelBps ?? 0;
+  // Tướng hút máu bị giảm nhẹ hệ số sát thương kỹ năng để bù lượng máu hồi thêm mỗi lượt.
+  const rawDamage = row.damageBps ?? def.damageBps;
+  const damageWithPenalty = lifestealPerLevelBps
+    ? Math.round((rawDamage * (BPS_SCALE - PVP_LIFESTEAL_DAMAGE_PENALTY_BPS)) / BPS_SCALE)
+    : rawDamage;
   return {
     style: row.style,
     skill: row.skill,
+    skillName: row.skillName,
     passive: passiveForSkill(row.skill),
     hot,
-    damageBps: Math.round(((row.damageBps ?? def.damageBps) * mul) / BPS_SCALE),
+    damageBps: Math.round((damageWithPenalty * mul) / BPS_SCALE),
     healBps: Math.round((def.healBps * mul) / BPS_SCALE),
     selfHealBps: Math.round((def.selfHealBps * mul) / BPS_SCALE),
     stunPerLevelBps,
+    lifestealPerLevelBps,
   };
 }
 
@@ -367,6 +419,12 @@ export function validatePvpConfig(assert: (cond: unknown, msg: string) => void):
   }
   for (const g of ROSTER) {
     assert(PROFILES.has(g.id), `Tướng ${g.id} chưa có hồ sơ PvP trong SKILLS.md`);
+  }
+  const skillNames = new Set<string>();
+  for (const row of PVP_ROSTER_ROWS) {
+    assert(row.skillName.trim().length > 0, `Tướng ${row.id} thiếu tên kỹ năng`);
+    assert(!skillNames.has(row.skillName), `Tên kỹ năng bị trùng: ${row.skillName}`);
+    skillNames.add(row.skillName);
   }
   for (const f of FACTIONS) {
     const ids = HOT_BY_FACTION[f] ?? [];

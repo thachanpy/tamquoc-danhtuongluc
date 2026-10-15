@@ -29,6 +29,7 @@ import type {
   PvpCombatDto,
   PvpOpponentDto,
   PvpOverviewDto,
+  PvpSkill,
   PvpStyle,
   PvpTeamDto,
   PvpUnitDto,
@@ -112,7 +113,11 @@ export const api = {
   updateProfile: (patch: { displayName?: string; avatar?: string | null }) => call<ProfileDto>('POST', '/api/me/profile', patch),
   changePassword: (currentPassword: string, newPassword: string) =>
     call<{ ok: true }>('POST', '/api/me/password', { currentPassword, newPassword }),
-  generals: () => call<{ items: GeneralDto[]; styles: Record<string, PvpStyle> }>('GET', '/api/generals'),
+  generals: () =>
+    call<{ items: GeneralDto[]; styles: Record<string, PvpStyle>; skills: Record<string, PvpSkill>; skillNames: Record<string, string> }>(
+      'GET',
+      '/api/generals',
+    ),
   cards: (q: { faction?: Faction; level?: number; q?: string; sort?: string; page?: number; pageSize?: number }) =>
     call<Page<CardDto>>('GET', '/api/cards?' + qs(q)),
   tickets: () => call<TicketsDto>('GET', '/api/tickets'),

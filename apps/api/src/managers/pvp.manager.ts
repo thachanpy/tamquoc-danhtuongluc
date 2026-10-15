@@ -2,6 +2,7 @@ import {
   BPS_SCALE,
   LEADERBOARD_POWER_BY_LEVEL,
   PVP_BACK_DAMAGE_BPS,
+  PVP_CLEANSE_BASE_BPS,
   PVP_CLEANSE_BPS_PER_LEVEL,
   PVP_CRIT_BPS_PER_LEVEL,
   PVP_FRONT_HP_BPS,
@@ -28,6 +29,7 @@ import type {
   PvpOutcome,
   PvpOverviewDto,
   PvpSide,
+  PvpSkill,
   PvpStyle,
   PvpTeamDto,
   PvpUnitDto,
@@ -142,6 +144,19 @@ function toBattleDto(row: PvpBattleRow, userId: number): PvpBattleDto {
 
 // ===== API cho controller =====
 
+/**
+ * Chi tiết chiến đấu của từng tướng người chơi ĐANG SỞ HỮU, ở cấp cao nhất của tướng đó.
+ * Bảng chọn tướng dùng dữ liệu này để hiện kỹ năng chi tiết mà không phải gọi thêm API.
+ */
+function ownedCombatOf(ctx: GameContext, userId: number): Record<string, PvpCombatDto> {
+  const best = new Map<string, number>();
+  for (const p of listOwnedPairs(ctx.db, userId)) {
+    const cur = best.get(p.general_id);
+    if (cur === undefined || p.level > cur) best.set(p.general_id, p.level);
+  }
+  return Object.fromEntries([...best].map(([generalId, level]) => [generalId, getCombatStats(generalId, level)]));
+}
+
 export function getOverview(ctx: GameContext, userId: number): PvpOverviewDto {
   const user = findUserRow(ctx.db, userId);
   if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'Không tìm thấy người chơi.');
@@ -156,12 +171,21 @@ export function getOverview(ctx: GameContext, userId: number): PvpOverviewDto {
     draws: record.draws,
     maxRounds: PVP_MAX_ROUNDS,
     powerByLevel: { ...LEADERBOARD_POWER_BY_LEVEL },
+    ownedCombat: ownedCombatOf(ctx, userId),
   };
 }
 
 /** Phong cách chiến đấu của mọi tướng trong roster (ổn định theo id) — client hiện nhãn trên mọi thẻ tướng. */
 const ROSTER_STYLES: Record<string, PvpStyle> = Object.fromEntries(ROSTER.map((g) => [g.id, pvpProfile(g.id).style]));
 export const rosterStyles = (): Record<string, PvpStyle> => ROSTER_STYLES;
+
+/** Kỹ năng của mọi tướng trong roster (ổn định theo id) — client hiện kỹ năng khi chọn tướng vào đội. */
+const ROSTER_SKILLS: Record<string, PvpSkill> = Object.fromEntries(ROSTER.map((g) => [g.id, pvpProfile(g.id).skill]));
+export const rosterSkills = (): Record<string, PvpSkill> => ROSTER_SKILLS;
+
+/** Tên kỹ năng thật của mọi tướng (theo SKILLS.md) — client hiện tên chiêu thay cho nhãn chung. */
+const ROSTER_SKILL_NAMES: Record<string, string> = Object.fromEntries(ROSTER.map((g) => [g.id, pvpProfile(g.id).skillName]));
+export const rosterSkillNames = (): Record<string, string> => ROSTER_SKILL_NAMES;
 
 /** Chi tiết chiến đấu của một tướng ở một cấp (mục 6.7) — modal xem thẻ ở Bộ sưu tập. */
 export function getCombatStats(generalId: string, level: number): PvpCombatDto {
@@ -188,6 +212,7 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
     level,
     style: profile.style,
     skill: profile.skill,
+    skillName: profile.skillName,
     passive: profile.passive,
     base: { maxHp: baseHp, damage: baseDamage },
     self: {
@@ -196,8 +221,11 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
       lc: pvpLc(profile.style, level),
       critBps,
       stunBps: level * profile.stunPerLevelBps + (passive.stat === 'stun' ? passive.pointsBps : 0),
-      cleanseBps: def.cleanse ? level * PVP_CLEANSE_BPS_PER_LEVEL + (passive.stat === 'cleanse' ? passive.pointsBps : 0) : 0,
+      // Giải choáng khớp engine: mốc nền 30% + 5%/cấp (nội tại CLEANSE_10 đã gộp vào mốc nền).
+      cleanseBps: def.cleanse ? PVP_CLEANSE_BASE_BPS + (level - 1) * PVP_CLEANSE_BPS_PER_LEVEL + (passive.stat === 'cleanse' ? passive.pointsBps : 0) : 0,
       heal,
+      // Hút máu ở cấp hiện tại (khớp engine): cấp × hệ số mỗi cấp.
+      lifestealBps: level * profile.lifestealPerLevelBps,
     },
     aura: { ...aura },
     passiveEffect: { ...passive },

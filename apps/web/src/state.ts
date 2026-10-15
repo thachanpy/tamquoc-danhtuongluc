@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import type { GachaConfigDto, GeneralDto, ProfileDto, PvpStyle, TicketsDto } from '@tq/shared';
+import type { GachaConfigDto, GeneralDto, ProfileDto, PvpSkill, PvpStyle, TicketsDto } from '@tq/shared';
 
 /**
  * Trạng thái client — chỉ là bản sao để hiển thị; server là nguồn sự thật.
@@ -14,6 +14,10 @@ export const state = {
   generalsById: new Map<string, GeneralDto>(),
   /** Phong cách chiến đấu từng tướng (mục 6.7) — server quyết định, client chỉ hiển thị. */
   generalStyles: {} as Record<string, PvpStyle>,
+  /** Kỹ năng chiến đấu từng tướng (mục 6.7) — client hiện kỹ năng khi chọn tướng vào đội hình. */
+  generalSkills: {} as Record<string, PvpSkill>,
+  /** Tên chiêu thật từng tướng (theo SKILLS.md, ví dụ "Hiệu lệnh thiên hạ") — client hiện thay nhãn chung. */
+  generalSkillNames: {} as Record<string, string>,
   config: null as GachaConfigDto | null,
   /** Mốc local (performance.now) khi tới lượt hồi kế tiếp — tính từ msUntilNextRecovery của server. */
   nextRecoveryLocal: 0,
@@ -45,3 +49,9 @@ export const gen = (id: string): GeneralDto =>
 
 /** Phong cách chiến đấu của tướng (mục 6.7); tướng lạ (không có trong roster) coi như Tấn công. */
 export const genStyle = (id: string): PvpStyle => state.generalStyles[id] ?? 'attack';
+
+/** Kỹ năng chiến đấu của tướng (mục 6.7); tướng lạ coi như đánh đơn mục tiêu. */
+export const genSkill = (id: string): PvpSkill => state.generalSkills[id] ?? 'SINGLE';
+
+/** Tên chiêu thật của tướng (theo SKILLS.md); thiếu dữ liệu thì trả chuỗi rỗng để UI dùng nhãn chung. */
+export const genSkillName = (id: string): string => state.generalSkillNames[id] ?? '';

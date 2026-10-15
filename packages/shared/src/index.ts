@@ -786,6 +786,9 @@ export const PVP_SKILLS = [
   'SELF_HEAL',
   // Hồi máu / giải choáng / buff đồng minh
   'ALL_ALLIES_HEAL',
+  'ALLY_LOWEST_HEAL',
+  'FRONT_ROW_HEAL',
+  'BACK_ROW_HEAL',
   'CLEANSE_ALL',
   'CLEANSE_DAMAGE_ALL',
   'BUFF_ALLIES',
@@ -810,6 +813,9 @@ export const PVP_SKILL_LABELS: Record<PvpSkill, string> = {
   STUN_ALL: 'Toàn bộ địch + choáng',
   SELF_HEAL: 'Đơn mục tiêu + tự hồi máu',
   ALL_ALLIES_HEAL: 'Hồi máu toàn đội',
+  ALLY_LOWEST_HEAL: 'Hồi máu đồng minh thấp máu nhất',
+  FRONT_ROW_HEAL: 'Hồi máu hàng trước',
+  BACK_ROW_HEAL: 'Hồi máu hàng sau',
   CLEANSE_ALL: 'Giải choáng',
   CLEANSE_DAMAGE_ALL: 'Sát thương + giải choáng',
   BUFF_ALLIES: 'Tăng damage & chí mạng',
@@ -821,7 +827,7 @@ export const PVP_SKILL_LABELS: Record<PvpSkill, string> = {
 };
 
 /** Cách chọn mục tiêu của kỹ năng (PVP.md mục 2.4). */
-export const PVP_TARGETINGS = ['single', 'lane', 'row', 'back_row', 'all_enemies', 'all_allies'] as const;
+export const PVP_TARGETINGS = ['single', 'lane', 'row', 'back_row', 'all_enemies', 'all_allies', 'lowest_ally', 'front_allies', 'back_allies'] as const;
 export type PvpTargeting = (typeof PVP_TARGETINGS)[number];
 
 export const PVP_TARGETING_LABELS: Record<PvpTargeting, string> = {
@@ -831,6 +837,9 @@ export const PVP_TARGETING_LABELS: Record<PvpTargeting, string> = {
   back_row: 'các tướng ở hàng sau',
   all_enemies: 'toàn bộ tướng địch',
   all_allies: 'toàn bộ đồng minh',
+  lowest_ally: 'đồng minh thấp máu nhất',
+  front_allies: 'các tướng hàng trước',
+  back_allies: 'các tướng hàng sau',
 };
 
 /** Nội tại tướng (PVP.md mục 10.1). */
@@ -879,14 +888,22 @@ export interface PvpUnitStateDto {
   level: number;
   style: PvpStyle;
   skill: PvpSkill;
+  /** Tên kỹ năng thật lấy từ SKILLS.md (ví dụ "Hiệu lệnh thiên hạ") — client hiện khi tướng ra đòn. */
+  skillName: string;
   passive: PvpPassive;
   maxHp: number;
   hp: number;
+  /** Sát thương cơ bản sau hiệu ứng nền/hàng/nội tại (đã gồm hot). Client hiện ở ô tướng khi phát lại. */
+  damage: number;
   lc: number;
   /** Tỉ lệ chí mạng cuối cùng (bps, 10000 = 100%). */
   critBps: number;
   /** Tỉ lệ choáng cuối cùng của kỹ năng (bps). */
   stunBps: number;
+  /** Hút máu: hồi bản thân theo % sát thương gây ra ở cấp hiện tại (bps). 0 = không hút máu. */
+  lifestealBps: number;
+  /** Hiệu ứng nền theo kỹ năng của tướng (để client mô tả lượng tăng khi thi triển). */
+  aura?: PvpAuraDto;
 }
 
 /** Sự kiện trong trận, theo thứ tự phát lại. */
@@ -895,10 +912,16 @@ export type PvpEventDto =
   | { t: 'act'; idx: number; skill: PvpSkill; targets: number[] }
   | { t: 'skip'; idx: number }
   | { t: 'damage'; from: number; idx: number; amount: number; crit: boolean; hp: number }
-  | { t: 'heal'; from: number; idx: number; amount: number; hp: number }
-  | { t: 'stun'; idx: number }
+  | { t: 'heal'; from: number; idx: number; amount: number; crit: boolean; hp: number }
+  /** Choáng tối đa 2 lượt: mục tiêu bỏ lượt tới hết lượt `untilRound`, sang lượt kế tiếp thì hết. */
+  | { t: 'stun'; idx: number; untilRound: number }
   | { t: 'cleanse'; idx: number }
-  | { t: 'buff'; idx: number }
+  /**
+   * Buff kỹ năng đặc biệt: đồng minh nhận thêm % sát thương nền và điểm chí mạng.
+   * `damageFlat` = lượng sát thương cộng thẳng của lớp buff này (client tự cộng vào sát thương hiển thị);
+   * `expiresRound` = lượt cuối còn hiệu lực, để client bỏ lớp buff đã hết hạn khi phát lại.
+   */
+  | { t: 'buff'; idx: number; damageBps: number; critPointsBps: number; damageFlat: number; expiresRound: number }
   | { t: 'down'; idx: number }
   | { t: 'end'; winner: PvpWinner; rounds: number; reason: 'wipe' | 'timeout' };
 
@@ -943,6 +966,11 @@ export interface PvpOverviewDto {
   maxRounds: number;
   /** Điểm Lực chiến mỗi thẻ theo level (dùng hiển thị sức mạnh tướng khi xếp đội). */
   powerByLevel: Record<number, number>;
+  /**
+   * Chi tiết chiến đấu của từng tướng ĐANG SỞ HỮU ở cấp cao nhất (mục 6.7) — bảng chọn tướng
+   * hiện chỉ số + kỹ năng chi tiết mà không phải gọi thêm API. Khoá = generalId.
+   */
+  ownedCombat: Record<string, PvpCombatDto>;
 }
 
 /** Xem trước đối thủ trước khi khiêu chiến. */
@@ -1001,11 +1029,13 @@ export interface PvpCombatDto {
   level: number;
   style: PvpStyle;
   skill: PvpSkill;
+  /** Tên kỹ năng thật lấy từ SKILLS.md (ví dụ "Hiệu lệnh thiên hạ"). */
+  skillName: string;
   passive: PvpPassive;
   /** Chỉ số nền theo cấp — chưa tính hiệu ứng kỹ năng, nội tại, vị trí. */
   base: { maxHp: number; damage: number };
   /** Chỉ số của riêng tướng sau khi áp hiệu ứng kỹ năng + nội tại. */
-  self: { maxHp: number; damage: number; lc: number; critBps: number; stunBps: number; cleanseBps: number; heal: number };
+  self: { maxHp: number; damage: number; lc: number; critBps: number; stunBps: number; cleanseBps: number; heal: number; lifestealBps: number };
   aura: PvpAuraDto;
   passiveEffect: PvpPassiveEffectDto;
   skillDef: PvpSkillDefDto;

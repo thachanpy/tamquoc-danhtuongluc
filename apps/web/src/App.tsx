@@ -22,11 +22,11 @@ import { AdminPage } from './pages/Admin.tsx';
 type PageDef = { label: string; component: () => JSX.Element; adminOnly?: boolean };
 const PAGES = {
   collection: { label: 'Bộ sưu tập', component: CollectionPage },
+  pvp: { label: 'Đấu trường', component: PvpPage },
   draw: { label: 'Quay thẻ', component: DrawPage },
   upgrade: { label: 'Nâng cấp', component: UpgradePage },
   quests: { label: 'Nhiệm vụ', component: QuestsPage },
   leaderboard: { label: 'Xếp hạng', component: LeaderboardPage },
-  pvp: { label: 'Đấu trường', component: PvpPage },
   history: { label: 'Lịch sử', component: HistoryPage },
   giftcode: { label: 'Giftcode', component: GiftCodePage },
   profile: { label: 'Hồ sơ', component: ProfilePage },
@@ -75,6 +75,8 @@ export function App() {
       state.generals = generals.items;
       state.generalsById = new Map(generals.items.map((g) => [g.id, g]));
       state.generalStyles = generals.styles;
+      state.generalSkills = generals.skills;
+      state.generalSkillNames = generals.skillNames;
       state.config = config;
       setTickets(claimed ?? me.tickets);
       setPhase({ kind: 'game' });

@@ -1,22 +1,27 @@
-import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { For, Show, batch, createEffect, createMemo, createSignal, onCleanup, onMount, untrack } from 'solid-js';
 import type {
   CardDto,
   Faction,
+  PvpAuraDto,
   PvpBattleDto,
   PvpBattleSummaryDto,
+  PvpCombatDto,
   PvpEventDto,
   PvpOpponentDto,
   PvpOutcome,
   PvpOverviewDto,
   PvpSide,
+  PvpSkill,
   PvpStyle,
   PvpUnitDto,
+  PvpUnitStateDto,
 } from '@tq/shared';
-import { FACTION_LABELS, PVP_PASSIVE_LABELS, PVP_SKILL_LABELS, PVP_STYLE_LABELS } from '@tq/shared';
+import { FACTIONS, FACTION_LABELS, PVP_PASSIVE_LABELS, PVP_SKILL_LABELS, PVP_STYLES, PVP_STYLE_LABELS } from '@tq/shared';
 import { api, fetchAllCards } from '../api.ts';
 import { gen, genStyle, pvpTarget, setPvpTarget } from '../state.ts';
 import { Avatar } from '../components/Avatar.tsx';
-import { FACTION_STYLE, initials, levelTier, portraitUrl } from '../art.ts';
+import { CombatDetailModal } from '../components/CombatDetailModal.tsx';
+import { FACTION_STYLE, initials, levelTier, pct, portraitUrl } from '../art.ts';
 import { toast } from '../ui.ts';
 
 /**
@@ -35,48 +40,260 @@ const outcomeClass = (r: PvpOutcome) => (r === 'win' ? 'win' : r === 'loss' ? 'l
 const mySideOfWinner = (b: PvpBattleDto): PvpOutcome => b.result;
 const time = (isoStr: string) => new Date(isoStr).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
-/** Ô một tướng trên bàn đội hình (dùng cho cả đội mình và đội đối thủ). */
-function UnitCell(props: { slot: number; unit?: PvpUnitDto; onClick?: (slot: number) => void }) {
-  const g = () => (props.unit ? gen(props.unit.generalId) : null);
+/** Chỉ số cơ bản của một tướng để hiển thị ở bước chuẩn bị (server tính, client chỉ hiện). */
+interface UnitStat {
+  style: PvpStyle;
+  /** Sát thương cơ bản của tướng (đã gồm hiệu ứng nền + nội tại của chính tướng). */
+  damage: number;
+  maxHp: number;
+}
+const statOf = (c: PvpCombatDto): UnitStat => ({ style: c.style, damage: c.self.damage, maxHp: c.self.maxHp });
+const statKey = (u: PvpUnitDto) => `${u.generalId}|${u.level}`;
+
+/**
+ * Mô tả hiệu ứng nền theo kỹ năng kèm LƯỢNG tăng cụ thể (mục 6.7, 11.2):
+ * "tự +25% HP", "cả đội +10% sát thương", "cả đội +5 điểm chí mạng"...
+ */
+const AURA_FIELDS: { key: keyof PvpAuraDto; text: (v: number) => string }[] = [
+  { key: 'hpBps', text: (v) => `tự +${pct(v)} HP` },
+  { key: 'damageBps', text: (v) => `tự +${pct(v)} sát thương` },
+  { key: 'teamHpBps', text: (v) => `cả đội +${pct(v)} HP` },
+  { key: 'teamDamageBps', text: (v) => `cả đội +${pct(v)} sát thương` },
+  { key: 'teamCritPointsBps', text: (v) => `cả đội +${v / 100} điểm chí mạng` },
+];
+function auraText(aura?: PvpAuraDto): string {
+  if (!aura) return '';
+  return AURA_FIELDS.filter((f) => (aura[f.key] ?? 0) > 0)
+    .map((f) => f.text(aura[f.key]))
+    .join(' · ');
+}
+
+/** Ảnh đại diện tướng hiện trong modal chi tiết (Đấu trường không có thẻ lớn) — ảnh lỗi thì hiện chữ cái đầu. */
+const artThumb = (name: string, artKey: string) => (
+  <>
+    <span class="viewer-art-ini">{initials(name)}</span>
+    <img src={portraitUrl(artKey)} alt="" loading="lazy" decoding="async" onError={(e) => (e.currentTarget.style.display = 'none')} />
+  </>
+);
+
+/** Dòng chỉ số cơ bản hiện dưới mỗi ô tướng trong đội hình (không hiện chi tiết kỹ năng cho gọn). */
+function StatLine(props: { stat?: UnitStat }) {
   return (
-    <button
-      type="button"
+    <Show when={props.stat} fallback={<span class="pvp-cell-stat loading">…</span>}>
+      {(s) => (
+        <span class="pvp-cell-stat">
+          <span class={`pvp-style ${s().style}`}>{PVP_STYLE_LABELS[s().style]}</span>
+          <span class="pvp-cell-num">{`⚔ ${num(s().damage)} · ❤ ${num(s().maxHp)}`}</span>
+        </span>
+      )}
+    </Show>
+  );
+}
+
+/** Ô một tướng trên bàn đội hình (dùng cho cả đội mình và đội đối thủ). */
+function UnitCell(props: {
+  slot: number;
+  unit?: PvpUnitDto;
+  stat?: UnitStat;
+  /** Bấm ô để chọn/đổi tướng (không truyền = ô chỉ để xem). */
+  onClick?: (slot: number) => void;
+  /** Bấm ảnh đại diện để xem chi tiết kỹ năng/chỉ số (không truyền = ảnh không bấm được). */
+  onDetail?: () => void;
+  /** Giữ và kéo tướng từ ô này sang ô khác (không truyền = không kéo thả được). */
+  onDragStart?: (e: PointerEvent, slot: number) => void;
+  dragging?: boolean;
+  dropTarget?: boolean;
+}) {
+  const g = () => (props.unit ? gen(props.unit.generalId) : null);
+  const interactive = () => !!props.onClick;
+  return (
+    // Dùng div thay button: ô đội địch chỉ để xem nhưng ảnh đại diện vẫn phải bấm được
+    // (nút disabled chặn luôn sự kiện chuột của phần tử con).
+    <div
       class="pvp-cell"
-      classList={{ empty: !props.unit, fill: !!props.unit }}
-      disabled={!props.onClick}
-      title={props.unit ? `${g()!.name} · Lv.${props.unit.level}` : SLOT_LABEL[props.slot]}
+      classList={{
+        empty: !props.unit,
+        fill: !!props.unit,
+        static: !interactive(),
+        dragging: !!props.dragging,
+        'drop-target': !!props.dropTarget,
+      }}
+      data-slot={props.slot}
+      role={interactive() ? 'button' : undefined}
+      tabIndex={interactive() ? 0 : undefined}
+      title={props.unit ? `${g()!.name} · Lv.${props.unit.level}${props.onDragStart ? ' · kéo để đổi vị trí' : ''}` : SLOT_LABEL[props.slot]}
       onClick={() => props.onClick?.(props.slot)}
+      onKeyDown={(e) => {
+        if (!interactive() || (e.key !== 'Enter' && e.key !== ' ')) return;
+        e.preventDefault();
+        props.onClick?.(props.slot);
+      }}
+      onPointerDown={(e) => props.onDragStart?.(e, props.slot)}
     >
       <span class="pvp-slot">{props.slot}</span>
       <Show when={props.unit} fallback={<span class="pvp-empty">＋</span>}>
         {(u) => (
           <>
-            <span class="pvp-art">
+            <span
+              class="pvp-art"
+              role={props.onDetail ? 'button' : undefined}
+              tabIndex={props.onDetail ? 0 : undefined}
+              title={props.onDetail ? `Xem chi tiết ${g()!.name}` : undefined}
+              onClick={(e) => {
+                if (!props.onDetail) return;
+                e.stopPropagation();
+                props.onDetail();
+              }}
+              onKeyDown={(e) => {
+                if (!props.onDetail || (e.key !== 'Enter' && e.key !== ' ')) return;
+                e.preventDefault();
+                e.stopPropagation();
+                props.onDetail();
+              }}
+            >
               <span class="pvp-ini">{initials(g()!.name)}</span>
               <img src={portraitUrl(g()!.artKey)} alt="" loading="lazy" decoding="async" onError={(e) => (e.currentTarget.style.display = 'none')} />
             </span>
             <span class="pvp-cell-name">{g()!.name}</span>
-            <span class="pvp-cell-lv" style={{ color: levelTier(u().level).css }}>{`Lv.${u().level}`}</span>
+            <span class="pvp-cell-lv" style={{ 'border-color': levelTier(u().level).css, color: levelTier(u().level).css }}>{`Lv.${u().level}`}</span>
+            <StatLine stat={props.stat} />
           </>
         )}
       </Show>
-    </button>
+    </div>
   );
 }
 
 /** Lưới 3×2: cột Hàng sau / Hàng trước. Đội đối thủ lật thứ tự cột cho đối xứng. */
-function TeamBoard(props: { units: PvpUnitDto[]; foe?: boolean; onSlot?: (slot: number) => void }) {
+function TeamBoard(props: {
+  units: PvpUnitDto[];
+  /** Chi tiết chiến đấu theo (tướng|cấp) — dùng cho dòng chỉ số và hộp chi tiết khi bấm ảnh đại diện. */
+  combat?: Record<string, PvpCombatDto>;
+  foe?: boolean;
+  onSlot?: (slot: number) => void;
+  /** Kéo thả đổi vị trí hai ô trong đội mình (mục 6.7). */
+  onMove?: (from: number, to: number) => void;
+}) {
   const bySlot = createMemo(() => new Map(props.units.map((u) => [u.slot, u])));
+  const [dragFrom, setDragFrom] = createSignal<number | null>(null);
+  const [hoverSlot, setHoverSlot] = createSignal<number | null>(null);
+  const [ghost, setGhost] = createSignal<{ x: number; y: number; unit: PvpUnitDto } | null>(null);
+  /** Slot đang mở hộp chi tiết tướng (bấm vào ảnh đại diện) — null là không mở. */
+  const [detailSlot, setDetailSlot] = createSignal<number | null>(null);
+  const detailUnit = () => {
+    const s = detailSlot();
+    return s === null ? null : (bySlot().get(s) ?? null);
+  };
+  // Sau khi thả tướng, sự kiện click phát sinh ngay sau đó bị nuốt để không mở luôn bảng chọn tướng.
+  let suppressClick = false;
+  let stopDrag: (() => void) | null = null;
+  onCleanup(() => stopDrag?.());
+
+  /** Ô tướng đang nằm dưới con trỏ khi kéo thả (ảnh kéo có pointer-events: none nên không che). */
+  const slotAt = (x: number, y: number): number | null => {
+    const el = document.elementFromPoint(x, y)?.closest('.pvp-cell') as HTMLElement | null;
+    const s = el?.dataset.slot;
+    return s ? Number(s) : null;
+  };
+
+  /** Bắt đầu theo dõi con trỏ: đi quá ~6px mới tính là kéo (dưới ngưỡng là bấm mở bảng chọn tướng). */
+  function beginDrag(e: PointerEvent, slot: number) {
+    if (!props.onMove) return;
+    const unit = bySlot().get(slot);
+    if (!unit) return;
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    let started = false;
+    const onMove = (ev: PointerEvent) => {
+      if (!started && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
+      started = true;
+      setDragFrom(slot);
+      setGhost({ x: ev.clientX, y: ev.clientY, unit });
+      setHoverSlot(slotAt(ev.clientX, ev.clientY));
+    };
+    const finish = (ev: PointerEvent, cancelled: boolean) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      stopDrag = null;
+      const to = cancelled || !started ? null : slotAt(ev.clientX, ev.clientY);
+      if (started) {
+        suppressClick = true;
+        setTimeout(() => (suppressClick = false), 0);
+        if (to && to !== slot) props.onMove?.(slot, to);
+      }
+      setDragFrom(null);
+      setHoverSlot(null);
+      setGhost(null);
+    };
+    const onUp = (ev: PointerEvent) => finish(ev, false);
+    const onCancel = (ev: PointerEvent) => finish(ev, true);
+    stopDrag = () => finish({ clientX: 0, clientY: 0 } as PointerEvent, true);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+  }
+
+  const clickSlot = (s: number) => {
+    if (!suppressClick) props.onSlot?.(s);
+  };
+
   const col = (slots: number[], title: string) => (
     <div class="pvp-col">
       <div class="pvp-col-title">{title}</div>
-      <For each={slots}>{(s) => <UnitCell slot={s} unit={bySlot().get(s)} onClick={props.onSlot} />}</For>
+      <For each={slots}>
+        {(s) => (
+          <UnitCell
+            slot={s}
+            unit={bySlot().get(s)}
+            stat={unitStat(s)}
+            onClick={props.onSlot ? clickSlot : undefined}
+            onDetail={props.combat ? () => !suppressClick && setDetailSlot(s) : undefined}
+            onDragStart={props.onMove ? beginDrag : undefined}
+            dragging={dragFrom() === s}
+            dropTarget={dragFrom() !== null && hoverSlot() === s}
+          />
+        )}
+      </For>
     </div>
   );
+  // Chi tiết chiến đấu của tướng ở slot — tra theo (tướng, cấp); chưa tải xong thì undefined (hiện "…").
+  const unitCombat = (slot: number) => {
+    const u = bySlot().get(slot);
+    return u ? props.combat?.[statKey(u)] : undefined;
+  };
+  const unitStat = (slot: number): UnitStat | undefined => {
+    const c = unitCombat(slot);
+    return c ? statOf(c) : undefined;
+  };
   return (
-    <div class="pvp-board" classList={{ foe: props.foe }}>
-      {props.foe ? [col(FRONT, 'Hàng trước'), col(BACK, 'Hàng sau')] : [col(BACK, 'Hàng sau'), col(FRONT, 'Hàng trước')]}
-    </div>
+    <>
+      <div class="pvp-board" classList={{ foe: props.foe, dragging: dragFrom() !== null }}>
+        {props.foe ? [col(FRONT, 'Hàng trước'), col(BACK, 'Hàng sau')] : [col(BACK, 'Hàng sau'), col(FRONT, 'Hàng trước')]}
+      </div>
+      <Show when={ghost()}>
+        {(g) => (
+          <span class="pvp-drag-ghost" style={{ left: `${g().x}px`, top: `${g().y}px` }}>
+            <img src={portraitUrl(gen(g().unit.generalId).artKey)} alt="" />
+            <b>{gen(g().unit.generalId).name}</b>
+          </span>
+        )}
+      </Show>
+      {/* Chi tiết tướng khi bấm ảnh đại diện trên bàn đội hình — dùng chung modal với Bộ sưu tập
+          nhưng không có thẻ lớn (chỉ bảng chi tiết), đầy đủ cả kỹ năng. */}
+      <Show when={detailUnit()}>
+        {(u) => (
+          <CombatDetailModal
+            name={gen(u().generalId).name}
+            level={u().level}
+            combat={unitCombat(u().slot)}
+            art={artThumb(gen(u().generalId).name, gen(u().generalId).artKey)}
+            above
+            onClose={() => setDetailSlot(null)}
+          />
+        )}
+      </Show>
+    </>
   );
 }
 
@@ -95,17 +312,36 @@ interface GenOpt {
 function Picker(props: {
   slot: number;
   options: GenOpt[];
+  /** Tướng đang có trong đội hình: generalId → vị trí (mục 6.7). */
+  taken: Record<string, number>;
+  /** Chi tiết chiến đấu của tướng ĐANG SỞ HỮU (cấp cao nhất) — hiện chỉ số ở mỗi dòng và mở chi tiết khi bấm ảnh. */
+  combat: Record<string, PvpCombatDto>;
   onPick: (generalId: string, level: number) => void;
   onClear: () => void;
   onClose: () => void;
 }) {
   const [q, setQ] = createSignal('');
+  /** Bộ lọc nhanh: theo phe và theo phong cách chiến đấu (mục 6.7). */
+  const [fac, setFac] = createSignal<Faction | 'all'>('all');
+  const [st, setSt] = createSignal<PvpStyle | 'all'>('all');
+  /** Số tướng đang sở hữu theo từng phe / từng phong cách — hiện trên nhãn lọc. */
+  const countFac = (f: Faction) => props.options.filter((o) => o.faction === f).length;
+  const countSt = (s: PvpStyle) => props.options.filter((o) => o.style === s).length;
   const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
   const filtered = createMemo(() => {
     const fq = fold(q().trim());
-    return props.options.filter((o) => !fq || fold(o.name).includes(fq));
+    return props.options.filter(
+      (o) => (!fq || fold(o.name).includes(fq)) && (fac() === 'all' || o.faction === fac()) && (st() === 'all' || o.style === st()),
+    );
   });
-  const onKey = (e: KeyboardEvent) => e.key === 'Escape' && props.onClose();
+  /** Tướng đang mở xem chi tiết (bấm vào ảnh đại diện) — null là không mở. */
+  const [detailId, setDetailId] = createSignal<string | null>(null);
+  const detailOpt = () => props.options.find((o) => o.id === detailId());
+  // Esc: chi tiết tướng (nếu đang mở) tự đóng trước — modal đó tự xử lý; ở đây chỉ đóng bảng chọn khi không có chi tiết.
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape' || detailId()) return;
+    props.onClose();
+  };
   onMount(() => document.addEventListener('keydown', onKey));
   onCleanup(() => document.removeEventListener('keydown', onKey));
   return (
@@ -123,47 +359,122 @@ function Picker(props: {
             Bỏ trống vị trí
           </button>
         </div>
+        {/* Lọc theo phe và theo phong cách chiến đấu */}
+        <div class="pvp-filters">
+          <div class="pvp-filter-row">
+            <button class="pvp-chip" classList={{ on: fac() === 'all' }} onClick={() => setFac('all')}>
+              {`Tất cả phe (${props.options.length})`}
+            </button>
+            <For each={FACTIONS}>
+              {(f) => (
+                <button
+                  class="pvp-chip"
+                  classList={{ on: fac() === f }}
+                  style={{ '--chip': FACTION_STYLE[f].css }}
+                  onClick={() => setFac(fac() === f ? 'all' : f)}
+                >
+                  {`${FACTION_LABELS[f]} (${countFac(f)})`}
+                </button>
+              )}
+            </For>
+          </div>
+          <div class="pvp-filter-row">
+            <button class="pvp-chip" classList={{ on: st() === 'all' }} onClick={() => setSt('all')}>
+              Mọi lối đánh
+            </button>
+            <For each={PVP_STYLES}>
+              {(s) => (
+                <button class={`pvp-chip ${s}`} classList={{ on: st() === s }} onClick={() => setSt(st() === s ? 'all' : s)}>
+                  {`${PVP_STYLE_LABELS[s]} (${countSt(s)})`}
+                </button>
+              )}
+            </For>
+          </div>
+        </div>
         <div class="pvp-picker-list">
           <Show when={props.options.length} fallback={<div class="state-msg">Bạn chưa có tướng nào. Hãy quay thẻ trước.</div>}>
             <Show when={filtered().length} fallback={<div class="state-msg">Không tìm thấy tướng phù hợp.</div>}>
               <For each={filtered()}>
-                {(o) => (
-                  <div class="pvp-pick-row">
-                    <span class="pvp-pick-art" style={{ 'border-color': FACTION_STYLE[o.faction].css }}>
-                      <span class="pvp-ini">{initials(o.name)}</span>
-                      <img
-                        src={portraitUrl(o.artKey)}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        onError={(e) => (e.currentTarget.style.display = 'none')}
-                      />
-                    </span>
-                    <span class="pvp-pick-meta">
-                      <span class="pvp-pick-name">{o.name}</span>
-                      <span class="pvp-pick-tags">
-                        <span class="pvp-pick-faction" style={{ color: FACTION_STYLE[o.faction].css }}>
-                          {FACTION_LABELS[o.faction]}
-                        </span>
-                        <span class={`pvp-pick-style ${o.style}`}>{PVP_STYLE_LABELS[o.style]}</span>
-                      </span>
-                    </span>
+                {(o) => {
+                  const c = () => props.combat[o.id];
+                  // Bấm BẤT KỲ chỗ nào trên dòng để đưa tướng vào vị trí (không phải bấm đúng chip cấp).
+                  return (
                     <button
                       type="button"
-                      class="lv-chip"
-                      style={{ 'border-color': levelTier(o.best).css, color: levelTier(o.best).css }}
-                      title={`Đưa ${o.name} vào vị trí ${props.slot}`}
+                      class="pvp-pick-row"
+                      classList={{ taken: props.taken[o.id] !== undefined }}
+                      title={`Đưa ${o.name} (Lv.${o.best}) vào vị trí ${props.slot}`}
                       onClick={() => props.onPick(o.id, o.best)}
                     >
-                      {`Lv.${o.best}`}
+                      <span class="pvp-pick-id">
+                        <span
+                          class="pvp-pick-art"
+                          role="button"
+                          tabIndex={0}
+                          title={`Xem chi tiết ${o.name}`}
+                          style={{ 'border-color': FACTION_STYLE[o.faction].css }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDetailId(o.id);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key !== 'Enter' && e.key !== ' ') return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDetailId(o.id);
+                          }}
+                        >
+                          <span class="pvp-ini">{initials(o.name)}</span>
+                          <img
+                            src={portraitUrl(o.artKey)}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            onError={(e) => (e.currentTarget.style.display = 'none')}
+                          />
+                        </span>
+                        <span class="lv-chip" style={{ 'border-color': levelTier(o.best).css, color: levelTier(o.best).css }}>
+                          {`Lv.${o.best}`}
+                        </span>
+                      </span>
+                      <span class="pvp-pick-meta">
+                        <span class="pvp-pick-name">{o.name}</span>
+                        <span class="pvp-pick-tags">
+                          <span class="pvp-pick-faction" style={{ color: FACTION_STYLE[o.faction].css }}>
+                            {FACTION_LABELS[o.faction]}
+                          </span>
+                          <span class={`pvp-pick-style ${o.style}`}>{PVP_STYLE_LABELS[o.style]}</span>
+                          <Show when={c()}>
+                            {(x) => <span class="pvp-pick-stat-num">{`⚔ ${num(x().self.damage)} · ❤ ${num(x().self.maxHp)}`}</span>}
+                          </Show>
+                        </span>
+                      </span>
+                      {/* Nhãn cho biết tướng đang nằm ở vị trí nào trong đội */}
+                      <Show when={props.taken[o.id] !== undefined}>
+                        <span class="pvp-pick-inteam">{`Đang ở vị trí ${props.taken[o.id]}`}</span>
+                      </Show>
                     </button>
-                  </div>
-                )}
+                  );
+                }}
               </For>
             </Show>
           </Show>
         </div>
       </div>
+      {/* Chi tiết tướng (bấm vào ảnh đại diện mới mở) — dùng chung modal với Bộ sưu tập, đầy đủ
+          kỹ năng + chỉ số, chỉ khác là không có thẻ lớn (thay bằng ảnh đại diện). */}
+      <Show when={detailOpt()}>
+        {(o) => (
+          <CombatDetailModal
+            name={o().name}
+            level={o().best}
+            combat={props.combat[o().id]}
+            art={artThumb(o().name, o().artKey)}
+            above
+            onClose={() => setDetailId(null)}
+          />
+        )}
+      </Show>
     </div>
   );
 }
@@ -175,7 +486,11 @@ interface CV {
   maxHp: number;
   alive: boolean;
   stunned: boolean;
+  /** Lượt cuối còn bị choáng (khớp engine): sang lượt sau mốc này thì gỡ hiệu ứng. */
+  stunnedUntil: number;
   buffed: boolean;
+  /** Các lớp buff đang hiệu lực: sát thương cộng thẳng + lượt hết hạn (khớp engine). */
+  buffs: { flat: number; expiresRound: number }[];
 }
 
 const EVENT_MS: Record<PvpEventDto['t'], number> = {
@@ -191,16 +506,264 @@ const EVENT_MS: Record<PvpEventDto['t'], number> = {
   end: 500,
 };
 
-function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void }) {
+/** Tổng hợp chỉ số của một tướng sau trận. */
+interface Tally {
+  dealt: number;
+  taken: number;
+  healedAllies: number;
+  healedSelf: number;
+  kills: number;
+  stuns: number;
+  cleanses: number;
+  buffs: number;
+}
+const newTally = (): Tally => ({ dealt: 0, taken: 0, healedAllies: 0, healedSelf: 0, kills: 0, stuns: 0, cleanses: 0, buffs: 0 });
+
+/** Một dòng diễn biến chi tiết (kèm avatar người thi triển / mục tiêu). */
+interface DetailRow {
+  id: number;
+  kind: 'round' | 'act' | 'skip' | 'damage' | 'heal' | 'stun' | 'cleanse' | 'buff' | 'down';
+  actor?: number;
+  target?: number;
+  text: string;
+  amount?: number;
+  crit?: boolean;
+}
+
+/**
+ * Bộ dựng "diễn biến chi tiết". Dùng chung cho cả hai chỗ: phân tích trọn trận sau khi đánh xong
+ * và hiện dần từng dòng trong lúc đang đánh (cùng logic nên nội dung luôn khớp nhau).
+ */
+function createDetailBuilder(units: PvpUnitStateDto[]) {
+  const unitByIdx = new Map(units.map((u) => [u.idx, u]));
+  const nameOf = (idx: number) => {
+    const u = unitByIdx.get(idx);
+    return u ? gen(u.generalId).name : `#${idx}`;
+  };
+  const tallies = new Map<number, Tally>(units.map((u) => [u.idx, newTally()]));
+  const at = (idx: number) => tallies.get(idx)!;
+  const rows: DetailRow[] = [];
+  let actor: number | undefined;
+  let id = 0;
+  const push = (row: Omit<DetailRow, 'id'>) => {
+    const full: DetailRow = { ...row, id: ++id };
+    rows.push(full);
+    return full;
+  };
+
+  function add(ev: PvpEventDto): DetailRow | null {
+    switch (ev.t) {
+      case 'round':
+        return push({ kind: 'round', text: `Lượt ${ev.round}` });
+      case 'act': {
+        actor = ev.idx;
+        // Kỹ năng hiệu ứng nền (aura): hiện kèm LƯỢNG tăng cụ thể, ví dụ "tự hồi 25% HP tối đa".
+        const extra = auraText(unitByIdx.get(ev.idx)?.aura);
+        const sk = unitByIdx.get(ev.idx)?.skillName ?? PVP_SKILL_LABELS[ev.skill];
+        return push({ kind: 'act', actor: ev.idx, text: `${nameOf(ev.idx)} dùng ${sk}${extra ? ` (${extra})` : ''}` });
+      }
+      case 'skip':
+        actor = ev.idx;
+        return push({ kind: 'skip', actor: ev.idx, text: `${nameOf(ev.idx)} bị choáng — bỏ lượt` });
+      case 'damage': {
+        at(ev.from).dealt += ev.amount;
+        at(ev.idx).taken += ev.amount;
+        if (ev.hp === 0) at(ev.from).kills += 1;
+        return push({ kind: 'damage', actor: ev.from, target: ev.idx, amount: ev.amount, crit: ev.crit, text: `${nameOf(ev.from)} đánh ${nameOf(ev.idx)}` });
+      }
+      case 'heal': {
+        if (ev.from === ev.idx) at(ev.idx).healedSelf += ev.amount;
+        else at(ev.from).healedAllies += ev.amount;
+        return push({
+          kind: 'heal',
+          actor: ev.from,
+          target: ev.idx,
+          amount: ev.amount,
+          crit: ev.crit,
+          text: ev.from === ev.idx ? `${nameOf(ev.idx)} tự hồi máu` : `${nameOf(ev.from)} hồi máu cho ${nameOf(ev.idx)}`,
+        });
+      }
+      case 'stun':
+        if (actor !== undefined) at(actor).stuns += 1;
+        return push({ kind: 'stun', actor, target: ev.idx, text: `${actor !== undefined ? nameOf(actor) : 'Kẻ địch'} làm choáng ${nameOf(ev.idx)}` });
+      case 'cleanse':
+        if (actor !== undefined) at(actor).cleanses += 1;
+        return push({ kind: 'cleanse', actor, target: ev.idx, text: `${actor !== undefined ? nameOf(actor) : 'Đồng minh'} giải choáng cho ${nameOf(ev.idx)}` });
+      case 'buff':
+        if (actor !== undefined) at(actor).buffs += 1;
+        return push({
+          kind: 'buff',
+          actor,
+          target: ev.idx,
+          text: `${actor !== undefined ? nameOf(actor) : 'Đồng minh'} tăng sức mạnh cho ${nameOf(ev.idx)} (+${pct(ev.damageBps)} sát thương · +${ev.critPointsBps / 100} điểm chí mạng)`,
+        });
+      case 'down':
+        return push({ kind: 'down', target: ev.idx, text: `${nameOf(ev.idx)} bị hạ` });
+      case 'end':
+        return null;
+    }
+  }
+  return { rows, tallies, add };
+}
+
+/**
+ * Phân tích trọn bộ sự kiện một lần: danh sách diễn biến chi tiết + tổng hợp chỉ số từng tướng.
+ * Tất định theo dữ liệu server trả về (không phụ thuộc tốc độ phát lại).
+ */
+function analyzeBattle(units: PvpUnitStateDto[], events: PvpEventDto[]): { detail: DetailRow[]; tallies: Map<number, Tally> } {
+  const b = createDetailBuilder(units);
+  for (const ev of events) b.add(ev);
+  return { detail: b.rows, tallies: b.tallies };
+}
+
+/** Avatar nhỏ trong dòng diễn biến (viền đỏ khi là tướng địch). */
+function MiniArt(props: { unit?: PvpUnitStateDto; mine: boolean }) {
+  return (
+    <span class="rp-mini" classList={{ foe: !props.mine }}>
+      <span class="rp-mini-ini">{props.unit ? initials(gen(props.unit.generalId).name) : '?'}</span>
+      <Show when={props.unit}>
+        {(x) => (
+          <img src={portraitUrl(gen(x().generalId).artKey)} alt="" loading="lazy" decoding="async" onError={(e) => (e.currentTarget.style.display = 'none')} />
+        )}
+      </Show>
+    </span>
+  );
+}
+
+/**
+ * Danh sách diễn biến chi tiết — dùng chung cho lúc ĐANG ĐÁNH và bảng kết quả sau trận.
+ * Mỗi dòng có nhãn "Ta"/"Địch" để biết hành động của bên nào.
+ */
+function DetailList(props: { rows: DetailRow[]; units: PvpUnitStateDto[]; mySide: PvpSide; /** Tự cuộn xuống dòng mới nhất (chế độ đang đánh). */ follow?: boolean }) {
+  const byIdx = createMemo(() => new Map(props.units.map((u) => [u.idx, u])));
+  const unitOf = (idx?: number) => (idx === undefined ? undefined : byIdx().get(idx));
+  const isMine = (idx: number) => byIdx().get(idx)?.side === props.mySide;
+  let box!: HTMLDivElement;
+  createEffect(() => {
+    if (props.follow && box && props.rows.length) box.scrollTop = box.scrollHeight;
+  });
+  return (
+    <div class="rp-drows" classList={{ scroll: !!props.follow }} ref={box}>
+      <For each={props.rows}>
+        {(d) => (
+          <div class={`rp-drow ${d.kind}`}>
+            <Show
+              when={d.kind === 'round'}
+              fallback={
+                <>
+                  <Show when={d.actor !== undefined}>
+                    <MiniArt unit={unitOf(d.actor)} mine={isMine(d.actor!)} />
+                    <span class="rp-drow-side" classList={{ foe: !isMine(d.actor!) }}>
+                      {isMine(d.actor!) ? 'Ta' : 'Địch'}
+                    </span>
+                  </Show>
+                  <span class="rp-drow-text">{d.text}</span>
+                  <Show when={d.target !== undefined && d.target !== d.actor}>
+                    <span class="rp-drow-arrow">→</span>
+                    <MiniArt unit={unitOf(d.target)} mine={isMine(d.target!)} />
+                  </Show>
+                  <Show when={d.amount !== undefined}>
+                    <span class="rp-drow-amt" classList={{ heal: d.kind === 'heal', crit: d.crit }}>
+                      {d.kind === 'heal' ? `+${num(d.amount!)}` : `-${num(d.amount!)}`}
+                      <Show when={d.crit}>{' CHÍ MẠNG'}</Show>
+                    </span>
+                  </Show>
+                </>
+              }
+            >
+              <span class="rp-dround">{d.text}</span>
+            </Show>
+          </div>
+        )}
+      </For>
+    </div>
+  );
+}
+
+/** Bảng kết quả trận đấu: diễn biến chi tiết (có avatar) + tổng kết chỉ số từng tướng. */
+function BattleReport(props: { units: PvpUnitStateDto[]; mySide: PvpSide; analysis: { detail: DetailRow[]; tallies: Map<number, Tally> } }) {
+  const [tab, setTab] = createSignal<'summary' | 'detail'>('summary');
+  const unitByIdx = createMemo(() => new Map(props.units.map((u) => [u.idx, u])));
+  const ordered = createMemo(() => props.units.slice().sort((a, b) => a.idx - b.idx));
+  const nameOf = (idx: number) => {
+    const u = unitByIdx().get(idx);
+    return u ? gen(u.generalId).name : `#${idx}`;
+  };
+  const artOf = (idx: number) => {
+    const u = unitByIdx().get(idx);
+    return <MiniArt unit={u} mine={u?.side === props.mySide} />;
+  };
+  const row = (t: Tally, idx: number) => (
+    <tr>
+      <td class="rp-t-name">
+        {artOf(idx)}
+        <span>{nameOf(idx)}</span>
+      </td>
+      <td class="rp-t-num dmg">{num(t.dealt)}</td>
+      <td class="rp-t-num taken">{num(t.taken)}</td>
+      <td class="rp-t-num heal">{num(t.healedAllies + t.healedSelf)}</td>
+      <td class="rp-t-num">{t.kills || '—'}</td>
+      <td class="rp-t-num">{t.stuns || '—'}</td>
+      <td class="rp-t-num">{t.cleanses || '—'}</td>
+      <td class="rp-t-num">{t.buffs || '—'}</td>
+    </tr>
+  );
+
+  return (
+    <div class="rp-report">
+      <div class="rp-report-tabs">
+        <button class="btn ghost small" classList={{ on: tab() === 'summary' }} onClick={() => setTab('summary')}>
+          Tổng kết chỉ số
+        </button>
+        <button class="btn ghost small" classList={{ on: tab() === 'detail' }} onClick={() => setTab('detail')}>
+          Diễn biến chi tiết
+        </button>
+      </div>
+
+      <Show when={tab() === 'summary'} fallback={<div class="rp-report-body">
+        <DetailList rows={props.analysis.detail} units={props.units} mySide={props.mySide} />
+      </div>}>
+        <div class="rp-report-body">
+          <table class="rp-table">
+            <thead>
+              <tr>
+                <th>Tướng</th>
+                <th>Sát thương</th>
+                <th>Đã chịu</th>
+                <th>Hồi máu</th>
+                <th>Hạ</th>
+                <th>Choáng</th>
+                <th>Giải</th>
+                <th>Buff</th>
+              </tr>
+            </thead>
+            <tbody>
+              <For each={ordered().filter((u) => u.side === props.mySide)}>{(u) => row(props.analysis.tallies.get(u.idx)!, u.idx)}</For>
+              <tr class="rp-t-sep">
+                <td colSpan={8}>Đối thủ</td>
+              </tr>
+              <For each={ordered().filter((u) => u.side !== props.mySide)}>{(u) => row(props.analysis.tallies.get(u.idx)!, u.idx)}</For>
+            </tbody>
+          </table>
+          <p class="muted small">Hồi máu = tổng lượng máu tướng này hồi cho chính mình và đồng đội. Đã chịu = tổng sát thương tướng này nhận vào.</p>
+        </div>
+      </Show>
+    </div>
+  );
+}
+
+function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRematch?: (opponentId: number) => void }) {
   const units = props.battle.units;
   const byIdx = new Map(units.map((u) => [u.idx, u]));
   const nameOf = (idx: number) => {
     const u = byIdx.get(idx);
     return u ? gen(u.generalId).name : `#${idx}`;
   };
+  /** Tên chiêu đang thi triển của tướng ở ô idx (ưu tiên tên thật trong snapshot). */
+  const skillNameAt = (idx: number, fallback: PvpSkill) => byIdx.get(idx)?.skillName ?? PVP_SKILL_LABELS[fallback];
   const initView = () => {
     const o: Record<number, CV> = {};
-    for (const u of units) o[u.idx] = { hp: u.maxHp, maxHp: u.maxHp, alive: true, stunned: false, buffed: false };
+    for (const u of units) o[u.idx] = { hp: u.maxHp, maxHp: u.maxHp, alive: true, stunned: false, stunnedUntil: 0, buffed: false, buffs: [] };
     return o;
   };
 
@@ -210,12 +773,18 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void }) {
   const [speed, setSpeed] = createSignal(2);
   const [round, setRound] = createSignal(0);
   const [acting, setActing] = createSignal<number | null>(null);
+  const [actingSkill, setActingSkill] = createSignal<PvpSkill | null>(null);
   const [targets, setTargets] = createSignal<number[]>([]);
   const [floats, setFloats] = createSignal<{ id: number; idx: number; text: string; crit: boolean; heal: boolean }[]>([]);
-  const [log, setLog] = createSignal<{ id: number; text: string }[]>([]);
+  /** Diễn biến chi tiết hiện dần trong lúc đang đánh (cùng nội dung với bảng kết quả). */
+  const [detail, setDetail] = createSignal<DetailRow[]>([]);
   const [done, setDone] = createSignal(false);
+  /** Đang xem bảng kết quả trận (bấm "Kết quả" hoặc trận kết thúc tự động). */
+  const [report, setReport] = createSignal(false);
+  /** Phân tích trọn trận (diễn biến chi tiết + tổng kết chỉ số) — chỉ hiện ở mục kết quả. */
+  const analysis = createMemo(() => analyzeBattle(units, props.battle.events));
+  let builder = createDetailBuilder(units);
   let floatId = 0;
-  let logId = 0;
   let timer: number | undefined;
 
   const upd = (idx: number, fn: (s: CV) => CV) =>
@@ -230,56 +799,66 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void }) {
     setFloats((f) => [...f, { id, idx, text, crit, heal }]);
     setTimeout(() => setFloats((f) => f.filter((x) => x.id !== id)), 900);
   }
-  function pushLog(text: string) {
-    const id = ++logId;
-    setLog((l) => [...l, { id, text }].slice(-40));
-  }
 
   function apply(ev: PvpEventDto) {
+    builder.add(ev);
+    setDetail(builder.rows.slice());
     switch (ev.t) {
       case 'round':
         setRound(ev.round);
+        setActing(null);
+        setActingSkill(null);
         setTargets([]);
-        pushLog(`— Lượt ${ev.round} —`);
+        // Bỏ các lớp buff đã hết hạn đúng như engine (lớp buff sống PVP_SKILL_BUFF_ROUNDS lượt).
+        // Đồng thời gỡ choáng đã hết hạn ở ĐẦU lượt: choáng gây ở lượt r sống tới hết lượt r+1 (mục 5.3).
+        setView((v) => {
+          const next: Record<number, CV> = {};
+          for (const k in v) {
+            const s = v[k]!;
+            const buffs = s.buffs.some((b) => b.expiresRound < ev.round) ? s.buffs.filter((b) => b.expiresRound >= ev.round) : s.buffs;
+            const stunned = s.stunned && ev.round <= s.stunnedUntil;
+            next[k] = buffs === s.buffs && stunned === s.stunned ? s : { ...s, buffs, stunned };
+          }
+          return next;
+        });
         break;
       case 'act':
         setActing(ev.idx);
+        setActingSkill(ev.skill);
         setTargets(ev.targets);
-        pushLog(`${nameOf(ev.idx)} · ${PVP_SKILL_LABELS[ev.skill]}`);
         break;
       case 'skip':
         setActing(ev.idx);
-        pushLog(`${nameOf(ev.idx)} bị choáng — bỏ lượt`);
+        setActingSkill(null);
         break;
       case 'damage':
         setActing(ev.from);
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp }));
         addFloat(ev.idx, `-${num(ev.amount)}`, ev.crit);
-        if (ev.crit) pushLog(`Chí mạng vào ${nameOf(ev.idx)}: ${num(ev.amount)}`);
         break;
       case 'heal':
         setActing(ev.from);
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp }));
-        addFloat(ev.idx, `+${num(ev.amount)}`, false, true);
+        addFloat(ev.idx, `+${num(ev.amount)}`, ev.crit, true);
         break;
       case 'stun':
-        upd(ev.idx, (s) => ({ ...s, stunned: true }));
-        pushLog(`${nameOf(ev.idx)} bị choáng!`);
+        upd(ev.idx, (s) => ({ ...s, stunned: true, stunnedUntil: ev.untilRound }));
         break;
       case 'cleanse':
-        upd(ev.idx, (s) => ({ ...s, stunned: false }));
-        pushLog(`Giải choáng cho ${nameOf(ev.idx)}`);
+        upd(ev.idx, (s) => ({ ...s, stunned: false, stunnedUntil: 0 }));
         break;
       case 'buff':
-        upd(ev.idx, (s) => ({ ...s, buffed: true }));
+        // Cộng thẳng lớp buff vào sát thương hiển thị của tướng và báo bằng số nhảy màu xanh.
+        upd(ev.idx, (s) => ({ ...s, buffed: true, buffs: [...s.buffs, { flat: ev.damageFlat, expiresRound: ev.expiresRound }] }));
+        addFloat(ev.idx, `+${num(ev.damageFlat)} ⚔`, false, true);
         break;
       case 'down':
-        upd(ev.idx, (s) => ({ ...s, alive: false, hp: 0, stunned: false }));
-        pushLog(`${nameOf(ev.idx)} bị hạ!`);
+        upd(ev.idx, (s) => ({ ...s, alive: false, hp: 0, stunned: false, stunnedUntil: 0 }));
         break;
       case 'end':
         setPlaying(false);
         setDone(true);
+        setReport(true);
         break;
     }
   }
@@ -321,14 +900,17 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void }) {
   }
   function reset() {
     clearTimeout(timer);
+    builder = createDetailBuilder(units);
     setView(initView());
     setCursor(0);
     setRound(0);
     setActing(null);
+    setActingSkill(null);
     setTargets([]);
     setFloats([]);
-    setLog([]);
+    setDetail([]);
     setDone(false);
+    setReport(false);
   }
   function toEnd() {
     pause();
@@ -336,6 +918,11 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void }) {
     for (let c = cursor(); c < evs.length; c++) apply(evs[c]!);
     setCursor(evs.length);
     setDone(true);
+  }
+  /** "Kết quả": nhảy tới cuối trận rồi mở bảng kết quả (diễn biến + tổng kết chỉ số). */
+  function showResult() {
+    toEnd();
+    setReport(true);
   }
   function stepOnce() {
     pause();
@@ -346,29 +933,30 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void }) {
   onMount(() => setTimeout(play, 300));
 
   const idxFor = (side: PvpSide, slot: number) => (side === 'a' ? slot - 1 : 6 + slot - 1);
-  const cols: { side: PvpSide; slots: number[]; title: string }[] = [
-    { side: 'a', slots: BACK, title: 'Sau' },
-    { side: 'a', slots: FRONT, title: 'Trước' },
-    { side: 'b', slots: FRONT, title: 'Trước' },
-    { side: 'b', slots: BACK, title: 'Sau' },
-  ];
+  const mineSide = () => props.battle.mySide;
+  const foeSide = (): PvpSide => (props.battle.mySide === 'a' ? 'b' : 'a');
+  // Mỗi bên 2 cột: hàng Sau | hàng Trước; hàng Trước sát vạch giữa vì là tuyến đầu giáp mặt địch.
+  const sideCols = (mine: boolean) => (mine ? [{ slots: BACK, title: 'Hàng sau' }, { slots: FRONT, title: 'Hàng trước' }] : [{ slots: FRONT, title: 'Hàng trước' }, { slots: BACK, title: 'Hàng sau' }]);
 
   function cell(idx: number) {
     const u = byIdx.get(idx);
     if (!u) return <div class="rp-cell empty" />;
-    const v = view()[idx]!;
-    const hpPct = () => Math.max(0, Math.round((v.hp / v.maxHp) * 100));
+    // Phải là accessor: đọc thẳng `view()[idx]` một lần sẽ đóng băng giá trị, thanh máu/trạng thái không cập nhật.
+    const v = () => view()[idx]!;
+    const hpPct = () => Math.max(0, Math.round((v().hp / v().maxHp) * 100));
+    /** Sát thương hiện tại = sát thương nền + các lớp buff đang hiệu lực (tự cộng khi được buff). */
+    const damageNow = () => u.damage + v().buffs.reduce((s, b) => s + b.flat, 0);
     const flock = () => floats().filter((f) => f.idx === idx);
     return (
       <div
         class="rp-cell"
         classList={{
-          dead: !v.alive,
+          dead: !v().alive,
           acting: acting() === idx,
-          stunned: v.stunned,
+          stunned: v().stunned,
           targeted: targets().includes(idx),
-          buffed: v.buffed,
-          foe: u.side === 'b',
+          buffed: v().buffed,
+          foe: u.side !== mineSide(),
         }}
       >
         <span class="rp-lv" style={{ color: levelTier(u.level).css }}>{`Lv.${u.level}`}</span>
@@ -380,19 +968,27 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void }) {
         <span class="rp-hp">
           <i style={{ width: `${hpPct()}%` }} />
         </span>
-        <Show when={v.stunned}>
+        {/* Máu hiện tại: số HP thật + % để dễ theo dõi khi đang đánh */}
+        <span class="rp-hp-num" classList={{ low: hpPct() <= 25 }}>
+          {v().alive ? `${num(v().hp)} · ${hpPct()}%` : 'Đã hạ'}
+        </span>
+        <Show when={v().stunned}>
           <span class="rp-badge stun" title="Đang bị choáng">✦</span>
         </Show>
-        <Show when={v.buffed}>
+        <Show when={v().buffed}>
           <span class="rp-badge buff" title="Đã được tăng sức mạnh">▲</span>
         </Show>
-        <Show when={v.alive}>
+        <Show when={v().alive}>
           <span
             class="rp-info"
-            title={`Phong cách: ${PVP_STYLE_LABELS[u.style]} · Nội tại: ${PVP_PASSIVE_LABELS[u.passive]} · Kỹ năng: ${PVP_SKILL_LABELS[u.skill]} · Choáng ${(u.stunBps / 100).toFixed(0)}%`}
+            classList={{ up: v().buffs.length > 0 }}
+            title={`Phong cách: ${PVP_STYLE_LABELS[u.style]} · Nội tại: ${PVP_PASSIVE_LABELS[u.passive]} · Kỹ năng: ${u.skillName} · Choáng ${(u.stunBps / 100).toFixed(0)}%${u.lifestealBps > 0 ? ` · Hút máu ${(u.lifestealBps / 100).toFixed(0)}%` : ''}`}
           >
-            {`LC ${u.lc} · CM ${(u.critBps / 100).toFixed(0)}% · ${PVP_STYLE_LABELS[u.style]}`}
+            {`⚔ ${num(damageNow())} · CM ${(u.critBps / 100).toFixed(0)}%`}
           </span>
+        </Show>
+        <Show when={acting() === idx ? actingSkill() : null}>
+          {(sk) => <span class="rp-skillname">{byIdx.get(idx)?.skillName ?? PVP_SKILL_LABELS[sk()]}</span>}
         </Show>
         <For each={flock()}>{(f) => <span class="rp-float" classList={{ crit: f.crit, heal: f.heal }}>{f.text}</span>}</For>
       </div>
@@ -401,6 +997,23 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void }) {
 
   const me = () => (props.battle.mySide === 'a' ? props.battle.attacker : props.battle.defender);
   const foe = () => (props.battle.mySide === 'a' ? props.battle.defender : props.battle.attacker);
+
+  /** Một nửa sân: tiêu đề tên đội + 2 cột tướng. */
+  const teamBlock = (side: PvpSide, mine: boolean, label: string) => (
+    <div class="rp-team" classList={{ foe: !mine }}>
+      <div class="rp-team-title">{label}</div>
+      <div class="rp-cols">
+        <For each={sideCols(mine)}>
+          {(c) => (
+            <div class="rp-col">
+              <div class="rp-col-title">{c.title}</div>
+              <For each={c.slots}>{(s) => cell(idxFor(side, s))}</For>
+            </div>
+          )}
+        </For>
+      </div>
+    </div>
+  );
 
   return (
     <div class="pvp-modal rp-modal" role="dialog" aria-modal="true">
@@ -424,47 +1037,84 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void }) {
           </div>
         </div>
 
-        <div class="rp-field">
-          <For each={cols}>
-            {(c) => (
-              <div class="rp-col">
-                <div class="rp-col-title">{c.title}</div>
-                <For each={c.slots}>{(s) => cell(idxFor(c.side, s))}</For>
-              </div>
-            )}
-          </For>
-        </div>
+        <Show
+          when={!report()}
+          fallback={
+            <div class="rp-report-wrap">
+              <BattleReport units={units} mySide={props.battle.mySide} analysis={analysis()} />
+            </div>
+          }
+        >
+          {/* Tên kỹ năng đang thi triển */}
+          <div class="rp-cast" classList={{ on: !!actingSkill() }}>
+            <Show when={actingSkill() && acting() !== null} fallback={<span class="rp-cast-hint">Diễn biến trận đấu</span>}>
+              <span class="rp-cast-who">{nameOf(acting()!)}</span>
+              <span class="rp-cast-tag">dùng</span>
+              <span class="rp-cast-skill">{skillNameAt(acting()!, actingSkill()!)}</span>
+            </Show>
+          </div>
 
-        <div class="rp-log" aria-live="polite">
-          <For each={log()}>{(l) => <div class="rp-log-line">{l.text}</div>}</For>
-        </div>
+          {/* Sân đấu: 2 đội 2 bên trái/phải, ngăn bằng dải phân cách giữa */}
+          <div class="rp-field">
+            {teamBlock(mineSide(), true, me().displayName)}
+            <div class="rp-divider" aria-hidden="true">
+              <span>VS</span>
+            </div>
+            {teamBlock(foeSide(), false, foe().displayName)}
+          </div>
 
-        <div class="rp-progress">
-          <i style={{ width: `${props.battle.events.length ? (cursor() / props.battle.events.length) * 100 : 0}%` }} />
-        </div>
+          {/* Diễn biến chi tiết hiện dần trong lúc đang đánh (giống hệt bảng kết quả sau trận) */}
+          <DetailList rows={detail()} units={units} mySide={props.battle.mySide} follow />
+
+          <div class="rp-progress">
+            <i style={{ width: `${props.battle.events.length ? (cursor() / props.battle.events.length) * 100 : 0}%` }} />
+          </div>
+        </Show>
 
         <div class="rp-controls">
-          <button class="btn primary small" onClick={() => (playing() ? pause() : play())}>
-            {playing() ? 'Tạm dừng' : 'Phát'}
-          </button>
-          <button class="btn ghost small" onClick={stepOnce}>
-            Bước
-          </button>
-          <button class="btn ghost small" onClick={reset}>
-            Chơi lại
-          </button>
-          <button class="btn ghost small" onClick={toEnd}>
-            Tua nhanh
-          </button>
-          <span class="rp-speeds">
-            <For each={[1, 2, 4]}>
-              {(s) => (
-                <button class="btn ghost small" classList={{ on: speed() === s }} onClick={() => setSpeed(s)}>
-                  {`${s}×`}
+          <Show
+            when={!report()}
+            fallback={
+              <>
+                <button class="btn ghost small" onClick={() => setReport(false)}>
+                  Xem diễn biến
                 </button>
-              )}
-            </For>
-          </span>
+                <button class="btn ghost small" onClick={reset}>
+                  Chơi lại
+                </button>
+                <Show when={props.onRematch}>
+                  <button class="btn primary small" onClick={() => props.onRematch?.(foe().id)}>
+                    Khiêu chiến lại
+                  </button>
+                </Show>
+              </>
+            }
+          >
+            <button class="btn primary small" onClick={() => (playing() ? pause() : play())}>
+              {playing() ? 'Tạm dừng' : 'Phát'}
+            </button>
+            <button class="btn ghost small" onClick={stepOnce}>
+              Bước
+            </button>
+            <button class="btn ghost small" onClick={reset}>
+              Chơi lại
+            </button>
+            <button class="btn ghost small" onClick={toEnd}>
+              Tua nhanh
+            </button>
+            <span class="rp-speeds">
+              <For each={[1, 2, 4]}>
+                {(s) => (
+                  <button class="btn ghost small" classList={{ on: speed() === s }} onClick={() => setSpeed(s)}>
+                    {`${s}×`}
+                  </button>
+                )}
+              </For>
+            </span>
+            <button class="btn primary small" onClick={showResult}>
+              Kết quả
+            </button>
+          </Show>
           <button class="btn ghost small rp-close" onClick={() => props.onClose()}>
             Đóng
           </button>
@@ -487,6 +1137,8 @@ export function PvpPage() {
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal('');
   const [pickerSlot, setPickerSlot] = createSignal<number | null>(null);
+  /** Modal chuẩn bị khiêu chiến (tự mở khi chọn đối thủ) — cho phép xem 2 đội và sửa đội ngay tại đây. */
+  const [challengeOpen, setChallengeOpen] = createSignal(false);
 
   const [cards, setCards] = createSignal<CardDto[] | null>(null);
   const [opponent, setOpponent] = createSignal<PvpOpponentDto | null>(null);
@@ -497,6 +1149,34 @@ export function PvpPage() {
 
   const powerOf = (level: number) => overview()?.powerByLevel[level] ?? 0;
   const teamPower = () => team().reduce((s, u) => s + powerOf(u.level), 0);
+
+  /**
+   * Chi tiết chiến đấu của từng tướng theo (tướng|cấp) — tải một lần, dùng chung cho cả 2 đội:
+   * dòng chỉ số dưới ô tướng lấy từ đây, và hộp chi tiết khi bấm ảnh đại diện cũng dùng luôn.
+   */
+  const [combat, setCombat] = createSignal<Record<string, PvpCombatDto>>({});
+  const pendingStats = new Set<string>();
+  async function ensureStats(units: PvpUnitDto[]) {
+    const jobs = units.filter((u) => {
+      const k = statKey(u);
+      if (untrack(combat)[k] || pendingStats.has(k)) return false;
+      pendingStats.add(k);
+      return true;
+    });
+    await Promise.all(
+      jobs.map(async (u) => {
+        try {
+          const dto = await api.generalCombat(u.generalId, u.level);
+          if (!alive) return;
+          setCombat((s) => ({ ...s, [statKey(u)]: dto }));
+        } catch {
+          /* lỗi tải chỉ số thì bỏ qua — ô tướng hiện dấu "…" */
+        } finally {
+          pendingStats.delete(statKey(u));
+        }
+      }),
+    );
+  }
 
   const options = createMemo<GenOpt[]>(() => {
     const cs = cards();
@@ -553,7 +1233,10 @@ export function PvpPage() {
     setOppError('');
     try {
       const d = await api.pvpOpponent(id);
-      if (alive) setOpponent(d);
+      if (alive) {
+        setOpponent(d);
+        setChallengeOpen(true); // tự mở modal chuẩn bị khiêu chiến khi chọn đối thủ
+      }
     } catch (e) {
       if (!alive) return;
       setOpponent(null);
@@ -566,6 +1249,14 @@ export function PvpPage() {
   onMount(() => {
     void loadOverview();
     void loadHistory();
+  });
+
+  // Nạp chỉ số cơ bản cho đội mình + đội đối thủ để hiển thị ở bước chuẩn bị khiêu chiến
+  createEffect(() => {
+    const t = team();
+    if (t.length) void ensureStats(t);
+    const o = opponent();
+    if (o) void ensureStats(o.team.units);
   });
 
   // Đối thủ chọn từ bảng xếp hạng (#pvp/<id>)
@@ -601,28 +1292,63 @@ export function PvpPage() {
     setDirty(true);
     setPickerSlot(null);
   }
-  function resetTeam() {
-    const ov = overview();
-    if (ov) setTeam(ov.team.units);
-    setDirty(false);
+  /** Kéo-thả đổi vị trí hai ô trong đội mình (mục 6.7): hoán đổi tướng giữa hai slot. */
+  function moveSlot(from: number, to: number) {
+    if (from === to) return;
+    setTeam((prev) => {
+      const a = prev.find((u) => u.slot === from);
+      const b = prev.find((u) => u.slot === to);
+      const rest = prev.filter((u) => u.slot !== from && u.slot !== to);
+      const next = [...rest];
+      if (b) next.push({ ...b, slot: from });
+      if (a) next.push({ ...a, slot: to });
+      return next.sort((x, y) => x.slot - y.slot);
+    });
+    setDirty(true);
   }
+  /** Tướng đang có trong đội: generalId → vị trí (Picker hiện "Đang ở vị trí X"). */
+  const takenSlots = createMemo<Record<string, number>>(() => Object.fromEntries(team().map((u) => [u.generalId, u.slot])));
+  /** Chi tiết chiến đấu của tướng đang sở hữu (cấp cao nhất) — Picker hiện kỹ năng chi tiết (server tính). */
+  const ownedCombat = createMemo(() => overview()?.ownedCombat ?? {});
+  /** Đối thủ đang mở trong modal chuẩn bị khiêu chiến. */
+  const challengeOpp = createMemo(() => (challengeOpen() ? opponent() : null));
+  /** Đang lưu đội hình (tự động) — chỉ để hiện trạng thái, không khoá thao tác. */
+  const [saving, setSaving] = createSignal(false);
 
-  async function saveTeam() {
-    if (busy()) return;
-    setBusy(true);
+  /**
+   * Lưu đội hình lên server. Không cần nút "Lưu": người chơi chỉnh xong là tự lưu (mục 6.7).
+   * Chỉ nhận kết quả server chuẩn hoá khi đội chưa bị sửa tiếp trong lúc đang lưu.
+   */
+  async function saveTeam(snapshot: PvpUnitDto[]) {
+    if (saving() || !alive) return;
+    setSaving(true);
     try {
-      const r = await api.pvpSaveTeam(team());
+      const r = await api.pvpSaveTeam(snapshot);
       if (!alive) return;
-      setTeam(r.units);
-      setDirty(false);
-      toast(`Đã lưu đội hình · Lực chiến ${num(r.power)}`);
-      await loadOverview();
+      batch(() => {
+        if (team() === snapshot) {
+          setTeam(r.units);
+          setDirty(false);
+        }
+      });
     } catch (e) {
       if (alive) toast((e as Error).message, 5000);
     } finally {
-      if (alive) setBusy(false);
+      if (alive) setSaving(false);
     }
   }
+
+  /** Trạng thái lưu đội hình hiển thị cho người chơi (không còn nút Lưu — tự động). */
+  const saveHint = () => (saving() || dirty() ? 'Đang tự động lưu đội hình…' : 'Đội hình được lưu tự động.');
+  let saveTimer: number | undefined;
+  onCleanup(() => clearTimeout(saveTimer));
+  // Người chơi ngừng chỉnh ~700ms thì tự lưu đội hình.
+  createEffect(() => {
+    const t = team();
+    if (!dirty() || !t.length) return;
+    clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(() => void saveTeam(t), 700);
+  });
 
   async function challenge() {
     const opp = opponent();
@@ -631,8 +1357,26 @@ export function PvpPage() {
     try {
       const b = await api.pvpChallenge(opp.opponent.id);
       if (!alive) return;
+      setChallengeOpen(false); // đóng modal chuẩn bị để xem trận đấu
       setBattle(b);
       void loadOverview(); // cập nhật thành tích Thắng/Thua/Hòa
+      void loadHistory();
+    } catch (e) {
+      if (alive) toast((e as Error).message, 5000);
+    } finally {
+      if (alive) setBusy(false);
+    }
+  }
+
+  /** Khiêu chiến lại cùng đối thủ ngay từ màn kết quả trận. */
+  async function rematch(opponentId: number) {
+    if (busy()) return;
+    setBusy(true);
+    try {
+      const b = await api.pvpChallenge(opponentId);
+      if (!alive) return;
+      setBattle(b);
+      void loadOverview();
       void loadHistory();
     } catch (e) {
       if (alive) toast((e as Error).message, 5000);
@@ -686,17 +1430,9 @@ export function PvpPage() {
                   <h3>Đội hình của bạn</h3>
                   <span class="pvp-power" title="Tổng Lực chiến của đội">{`Lực chiến ${num(teamPower())}`}</span>
                 </div>
-                <TeamBoard units={team()} onSlot={openPicker} />
+                <TeamBoard units={team()} combat={combat()} onSlot={openPicker} onMove={moveSlot} />
                 <div class="pvp-team-actions">
-                  <button class="btn primary" disabled={!dirty() || busy()} onClick={() => void saveTeam()}>
-                    {busy() ? 'Đang lưu…' : 'Lưu đội hình'}
-                  </button>
-                  <button class="btn ghost" disabled={!dirty() || busy()} onClick={resetTeam}>
-                    Hoàn tác
-                  </button>
-                  <span class="muted small">
-                    {ov().saved ? 'Đội hình đã lưu.' : 'Đang dùng đội gợi ý (mạnh nhất) — bấm Lưu để giữ lại.'}
-                  </span>
+                  <span class="muted small">{saveHint()}</span>
                 </div>
               </div>
 
@@ -715,18 +1451,15 @@ export function PvpPage() {
                 </Show>
                 <Show when={!oppBusy() && opponent()}>
                   {(o) => (
-                    <div class="pvp-opp-card">
-                      <div class="pvp-opp-info">
-                        <Avatar avatar={o().opponent.avatar} name={o().opponent.displayName} class="pvp-opp-avatar" />
-                        <div>
-                          <b>{o().opponent.displayName}</b>
-                          <div class="muted small">{`Lực chiến ${num(o().team.power)}${o().saved ? '' : ' · đội gợi ý'}`}</div>
-                        </div>
-                        <button class="btn primary" disabled={busy() || team().length === 0} onClick={() => void challenge()}>
-                          {busy() ? 'Đang giao chiến…' : 'Khiêu chiến'}
-                        </button>
+                    <div class="pvp-opp-row">
+                      <Avatar avatar={o().opponent.avatar} name={o().opponent.displayName} class="pvp-opp-avatar" />
+                      <div class="pvp-opp-row-info">
+                        <b>{o().opponent.displayName}</b>
+                        <span class="muted small">{`Lực chiến ${num(o().team.power)}${o().saved ? '' : ' · đội gợi ý'}`}</span>
                       </div>
-                      <TeamBoard units={o().team.units} foe />
+                      <button class="btn primary small" onClick={() => setChallengeOpen(true)}>
+                        Chuẩn bị khiêu chiến
+                      </button>
                     </div>
                   )}
                 </Show>
@@ -761,11 +1494,61 @@ export function PvpPage() {
         </Show>
       </section>
 
+      {/* Modal chuẩn bị khiêu chiến: xem 2 đội cạnh nhau và chỉnh đội mình ngay tại đây */}
+      <Show when={challengeOpp()}>
+        {(o) => (
+          <div class="pvp-modal" role="dialog" aria-modal="true" onClick={(e) => e.target === e.currentTarget && setChallengeOpen(false)}>
+            <div class="panel pvp-challenge">
+              <div class="pvp-picker-head">
+                <h3>{`Chuẩn bị khiêu chiến · ${o().opponent.displayName}`}</h3>
+                <button class="btn ghost small" onClick={() => setChallengeOpen(false)}>
+                  Đóng
+                </button>
+              </div>
+              <div class="pvp-duel">
+                <div class="pvp-duel-side mine">
+                  <div class="pvp-duel-head">
+                    <Avatar avatar={overview()?.me.avatar ?? null} name={overview()?.me.displayName ?? ''} class="pvp-opp-avatar" />
+                    <div>
+                      <b>{overview()?.me.displayName}</b>
+                      <div class="muted small">{`Lực chiến ${num(teamPower())}`}</div>
+                    </div>
+                  </div>
+                  <TeamBoard units={team()} combat={combat()} onSlot={openPicker} onMove={moveSlot} />
+                </div>
+                <div class="pvp-duel-vs" aria-hidden="true">
+                  VS
+                </div>
+                <div class="pvp-duel-side foe">
+                  <div class="pvp-duel-head">
+                    <Avatar avatar={o().opponent.avatar} name={o().opponent.displayName} class="pvp-opp-avatar" />
+                    <div>
+                      <b>{o().opponent.displayName}</b>
+                      <div class="muted small">{`Lực chiến ${num(o().team.power)}${o().saved ? '' : ' · đội gợi ý'}`}</div>
+                    </div>
+                  </div>
+                  <TeamBoard units={o().team.units} combat={combat()} foe />
+                </div>
+              </div>
+              <p class="muted small pvp-challenge-hint">Bấm vào ô tướng để đổi, hoặc kéo-thả để thay đổi vị trí. Hàng trước +10% HP, hàng sau +10% sát thương.</p>
+              <div class="pvp-team-actions">
+                <span class="muted small">{saveHint()}</span>
+                <button class="btn primary" disabled={busy() || team().length === 0} onClick={() => void challenge()}>
+                  {busy() ? 'Đang giao chiến…' : 'Khiêu chiến'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Show>
+
       <Show when={pickerSlot()}>
         {(slot) => (
           <Picker
             slot={slot()}
             options={options()}
+            taken={takenSlots()}
+            combat={ownedCombat()}
             onPick={(gid, lv) => assign(slot(), gid, lv)}
             onClear={() => clearSlot(slot())}
             onClose={() => setPickerSlot(null)}
@@ -773,7 +1556,7 @@ export function PvpPage() {
         )}
       </Show>
 
-      <Show when={battle()}>{(b) => <BattleReplay battle={b()} onClose={() => setBattle(null)} />}</Show>
+      <Show keyed when={battle()}>{(b) => <BattleReplay battle={b} onClose={() => setBattle(null)} onRematch={(id) => void rematch(id)} />}</Show>
     </>
   );
 }
