@@ -12,7 +12,7 @@ Xây dựng game web gacha thu thập thẻ tướng Tam Quốc. Trọng tâm:
 - Quay thẻ bằng vé miễn phí.
 - Nâng cấp thẻ bằng cách ghép 2 thẻ cùng level.
 - Quản lý bộ sưu tập.
-- Tặng thẻ cho người chơi khác (tối đa 20 thẻ mỗi lần).
+- Tặng thẻ cho người chơi khác (tối đa 20 thẻ mỗi lần) — **đang tạm tắt** (mục 5.6).
 - Trang quản trị: duyệt tài khoản đăng ký, danh sách người chơi, cộng vé, xem mọi thẻ, tạo giftcode (mục 3.8).
 - Giftcode tặng vé quay (mục 3.9).
 - Nhiệm vụ hằng ngày, thưởng reset 05:00, điểm danh theo tháng và thành tựu — chỉ thưởng vé (mục 3.10).
@@ -730,6 +730,9 @@ Trang Nâng cấp có nút **"Nâng cấp nhanh (≤ Lv.5)"** do chủ dự án 
 
 Người chơi có thể tặng thẻ cho bất kỳ người chơi nào khác, do chủ dự án yêu cầu.
 
+**Hiện đang TẠM TẮT** (chủ dự án yêu cầu): cờ server `ENABLE_GIFT` (`1`/`true`, context `features.gift`), mặc định **tắt**. Khi tắt: `POST /api/gifts` và `GET /api/users` trả 404 `FEATURE_DISABLED`; `GET /api/me` trả `features.gift = false` và Bộ sưu tập ẩn nút 🎁 Tặng thẻ. Logic tặng, dữ liệu và lịch sử tặng/nhận cũ giữ nguyên (Lịch sử vẫn hiển thị). Các quy tắc dưới đây áp dụng khi bật.
+
+
 - Người nhận xác định bằng tên đăng nhập (không phân biệt hoa thường). Không được tặng cho chính mình, không tặng cho tài khoản quản trị (`RECIPIENT_IS_ADMIN`, mục 3.8).
 - Mỗi lần tặng từ 1 đến `GIFT_MAX_CARDS` thẻ (cấu hình server, mặc định **20**).
 - Thẻ thuộc mọi level đều tặng được, kể cả Lv.10. Chỉ tặng được thẻ đang active của chính mình; thẻ đã bị ghép (tiêu thụ) không tặng được.
@@ -1113,6 +1116,7 @@ Server phải:
 
 ### 8.4b. Tặng thẻ
 
+- Tạm tắt: khi `ENABLE_GIFT` tắt (mặc định), `POST /api/gifts` và `GET /api/users` trả 404 `FEATURE_DISABLED`; `GET /api/me` có `features.gift`.
 - `POST /api/gifts`: body `{ toUsername, cardIds[], idempotencyKey }`. Server kiểm tra người nhận tồn tại và khác người gửi, số thẻ 1–20, không trùng ID, mọi thẻ thuộc người gửi và còn active, rồi đổi chủ nguyên tử. Lỗi: `RECIPIENT_NOT_FOUND`, `GIFT_TO_SELF`, `RECIPIENT_IS_ADMIN`, `GIFT_CARD_COUNT`, `DUPLICATE_CARD`, `CARD_NOT_FOUND`, `CARD_CONSUMED`. Có rate limit.
 - `GET /api/users?q=&limit=`: danh sách người nhận cho dropdown, mọi người chơi trừ chính mình và admin, sắp theo lần tặng/nhận thẻ gần nhất với mình rồi theo tên; `q` lọc theo tên không phân biệt hoa thường. Cần đăng nhập. Chỉ trả `username` và `lastGiftAt`, không lộ thông tin khác.
 - `GET /api/gacha/config` trả thêm `giftMaxCards`.
@@ -1263,6 +1267,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 
 ### 10.5b. Tặng thẻ
 
+- Tắt `ENABLE_GIFT`: `/api/gifts`, `/api/users` → 404 `FEATURE_DISABLED`, không thẻ nào bị chuyển.
 - Tặng chuyển đúng thẻ sang người nhận, giữ nguyên tướng/level; người gửi mất thẻ, người nhận dùng được thẻ để ghép.
 - Tối đa 20 thẻ; 0 hoặc 21 thẻ bị từ chối, không thẻ nào bị chuyển.
 - Từ chối tặng chính mình, người nhận không tồn tại, thẻ của người khác, thẻ đã tiêu thụ, trùng ID; mọi lỗi đều huỷ cả giao dịch.
@@ -1344,7 +1349,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 - Không có nút "+50 vé" trên UI.
 - Mọi danh sách thẻ (Bộ sưu tập, Nâng cấp, Quản trị) mặc định sắp xếp level cao nhất.
 - Nút Nâng cấp nhanh hiển thị số cặp có thể ghép, bảng tỷ lệ Lv.1–5, bước xác nhận, khóa khi đang xử lý và tổng kết sau khi xong.
-- Bộ sưu tập gom thẻ theo tướng; tặng thẻ nằm trong Bộ sưu tập với dropdown người nhận có tìm kiếm, sắp theo giao dịch gần nhất.
+- Bộ sưu tập gom thẻ theo tướng; tặng thẻ (khi bật) nằm trong Bộ sưu tập với dropdown người nhận có tìm kiếm, sắp theo giao dịch gần nhất.
 - Đăng ký hiển thị thông báo chờ duyệt; tab Quản trị chỉ hiện với admin; admin chỉ thấy tab Quản trị (không có tab game, thanh vé).
 - Có tab Giftcode; popup lần đầu đăng nhập mời nhập code gợi ý.
 - Có tab Xếp hạng: top 10 nổi bật, cuộn tới top 100, luôn hiện hạng của mình; không có admin.
@@ -1402,7 +1407,7 @@ Thứ tự ưu tiên:
 - Gacha roll level theo bảng xác suất đã định nghĩa, tối đa level 9; level 10 chỉ có qua ghép thẻ.
 - Trang Nâng cấp gom thẻ cùng tướng nằm liền nhau.
 - Nút Nâng cấp nhanh tự ghép mọi cặp thẻ ≤ Lv.5 trong một thao tác nguyên tử.
-- Tặng thẻ cho người chơi khác (chọn từ dropdown mọi người chơi, ưu tiên người giao dịch gần nhất), tối đa 20 thẻ mỗi lần, nguyên tử; nằm trong trang Bộ sưu tập.
+- Tặng thẻ (đang tạm tắt, bật bằng `ENABLE_GIFT`) cho người chơi khác (chọn từ dropdown mọi người chơi, ưu tiên người giao dịch gần nhất), tối đa 20 thẻ mỗi lần, nguyên tử; nằm trong trang Bộ sưu tập.
 - Có lựa chọn quay 1 lần hoặc ×10; nếu còn ít hơn 10 vé loại đã chọn thì quay hết số vé đó.
 - Nâng cấp cần đúng 2 thẻ cùng level và cùng tướng.
 - Không có thẻ chính, thẻ mồi hoặc bonus từ thẻ khác.

@@ -9,7 +9,7 @@ import type { GachaConfigDto, GeneralDto, TicketsDto } from '@tq/shared';
 export const state = {
   username: '',
   isAdmin: false,
-  features: { devTopup: false, devTopupAmount: 0 },
+  features: { devTopup: false, devTopupAmount: 0, gift: false },
   generals: [] as GeneralDto[],
   generalsById: new Map<string, GeneralDto>(),
   config: null as GachaConfigDto | null,

@@ -83,7 +83,7 @@ export interface MeDto {
   isAdmin: boolean;
   tickets: TicketsDto;
   /** Tính năng bật/tắt theo cấu hình server. */
-  features: { devTopup: boolean; devTopupAmount: number };
+  features: { devTopup: boolean; devTopupAmount: number; gift: boolean };
   /** Sự kiện ngày mới vừa xử lý trong request này (thưởng reset 05:00, nhiệm vụ ngày cũ tự nhận). */
   dailyEvents?: DailyEventsDto;
 }

@@ -250,9 +250,12 @@ export function CollectionPage(): JSX.Element {
           <div class="summary muted">
             <Show when={loaded()}>{`Đã sở hữu ${ownedIds().size}/${state.generals.length} tướng · ${cards().length} thẻ`}</Show>
           </div>
-          <button class={giftMode() ? 'btn ghost small' : 'btn primary small'} onClick={toggleGift}>
-            {giftMode() ? 'Đóng tặng thẻ' : '🎁 Tặng thẻ'}
-          </button>
+          {/* Tặng thẻ tạm tắt (server features.gift = false) => ẩn nút */}
+          <Show when={state.features.gift}>
+            <button class={giftMode() ? 'btn ghost small' : 'btn primary small'} onClick={toggleGift}>
+              {giftMode() ? 'Đóng tặng thẻ' : '🎁 Tặng thẻ'}
+            </button>
+          </Show>
         </div>
         <div class="gift-panel" hidden={!giftMode()}>
           <p class="muted small">

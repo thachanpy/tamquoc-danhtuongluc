@@ -11,9 +11,9 @@ const RESET = Object.values(DAILY_RESET_BONUS).reduce((s, n) => s + n, 0);
 
 /** Test HTTP thật qua Fastify inject (không mở cổng mạng). */
 /** Các test duyệt tài khoản chạy với cài đặt "Duyệt tài khoản" bật; mặc định thật của server là tắt. */
-async function setup(devTopup: boolean, requireApproval = true) {
+async function setup(devTopup: boolean, requireApproval = true, gift = true) {
   process.env.LOG_LEVEL = 'silent';
-  const ctx = createContext(openDatabase(':memory:'), { devTopup });
+  const ctx = createContext(openDatabase(':memory:'), { devTopup, gift });
   setRequireApproval(ctx, false);
   const app = await buildServer(ctx);
   // Tài khoản đầu tiên tự thành admin (chỉ quản trị, không chơi game); 'tester' là người chơi thường.
@@ -40,7 +40,7 @@ async function regApproved(app: App, adminAuth: Record<string, string>, username
 test('HTTP: dev-topup bật => +50 vé; /api/me báo tính năng bật', async () => {
   const { app, auth } = await setup(true);
   const me = (await app.inject({ method: 'GET', url: '/api/me', headers: auth })).json();
-  assert.deepEqual(me.features, { devTopup: true, devTopupAmount: 50 });
+  assert.deepEqual(me.features, { devTopup: true, devTopupAmount: 50, gift: true });
   assert.equal(me.tickets.total, 100 + RESET);
 
   const r = await app.inject({ method: 'POST', url: '/api/tickets/dev-topup', headers: auth, payload: { idempotencyKey: 'http-topup-01' } });
@@ -510,5 +510,22 @@ test('HTTP: admin không chơi game — chặn thao tác người chơi, không 
   const gift = await app.inject({ method: 'POST', url: '/api/gifts', headers: auth, payload: { toUsername: 'BOSS', cardIds: [d.results[0].card.id], idempotencyKey: 'gift-admin-01' } });
   assert.equal(gift.statusCode, 400);
   assert.equal(gift.json().error.code, 'RECIPIENT_IS_ADMIN');
+  await app.close();
+});
+
+test('HTTP: tặng thẻ tạm tắt (ENABLE_GIFT tắt) => /api/gifts và /api/users trả 404, không chuyển thẻ', async () => {
+  const { app, auth } = await setup(false, false, false);
+  const me = (await app.inject({ method: 'GET', url: '/api/me', headers: auth })).json();
+  assert.equal(me.features.gift, false);
+  const d = (await app.inject({ method: 'POST', url: '/api/gacha/draw', headers: auth, payload: { ticketType: 'normal', idempotencyKey: 'off-draw-01' } })).json();
+  const u = await app.inject({ method: 'GET', url: '/api/users', headers: auth });
+  assert.equal(u.statusCode, 404);
+  assert.equal(u.json().error.code, 'FEATURE_DISABLED');
+  await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username: 'bob_off', password: 'secret123' } });
+  const g = await app.inject({ method: 'POST', url: '/api/gifts', headers: auth, payload: { toUsername: 'bob_off', cardIds: [d.results[0].card.id], idempotencyKey: 'off-gift-01' } });
+  assert.equal(g.statusCode, 404);
+  assert.equal(g.json().error.code, 'FEATURE_DISABLED');
+  const mine = (await app.inject({ method: 'GET', url: '/api/cards?pageSize=500', headers: auth })).json();
+  assert.ok((mine.items as { id: number }[]).some((c) => c.id === d.results[0].card.id));
   await app.close();
 });

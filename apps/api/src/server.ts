@@ -129,7 +129,7 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
       username: getUsername(ctx, req.userId),
       isAdmin: isAdmin(ctx, req.userId),
       tickets: getTickets(ctx, req.userId),
-      features: { devTopup: !!ctx.features?.devTopup, devTopupAmount: DEV_TOPUP_TICKETS },
+      features: { devTopup: !!ctx.features?.devTopup, devTopupAmount: DEV_TOPUP_TICKETS, gift: !!ctx.features?.gift },
       ...(req.dailyEvents ? { dailyEvents: req.dailyEvents } : {}),
     };
   });
@@ -180,7 +180,12 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
   );
 
   // ---------- Tặng thẻ ----------
+  // Tặng thẻ đang tạm tắt (chủ dự án yêu cầu): cả 2 route trả 404 FEATURE_DISABLED khi ENABLE_GIFT tắt.
+  const requireGift = () => {
+    if (!ctx.features?.gift) throw new AppError(404, 'FEATURE_DISABLED', 'Tính năng tặng thẻ đang tạm tắt.');
+  };
   app.get('/api/users', { preHandler: playerAuth, schema: { querystring: schemas.usersQuery } }, async (req) => {
+    requireGift();
     const { q, limit } = req.query as { q?: string; limit?: number };
     return { items: listRecipients(ctx, req.userId, q ?? '', limit ?? 200) };
   });
@@ -188,6 +193,7 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
     '/api/gifts',
     { preHandler: playerAuth, schema: { body: schemas.giftBody }, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (req) => {
+      requireGift();
       const { toUsername, cardIds, idempotencyKey } = req.body as { toUsername: string; cardIds: number[]; idempotencyKey: string };
       return giftCards(ctx, req.userId, toUsername, cardIds, idempotencyKey);
     },

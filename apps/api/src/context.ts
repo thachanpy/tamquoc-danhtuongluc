@@ -12,6 +12,8 @@ export interface GameContext {
   /** Tính năng bật theo cấu hình server. Mặc định tắt. */
   features?: {
     devTopup?: boolean;
+    /** Tặng thẻ (mục 5.6) — chủ dự án yêu cầu tạm tắt; bật bằng ENABLE_GIFT. */
+    gift?: boolean;
   };
 }
 

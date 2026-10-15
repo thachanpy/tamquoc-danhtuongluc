@@ -12,7 +12,9 @@ const db = openDatabase(dbPath);
 // Nút cộng vé thử nghiệm: chỉ bật khi ENABLE_DEV_TOPUP=1 (script `pnpm dev` bật sẵn).
 const devTopup = ['1', 'true', 'yes'].includes((process.env.ENABLE_DEV_TOPUP ?? '').toLowerCase());
 // Duyệt tài khoản đăng ký: bật/tắt ở trang Quản trị (bảng app_settings), không dùng biến môi trường.
-const app = await buildServer(createContext(db, { devTopup }));
+// Tặng thẻ: tạm tắt theo yêu cầu chủ dự án; chỉ bật khi ENABLE_GIFT=1.
+const gift = ['1', 'true', 'yes'].includes((process.env.ENABLE_GIFT ?? '').toLowerCase());
+const app = await buildServer(createContext(db, { devTopup, gift }));
 if (devTopup) app.log.warn('ENABLE_DEV_TOPUP đang BẬT — người chơi có thể tự cộng vé. Tắt khi chạy thật.');
 
 const port = Number(process.env.PORT ?? 3000);

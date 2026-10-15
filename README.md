@@ -86,7 +86,7 @@ Lệnh hay dùng: `pm2 logs tamquoc-api`, `pm2 restart tamquoc-api`, `pm2 stop t
 Ghi chú:
 
 - Giữ `instances: 1` (fork mode): SQLite chỉ có một tiến trình ghi và rate limit lưu trong bộ nhớ.
-- Biến môi trường chỉnh trong `env` của `pm2.config.json`: `PORT`, `HOST`, `DB_PATH` (mặc định `data/tamquoc.db`), `LOG_LEVEL`, `TRUST_PROXY`. (Bật/tắt duyệt tài khoản nằm ở trang Quản trị, không phải biến môi trường.) **Không** đặt `ENABLE_DEV_TOPUP` khi chạy thật. Sửa xong chạy `pm2 restart pm2.config.json --update-env`.
+- Biến môi trường chỉnh trong `env` của `pm2.config.json`: `PORT`, `HOST`, `DB_PATH` (mặc định `data/tamquoc.db`), `LOG_LEVEL`, `TRUST_PROXY`, `ENABLE_GIFT` (tặng thẻ, mặc định tắt). (Bật/tắt duyệt tài khoản nằm ở trang Quản trị, không phải biến môi trường.) **Không** đặt `ENABLE_DEV_TOPUP` khi chạy thật. Sửa xong chạy `pm2 restart pm2.config.json --update-env`.
 - Migration chạy tự động khi API khởi động, không bao giờ xoá dữ liệu.
 
 ### 4. Cấu hình nginx
@@ -171,7 +171,7 @@ apps/web               Vite + PixiJS: quay thẻ, bộ sưu tập, nâng cấp, 
 - **Tỷ lệ ghép**: thành công 90% (Lv1) giảm đều 10% mỗi bậc tới 10% (Lv9); thất bại giữ nguyên 80% hoặc tụt đúng 1 bậc 20% (Lv2: 90/10, Lv1 luôn giữ).
 - **Trang Nâng cấp** gom thẻ theo tướng (bản sao cùng tướng luôn liền nhau, chia nhóm theo level, đánh dấu nhóm đủ 2 thẻ).
   Logic gom/sắp xếp ở `apps/web/src/upgrade-groups.ts`, có test.
-- **Tặng thẻ** (`GIFT_MAX_CARDS = 20`): nằm trong trang Bộ sưu tập (nút 🎁), dropdown người nhận sắp theo giao dịch gần nhất (`GET /api/users`), chuyển chủ thẻ nguyên tử, lịch sử ở cả người gửi lẫn người nhận (bảng `card_gifts`, migration v5).
+- **Tặng thẻ** — **đang tạm tắt** (chủ dự án yêu cầu): API trả 404 `FEATURE_DISABLED`, UI ẩn nút. Bật lại bằng biến môi trường `ENABLE_GIFT=1`. Khi bật (`GIFT_MAX_CARDS = 20`): nằm trong trang Bộ sưu tập (nút 🎁), dropdown người nhận sắp theo giao dịch gần nhất (`GET /api/users`), chuyển chủ thẻ nguyên tử, lịch sử ở cả người gửi lẫn người nhận (bảng `card_gifts`, migration v5).
 - **Nâng cấp nhanh** (`QUICK_UPGRADE_MAX_LEVEL = 5`): một nút ghép liên tục mọi cặp thẻ ≤ Lv.5, level thấp trước, trong 1 transaction.
 - **Quay ×10**: số lượt = min(10, số dư loại vé); tất cả lượt trong 1 transaction, mỗi lượt 1 dòng ledger + lịch sử,
   1 idempotency key cho cả thao tác. Lựa chọn số lần ở `DRAW_COUNT_OPTIONS` trong `rates.ts`.
@@ -212,8 +212,8 @@ thay ảnh thật bằng cách map `artKey` → file ảnh trong `apps/web/src/a
 | GET | `/api/gacha/config` | Loại vé, pool, tỷ lệ level |
 | POST | `/api/gacha/draw` | `{ ticketType, count?: 1 \| 10, idempotencyKey }` — quay ×10, còn ít hơn 10 vé thì quay hết |
 | POST | `/api/upgrades/preview` | `{ cardIds: [a,b,c] }` |
-| GET | `/api/users` | Danh sách người nhận (trừ mình), người giao dịch gần nhất lên đầu; `?q=` tìm theo tên |
-| POST | `/api/gifts` | `{ toUsername, cardIds[], idempotencyKey }` — tặng 1–20 thẻ cho người chơi khác |
+| GET | `/api/users` | Danh sách người nhận (trừ mình, admin), người giao dịch gần nhất lên đầu; `?q=` tìm theo tên (404 nếu `ENABLE_GIFT` tắt) |
+| POST | `/api/gifts` | `{ toUsername, cardIds[], idempotencyKey }` — tặng 1–20 thẻ cho người chơi khác (404 nếu `ENABLE_GIFT` tắt) |
 | POST | `/api/upgrades/quick` | `{ idempotencyKey }` — Nâng cấp nhanh: tự ghép dây chuyền mọi cặp thẻ ≤ Lv.5 |
 | POST | `/api/upgrades/attempt` | `{ cardIds: [a,b,c], idempotencyKey }` |
 | GET | `/api/history` | Lịch sử phân trang (`kind`, `page`, `pageSize`) |
