@@ -7,24 +7,32 @@ import { Avatar } from '../components/Avatar.tsx';
 const num = (n: number) => n.toLocaleString('vi-VN');
 const time = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
+/**
+ * Huy hiệu hạng (ảnh trống chữ do chủ dự án cung cấp, public/theme/rank/r1..r4.png):
+ * hạng 1, 2, 3 mỗi hạng một huy hiệu riêng; hạng 4 trở đi dùng chung r4. Số hạng do app ghi giữa mặt huy hiệu.
+ */
 function RankBadge(props: { rank: number | null }) {
-  const medal = () => props.rank !== null && props.rank <= 3;
-  return <span class={`lb-rank ${medal() ? `medal m${props.rank}` : ''}`}>{props.rank ?? '–'}</span>;
+  return (
+    <Show when={props.rank} fallback={<span class="lb-rank none">–</span>}>
+      {(r) => {
+        const tier = () => (r() <= 3 ? r() : 4);
+        const digits = () => String(r()).length;
+        return (
+          <span class={`lb-rank rk-${tier()}`} aria-label={`Hạng ${r()}`}>
+            <img src={`/theme/rank/r${tier()}.png`} alt="" decoding="async" />
+            <b class={`lb-rank-no ${digits() >= 4 ? 'd4' : digits() === 3 ? 'd3' : ''}`}>{r()}</b>
+          </span>
+        );
+      }}
+    </Show>
+  );
 }
 
-/** Level cao nhất (màu bậc khung) + số thẻ. */
-function Meta(props: { maxLevel: number | null; cardCount: number }) {
+/** Level cao nhất (màu bậc khung). */
+function Meta(props: { maxLevel: number | null }) {
   return (
     <span class="lb-meta">
-      <Show when={props.maxLevel}>
-        {(lv) => (
-          <>
-            <b style={{ color: levelTier(lv()).css }}>Lv.{lv()}</b>
-            {' · '}
-          </>
-        )}
-      </Show>
-      {num(props.cardCount)} thẻ
+      <Show when={props.maxLevel}>{(lv) => <b style={{ color: levelTier(lv()).css }}>Lv.{lv()}</b>}</Show>
     </span>
   );
 }
@@ -42,7 +50,7 @@ function Row(props: { e: LeaderboardEntryDto }) {
           <span class="lb-you">Bạn</span>
         </Show>
       </span>
-      <Meta maxLevel={props.e.maxLevel} cardCount={props.e.cardCount} />
+      <Meta maxLevel={props.e.maxLevel} />
       <b class="lb-power">{num(props.e.power)}</b>
     </div>
   );
@@ -50,7 +58,7 @@ function Row(props: { e: LeaderboardEntryDto }) {
 
 /**
  * Bảng xếp hạng Lực chiến (mục 6.6). Chỉ hiển thị dữ liệu server tính sẵn.
- * Khung danh sách cao vừa top 10; cuộn trong khung để xem tới top 100. Hạng của mình luôn hiện phía trên.
+ * Khung danh sách cao vừa top 10; cuộn trong khung để xem tới top 100. Hạng của mình hiện ở cuối bảng.
  */
 export function LeaderboardPage() {
   let alive = true;
@@ -103,47 +111,6 @@ export function LeaderboardPage() {
       </div>
       <p class="muted small lb-rule">{rule()}</p>
 
-      {/* Hạng của mình */}
-      <div class="lb-me" aria-live="polite">
-        <Show when={data()}>
-          {(d) => (
-            <Show when={d().me} fallback={<div class="lb-me-box muted">Tài khoản quản trị không tham gia xếp hạng.</div>}>
-              {(me) => (
-                <Show
-                  when={me().rank !== null}
-                  fallback={
-                    <div class="lb-me-box">
-                      <b>Bạn chưa có thẻ nào</b> — quay thẻ để có tên trên bảng xếp hạng.
-                    </div>
-                  }
-                >
-                  <div class="lb-me-box">
-                    <span class="muted small">Hạng của bạn</span>
-                    <div class="lb-row me">
-                      <RankBadge rank={me().rank} />
-                      <span class="lb-name">
-                        <Avatar avatar={me().avatar} name={me().displayName} class="lb-avatar" />
-                        <span class="lb-name-text">{me().displayName}</span>
-                      </span>
-                      <Meta maxLevel={me().maxLevel} cardCount={me().cardCount} />
-                      <b class="lb-power">{num(me().power)}</b>
-                    </div>
-                    <Show when={d().items.some((e) => e.isMe) && (me().rank ?? 0) > d().top}>
-                      <button class="btn ghost small" onClick={gotoMe}>
-                        Xem vị trí của tôi
-                      </button>
-                    </Show>
-                    <Show when={!d().items.some((e) => e.isMe)}>
-                      <span class="muted small">Ngoài top {d().items.length}.</span>
-                    </Show>
-                  </div>
-                </Show>
-              )}
-            </Show>
-          )}
-        </Show>
-      </div>
-
       {/* Danh sách: top 10 nổi bật, sau đó vạch chia rồi tới top 100 */}
       <div class="lb-list" ref={listEl} tabIndex={0} aria-label="Bảng xếp hạng">
         <Show
@@ -168,6 +135,47 @@ export function LeaderboardPage() {
       <div class="muted small lb-foot">
         {/* Biểu thức JSX (không phải chuỗi trả thẳng từ callback) để cập nhật khi bấm Làm mới */}
         <Show when={data()}>{(d) => <>{`${num(d().totalRanked)} người chơi được xếp hạng · cập nhật lúc ${time(d().generatedAt)}`}</>}</Show>
+      </div>
+
+      {/* Hạng của mình — đặt cuối bảng */}
+      <div class="lb-me" aria-live="polite">
+        <Show when={data()}>
+          {(d) => (
+            <Show when={d().me} fallback={<div class="lb-me-box muted">Tài khoản quản trị không tham gia xếp hạng.</div>}>
+              {(me) => (
+                <Show
+                  when={me().rank !== null}
+                  fallback={
+                    <div class="lb-me-box">
+                      <b>Bạn chưa có thẻ nào</b> — quay thẻ để có tên trên bảng xếp hạng.
+                    </div>
+                  }
+                >
+                  <div class="lb-me-box">
+                    <span class="muted small">Hạng của bạn</span>
+                    <div class="lb-row me">
+                      <RankBadge rank={me().rank} />
+                      <span class="lb-name">
+                        <Avatar avatar={me().avatar} name={me().displayName} class="lb-avatar" />
+                        <span class="lb-name-text">{me().displayName}</span>
+                      </span>
+                      <Meta maxLevel={me().maxLevel} />
+                      <b class="lb-power">{num(me().power)}</b>
+                    </div>
+                    <Show when={d().items.some((e) => e.isMe) && (me().rank ?? 0) > d().top}>
+                      <button class="btn ghost small" onClick={gotoMe}>
+                        Xem vị trí của tôi
+                      </button>
+                    </Show>
+                    <Show when={!d().items.some((e) => e.isMe)}>
+                      <span class="muted small">Ngoài top {d().items.length}.</span>
+                    </Show>
+                  </div>
+                </Show>
+              )}
+            </Show>
+          )}
+        </Show>
       </div>
     </section>
   );

@@ -47,6 +47,15 @@ export const FRAME_LAYOUT: Record<number, { left: number; top: number; width: nu
 export const frameUrl = (level: number) => `/frames/lv${Math.min(Math.max(level, 1), 10)}.png`;
 
 /**
+ * Huy hiệu hạng ở bảng xếp hạng (mục 6.6): /theme/rank/r{n}.png cho các hạng đầu.
+ * Hạng ngoài phạm vi có ảnh thì hiển thị số thường. Tăng RANK_ICON_VERSION khi thay bộ ảnh
+ * (nginx cache /theme/ 7 ngày nên đổi query để trình duyệt lấy bản mới).
+ */
+const RANK_ICON_VERSION = 1;
+export const RANK_ICON_MAX = 4;
+export const rankIconUrl = (rank: number) => `/theme/rank/r${rank}.png?v=${RANK_ICON_VERSION}`;
+
+/**
  * Chân dung tướng: /generals/{artKey}.jpg (cắt từ bộ ảnh chủ dự án cung cấp).
  * Thay artwork = thay file cùng tên. Thiếu ảnh thì thẻ tự rơi về placeholder (glyph phe + chữ viết tắt).
  */

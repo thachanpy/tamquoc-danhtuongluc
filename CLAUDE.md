@@ -847,9 +847,9 @@ Do chủ dự án yêu cầu. Tab **Xếp hạng** (`#leaderboard`, `apps/web/sr
 - Server tính trực tiếp từ `user_cards` mỗi lần gọi (không lưu bảng riêng). Thẻ đã tiêu thụ không tính; thẻ tặng đi tính cho người nhận.
 - Chỉ xếp hạng tài khoản đã duyệt, **không phải admin** (chủ dự án yêu cầu ẩn admin) và có ít nhất 1 thẻ.
 - Đồng Lực chiến → đồng hạng (`RANK`); trong cùng hạng sắp theo level cao nhất giảm dần rồi tên A→Z.
-- Trả tối đa `LEADERBOARD_SIZE` (100) người; UI làm nổi bật top `LEADERBOARD_TOP` (10, huy chương vàng/bạc/đồng cho 1–3), khung danh sách cao vừa top 10, cuộn trong khung để xem tới top 100.
-- Luôn hiện **hạng của tôi** (kể cả ngoài top 100) kèm nút "Xem vị trí của tôi" khi nằm trong danh sách nhưng ngoài top 10. Admin thấy "Tài khoản quản trị không tham gia xếp hạng"; người chưa có thẻ thấy "chưa có thẻ".
-- Mỗi dòng: hạng, ảnh đại diện + tên hiển thị (mục 3.11; mặc định là tên đăng nhập), level cao nhất (màu bậc khung), số thẻ, Lực chiến. Có nút Làm mới.
+- Trả tối đa `LEADERBOARD_SIZE` (100) người; UI làm nổi bật top `LEADERBOARD_TOP` (10), cột hạng dùng **huy hiệu trống chữ do chủ dự án cung cấp** (`apps/web/public/theme/rank/r1…r4.png`, tách nền đen thành trong suốt, 128px): hạng 1 (khiên vàng rồng), 2 (khiên bạc cánh), 3 (khiên đồng ngọc lục) mỗi hạng một huy hiệu; hạng 4 trở đi dùng chung `r4` (khiên sắt tròn); **app tự ghi số hạng** giữa mặt huy hiệu bằng CSS (`.lb-rank-no`, màu chữ theo huy hiệu, tự thu nhỏ khi 3–4 chữ số); khung danh sách cao vừa top 10, cuộn trong khung để xem tới top 100.
+- Hiện **hạng của tôi** ở **cuối bảng** (kể cả ngoài top 100) kèm nút "Xem vị trí của tôi" khi nằm trong danh sách nhưng ngoài top 10. Admin thấy "Tài khoản quản trị không tham gia xếp hạng"; người chưa có thẻ thấy "chưa có thẻ".
+- Mỗi dòng: hạng (huy hiệu), ảnh đại diện + tên hiển thị (mục 3.11; mặc định là tên đăng nhập), level cao nhất (màu bậc khung), Lực chiến. Không hiện số thẻ. Có nút Làm mới.
 
 ## 7. Database SQLite
 
