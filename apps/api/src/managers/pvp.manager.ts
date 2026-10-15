@@ -5,12 +5,10 @@ import {
   PVP_CLEANSE_BASE_BPS,
   PVP_CLEANSE_BPS_PER_LEVEL,
   PVP_CRIT_BPS_PER_LEVEL,
+  PVP_CRIT_DAMAGE_BPS,
   PVP_FRONT_HP_BPS,
   PVP_MAX_ROUNDS,
   PVP_PASSIVE_EFFECT,
-  PVP_SKILL_BUFF_MAX_LAYERS,
-  PVP_SKILL_BUFF_ROUNDS,
-  PVP_SKILL_DEF,
   PVP_TEAM_SIZE,
   pvpBaseDamage,
   pvpBaseHp,
@@ -191,12 +189,12 @@ export const rosterSkillNames = (): Record<string, string> => ROSTER_SKILL_NAMES
 export function getCombatStats(generalId: string, level: number): PvpCombatDto {
   if (!ROSTER_IDS.has(generalId)) throw new AppError(404, 'GENERAL_NOT_FOUND', 'Không tìm thấy tướng.');
   const profile = pvpProfile(generalId);
-  const def = PVP_SKILL_DEF[profile.skill];
+  const def = profile.def;
   const passive = PVP_PASSIVE_EFFECT[profile.passive];
   const baseHp = pvpBaseHp(level);
   const baseDamage = pvpBaseDamage(level);
   // Chỉ số của riêng tướng: chỉ áp nội tại (mục 10.1). Buff theo hàng và buff đồng minh phát
-  // mỗi lượt (TEAM_*/BUFF_ALLIES) KHÔNG cộng sẵn ở đây — chỉ số đó do engine áp khi vào trận.
+  // mỗi lượt KHÔNG cộng sẵn ở đây — chỉ số đó do engine áp khi vào trận.
   const hpBps = passive.stat === 'maxHp' ? passive.bps : 0;
   const damageBps = passive.stat === 'damage' ? passive.bps : 0;
   const maxHp = Math.round(baseHp * (1 + hpBps / BPS_SCALE));
@@ -204,8 +202,8 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
   const critBps = level * PVP_CRIT_BPS_PER_LEVEL + (passive.stat === 'crit' ? passive.pointsBps : 0);
   // Hồi máu mỗi lần thi triển: hồi đồng minh theo damage, tự hồi theo HP tối đa (hai loại loại trừ nhau).
   const heal =
-    (profile.healBps > 0 ? Math.round((damage * profile.healBps) / BPS_SCALE) : 0) +
-    (profile.selfHealBps > 0 ? Math.round((maxHp * profile.selfHealBps) / BPS_SCALE) : 0);
+    (def.healBps > 0 ? Math.round((damage * def.healBps) / BPS_SCALE) : 0) +
+    (def.selfHealBps > 0 ? Math.round((maxHp * def.selfHealBps) / BPS_SCALE) : 0);
   return {
     generalId,
     level,
@@ -219,7 +217,9 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
       damage,
       lc: pvpLc(profile.style, level),
       critBps,
-      stunBps: level * profile.stunPerLevelBps + (passive.stat === 'stun' ? passive.pointsBps : 0),
+      // ST chí mạng nền (150%); buff/debuff kỹ năng điều chỉnh quanh mốc này khi vào trận.
+      critDamageBps: PVP_CRIT_DAMAGE_BPS,
+      stunBps: level * def.stunPerLevelBps + (passive.stat === 'stun' ? passive.pointsBps : 0),
       // Giải choáng khớp engine: mốc nền 30% + 5%/cấp (nội tại CLEANSE_10 đã gộp vào mốc nền).
       cleanseBps: def.cleanse ? PVP_CLEANSE_BASE_BPS + (level - 1) * PVP_CLEANSE_BPS_PER_LEVEL + (passive.stat === 'cleanse' ? passive.pointsBps : 0) : 0,
       heal,
@@ -229,17 +229,27 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
     passiveEffect: { ...passive },
     // Hệ số kỹ năng ở đây là của riêng tướng (đã nhân hot) — khớp với engine khi vào trận.
     skillDef: {
+      skill: profile.skill,
       targeting: def.targeting,
-      damageBps: profile.damageBps,
-      healBps: profile.healBps,
-      selfHealBps: profile.selfHealBps,
+      damageBps: def.damageBps,
+      healBps: def.healBps,
+      selfHealBps: def.selfHealBps,
       stun: def.stun,
+      stunPerLevelBps: def.stunPerLevelBps,
       cleanse: def.cleanse,
+      purify: def.purify,
+      dispel: def.dispel,
+      dispelChanceBps: def.dispelChanceBps,
       buff: def.buff,
-      teamBuff: { ...def.teamBuff, rounds: PVP_SKILL_BUFF_ROUNDS, maxLayers: PVP_SKILL_BUFF_MAX_LAYERS },
+      buffScope: def.buffScope,
+      debuff: def.debuff,
+      counter: def.counter,
+      selfBurn: def.selfBurn,
+      selfBurnRounds: def.selfBurnRounds,
     },
-    // Buff tăng sức mạnh kỹ năng phát cho toàn đội mỗi lượt (kể cả bản thân); tất cả 0 = không buff.
-    teamBuff: { ...def.teamBuff, rounds: PVP_SKILL_BUFF_ROUNDS, maxLayers: PVP_SKILL_BUFF_MAX_LAYERS },
+    // Buff tăng sức mạnh kỹ năng phát mỗi lượt; tất cả 0 = kỹ năng không buff.
+    buff: def.buff,
+    buffScope: def.buffScope,
     rowBonus: { frontHpBps: PVP_FRONT_HP_BPS, backDamageBps: PVP_BACK_DAMAGE_BPS },
     bpsScale: BPS_SCALE,
   };

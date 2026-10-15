@@ -21,6 +21,7 @@ export function statRows(c: PvpCombatDto): { label: string; value: string; note?
     { label: 'Sát thương', value: `${c.self.damage}`, note: note(dmgPct, c.base.damage) },
     { label: 'Lực chiến (LC)', value: `${c.self.lc}` },
     { label: 'Chí mạng', value: pct(c.self.critBps) },
+    { label: 'ST chí mạng', value: pct(c.self.critDamageBps) },
   ];
   if (c.skillDef.stun !== 'none') rows.push({ label: 'Choáng', value: pct(c.self.stunBps) });
   if (c.skillDef.cleanse) rows.push({ label: 'Giải choáng', value: pct(c.self.cleanseBps) });

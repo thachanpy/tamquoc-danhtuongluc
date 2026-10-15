@@ -51,7 +51,7 @@ export const gen = (id: string): GeneralDto =>
 export const genStyle = (id: string): PvpStyle => state.generalStyles[id] ?? 'attack';
 
 /** Kỹ năng chiến đấu của tướng (mục 6.7); tướng lạ coi như đánh đơn mục tiêu. */
-export const genSkill = (id: string): PvpSkill => state.generalSkills[id] ?? 'SINGLE';
+export const genSkill = (id: string): PvpSkill => state.generalSkills[id] ?? 'ATTACK';
 
 /** Tên chiêu thật của tướng (theo SKILLS.md); thiếu dữ liệu thì trả chuỗi rỗng để UI dùng nhãn chung. */
 export const genSkillName = (id: string): string => state.generalSkillNames[id] ?? '';

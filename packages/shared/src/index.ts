@@ -774,76 +774,51 @@ export const PVP_STYLE_LABELS: Record<PvpStyle, string> = {
   support: 'Hỗ trợ',
 };
 
-/** Mã kỹ năng chiến đấu (SKILLS.md — bảng kỹ năng theo từng tướng). */
-export const PVP_SKILLS = [
-  // Sát thương thuần
-  'SINGLE',
-  'HORIZONTAL',
-  'VERTICAL',
-  'BACK_ROW',
-  'ALL_ENEMIES',
-  // Sát thương kèm choáng
-  'STUN_SINGLE',
-  'STUN_HORIZONTAL',
-  'STUN_VERTICAL',
-  'STUN_ALL',
-  // Sát thương kèm hồi máu/hiệu ứng bản thân
-  'SELF_HEAL',
-  // Hồi máu / giải choáng / buff đồng minh
-  'ALL_ALLIES_HEAL',
-  'ALLY_LOWEST_HEAL',
-  'FRONT_ROW_HEAL',
-  'BACK_ROW_HEAL',
-  'CLEANSE_ALL',
-  'CLEANSE_DAMAGE_ALL',
-  'BUFF_ALLIES',
-  // Hiệu ứng toàn đội/bản thân (khi tới lượt sẽ đánh thường 100%)
-  'SELF_HP',
-  'TEAM_DAMAGE',
-  'TEAM_HP',
-  'TEAM_DAMAGE_HP',
-  'TEAM_CRIT',
-  'TEAM_DAMAGE_HP_CRIT',
-] as const;
+/**
+ * Nhóm kỹ năng chiến đấu (SKILLS.md — mỗi tướng có một bộ hiệu ứng tường minh trong game-config).
+ * Nhóm chỉ dùng để phân loại/nhãn dự phòng trên UI; tên chiêu thật hiển thị qua `skillName`.
+ */
+export const PVP_SKILLS = ['ATTACK', 'STUN', 'BUFF', 'HEAL', 'DEBUFF', 'BURN', 'DISPEL', 'PURIFY', 'CLEANSE'] as const;
 export type PvpSkill = (typeof PVP_SKILLS)[number];
 
 export const PVP_SKILL_LABELS: Record<PvpSkill, string> = {
-  SINGLE: 'Đơn mục tiêu',
-  HORIZONTAL: 'Hàng ngang',
-  VERTICAL: 'Hàng dọc',
-  BACK_ROW: 'Đánh hàng sau',
-  ALL_ENEMIES: 'Đánh toàn bộ',
-  STUN_SINGLE: 'Đơn mục tiêu + choáng',
-  STUN_HORIZONTAL: 'Hàng ngang + choáng',
-  STUN_VERTICAL: 'Hàng dọc + choáng',
-  STUN_ALL: 'Toàn bộ địch + choáng',
-  SELF_HEAL: 'Đơn mục tiêu + tự hồi máu',
-  ALL_ALLIES_HEAL: 'Hồi máu toàn đội',
-  ALLY_LOWEST_HEAL: 'Hồi máu đồng minh thấp máu nhất',
-  FRONT_ROW_HEAL: 'Hồi máu hàng trước',
-  BACK_ROW_HEAL: 'Hồi máu hàng sau',
-  CLEANSE_ALL: 'Giải choáng',
-  CLEANSE_DAMAGE_ALL: 'Sát thương + giải choáng',
-  BUFF_ALLIES: 'Tăng damage & chí mạng',
-  SELF_HP: 'Bản thân tăng HP',
-  TEAM_DAMAGE: 'Toàn đội tăng sát thương',
-  TEAM_HP: 'Toàn đội tăng HP',
-  TEAM_DAMAGE_HP: 'Toàn đội tăng sát thương & HP',
-  TEAM_CRIT: 'Toàn đội tăng chí mạng',
-  TEAM_DAMAGE_HP_CRIT: 'Toàn đội tăng sát thương, HP & chí mạng',
+  ATTACK: 'Sát thương',
+  STUN: 'Khống chế (Choáng)',
+  BUFF: 'Tăng cường đồng đội',
+  HEAL: 'Hồi máu',
+  DEBUFF: 'Suy yếu đối thủ',
+  BURN: 'Hỏa công (Thiêu đốt)',
+  DISPEL: 'Xóa hiệu ứng có lợi',
+  PURIFY: 'Thanh tẩy hiệu ứng bất lợi',
+  CLEANSE: 'Giải choáng',
 };
 
 /** Cách chọn mục tiêu của kỹ năng (PVP.md mục 2.4). */
-export const PVP_TARGETINGS = ['single', 'lane', 'row', 'back_row', 'all_enemies', 'all_allies', 'lowest_ally', 'front_allies', 'back_allies'] as const;
+export const PVP_TARGETINGS = ['single', 'lane', 'row', 'back_row', 'back_single', 'front_enemies', 'all_enemies', 'all_allies', 'lowest_ally', 'front_allies', 'back_allies'] as const;
 export type PvpTargeting = (typeof PVP_TARGETINGS)[number];
 
 export const PVP_TARGETING_LABELS: Record<PvpTargeting, string> = {
-  single: 'một mục tiêu (ưu tiên cùng hàng dọc)',
+  single: 'một mục tiêu (ưu tiên cùng hàng ngang)',
   lane: 'toàn bộ hàng ngang',
   row: 'toàn bộ hàng dọc',
   back_row: 'các tướng ở hàng sau',
+  back_single: 'một tướng ở hàng sau',
+  front_enemies: 'các tướng hàng trước của địch',
   all_enemies: 'toàn bộ tướng địch',
   all_allies: 'toàn bộ đồng minh',
+  lowest_ally: 'đồng minh thấp máu nhất',
+  front_allies: 'các tướng hàng trước',
+  back_allies: 'các tướng hàng sau',
+};
+
+/** Phạm vi nhận hiệu ứng có lợi (buff/hồi máu) của kỹ năng. */
+export const PVP_BUFF_SCOPES = ['none', 'self', 'all_allies', 'lowest_ally', 'front_allies', 'back_allies'] as const;
+export type PvpBuffScope = (typeof PVP_BUFF_SCOPES)[number];
+
+export const PVP_BUFF_SCOPE_LABELS: Record<PvpBuffScope, string> = {
+  none: 'không nhắm ai',
+  self: 'bản thân',
+  all_allies: 'toàn bộ đồng minh (kể cả bản thân)',
   lowest_ally: 'đồng minh thấp máu nhất',
   front_allies: 'các tướng hàng trước',
   back_allies: 'các tướng hàng sau',
@@ -907,10 +882,18 @@ export interface PvpUnitStateDto {
   critBps: number;
   /** Tỉ lệ choáng cuối cùng của kỹ năng (bps). */
   stunBps: number;
-  /** Hút máu: hồi bản thân theo % sát thương gây ra ở cấp hiện tại (bps). 0 = không hút máu. */
+  /** Hút máu ở cấp hiện tại: hồi bản thân theo % sát thương thực tế gây ra (bps; 0 = không hút máu). */
   lifestealBps: number;
-  /** Hiệu ứng tăng sức mạnh theo kỹ năng của tướng (client mô tả lượng tăng khi thi triển). */
-  teamBuff?: PvpTeamBuffDto;
+  /** Hiệu ứng có lợi mà kỹ năng của tướng phát (client mô tả khi thi triển). Rỗng = không buff. */
+  buff?: PvpBuffDto;
+  /** Phạm vi nhận buff của kỹ năng. */
+  buffScope?: PvpBuffScope;
+  /** Hiệu ứng bất lợi mà kỹ năng của tướng áp lên địch (client mô tả khi thi triển). */
+  debuff?: PvpDebuffDto;
+  /** Phản kích của tướng khi gánh sát thương chủ động (rỗng = không phản kích). */
+  counter?: PvpCounterDto;
+  /** Kỹ năng tự gây thiêu đốt lên bản thân (Khổ nhục kế — Hoàng Cái). */
+  selfBurn?: boolean;
 }
 
 /** Sự kiện trong trận, theo thứ tự phát lại. */
@@ -920,17 +903,33 @@ export type PvpEventDto =
   | { t: 'skip'; idx: number }
   | { t: 'damage'; from: number; idx: number; amount: number; crit: boolean; hp: number }
   | { t: 'heal'; from: number; idx: number; amount: number; crit: boolean; hp: number }
-  /** Choáng tối đa 2 lượt: mục tiêu bỏ lượt tới hết lượt `untilRound`, sang lượt kế tiếp thì hết. */
-  | { t: 'stun'; idx: number; untilRound: number }
+  /** Phản kích: `from` đánh trả `idx` (kẻ vừa gây sát thương cho `from`). Có thể Chí mạng. */
+  | { t: 'counter'; from: number; idx: number; amount: number; crit: boolean; hp: number }
+  /**
+   * Choáng: mục tiêu bỏ lượt cho tới khi TƯỚNG GÂY CHOÁNG ra skill ở lượt kế tiếp (`byIdx` = idx
+   * của tướng đó). Choáng đè/nối tiếp được: nguồn mới nhất ghi vào `byIdx`.
+   */
+  | { t: 'stun'; idx: number; byIdx: number }
   | { t: 'cleanse'; idx: number }
   /**
-   * Buff tăng sức mạnh mỗi lần tướng tới lượt: đồng minh nhận thêm một lớp +% HP tối đa, +% sát thương
-   * và điểm chí mạng. `damageFlat`/`hpFlat` = lượng cộng thẳng của lớp này (client tự cộng vào chỉ số
-   * hiển thị và hồi máu); `hpFlat` = lượng trần HP tăng ⇒ cũng là lượng máu hồi ngay. `crit` = lớp này
-   * ăn chí mạng (×1.5 cho % HP và % sát thương). `expiresRound` = lượt cuối còn hiệu lực;
+   * Buff có lợi phát cho đồng minh: mỗi lần tướng tới lượt cộng MỘT lớp. Các giá trị `*Flat` là lượng
+   * cộng thẳng của lớp này theo chỉ số nền của CHÍNH tướng nhận (client tự cộng vào chỉ số hiển thị).
+   * `crit` = lớp này ăn chí mạng (×ST chí mạng cho % sát thương/HP). `expiresRound` = lượt cuối hiệu lực;
    * `maxLayers` = số lớp cộng dồn tối đa (client tự bỏ lớp cũ nhất khi vượt trần).
    */
-  | { t: 'buff'; idx: number; damageBps: number; hpBps: number; critPointsBps: number; damageFlat: number; hpFlat: number; crit: boolean; expiresRound: number; maxLayers: number }
+  | { t: 'buff'; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; crit: boolean; expiresRound: number; maxLayers: number }
+  /**
+   * Áp một lớp hiệu ứng bất lợi lên mục tiêu địch: giảm sát thương gây ra (`damageFlat`),
+   * giảm trần HP (`hpFlat`), giảm chí mạng (`critBps`), giảm ST chí mạng (`critDamageBps`)
+   * và/hoặc thiêu đốt mỗi lượt (`burnFlat`). `maxLayers` = số lớp cộng dồn tối đa.
+   */
+  | { t: 'debuff'; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; burnFlat: number; expiresRound: number; maxLayers: number }
+  /** Thiêu đốt: gây sát thương vào đầu mỗi lượt cho tướng đang bị thiêu đốt. */
+  | { t: 'burn'; idx: number; amount: number; hp: number }
+  /** Xóa toàn bộ hiệu ứng có lợi (lớp buff) của mục tiêu. */
+  | { t: 'dispel'; idx: number }
+  /** Thanh tẩy hiệu ứng bất lợi của đồng minh (trừ choáng và thiêu đốt). */
+  | { t: 'purify'; idx: number }
   | { t: 'down'; idx: number }
   | { t: 'end'; winner: PvpWinner; rounds: number; reason: 'wipe' | 'timeout' };
 
@@ -990,20 +989,59 @@ export interface PvpOpponentDto {
 }
 
 /**
- * Buff tăng sức mạnh mà một kỹ năng phát cho toàn đội mỗi lần tướng tới lượt (SKILLS.md).
- * Đơn vị bps: 10000 = 100%. Tất cả bằng 0 = kỹ năng không buff.
+ * Buff có lợi mà một kỹ năng phát cho bản thân/đồng minh (SKILLS.md). Đơn vị bps: 10000 = 100%.
+ * Tất cả bằng 0 = kỹ năng không buff.
  */
-export interface PvpTeamBuffDto {
-  /** % sát thương cộng mỗi lớp (theo sát thương nền của chính đồng minh nhận). */
+export interface PvpBuffDto {
+  /** % sát thương cộng mỗi lớp (theo sát thương nền của chính tướng nhận). */
   damageBps: number;
   /** % HP tối đa cộng mỗi lớp (tăng trần HP và hồi đúng lượng tăng). */
   hpBps: number;
   /** Điểm chí mạng cộng mỗi lớp (bps: 500 = +5 điểm phần trăm). */
-  critPointsBps: number;
+  critBps: number;
+  /** % sát thương chí mạng cộng mỗi lớp (mặc định ST chí mạng là 150%). */
+  critDamageBps: number;
+  /** % sát thương gánh chịu được giảm mỗi lớp. */
+  takenDownBps: number;
   /** Số lượt mỗi lớp còn hiệu lực. */
   rounds: number;
   /** Số lớp cộng dồn tối đa. */
   maxLayers: number;
+}
+
+/**
+ * Hiệu ứng bất lợi mà một kỹ năng áp lên mục tiêu địch (SKILLS.md). Giá trị là MỨC GIẢM (dương).
+ * Tất cả bằng 0 = kỹ năng không gây hiệu ứng bất lợi.
+ */
+export interface PvpDebuffDto {
+  /** Giảm sát thương mục tiêu gây ra (bps theo sát thương nền của mục tiêu). */
+  damageDownBps: number;
+  /** Giảm HP tối đa của mục tiêu (bps theo HP nền). */
+  hpDownBps: number;
+  /** Giảm điểm chí mạng của mục tiêu (bps: 500 = −5 điểm phần trăm). */
+  critDownBps: number;
+  /** Giảm % sát thương chí mạng của mục tiêu. */
+  critDamageDownBps: number;
+  /** Thiêu đốt: mỗi lượt gây thêm % sát thương cơ bản của người thi triển (bps). */
+  burnBps: number;
+  /** Số lượt thiêu đốt còn hiệu lực. */
+  burnRounds: number;
+  /** Số lượt mỗi lớp còn hiệu lực. */
+  rounds: number;
+  /** Số lớp cộng dồn tối đa. */
+  maxLayers: number;
+}
+
+/** Phản kích (SKILLS.md #12). Tất cả bằng 0 = kỹ năng không phản kích. */
+export interface PvpCounterDto {
+  /** Tỉ lệ phản kích mỗi cấp (bps). */
+  perLevelBps: number;
+  /** % sát thương cơ bản đánh trả (bps: 5000 = 50%). */
+  damageBps: number;
+  /** Số lượt hiệu lực. */
+  rounds: number;
+  /** 'single' = đánh trả kẻ vừa gây sát thương; 'all' = đánh trả toàn bộ địch. */
+  scope: 'single' | 'all';
 }
 
 /** Hiệu ứng nội tại tướng (SKILLS.md). */
@@ -1015,8 +1053,10 @@ export interface PvpPassiveEffectDto {
   pointsBps: number;
 }
 
-/** Định nghĩa kỹ năng chiến đấu (SKILLS.md). */
+/** Định nghĩa kỹ năng chiến đấu đầy đủ của một tướng (SKILLS.md). */
 export interface PvpSkillDefDto {
+  /** Nhóm kỹ năng — chỉ dùng phân loại/nhãn dự phòng trên UI. */
+  skill: PvpSkill;
   targeting: PvpTargeting;
   /** Hệ số sát thương theo damage cơ bản (bps). 0 = không gây sát thương. */
   damageBps: number;
@@ -1025,10 +1065,28 @@ export interface PvpSkillDefDto {
   /** Hồi máu cho bản thân theo HP tối đa (bps). 0 = không tự hồi. */
   selfHealBps: number;
   stun: 'none' | 'single' | 'row';
+  /** Tỉ lệ choáng mỗi cấp (bps; 0 = kỹ năng không choáng). Trần = perLevel × MAX_LEVEL. */
+  stunPerLevelBps: number;
+  /** Kỹ năng có kiểm tra giải choáng cho đồng minh. */
   cleanse: boolean;
-  buff: boolean;
-  /** Buff tăng sức mạnh phát cho toàn đội mỗi lần tướng tới lượt (rỗng = không buff). */
-  teamBuff: PvpTeamBuffDto;
+  /** Kỹ năng thanh tẩy hiệu ứng bất lợi cho đồng minh (trừ choáng và thiêu đốt). */
+  purify: boolean;
+  /** Xóa hiệu ứng có lợi (lớp buff) của đối thủ. */
+  dispel: boolean;
+  /** Xác suất xóa hiệu ứng có lợi thành công (bps; 10000 = chắc chắn). */
+  dispelChanceBps: number;
+  /** Buff tăng sức mạnh phát cho `buffScope` mỗi lần tướng tới lượt (rỗng = không buff). */
+  buff: PvpBuffDto;
+  /** Phạm vi nhận buff của kỹ năng. */
+  buffScope: PvpBuffScope;
+  /** Hiệu ứng bất lợi áp lên địch (rỗng = không có). */
+  debuff: PvpDebuffDto;
+  /** Phản kích của bản thân khi gánh chịu sát thương (rỗng = không phản kích). */
+  counter: PvpCounterDto;
+  /** Kỹ năng tự gây thiêu đốt lên bản thân (Khổ nhục kế — Hoàng Cái). */
+  selfBurn: boolean;
+  /** Số lượt tự thiêu đốt. */
+  selfBurnRounds: number;
 }
 
 /**
@@ -1047,11 +1105,13 @@ export interface PvpCombatDto {
   /** Chỉ số nền theo cấp — chưa tính hiệu ứng kỹ năng, nội tại, vị trí. */
   base: { maxHp: number; damage: number };
   /** Chỉ số của riêng tướng sau khi áp nội tại. */
-  self: { maxHp: number; damage: number; lc: number; critBps: number; stunBps: number; cleanseBps: number; heal: number; lifestealBps: number };
+  self: { maxHp: number; damage: number; lc: number; critBps: number; critDamageBps: number; stunBps: number; cleanseBps: number; heal: number; lifestealBps: number };
   passiveEffect: PvpPassiveEffectDto;
   skillDef: PvpSkillDefDto;
-  /** Buff tăng sức mạnh kỹ năng phát cho toàn đội mỗi lượt; tất cả 0 = kỹ năng không buff. */
-  teamBuff: PvpTeamBuffDto;
+  /** Buff tăng sức mạnh kỹ năng phát mỗi lượt; tất cả 0 = kỹ năng không buff. */
+  buff: PvpBuffDto;
+  /** Phạm vi nhận buff của kỹ năng. */
+  buffScope: PvpBuffScope;
   /** Buff theo vị trí khi vào trận. */
   rowBonus: { frontHpBps: number; backDamageBps: number };
   bpsScale: number;

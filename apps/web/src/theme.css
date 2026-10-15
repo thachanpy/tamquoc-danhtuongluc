@@ -815,6 +815,10 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-drow.stun { background: rgba(255, 215, 94, .07); }
 .rp-drow.cleanse { background: rgba(90, 162, 255, .07); }
 .rp-drow.buff { background: rgba(63, 191, 127, .05); }
+.rp-drow.debuff { background: rgba(150, 90, 200, .08); }
+.rp-drow.burn { background: rgba(255, 138, 58, .09); }
+.rp-drow.dispel { background: rgba(90, 162, 255, .06); }
+.rp-drow.purify { background: rgba(63, 191, 200, .08); }
 .rp-drow.down { background: rgba(217, 83, 79, .14); font-weight: 700; }
 .rp-drow-text { flex: 1 1 auto; min-width: 0; }
 .rp-drow-arrow { flex: 0 0 auto; color: var(--muted); }
