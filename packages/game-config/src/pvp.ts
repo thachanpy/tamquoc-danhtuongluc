@@ -22,10 +22,14 @@ export { PVP_TEAM_SIZE };
 export const PVP_MAX_ROUNDS = 50;
 
 // ===== Chỉ số nền theo cấp (cùng cấp => chỉ số nền tương đương) =====
+// Chỉ số tăng theo CẤP SỐ NHÂN để khoảng cách cấp là quyết định: cấp 6 chỉ bằng ~51% cấp 9,
+// nên nâng cấp thẻ có ý nghĩa rõ rệt (trước đây tăng tuyến tính nên cấp 6 vẫn thắng được cấp 9).
 
-/** Damage cơ bản nền theo cấp: 200 ở cấp 1, +50 mỗi cấp. */
-export const pvpBaseDamage = (level: number) => 200 + 50 * (level - 1);
-/** HP tối đa nền theo cấp: luôn gấp 10 lần sát thương nền (2000 ở cấp 1, +500 mỗi cấp). */
+/** Hệ số nhân chỉ số nền mỗi cấp: cấp sau mạnh hơn 25% cấp trước. */
+export const PVP_LEVEL_GROWTH = 1.25;
+/** Damage cơ bản nền theo cấp: 200 ở cấp 1, ×1.25 mỗi cấp (cấp 10 = 1.490 — gấp ~7,5 lần cấp 1). */
+export const pvpBaseDamage = (level: number) => Math.round(200 * PVP_LEVEL_GROWTH ** (level - 1));
+/** HP tối đa nền theo cấp: luôn gấp 10 lần sát thương nền (2.000 ở cấp 1, 14.900 ở cấp 10). */
 export const pvpBaseHp = (level: number) => 10 * pvpBaseDamage(level);
 
 /**
