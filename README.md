@@ -1,4 +1,4 @@
-# Tam Quốc: Danh Tướng Lục — bản demo MVP
+# Tam Quốc: Vô Song — bản demo MVP
 
 Game web sưu tầm thẻ tướng Tam Quốc, triển khai theo `CLAUDE.md`.
 

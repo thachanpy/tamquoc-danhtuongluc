@@ -183,7 +183,7 @@ function Login(props: { message?: string; info?: JSX.Element; onLogin: () => Pro
     <div class="login">
       <img class="logo big" src="/icons/icon-192.png" alt="" aria-hidden="true" />
       <h1>Tam Quốc: </h1>
-      <h1>Danh Tướng Lục</h1>
+      <h1>Vô Song</h1>
       <form class="panel" ref={form}>
         <label>
           Tên đăng nhập <input name="username" autocomplete="username" required minLength={3} maxLength={32} pattern="[A-Za-z0-9_]+" />
@@ -273,7 +273,7 @@ function Shell(props: { onLogout: () => void }) {
         <header class="top">
           <div class="brand">
             <img class="logo" src="/icons/icon-192.png" alt="" aria-hidden="true" />
-            Tam Quốc<i class="brand-sep">:</i> <span>Danh Tướng Lục</span>
+            Tam Quốc<i class="brand-sep">:</i> <span>Vô Song</span>
           </div>
           <Show when={!state.isAdmin}>
             <TicketsBar />

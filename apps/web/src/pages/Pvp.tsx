@@ -902,6 +902,10 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         buffed: s.buffed,
         // Sát thương hiện tại = sát thương nền + lớp buff đang hiệu lực − lớp debuff giảm sát thương
         damage: Math.max(0, u.damage + s.buffs.reduce((acc, b) => acc + b.flat, 0) - s.debuffs.reduce((acc, d) => acc + d.damageFlat, 0)),
+        // Số lớp hiệu ứng đang có để vẽ chip trên ô tướng (buff ▲ / suy yếu ▼ / thiêu đốt 🔥)
+        buffLayers: s.buffs.length,
+        debuffLayers: s.debuffs.filter((d) => d.damageFlat > 0 || d.hpFlat > 0 || d.critBps > 0).length,
+        burnLayers: s.debuffs.filter((d) => d.burnFlat > 0).length,
       };
     }
     const a = acting();
@@ -1126,6 +1130,8 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
       artKey: g.artKey,
       critBps: u.critBps,
       damage: u.damage,
+      // Tướng có nội tại Phản kích: luôn hiện chip "PK" trên ô để biết nó đánh trả khi bị đánh
+      counter: u.counter !== undefined,
       // Chú thích đầy đủ khi rê chuột lên ô tướng (giống dòng chỉ số cũ)
       info:
         `Phong cách: ${PVP_STYLE_LABELS[u.style]} · Nội tại: ${PVP_PASSIVE_LABELS[u.passive]} · Kỹ năng: ${u.skillName} · Choáng ${(u.stunBps / 100).toFixed(0)}%` +

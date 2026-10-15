@@ -58,6 +58,8 @@ const C = {
   heal: 0x6ef0a6,
   crit: 0xffd75e,
   stun: 0xffd75e,
+  debuff: 0xc08bff,
+  burn: 0xff9a4d,
 };
 
 const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -75,6 +77,8 @@ export interface ArenaUnit {
   critBps: number;
   /** Sát thương hiện tại = sát thương nền + các lớp buff đang hiệu lực. */
   damage: number;
+  /** Tướng có nội tại Phản kích (luôn hiện chip "PK" trên ô). */
+  counter: boolean;
   /** Chú thích đầy đủ khi rê chuột lên ô (phong cách · nội tại · kỹ năng · choáng% · hút máu%). */
   info?: string;
 }
@@ -87,6 +91,12 @@ export interface ArenaView {
   stunned: boolean;
   buffed: boolean;
   damage: number;
+  /** Số lớp buff tăng sức mạnh đang hiệu lực. */
+  buffLayers: number;
+  /** Số lớp hiệu ứng bất lợi đang chịu (giảm ST/HP/chí mạng). */
+  debuffLayers: number;
+  /** Số lớp Thiêu đốt đang chịu. */
+  burnLayers: number;
 }
 
 export interface ArenaSnapshot {
@@ -185,7 +195,9 @@ class Tile {
   private readonly infoT: Text;
   private readonly skillT: Text;
   private readonly buffFx: Graphics;
-  private readonly badge: Text;
+  /** Hàng chip hiệu ứng trạng thái ở góc trên phải ô: ▲ buff, ▼ suy yếu, 🔥 thiêu đốt, PK phản kích. */
+  private readonly fxC = new Container();
+  private readonly chips: { c: Container; bg: Graphics; t: Text; w: number }[] = [];
   private readonly stunFx = new Container();
   private readonly stunRing = new Graphics();
   private readonly stars: Text[] = [];
@@ -265,12 +277,9 @@ class Tile {
     this.skillT.position.set(COL_W / 2, -18);
     this.skillT.visible = false;
 
-    this.badge = new Text({ text: '▲', style: { fontFamily: UI_FONT, fontSize: 13, fill: C.ok } });
-    this.badge.anchor.set(0.5, 0);
-    this.badge.position.set(COL_W - 12, 4);
-    this.badge.visible = false;
+    // Hàng chip hiệu ứng trạng thái ở góc trên phải ô (chip tạo lười khi cần).
+    this.fxC.position.set(0, 5);
 
-    // Vòng choáng: vòng nét đứt quay tròn + 3 ngôi sao bay quanh chân dung
     this.stunRing.clear();
     const seg = 14;
     const r = ART_R + 8;
@@ -313,7 +322,7 @@ class Tile {
       this.hpT,
       this.infoT,
       this.stunFx,
-      this.badge,
+      this.fxC,
       this.turnC,
       this.skillT,
     );
@@ -356,7 +365,13 @@ class Tile {
     this.infoT.visible = v.alive;
 
     this.buffFx.visible = v.buffed;
-    this.badge.visible = v.buffed;
+    // Chip hiệu ứng: nhìn vào ô là biết tướng đang có buff / suy yếu / thiêu đốt / nội tại phản kích.
+    const chips: { text: string; color: number }[] = [];
+    if (v.buffLayers > 0) chips.push({ text: `▲${v.buffLayers}`, color: C.ok });
+    if (v.debuffLayers > 0) chips.push({ text: `▼${v.debuffLayers}`, color: C.debuff });
+    if (v.burnLayers > 0) chips.push({ text: `🔥${v.burnLayers}`, color: C.burn });
+    if (this.u.counter) chips.push({ text: 'PK', color: C.gold2 });
+    this.setChips(v.alive ? chips : []);
     this.stunFx.visible = v.stunned;
     this.tgtFx.visible = targeted;
     this.actFx.visible = acting;
@@ -377,6 +392,47 @@ class Tile {
       }
       this.skillT.visible = true;
     }
+  }
+
+  /** Cập nhật hàng chip hiệu ứng (tạo lười, canh phải ở góc trên ô). */
+  private setChips(items: { text: string; color: number }[]): void {
+    while (this.chips.length < items.length) {
+      const bg = new Graphics();
+      const t = new Text({ text: '', style: { fontFamily: NUM_FONT, fontSize: 10.5, fontWeight: '800', fill: 0xffffff } });
+      t.anchor.set(0.5);
+      const c = new Container();
+      c.addChild(bg, t);
+      this.chips.push({ c, bg, t, w: 0 });
+      this.fxC.addChild(c);
+    }
+    const n = Math.min(items.length, this.chips.length);
+    let total = 0;
+    for (let i = 0; i < n; i++) {
+      const chip = this.chips[i]!;
+      const it = items[i]!;
+      chip.t.text = it.text;
+      chip.t.style.fill = it.color;
+      chip.w = chip.t.width + 10;
+      total += chip.w + 4;
+    }
+    if (n > 0) total -= 4;
+    let x = COL_W - 6 - total;
+    for (let i = 0; i < this.chips.length; i++) {
+      const chip = this.chips[i]!;
+      if (i >= n) {
+        chip.c.visible = false;
+        continue;
+      }
+      chip.bg
+        .clear()
+        .roundRect(-chip.w / 2, -8, chip.w, 16, 8)
+        .fill({ color: 0x0a0604, alpha: 0.9 })
+        .stroke({ width: 1, color: items[i]!.color, alpha: 0.85 });
+      chip.c.position.set(x + chip.w / 2, 0);
+      chip.c.visible = true;
+      x += chip.w + 4;
+    }
+    this.fxC.visible = n > 0;
   }
 
   update(dt: number, time: number): void {

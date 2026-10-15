@@ -445,16 +445,43 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(gy.def.buff.critBps, 3000);
   assert.equal(gy.def.buff.critDamageBps, 3000);
   assert.equal(gy.def.buffScope, 'self');
-  // Triệu Vân: hút máu 3%/cấp + tự hồi 15% HP tối đa, tự buff chí mạng.
+  // Triệu Vân: hút máu 3%/cấp + tự buff chí mạng (SKILLS.md không có tự hồi HP).
   const zy = pvpProfile('zhao-yun');
   assert.equal(zy.def.damageBps, 28000);
   assert.equal(zy.lifestealPerLevelBps, 300);
-  assert.equal(zy.def.selfHealBps, 1500);
+  assert.equal(zy.def.selfHealBps, 0);
   assert.equal(zy.def.buff.critBps, 2000);
-  // Tôn Sách: hút máu 2.5%/cấp.
+  // Tôn Sách: hút máu 2.5%/cấp, không tự hồi HP.
   const sc = pvpProfile('sun-ce');
   assert.equal(sc.def.damageBps, 28500);
   assert.equal(sc.lifestealPerLevelBps, 250);
+  assert.equal(sc.def.selfHealBps, 0);
+  // Trương Liêu: hàng ngang 225%, giảm ST địch 10%, hút máu 2%/cấp, phản kích diện rộng (không tự buff ST).
+  const zl = pvpProfile('zhang-liao');
+  assert.equal(zl.def.damageBps, 22500);
+  assert.equal(zl.def.debuff.damageDownBps, 1000);
+  assert.equal(zl.def.buffScope, 'none');
+  assert.equal(zl.def.counter.scope, 'all');
+  // Nhạc Tiến: đánh đơn 290%, xóa buff địch.
+  const yj = pvpProfile('yue-jin');
+  assert.equal(yj.def.damageBps, 29000);
+  assert.ok(yj.def.dispel);
+  // Tân Hiến Anh: AoE 55% + giải choáng.
+  const xx = pvpProfile('xin-xianying');
+  assert.equal(xx.def.damageBps, 5500);
+  assert.ok(xx.def.cleanse);
+  // Gia Cát Quả: giảm ST nhận toàn đội 10% + giải choáng (không hồi máu).
+  const zg = pvpProfile('zhuge-guo');
+  assert.equal(zg.def.healBps, 0);
+  assert.equal(zg.def.buff.takenDownBps, 1000);
+  assert.equal(zg.def.buffScope, 'all_allies');
+  assert.ok(zg.def.cleanse);
+  // Trần Cung: buff ST 5% + chí mạng 5% toàn đội + giải choáng (không xóa buff địch).
+  const cg = pvpProfile('chen-gong');
+  assert.equal(cg.def.buff.damageBps, 500);
+  assert.equal(cg.def.buff.critBps, 500);
+  assert.ok(cg.def.cleanse);
+  assert.equal(cg.def.dispel, false);
   // Điêu Thuyền: choáng 8%/cấp, kèm giảm sát thương địch.
   const dc = pvpProfile('diao-chan');
   assert.equal(dc.def.damageBps, 11000);
@@ -470,11 +497,15 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(dw.def.counter.damageBps, 5000);
   assert.equal(dw.def.counter.perLevelBps, 300);
   assert.equal(dw.def.counter.scope, 'single');
-  // Hoả công: Chu Du thiêu đốt 3 lượt, cộng dồn 3 lớp.
+  // Hoả công: Chu Du thiêu đốt 30% ST, 4 lượt, cộng dồn 3 lớp.
   const zyu = pvpProfile('zhou-yu');
-  assert.equal(zyu.def.debuff.burnBps, 2000);
-  assert.equal(zyu.def.debuff.burnRounds, 3);
+  assert.equal(zyu.def.debuff.burnBps, 3000);
+  assert.equal(zyu.def.debuff.burnRounds, 4);
   assert.equal(zyu.def.debuff.burnMaxLayers, 3);
+  // Thiêu đốt thường (Chu Hoàn): 3 lượt.
+  const zh = pvpProfile('zhu-huan');
+  assert.equal(zh.def.debuff.burnBps, 3000);
+  assert.equal(zh.def.debuff.burnRounds, 3);
 });
 
 // ===================== HTTP =====================

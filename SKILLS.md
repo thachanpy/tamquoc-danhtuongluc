@@ -28,9 +28,9 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
      - *Tướng Choáng diện rộng (Ngang/Dọc/AoE)*: Tỷ lệ choáng `cấp × 3%` (max 30%).
      - *Tướng kết hợp Choáng + Hiệu ứng khác*: Giới hạn tỷ lệ choáng **tối đa 20%** (`cấp × 2%`).
 7. **Giải choáng**: Giải hiệu ứng Choáng cho đồng minh (tỷ lệ 30% – 75%). Tướng có kỹ năng giải choáng **miễn nhiễm Choáng**. *Tác dụng tức thì*.
-8. **Thiêu đốt**: Gây thêm sát thương vào đầu mỗi lượt thi triển.
-   - *Tướng thường*: Duy trì **2 lượt**.
-   - *Chu Du, Lục Tốn, Hoàng Cái*: Duy trì **3 lượt**, có thể **cộng dồn tối đa 3 lớp từ chính tướng đó**.
+8. **Thiêu đốt**: Gây thêm sát thương vào đầu mỗi lượt thi triển (mỗi lớp gây **30% sát thương cơ bản** của người thi triển).
+   - *Tướng thường*: Duy trì **3 lượt**.
+   - *Chu Du, Lục Tốn, Hoàng Cái*: Duy trì **4 lượt**, có thể **cộng dồn tối đa 3 lớp từ chính tướng đó**.
    - **Quy tắc giới hạn toàn hệ thống**: Trên 1 mục tiêu bất kỳ, **tối đa chỉ dồn cùng lúc 5 hiệu ứng Thiêu đốt** (kể cả từ nhiều nguồn/tướng khác nhau).
 9. **Tăng tỷ lệ chí mạng**: Tăng tỷ lệ chí mạng của bản thân hoặc đồng đội (10% – 35%). **Max cộng dồn: 3 lớp**.
 10. **Giảm tỷ lệ chí mạng**: Giảm tỷ lệ chí mạng của đối thủ (15% – 20%). **Max cộng dồn: 3 lớp**.
@@ -134,10 +134,10 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 | 1 | **Tôn Kiên** | Tấn công | ⭐ | **Giang Đông mãnh hổ**: Tấn công hàng ngang 200%, Giảm sát thương địch 15% và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Giảm ST địch, Phản kích đơn |
 | 2 | **Tôn Sách** | Tấn công | ⭐ | **Tiểu Bá Vương**: Tấn công đơn 285%, Buff sát thương bản thân 20%, Hút máu theo cấp (cấp×2.5%, max 25%) và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Buff ST, Hút máu, Phản kích đơn |
 | 3 | **Tôn Quyền** | Hỗ trợ | ⭐ | **Đế nghiệp Giang Đông**: Buff sát thương toàn đội 15% và Giảm sát thương nhận vào cho toàn đội 10% (2 lượt). | Buff ST, Giảm ST nhận |
-| 4 | **Chu Du** | Hỗ trợ | ⭐ | **Hỏa thiêu Xích Bích**: Tấn công toàn bộ địch 90%, gây Thiêu đốt toàn bộ địch (duy trì **3 lượt**, cộng dồn max 3 lớp). | Thiêu đốt (3 lượt, dồn 3) |
-| 5 | **Lục Tốn** | Hỗ trợ | ⭐ | **Hỏa kế liên doanh**: Tấn công hàng ngang 180%, gây Thiêu đốt hàng ngang địch (duy trì **3 lượt**, cộng dồn max 3 lớp). | Thiêu đốt (3 lượt, dồn 3) |
+| 4 | **Chu Du** | Hỗ trợ | ⭐ | **Hỏa thiêu Xích Bích**: Tấn công toàn bộ địch 90%, gây Thiêu đốt toàn bộ địch (duy trì **4 lượt**, cộng dồn max 3 lớp). | Thiêu đốt (4 lượt, dồn 3) |
+| 5 | **Lục Tốn** | Hỗ trợ | ⭐ | **Hỏa kế liên doanh**: Tấn công hàng dọc 180%, gây Thiêu đốt hàng dọc địch (duy trì **4 lượt**, cộng dồn max 3 lớp). | Thiêu đốt (4 lượt, dồn 3) |
 | 6 | **Lữ Mông** | Tấn công | ⭐ | **Bạch y độ giang**: Tấn công đơn 290%, Xóa hiệu ứng có lợi của đối thủ. | Xóa buff địch |
-| 7 | **Hoàng Cái** | Phòng thủ | ⭐ | **Khổ nhục kế**: Tự gây Thiêu đốt bản thân (duy trì **3 lượt**, cộng dồn max 3 lớp) để Buff sát thương bản thân 30%, Hồi máu 20% HP tối đa, Hút máu theo cấp (cấp×2%, max 20%) và Phản kích toàn bộ địch (Nội tại: cấp×3%, max 30%, ST 30%). | Thiêu đốt (3 lượt, dồn 3), Buff ST, Hồi máu, Hút máu, Phản kích diện rộng |
+| 7 | **Hoàng Cái** | Phòng thủ | ⭐ | **Khổ nhục kế**: Tự gây Thiêu đốt bản thân (duy trì **4 lượt**, cộng dồn max 3 lớp) để Buff sát thương bản thân 30%, Hồi máu 20% HP tối đa, Hút máu theo cấp (cấp×2%, max 20%) và Phản kích toàn bộ địch (Nội tại: cấp×3%, max 30%, ST 30%). | Thiêu đốt (4 lượt, dồn 3), Buff ST, Hồi máu, Hút máu, Phản kích diện rộng |
 | 8 | **Trình Phổ** | Phòng thủ | | **Lão tướng trấn quân**: Giảm sát thương nhận vào 20%, Hồi máu bản thân 15% HP tối đa và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Giảm ST nhận, Hồi máu, Phản kích đơn |
 | 9 | **Hàn Đương** | Tấn công | | **Cung kỵ hợp kích**: Tấn công hàng sau 200%, Tăng tỷ lệ chí mạng 20% và Tăng 20% ST chí mạng (2 lượt). | Tăng chí mạng, Tăng ST chí mạng |
 | 10 | **Thái Sử Từ** | Tấn công | ⭐ | **Thần xạ**: Tấn công đơn hàng sau 300%, Tăng tỷ lệ chí mạng 25% cho phát bắn này. | Tăng chí mạng |
@@ -146,7 +146,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 | 13 | **Chu Thái** | Phòng thủ | | **Hộ chủ bất khuất**: Tăng máu tối đa 20%, Hồi máu 20% HP tối đa cho bản thân và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Tăng HP max, Hồi máu, Phản kích đơn |
 | 14 | **Từ Thịnh** | Phòng thủ | | **Giang phòng thiết thủ**: Giảm sát thương nhận vào 25% cho bản thân, Hồi máu 10% HP tối đa và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Giảm ST nhận, Hồi máu, Phản kích đơn |
 | 15 | **Đinh Phụng** | Tấn công | | **Tuyết trung đột kích**: Tấn công đơn 270%, gây Choáng mục tiêu (tỷ lệ cấp×4%, max 40%). | Choáng (Sát thương chính) |
-| 16 | **Chu Hoàn** | Tấn công | | **Hỏa công phá trận**: Tấn công hàng ngang 180%, gây Thiêu đốt các mục tiêu (2 lượt). | Thiêu đốt (2 lượt) |
+| 16 | **Chu Hoàn** | Tấn công | | **Hỏa công phá trận**: Tấn công hàng ngang 180%, gây Thiêu đốt các mục tiêu (3 lượt). | Thiêu đốt (3 lượt) |
 | 17 | **Trương Chiêu** | Hỗ trợ | | **Ổn định triều chính**: Giảm sát thương nhận vào cho toàn đội 15% (2 lượt) và Hồi máu toàn đội (80% ST cơ bản). | Giảm ST nhận, Hồi máu |
 | 18 | **Trương Hoành** | Hỗ trợ | | **Hoành sách**: Buff sát thương toàn đội 10% và Tăng tỷ lệ chí mạng toàn đội 10% (2 lượt). | Buff ST, Tăng chí mạng |
 | 19 | **Lỗ Túc** | Hỗ trợ | ⭐ | **Liên minh Tôn Lưu**: Buff sát thương toàn đội 15% và Tăng máu tối đa toàn đội 10% (2 lượt). | Buff ST, Tăng HP max |
@@ -171,7 +171,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 | 4 | **Viên Thiệu** | Hỗ trợ | ⭐ | **Thế gia hào tộc**: Tăng máu tối đa toàn đội 15% và Buff sát thương toàn đội 10% (2 lượt). | Tăng HP max, Buff ST |
 | 5 | **Viên Thuật** | Hỗ trợ | | **Trọng thị đế nghiệp**: Giảm máu tối đa hàng trước của đối thủ 15% (2 lượt). | Giảm HP max địch |
 | 6 | **Công Tôn Toản** | Tấn công | ⭐ | **Bạch mã nghĩa tùng**: Tấn công hàng sau 220%, Tăng tỷ lệ chí mạng 20% và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Tăng chí mạng, Phản kích đơn |
-| 7 | **Trương Giác** | Hỗ trợ | ⭐ | **Thái Bình đạo**: Tấn công toàn bộ địch 85%, gây Choáng (tỷ lệ cấp×2%, max 20%) và Thiêu đốt nhẹ (2 lượt). | Choáng, Thiêu đốt (2 lượt) |
+| 7 | **Trương Giác** | Hỗ trợ | ⭐ | **Thái Bình đạo**: Tấn công toàn bộ địch 85%, gây Choáng (tỷ lệ cấp×2%, max 20%) và Thiêu đốt nhẹ (3 lượt). | Choáng, Thiêu đốt (3 lượt) |
 | 8 | **Trương Bảo** | Hỗ trợ | | **Địa công tướng quân**: Tấn công hàng ngang 130%, Giảm tỷ lệ chí mạng địch 15% và Giảm 20% ST chí mạng địch (2 lượt). | Giảm chí mạng, Giảm ST chí mạng |
 | 9 | **Trương Lương** | Hỗ trợ | | **Nhân công tướng quân**: Tấn công hàng dọc 130%, Giảm sát thương địch 15% (2 lượt). | Giảm ST địch |
 | 10 | **Hoa Hùng** | Tấn công | ⭐ | **Uy chấn Hổ Lao**: Tấn công đơn 295%, Buff sát thương bản thân 25%, Hút máu theo cấp (cấp×2%, max 20%) và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Buff ST, Hút máu, Phản kích đơn |
@@ -187,6 +187,6 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 | 20 | **Trương Lỗ** | Hỗ trợ | | **Ngũ Đấu Mễ Đạo**: Hồi máu hàng trước (220% ST cơ bản) và Xóa hiệu ứng bất lợi của bản thân/đồng minh (trừ Choáng & Thiêu đốt). | Hồi máu, Xóa debuff đồng minh |
 | 21 | **Thái Văn Cơ** | Hỗ trợ | | **Bi ca**: Hồi máu toàn bộ đồng minh (110% ST cơ bản) và Buff sát thương cho toàn đội 10% (2 lượt). | Hồi máu toàn đội, Buff ST |
 | 22 | **Trâu Ngọc** | Hỗ trợ | | **Mị ảnh**: Tấn công đơn 120%, gây Choáng mục tiêu (tỷ lệ cấp×10%, max 100%). | Choáng (Khống chế Hỗ trợ) |
-| 23 | **Chúc Dung** | Tấn công | | **Phi đao Nam Man**: Tấn công hàng ngang 180%, gây Thiêu đốt hàng ngang địch (2 lượt). | Thiêu đốt (2 lượt) |
+| 23 | **Chúc Dung** | Tấn công | | **Phi đao Nam Man**: Tấn công hàng ngang 180%, gây Thiêu đốt hàng ngang địch (3 lượt). | Thiêu đốt (3 lượt) |
 | 24 | **Đổng Bạch** | Tấn công | | **Quý tộc tàn bạo**: Tấn công đơn 280%, Giảm máu tối đa mục tiêu 15% (2 lượt). | Giảm HP max địch |
 | 25 | **Trương Xuân Hoa** | Hỗ trợ | | **Lãnh tâm**: Tấn công đơn 140%, Giảm sát thương mục tiêu 20% và Xóa hiệu ứng có lợi của đối thủ. | Giảm ST địch, Xóa buff địch |

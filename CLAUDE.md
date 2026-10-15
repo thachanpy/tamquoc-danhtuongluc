@@ -1,6 +1,6 @@
-# CLAUDE.md — Tam Quốc: Danh Tướng Lục
+# CLAUDE.md — Tam Quốc: Vô Song
 
-Tên game hiển thị: **Tam Quốc: Danh Tướng Lục** (tiêu đề trang, thanh trên, trang đăng nhập). Tên package/thư mục kỹ thuật vẫn là `tamquoc-gacha`.
+Tên game hiển thị: **Tam Quốc: Vô Song** (tiêu đề trang, thanh trên, trang đăng nhập). Tên package/thư mục kỹ thuật vẫn là `tamquoc-gacha`.
 
 Icon game (chủ dự án cung cấp: chân dung Gia Cát Lượng trong khung vàng bo góc): `apps/web/public/favicon.ico`, `apps/web/public/icons/icon-32|192|512.png` (nền trong suốt ở góc bo), `apps/web/public/icons/apple-touch-icon.png` (180×180, full-bleed), khai báo trong `apps/web/index.html` và `apps/web/public/manifest.webmanifest`. Icon này cũng là logo cạnh tên game ở thanh trên và trang đăng nhập (thay con dấu 三國).
 
