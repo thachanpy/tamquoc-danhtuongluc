@@ -135,21 +135,41 @@ export function attemptUpgrade(ctx: GameContext, userId: number, cardIds: number
 }
 
 /**
+ * Chuẩn hoá danh sách level đầu vào cho Nâng cấp nhanh.
+ * Bỏ trống => mặc định Lv.1–QUICK_UPGRADE_MAX_LEVEL (Lv.5). Mọi level phải trong Lv.1–9 (Lv.10 không ghép tiếp).
+ */
+function normalizeQuickLevels(levels?: number[]): number[] {
+  if (levels === undefined) return Array.from({ length: QUICK_UPGRADE_MAX_LEVEL }, (_, i) => i + 1);
+  if (!Array.isArray(levels) || levels.length === 0) {
+    throw new AppError(400, 'INVALID_LEVELS', 'Cần chọn ít nhất một level để ghép nhanh.');
+  }
+  const uniq = [...new Set(levels)];
+  if (!uniq.every((lv) => Number.isInteger(lv) && lv >= MIN_LEVEL && lv <= MAX_LEVEL - 1)) {
+    throw new AppError(400, 'INVALID_LEVELS', `Level ghép nhanh phải trong khoảng Lv.${MIN_LEVEL}–${MAX_LEVEL - 1}.`);
+  }
+  return uniq.sort((a, b) => a - b);
+}
+
+/**
  * Nâng cấp nhanh (mục 5.5): tự ghép liên tục mọi nhóm UPGRADE_INPUT_COUNT thẻ cùng tướng, cùng level,
- * với level đầu vào ≤ QUICK_UPGRADE_MAX_LEVEL, cho đến khi không còn cặp nào (hoặc chạm trần QUICK_UPGRADE_MAX_MERGES).
+ * với level đầu vào NẰM TRONG danh sách `levels` người chơi chọn (mặc định Lv.1–QUICK_UPGRADE_MAX_LEVEL),
+ * cho đến khi không còn cặp nào (hoặc chạm trần QUICK_UPGRADE_MAX_MERGES).
  * - Thứ tự: level thấp trước (để thẻ mới lên level có thể ghép tiếp), rồi theo tướng, rồi thẻ cũ trước.
  * - Mỗi lần ghép dùng đúng tỷ lệ & luật của ghép thường, ghi 1 dòng upgrade_history riêng.
  * - Toàn bộ trong MỘT transaction; một idempotency key cho cả thao tác.
- * - Không đụng thẻ có level > QUICK_UPGRADE_MAX_LEVEL.
+ * - Không đụng thẻ có level NGOÀI danh sách đã chọn.
  */
-export function quickUpgrade(ctx: GameContext, userId: number, idempotencyKey: string): QuickUpgradeResultDto {
-  const requestHash = sha256(JSON.stringify({ maxLevel: QUICK_UPGRADE_MAX_LEVEL, n: UPGRADE_INPUT_COUNT }));
+export function quickUpgrade(ctx: GameContext, userId: number, idempotencyKey: string, levels?: number[]): QuickUpgradeResultDto {
+  const selected = normalizeQuickLevels(levels);
+  const levelSet = new Set(selected);
+  const maxLevel = selected[selected.length - 1]!;
+  const requestHash = sha256(JSON.stringify({ levels: selected, n: UPGRADE_INPUT_COUNT }));
   return tx(ctx.db, () => {
     const prev = findIdempotent<QuickUpgradeResultDto>(ctx.db, userId, 'upgrade_quick', idempotencyKey, requestHash);
     if (prev) return prev;
 
-    // Hàng đợi thẻ theo (tướng, level), chỉ thẻ active và level ≤ trần
-    const rows = listActiveCardsUpTo(ctx.db, userId, QUICK_UPGRADE_MAX_LEVEL);
+    // Hàng đợi thẻ theo (tướng, level), chỉ thẻ active và level nằm trong danh sách đã chọn
+    const rows = listActiveCardsUpTo(ctx.db, userId, maxLevel).filter((r) => levelSet.has(r.level));
     const buckets = new Map<string, number[]>();
     const keyOf = (g: string, lv: number) => `${lv}|${g}`;
     for (const r of rows) {
@@ -179,18 +199,18 @@ export function quickUpgrade(ctx: GameContext, userId: number, idempotencyKey: s
         resultCardId: r.resultCard.id,
         outcome: r.outcome,
       });
-      // Thẻ mới vẫn ≤ trần thì đưa lại vào hàng đợi để có thể ghép tiếp
-      if (r.resultCard.level <= QUICK_UPGRADE_MAX_LEVEL) {
+      // Thẻ mới vẫn thuộc level đã chọn thì đưa lại vào hàng đợi để có thể ghép tiếp
+      if (levelSet.has(r.resultCard.level)) {
         const nk = keyOf(r.resultCard.generalId, r.resultCard.level);
         (buckets.get(nk) ?? buckets.set(nk, []).get(nk)!).push(r.resultCard.id);
       }
     }
     if (results.length === 0) {
-      throw new AppError(409, 'NOTHING_TO_UPGRADE', `Không có cặp thẻ nào (≤ Lv.${QUICK_UPGRADE_MAX_LEVEL}) để ghép.`);
+      throw new AppError(409, 'NOTHING_TO_UPGRADE', `Không có cặp thẻ nào (Lv.${selected.join(', ')} đã chọn) để ghép.`);
     }
 
     const result: QuickUpgradeResultDto = {
-      maxLevel: QUICK_UPGRADE_MAX_LEVEL,
+      levels: selected,
       merges: results.length,
       successes: results.filter((r) => r.outcome === 'success').length,
       failures: results.filter((r) => r.outcome === 'failure').length,

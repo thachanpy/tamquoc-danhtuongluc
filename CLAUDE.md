@@ -47,7 +47,7 @@ Các nguyên tắc bắt buộc:
 Công nghệ mục tiêu:
 
 - Monorepo TypeScript.
-- Frontend: **SolidJS** (chủ dự án yêu cầu viết lại từ TypeScript thuần + innerHTML) cho toàn bộ UI DOM; PixiJS cho hiệu ứng mở thẻ và nâng cấp.
+- Frontend: **SolidJS** cho toàn bộ UI; riêng sân khấu mở thẻ/nâng cấp và sân đấu PvP dùng **PixiJS** (engine đồ hoạ ngoài) vì hiệu ứng SolidJS + CSS không đạt yêu cầu trực quan.
 - Backend: Fastify REST API.
 - Database: SQLite.
 - Shared package: types, schema validation, DTO và enum dùng chung.
@@ -56,7 +56,7 @@ Công nghệ mục tiêu:
 
 Cấu trúc gợi ý:
 
-- `apps/web`: frontend, UI và PixiJS.
+- `apps/web`: frontend, UI và hiệu ứng (SolidJS + CSS).
 - `apps/api`: Fastify, authentication, game logic và persistence.
 - `packages/shared`: types, schemas, DTO và constants.
 - `packages/game-config`: roster 100 tướng và các cấu hình game.
@@ -68,7 +68,7 @@ Cấu trúc frontend (SolidJS, `apps/web/src`):
 - `pages/*.tsx`: mỗi tab một component (`CollectionPage`, `DrawPage`, `UpgradePage`, `QuestsPage`, `LeaderboardPage`, `PvpPage`, `HistoryPage`, `GiftCodePage`, `ProfilePage`, `AdminPage`); router mount/unmount bằng `<Dynamic>`, rời trang thì component bị dispose (timer/listener dọn trong `onCleanup`).
 - `state.ts`: dữ liệu nạp lúc vào game (object `state`) + signal `tickets()` (số dư vé), `profile()` (tên hiển thị + ảnh đại diện), `questBadge`/`pendingBadge`; `badges.ts` tải lại badge; `ui.ts` toast.
 - `components/Card.tsx` (thẻ tướng DOM, dùng chung mọi trang), `components/Avatar.tsx` (ảnh đại diện, dùng ở thanh trên + trang Hồ sơ), `components/MusicControl.tsx`, `components/CombatDetail.tsx` (bảng chi tiết chiến đấu của tướng) + `components/CombatDetailModal.tsx` (modal chi tiết dùng chung cho popup ngắm thẻ và Đấu trường), `viewer.tsx` (popup ngắm thẻ, `openCardViewer`).
-- `art.ts` (màu phe, bậc khung, `FRAME_LAYOUT`, URL ảnh), `upgrade-groups.ts` (gom thẻ, có test), `api.ts`, `pixi/stage.ts` (PixiJS, gọi từ trang) giữ dạng TypeScript thường.
+- `pixi/stage.ts` (sân khấu mở thẻ / ghép thẻ: PixiJS, `playReveal`/`playRevealMany`/`playUpgrade` gọi từ trang), `pixi/arena.ts` (sân đấu PvP: PixiJS, `createArena` dựng 12 ô tướng + thanh máu + số sát thương/hồi máu bay lên + vòng choáng; trang `Pvp.tsx` chỉ đẩy trạng thái qua `sync()`/`float()`), `art.ts` (màu phe, bậc khung, `FRAME_LAYOUT`, URL ảnh), `upgrade-groups.ts` (gom thẻ, có test), `api.ts` giữ dạng TypeScript thường.
 - Không dùng innerHTML cho dữ liệu: JSX tự escape. Class CSS/markup giữ như bản cũ nên `style.css`/`theme.css` không đổi.
 - Build cần `vite-plugin-solid`; tsconfig `jsx: preserve`, `jsxImportSource: solid-js`.
 
@@ -725,12 +725,13 @@ Yêu cầu triển khai:
 
 ### 5.5. Nâng cấp nhanh
 
-Trang Nâng cấp có nút **"Nâng cấp nhanh (≤ Lv.5)"** do chủ dự án yêu cầu.
+Trang Nâng cấp có nút **"Nâng cấp nhanh"** kèm các **checkbox chọn level đầu vào** do chủ dự án yêu cầu.
 
-- Áp dụng cho thẻ có level đầu vào ≤ `QUICK_UPGRADE_MAX_LEVEL` (cấu hình server, mặc định 5).
-- Server tự ghép liên tục mọi nhóm `UPGRADE_INPUT_COUNT` thẻ cùng tướng, cùng level ≤ 5, cho đến khi không còn nhóm nào. Thẻ mới tạo ra (thành công hoặc thất bại) nếu vẫn ≤ Lv.5 sẽ được đưa lại vào hàng chờ để ghép tiếp (dây chuyền).
+- Người chơi tick chọn các level muốn ghép nhanh (Lv.1–9); mặc định chọn sẵn Lv.1–`QUICK_UPGRADE_MAX_LEVEL` (cấu hình server, mặc định 5). Không tick level nào thì nút bị khoá.
+- Request gửi kèm `levels[]` (danh sách level đã chọn); bỏ trống thì server dùng mặc định Lv.1–5. Level ngoài khoảng Lv.1–9 bị chặn (`INVALID_LEVELS` / lỗi schema).
+- Server tự ghép liên tục mọi nhóm `UPGRADE_INPUT_COUNT` thẻ cùng tướng, cùng level **nằm trong danh sách đã chọn**, cho đến khi không còn nhóm nào. Thẻ mới tạo ra (thành công hoặc thất bại) nếu vẫn thuộc level đã chọn sẽ được đưa lại vào hàng chờ để ghép tiếp (dây chuyền).
 - Thứ tự xử lý: level thấp trước, rồi theo tướng, trong cùng nhóm dùng thẻ cũ (id nhỏ) trước.
-- Thẻ có level > 5 không bao giờ bị dùng. Thẻ lên Lv.6 từ ghép Lv.5 không ghép tiếp.
+- Thẻ ở level KHÔNG được chọn không bao giờ bị dùng. Thẻ lên một level không nằm trong danh sách chọn không ghép tiếp.
 - Mỗi lần ghép dùng đúng luật và tỷ lệ của mục 5.1–5.3. Không có bonus hay bảo đảm riêng.
 - Mỗi lần ghép ghi một dòng `upgrade_history` riêng, kèm snapshot tỷ lệ.
 - Toàn bộ thao tác nằm trong một transaction. Lỗi ở bất kỳ lần ghép nào thì không thẻ nào bị tiêu thụ và không ghi lịch sử.
@@ -799,7 +800,7 @@ Người chơi có thể tặng thẻ cho bất kỳ người chơi nào khác, 
 
 - Chọn 2 thẻ cùng level và cùng tướng.
 - Thẻ cùng tướng nằm liền nhau, chia nhóm theo level (xem mục 5.4).
-- Có nút Nâng cấp nhanh cho thẻ ≤ Lv.5 (xem mục 5.5).
+- Có nút Nâng cấp nhanh kèm checkbox chọn level, mặc định Lv.1–5 (xem mục 5.5).
 - Hiển thị tỷ lệ thành công, thất bại và phân phối level sau thất bại.
 - Hiển thị rõ cả 2 thẻ sẽ bị tiêu thụ.
 - Preview chỉ mang tính tham khảo; API thực hiện nâng cấp phải tính lại.
@@ -829,14 +830,14 @@ Hiển thị lịch sử phân trang:
 - **Mobile web (≤ 640px)** — khối CSS cuối `theme.css` (chủ dự án yêu cầu tối ưu mobile): thanh trên chỉ còn logo + "Tam Quốc", nút nhạc (ẩn thanh âm lượng) và Đăng xuất; thanh vé là một hàng cuộn ngang; tab cuộn ngang và tự cuộn tới tab đang chọn; ô nhập cỡ chữ ≥ 16px (iOS không tự phóng to), lọc/form full-width, nút cao ≥ 40px; lưới thẻ ~3 cột; nút quay 1/×10 chia đôi bề ngang. Trang Nâng cấp: khi đang chọn thẻ, khung "Đã chọn" thành bottom sheet dính đáy màn hình (class `.side.has-sel`, tối đa 62dvh, cuộn trong). Bộ sưu tập: khung tặng thẻ dính dưới thanh trên khi bật chế độ tặng. Popup mở thẻ/ngắm thẻ dùng `dvh` và safe-area; các nút "Quay tiếp"/"Đóng" tự xuống dòng.
 - Khung thẻ theo cấp (chủ dự án cung cấp bộ khung tham chiếu): Cấp 1 Đồng, 2 Bạc, 3 Lục, 4 Vàng, 5 Đỏ, 6 Huyền, 7 Tử, 8 Cam, 9 Bạch kim, 10 Kim cương. Cấp 1–5 là khung kim loại (cấp 5 có đá đỏ phát sáng); cấp 6–10 có đá quý, hào quang, cánh/rồng/phượng. Phần trang trí cấp 6–10 được phép tràn ra ngoài thân thẻ.
 - Thân thẻ (avatar + tên) luôn cùng kích thước ở mọi cấp trong cùng một ô: thẻ Lv.6–10 cần chừa chỗ khung lớn hơn nên được phóng to (≈1,171×) kèm lề âm để thân thẻ trùng đúng vị trí/kích thước thân thẻ Lv.1–5; khung Lv.6+ tràn ra ngoài ô, ô chứa thẻ Lv.6+ được nới rộng. Thẻ luôn căn giữa ô; các ô nhóm level trong cùng một tướng cao bằng nhau và dùng chung đệm (nhóm có thẻ Lv.6+ thì mọi ô cùng nới), nên thân thẻ các cấp thẳng hàng. Kích thước ô đặt bằng biến CSS `--cw` (`style.css`).
-- Ảnh khung nằm ở `apps/web/public/frames/lv1.png` … `lv10.png` (PNG nền trong suốt, tách từ bộ khung tham chiếu bản 3 bằng color-to-alpha nên giữ được hào quang mờ; thân thẻ rộng 240px trong ảnh khung). Vị trí đặt khung so với thân thẻ khai báo ở `FRAME_LAYOUT` trong `apps/web/src/art.ts`; dùng chung cho thẻ DOM và thẻ PixiJS (animation mở thẻ, ghép thẻ). Thay khung = thay file PNG cùng tên (nếu tỉ lệ khung đổi thì cập nhật `FRAME_LAYOUT`).
+- Ảnh khung nằm ở `apps/web/public/frames/lv1.png` … `lv10.png` (PNG nền trong suốt, tách từ bộ khung tham chiếu bản 3 bằng color-to-alpha nên giữ được hào quang mờ; thân thẻ rộng 240px trong ảnh khung). Vị trí đặt khung so với thân thẻ khai báo ở `FRAME_LAYOUT` trong `apps/web/src/art.ts`; dùng chung cho thẻ trong lưới và thẻ trên sân khấu (animation mở thẻ, ghép thẻ). Thay khung = thay file PNG cùng tên (nếu tỉ lệ khung đổi thì cập nhật `FRAME_LAYOUT`).
 - Màu chữ level và chấm màu ở bảng tỷ lệ dùng màu của bậc khung tương ứng.
-- Chân dung tướng nằm ở `apps/web/public/generals/{artKey}.jpg` (cắt từ 4 bảng ảnh độ phân giải cao chủ dự án cung cấp, mỗi phe một bảng 5×5, bỏ khung và bảng tên; mỗi ảnh 286×378). Dùng chung cho thẻ DOM và thẻ PixiJS. Ô chân dung là **chữ nhật đúng tỉ lệ ảnh gốc 286:378** (chủ dự án yêu cầu; `.tq-art` `aspect-ratio: 286/378`, Pixi `ART_W×ART_H`), tên + phe/Lv **nằm đè phần dưới chân dung** trên nền tối dần (như bảng tên ảnh gốc) với cỡ chữ nhỏ (tên 12px, phe/Lv 10,5px; mobile 11/9,5px), có đệm theo bậc khung để thanh khung/đá Lv.6+ không che chữ; nhờ vậy thân thẻ giữ đúng tỉ lệ khung, ảnh khung không bị kéo giãn. Thay artwork = thay file cùng tên rồi tăng `PORTRAIT_VERSION` trong `art.ts` (URL có `?v=`, vì nginx cache `/generals/` 7 ngày). Bộ hiện tại (v4) cắt lại từ 4 bảng mới của chủ dự án, giữ nguyên bố cục ảnh gốc (chủ dự án yêu cầu bỏ việc đẩy người xuống + vùng mờ phía trên của v3); bảng Ngụy ghi "Tào Thuần" ở ô thứ 5, ảnh này dùng cho `cao-zhen` (Tào Chân) vì roster chưa đổi.
+- Chân dung tướng nằm ở `apps/web/public/generals/{artKey}.jpg` (cắt từ 4 bảng ảnh độ phân giải cao chủ dự án cung cấp, mỗi phe một bảng 5×5, bỏ khung và bảng tên; mỗi ảnh 286×378). Dùng chung cho thẻ trong lưới và thẻ trên sân khấu. Ô chân dung là **chữ nhật đúng tỉ lệ ảnh gốc 286:378** (chủ dự án yêu cầu; `.tq-art` `aspect-ratio: 286/378`), tên + phe/Lv **nằm đè phần dưới chân dung** trên nền tối dần (như bảng tên ảnh gốc) với cỡ chữ nhỏ (tên 12px, phe/Lv 10,5px; mobile 11/9,5px), có đệm theo bậc khung để thanh khung/đá Lv.6+ không che chữ; nhờ vậy thân thẻ giữ đúng tỉ lệ khung, ảnh khung không bị kéo giãn. Thay artwork = thay file cùng tên rồi tăng `PORTRAIT_VERSION` trong `art.ts` (URL có `?v=`, vì nginx cache `/generals/` 7 ngày). Bộ hiện tại (v4) cắt lại từ 4 bảng mới của chủ dự án, giữ nguyên bố cục ảnh gốc (chủ dự án yêu cầu bỏ việc đẩy người xuống + vùng mờ phía trên của v3); bảng Ngụy ghi "Tào Thuần" ở ô thứ 5, ảnh này dùng cho `cao-zhen` (Tào Chân) vì roster chưa đổi.
 - Tướng thiếu ảnh chân dung tự rơi về placeholder (biểu tượng phe + chữ viết tắt).
 - Mặt sau thẻ trong animation quay thẻ là ảnh `apps/web/public/theme/card-back.jpg` (chủ dự án cung cấp: khung đồng, rồng, bát quái; 360×568, ~40 KB). Thay mặt sau = thay file cùng tên; thiếu ảnh thì dùng mặt sau vẽ dự phòng.
 - Nhạc nền (chủ dự án cung cấp): 4 bài `apps/web/public/audio/b1.mp3`, `b2.mp3`, `b3.mp3`, `b4.mp3` (MP3 64 kbps, ~1,4 MB/bài), khai báo trong `TRACKS` ở `apps/web/src/music.ts`; phát kiểu xào bài: trộn ngẫu nhiên cả danh sách, nghe hết các bài rồi mới trộn lại; bài vừa nghe được nhớ trong localStorage (`tq.music.last`) nên lần mở game sau không bắt đầu bằng bài đó. Thanh trên có nút bật/tắt hình trống trận (SVG; khi tắt có vạch son chéo) và thanh âm lượng (`components/MusicControl.tsx`); lựa chọn lưu trong localStorage của trình duyệt (mặc định bật, 40%). Do trình duyệt chặn tự phát, nhạc chỉ bắt đầu sau lần chạm/bấm đầu tiên.
-- PixiJS quản lý stage, texture, animation và hiệu ứng.
-- Giải phóng texture/tài nguyên khi đổi màn hình để tránh rò rỉ bộ nhớ.
+- Sân khấu mở thẻ/ghép thẻ là SolidJS + CSS thuần (không dùng engine đồ hoạ ngoài): thẻ định vị theo % trong khung 520×460, animation chạy bằng `requestAnimationFrame` kéo thuộc tính trong `createStore` (không dựng lại DOM) kết hợp keyframe CSS cho hào quang/hạt sáng.
+- Đóng sân khấu thì gỡ overlay khỏi DOM và huỷ vòng `requestAnimationFrame` đang chạy để không rò rỉ.
 - Hiệu ứng không được cản trở thao tác.
 - Hỗ trợ reduced motion.
 
@@ -861,9 +862,9 @@ Do chủ dự án yêu cầu, theo GDD `PVP.md`. Tab **Đấu trường** (`#pvp
 - **Chuẩn bị khiêu chiến**: khi chọn đối thủ (từ bảng xếp hạng hoặc `#pvp/<id>`), một **modal** tự mở hiển thị 2 đội **2 bên trái/phải** (mình bên trái, đối thủ bên phải) để so sánh trực tiếp; sửa đội mình ngay trong modal (bấm ô để đổi, kéo-thả để đổi vị trí — tự lưu như trên) rồi bấm **Khiêu chiến** tại chỗ (màn hẹp tự xếp dọc). Trang Đấu trường chỉ còn dòng tóm tắt đối thủ + nút mở lại modal.
 - **Vào trận**: chọn đối thủ bằng cách bấm vào người chơi trên **bảng xếp hạng** (mục 6.6) hoặc mở từ Đấu trường (`#pvp/<id>`); không được tự khiêu chiến chính mình. Trận giữa hai người được ghi lại và **xem lại được** từ cả hai phía (dữ liệu đối xứng).
 - **Mô phỏng ở server**: `simulatePvp(sides, rand)` trong `apps/api/src/managers/pvp.engine.ts` là hàm thuần, chạy hết trận ngay khi khiêu chiến (client không gửi kết quả). Engine tất định theo seed nên lưu seed là tái dựng được (không cần lưu từng bước — SKILLS.md). **Thứ tự hành động** (LC do phong cách + cấp quyết định, `pvpLc`): hai đội **luân phiên nhau**, bên có **tổng lực chiến cả đội cao hơn** đi trước — vòng đầu đủ 6 vs 6 là **vị trí 1 của bên đi trước**, rồi **vị trí 1 của bên kia**, rồi **vị trí 2 của bên đi trước**, **vị trí 2 của bên kia**… cứ thế tới vị trí 6 (bằng tổng LC thì bên khiêu chiến A đi trước); không xếp theo LC từng tướng. Tướng đã gục bị bỏ qua nhưng **bên đi trước vẫn giữ quyền mở màn mỗi vòng**: nếu vị trí 1 của bên đó chết thì vòng sau bắt đầu bằng **vị trí còn sống gần nhất của bên đó** (A2) rồi mới tới vị trí 1 của đối thủ (B1), tiếp tục A3, B2… Chí mạng ×1,5 áp cho cả **sát thương lẫn hồi máu**. Hồi máu chủ động chọn mục tiêu theo kỹ năng: **toàn đội**, **1 đồng minh thấp máu nhất**, **hàng trước** hoặc **hàng sau** (SKILLS.md). Kỹ năng **tự hồi máu** (`SELF_HP`, mô tả cũ "*Bản thân +25% HP tối đa*") nay là **hồi 25% HP tối đa mỗi lượt ra đòn**, không cộng trần HP. Một số tướng được chỉ định có **hút máu**: hồi bản thân `cấp × 2%` sát thương gây ra (cấp 1 = 2% … cấp 10 = 20%), bù lại hệ số sát thương kỹ năng **giảm 10%** (áp trước khi nhân hot).
-- **Phát lại ở client**: server trả `units` (snapshot đầu trận) + `events` (danh sách sự kiện có thứ tự) + `rounds`/`winner`; client dựng bàn đấu từ `units` rồi áp `events` tuần tự, có chỉnh tốc độ và thanh tiến trình. 2 đội nằm **2 bên trái/phải** ngăn bằng dải phân cách; tên kỹ năng thật (lấy từ `SKILLS.md`, ví dụ *"Hiệu lệnh thiên hạ"*) **bay lên trên ô tướng đang ra đòn** (kèm bảng tên chiêu ở giữa); số sát thương/hồi máu/buff nhảy trên đầu tướng **cỡ lớn, có viền + quầng sáng** cho dễ đọc (z-index cao nên không bị ảnh tướng che; chí mạng thì số to hơn hẳn, màu vàng); tên hiệu ứng/chiêu bay lên cũng được phóng to. Ô tướng hiện **thanh máu kèm số HP thật và %** (`1.500 · 62%`, sắp hết máu thì nhấp nháy vàng) và dòng **⚔ sát thương hiện tại · CM %** — thay cho LC; sát thương này **tự cộng các lớp buff đang hiệu lực** (đổi màu sáng khi đang được buff) và lớp buff hết hạn bị bỏ đúng như engine nhờ `expiresRound` trong sự kiện `buff`. **Diễn biến chi tiết hiện ngay trong lúc đang đánh** (cùng nội dung với tab *Diễn biến chi tiết* ở bảng kết quả, tự cuộn xuống dòng mới nhất). Nút **Kết quả** nhảy tới cuối trận và mở bảng kết quả (trận kết thúc tự nhiên cũng tự mở). Ở màn kết quả có nút **Khiêu chiến lại** để đánh lại chính đối thủ đó ngay.
-- **Bảng kết quả trận**: 2 tab — *Tổng kết chỉ số* (mỗi tướng: sát thương gây ra, sát thương đã chịu, tổng hồi máu cho bản thân + đồng đội, số lần hạ/choáng/giải/buff) và *Diễn biến chi tiết* (từng lượt/hành động kèm avatar người thi triển → mục tiêu, **nhãn "Ta"/"Địch"** để biết dòng của bên nào, lượng sát thương/hồi máu, nhãn CHÍ MẠNG; hành động dùng **kỹ năng hiệu ứng nền** hiện kèm **lượng tăng** cụ thể từ `aura` trong snapshot, ví dụ *"Điển Vi dùng Ác Lai hộ vệ (tự hồi 25% HP tối đa)"*, và hành động **buff** hiện `+X% sát thương · +Y điểm chí mạng`). Tên hiệu ứng/chiêu hiển thị là **tên kỹ năng thật** (trường `skillName` theo `SKILLS.md`), không dùng nhãn chung. Tướng có **hút máu** hiện thêm *"hút máu X%"* ở ô tướng. Dữ liệu phân tích trọn từ `events`, không phụ thuộc tốc độ phát lại. Không gửi lại server trong lúc phát.
-- **Cân bằng**: `packages/game-config/src/pvp.ts` (`PVP_MAX_ROUNDS` = 50, `pvpBaseHp`/`pvpBaseDamage` — **HP nền luôn gấp 10 lần sát thương nền**, cấp 1: 2000 HP ↔ 200 sát thương, +500 HP/+50 sát thương mỗi cấp; `PVP_SKILL_DEF` — kèm `aura` theo kỹ năng, `PVP_CRIT_*`, `pvpProfile` — hệ số đã nhân hot ×1.1); nguồn cân bằng là `SKILLS.md`. Sát thương theo số mục tiêu (đơn 250%, hàng 180%/mục tiêu, toàn bộ 100%/mục tiêu); hồi máu cân theo số mục tiêu (toàn đội 110%, hàng 220%, thấp máu nhất 330%). Tướng có **hút máu** (`PVP_LIFESTEAL_BPS_PER_LEVEL` = 2%/cấp, `PVP_LIFESTEAL_DAMAGE_PENALTY_BPS` = −10% sát thương kỹ năng); `pvpProfile` trả thêm `skillName` (tên chiêu theo `SKILLS.md`) và `lifestealPerLevelBps`. Choáng đơn mục tiêu `cấp × 7%` (tối đa 70%), hàng/diện rộng `cấp × 3%`; choáng **chỉ kéo dài 2 lượt** (`PVP_STUN_ROUNDS` — gây ở lượt r thì mục tiêu bỏ lượt tới hết lượt r+1, đầu lượt r+2 tự hết; đang choáng thì không choáng chồng); giải choáng `30% + 5%×(cấp−1)` (30%→75%). Buff chỉ số chủ động **cộng dồn**, mỗi lớp hiệu lực tối đa 3 lượt (`PVP_SKILL_BUFF_ROUNDS`). Validate khi khởi động qua `validate.ts` (`validatePvpConfig(assert)` — mỗi phe đúng 10 tướng hot). Hết 50 vòng không phân thắng bại → hoà.
+- **Phát lại ở client**: server trả `units` (snapshot đầu trận) + `events` (danh sách sự kiện có thứ tự) + `rounds`/`winner`; client dựng bàn đấu từ `units` rồi áp `events` tuần tự, có chỉnh tốc độ và thanh tiến trình. 2 đội nằm **2 bên trái/phải** ngăn bằng dải phân cách; tên kỹ năng thật (lấy từ `SKILLS.md`, ví dụ *"Hiệu lệnh thiên hạ"*) **bay lên trên ô tướng đang ra đòn** (kèm bảng tên chiêu ở giữa); số sát thương/hồi máu/buff nhảy trên đầu tướng **cỡ lớn, có viền + quầng sáng** cho dễ đọc, **luôn rõ nét** (giữ nguyên độ đậm suốt hoạt ảnh, không bị ô tướng choáng/gục làm nhạt; z-index cao nên không bị ảnh tướng che; chí mạng thì số to hơn hẳn, màu vàng); tướng bị choáng hiện **vòng sao xoay tròn** quanh ô để thấy rõ đang bị khống chế. Ô tướng hiện **thanh máu kèm số HP thật và %** (`1.500 · 62%`, sắp hết máu thì nhấp nháy vàng) và dòng **⚔ sát thương hiện tại · CM %** — thay cho LC; sát thương này **tự cộng các lớp buff đang hiệu lực** (đổi màu sáng khi đang được buff) và lớp buff hết hạn bị bỏ đúng như engine nhờ `expiresRound` trong sự kiện `buff`. **Diễn biến chi tiết hiện ngay trong lúc đang đánh** (cùng nội dung với tab *Diễn biến chi tiết* ở bảng kết quả, tự cuộn xuống dòng mới nhất). Kết quả **Thắng/Hòa/Thua** hiển thị **cỡ lớn có quầng sáng** cho dễ thấy. Nút **Kết quả** nhảy tới cuối trận và mở bảng kết quả (trận kết thúc tự nhiên cũng tự mở). Ở màn kết quả có nút **Khiêu chiến lại** để đánh lại chính đối thủ đó ngay.
+- **Bảng kết quả trận**: 2 tab — *Tổng kết chỉ số* (mỗi tướng: sát thương gây ra, sát thương đã chịu, tổng hồi máu cho bản thân + đồng đội, số lần hạ/choáng/giải/buff) và *Diễn biến chi tiết* (từng lượt/hành động kèm avatar người thi triển → mục tiêu, **nhãn "Ta"/"Địch"** để biết dòng của bên nào, lượng sát thương/hồi máu, nhãn CHÍ MẠNG; hành động **tự hồi máu** hiện kèm lượng hồi cụ thể, ví dụ *"Điển Vi dùng Ác Lai hộ vệ (tự hồi 25% HP tối đa)"*, và hành động **buff** hiện lượng tăng cụ thể `+X% sát thương · +Y% HP tối đa · +Z điểm chí mạng` kèm nhãn **CHÍ MẠNG** khi lớp buff đó chí mạng). Tên hiệu ứng/chiêu hiển thị là **tên kỹ năng thật** (trường `skillName` theo `SKILLS.md`), không dùng nhãn chung. Tướng có **hút máu** hiện thêm *"hút máu X%"* ở ô tướng. Dữ liệu phân tích trọn từ `events`, không phụ thuộc tốc độ phát lại. Không gửi lại server trong lúc phát.
+- **Cân bằng**: `packages/game-config/src/pvp.ts` (`PVP_MAX_ROUNDS` = 50, `pvpBaseHp`/`pvpBaseDamage` — **HP nền luôn gấp 10 lần sát thương nền**, cấp 1: 2000 HP ↔ 200 sát thương, +500 HP/+50 sát thương mỗi cấp; `PVP_SKILL_DEF` — mỗi kỹ năng kèm `teamBuff` (nhóm `TEAM_*`/`BUFF_ALLIES`), `PVP_CRIT_*`, `pvpProfile` — hệ số đã nhân hot ×1.1); nguồn cân bằng là `SKILLS.md`. Sát thương theo số mục tiêu (đơn 250%, hàng 180%/mục tiêu, toàn bộ 100%/mục tiêu); hồi máu cân theo số mục tiêu (toàn đội 110%, hàng 220%, thấp máu nhất 330%). Tướng có **hút máu** (`PVP_LIFESTEAL_BPS_PER_LEVEL` = 2%/cấp, `PVP_LIFESTEAL_DAMAGE_PENALTY_BPS` = −10% sát thương kỹ năng); `pvpProfile` trả thêm `skillName` (tên chiêu theo `SKILLS.md`) và `lifestealPerLevelBps`. Choáng đơn mục tiêu `cấp × 7%` (tối đa 70%), hàng/diện rộng `cấp × 3%`; choáng **chỉ kéo dài 2 lượt** (`PVP_STUN_ROUNDS` — gây ở lượt r thì mục tiêu bỏ lượt tới hết lượt r+1, đầu lượt r+2 tự hết; đang choáng thì không choáng chồng); giải choáng `30% + 5%×(cấp−1)` (30%→75%); tướng **sở hữu kỹ năng giải choáng miễn nhiễm choáng**. Buff tăng sức mạnh theo kỹ năng (`teamBuff`, nhóm `TEAM_*`/`BUFF_ALLIES`) **cộng dồn tối đa 3 lớp** (`PVP_SKILL_BUFF_MAX_LAYERS`), mỗi lớp hiệu lực **4 lượt** (`PVP_SKILL_BUFF_ROUNDS`); mỗi lớp **+10% HP tối đa** (`PVP_SKILL_BUFF_HP_BPS`, tăng trần HP và **hồi ngay đúng lượng trần tăng**), **+10% sát thương** (`PVP_SKILL_BUFF_DAMAGE_BPS`) và **+5 điểm chí mạng** (`PVP_SKILL_BUFF_CRIT_POINTS_BPS`); **%HP và %sát thương ăn chí mạng (×1,5)** theo **một lần roll chung cho cả lớp**. Validate khi khởi động qua `validate.ts` (`validatePvpConfig(assert)` — mỗi phe đúng 10 tướng hot). Hết 50 vòng không phân thắng bại → hoà.
 - **Không ảnh hưởng vé/thẻ**: PvP không tiêu vé, không tạo thẻ, không thưởng; chỉ ghi nhật ký trận (`pvp_battles`).
 - **Admin không tham gia**: mọi route PvP dùng `playerGuard` → admin bị 403 `ADMIN_NOT_PLAYER` (mục 3.8).
 
@@ -1134,7 +1135,7 @@ Server xác thực số dư loại vé, xác định số lượt thực tế = 
 
 - `POST /api/upgrades/preview`: tính tỷ lệ hiện tại dựa trên đúng hai thẻ đầu vào mà không thay đổi dữ liệu.
 - `POST /api/upgrades/attempt`: thực hiện ghép thẻ nguyên tử.
-- `POST /api/upgrades/quick`: Nâng cấp nhanh (mục 5.5). Body chỉ gồm `idempotencyKey`; server tự chọn thẻ. Response gồm `merges`, `successes`, `failures`, `hasMore`, `results[]`. Có rate limit.
+- `POST /api/upgrades/quick`: Nâng cấp nhanh (mục 5.5). Body gồm `idempotencyKey` và `levels[]` tuỳ chọn (danh sách level đầu vào, mặc định Lv.1–5); server tự chọn thẻ. Response gồm `levels`, `merges`, `successes`, `failures`, `hasMore`, `results[]`. Có rate limit.
 - `GET /api/gacha/config` trả thêm `upgradeInputCount`, `quickUpgradeMaxLevel` và `upgradeRates` (tỷ lệ ghép công khai theo level) để UI hiển thị.
 
 Request gồm đúng hai card ID và idempotency key.
@@ -1211,7 +1212,7 @@ Mọi route dưới `/api/pvp` (trừ route chi tiết chiến đấu) dùng `pl
 - `POST /api/pvp/challenge`: body `{ opponentId }`. Server mô phỏng trọn trận rồi trả `units` + `events` + `rounds`/`winner` để phát lại. Lỗi: `TEAM_EMPTY`, `OPPONENT_NO_TEAM`, `SELF_CHALLENGE`, `OPPONENT_NOT_FOUND`.
 - `GET /api/pvp/battles?page=&pageSize=`: lịch sử trận (mình là bên khiêu chiến hoặc bị khiêu chiến).
 - `GET /api/pvp/battles/:id`: chi tiết một trận để phát lại; người ngoài cuộc → 404. Trả thêm `mySide` để client hiển thị đúng phía.
-- `GET /api/pvp/generals/:id/combat?level=`: chi tiết chiến đấu của một tướng ở một cấp (`PvpCombatDto`: phong cách, kỹ năng, nội tại, chỉ số nền/riêng tướng, buff hàng) — modal xem thẻ ở Bộ sưu tập. Chỉ số `self` là của riêng tướng, **đã gồm buff hỗ trợ mà tướng tự hưởng** (Hỗ trợ cộng +10% damage/+10% HP cho toàn đội, kể cả bản thân — mục 4.3); buff theo hàng chỉ áp khi vào trận. Chỉ là dữ liệu cấu hình nên dùng `authGuard` (không cần đăng nhập thao tác chơi). Lỗi: `GENERAL_NOT_FOUND`.
+- `GET /api/pvp/generals/:id/combat?level=`: chi tiết chiến đấu của một tướng ở một cấp (`PvpCombatDto`: phong cách, kỹ năng, nội tại, chỉ số nền/riêng tướng, buff hàng) — modal xem thẻ ở Bộ sưu tập. Chỉ số `self` là của **riêng tướng** (nội tại + cấp); buff tăng sức mạnh theo kỹ năng (`teamBuff`) **không cộng sẵn ở ảnh chụp đầu trận** mà phát dần mỗi lượt tới lượt khi vào trận (mục 6.7), buff theo hàng cũng chỉ áp khi vào trận. Chỉ là dữ liệu cấu hình nên dùng `authGuard` (không cần đăng nhập thao tác chơi). Lỗi: `GENERAL_NOT_FOUND`.
 
 ### 8.5. Lịch sử
 
@@ -1322,7 +1323,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 - Retry không tiêu thụ lại hai thẻ.
 - Concurrent requests không thể tiêu thụ cùng một thẻ nhiều lần.
 - Snapshot lịch sử đủ để giải thích kết quả theo cấu hình tại thời điểm thực hiện.
-- Nâng cấp nhanh: ghép dây chuyền mọi cặp ≤ Lv.5, level thấp trước; không đụng thẻ > Lv.5; mỗi lần ghép một dòng lịch sử; nguyên tử (lỗi giữa chừng không tiêu thẻ nào); retry cùng key trả kết quả cũ; chỉ dùng thẻ của chính người chơi; không có cặp => `NOTHING_TO_UPGRADE`.
+- Nâng cấp nhanh: ghép dây chuyền mọi cặp trong các level được chọn (mặc định Lv.1–5), level thấp trước; không đụng thẻ ngoài danh sách chọn; mỗi lần ghép một dòng lịch sử; nguyên tử (lỗi giữa chừng không tiêu thẻ nào); retry cùng key trả kết quả cũ; chỉ dùng thẻ của chính người chơi; không có cặp => `NOTHING_TO_UPGRADE`.
 
 ### 10.5b. Tặng thẻ
 
@@ -1379,11 +1380,11 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 ### 10.5g. Đấu trường PvP
 
 - Engine tất định: cùng seed + cùng đội hình → cùng kết quả; idx theo slot (A = 0–5, B = 6–11); hàng trước +10% HP, hàng sau +10% damage; thứ tự hành động: hai đội luân phiên nhau, bên tổng LC cao hơn đi trước và **giữ quyền mở màn mỗi vòng** (đủ 6v6: A1, B1, A2, B2…; nếu A1 đã gục thì vòng đó là A2, B1, A3, B2…).
-- Aura theo kỹ năng áp trước trận (tự buff + buff toàn đội, kể cả tướng sở hữu); tướng hot ×1.1 hệ số kỹ năng; tướng chỉ có aura đánh thường 100% (hot 110%).
-- Chí mạng ×1,5 xảy ra đúng theo RNG — áp cho cả sát thương lẫn hồi máu (hồi đồng minh và tự hồi); hồi máu chủ động nhắm đúng mục tiêu theo kỹ năng (toàn đội / 1 đồng minh thấp máu nhất / hàng trước / hàng sau); choáng chỉ kéo dài 2 lượt rồi tự hết; buff tác động lên đồng minh đúng như định nghĩa.
+- Buff tăng sức mạnh theo kỹ năng (nhóm `TEAM_*`/`BUFF_ALLIES`) phát **mỗi lượt tới lượt** một lớp cho **toàn bộ đồng minh còn sống (kể cả bản thân)**; mỗi lớp **+10% HP tối đa (tăng trần HP và hồi ngay đúng lượng trần tăng) + 10% sát thương + 5 điểm chí mạng**; **%HP và %sát thương ăn chí mạng (×1,5)** theo **một lần roll chung cho cả lớp**; **cộng dồn tối đa 3 lớp**, mỗi lớp **4 lượt**; tướng hot ×1.1 hệ số kỹ năng (không nhân `teamBuff`); tướng `TEAM_*` vừa đánh thường 100% (hot 110%) vừa phát buff, `BUFF_ALLIES` chỉ phát buff.
+- Chí mạng ×1,5 xảy ra đúng theo RNG — áp cho cả sát thương lẫn hồi máu (hồi đồng minh và tự hồi); hồi máu chủ động nhắm đúng mục tiêu theo kỹ năng (toàn đội / 1 đồng minh thấp máu nhất / hàng trước / hàng sau); choáng chỉ kéo dài 2 lượt rồi tự hết, tướng có kỹ năng giải choáng **miễn nhiễm choáng**; buff tác động lên đồng minh đúng như định nghĩa.
 - Màn kết quả trận có nút **Khiêu chiến lại** (đánh lại cùng đối thủ ngay).
 - Giao diện xếp đội: kéo-thả đổi vị trí tướng (chuột + cảm ứng); Picker hiện chỉ số ở mỗi dòng + cấp cạnh ảnh đại diện, bấm cả dòng để chọn, bấm ảnh đại diện để mở chi tiết đầy đủ, đánh dấu tướng đã trong đội; modal chuẩn bị khiêu chiến tự mở khi chọn đối thủ và cho sửa đội ngay tại chỗ.
-- Diễn biến chi tiết hiện **lượng tăng** của kỹ năng hiệu ứng nền (aura) và buff; số sát thương/hồi máu trên sân không bị ảnh tướng che và **cỡ lớn, rõ ràng** (chí mạng to hơn hẳn); Picker mở chi tiết tướng đầy đủ (cùng component với popup ngắm thẻ) khi bấm vào ảnh đại diện.
+- Diễn biến chi tiết hiện **lượng tăng** của buff (`+X% sát thương · +Y% HP tối đa · +Z điểm chí mạng`, nhãn CHÍ MẠNG khi lớp đó chí mạng) và lượng tự hồi máu; số sát thương/hồi máu trên sân không bị ảnh tướng che và **cỡ lớn, rõ ràng** (chí mạng to hơn hẳn); Picker mở chi tiết tướng đầy đủ (cùng component với popup ngắm thẻ) khi bấm vào ảnh đại diện.
 - Modal chi tiết dùng chung cho cả Bộ sưu tập lẫn Đấu trường: Đấu trường không có thẻ lớn mà hiện **ảnh đại diện nhỏ cạnh tên** (prop `art`), bảng chi tiết **đầy đủ cả kỹ năng** như nhau; nền phủ tối trung tính (bỏ tông đỏ).
 - Đánh bại toàn bộ một bên → bên kia thắng; hết `PVP_MAX_ROUNDS` (50) mà cả hai còn sống → `draw`/`timeout`.
 - Mọi kỹ năng trong roster đều có định nghĩa (`PVP_SKILL_DEF`); `validatePvpConfig()` chạy khi khởi động.
@@ -1425,7 +1426,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 - Không có thưởng đăng nhập, nút nạp tiền, cửa hàng vé hoặc mua vé bằng Vàng.
 - Không có nút "+50 vé" trên UI.
 - Mọi danh sách thẻ (Bộ sưu tập, Nâng cấp, Quản trị) mặc định sắp xếp level cao nhất.
-- Nút Nâng cấp nhanh hiển thị số cặp có thể ghép, bảng tỷ lệ Lv.1–5, bước xác nhận, khóa khi đang xử lý và tổng kết sau khi xong.
+- Nút Nâng cấp nhanh có checkbox chọn level (mặc định Lv.1–5), hiển thị số cặp có thể ghép, bảng tỷ lệ theo level đã chọn, bước xác nhận, khóa khi đang xử lý và tổng kết sau khi xong.
 - Bộ sưu tập gom thẻ theo tướng; tặng thẻ (khi bật) nằm trong Bộ sưu tập với dropdown người nhận có tìm kiếm, sắp theo giao dịch gần nhất.
 - Đăng ký hiển thị thông báo chờ duyệt; tab Quản trị chỉ hiện với admin; admin chỉ thấy tab Quản trị (không có tab game, thanh vé).
 - Có tab Giftcode; popup lần đầu đăng nhập mời nhập code gợi ý.
@@ -1483,7 +1484,7 @@ Thứ tự ưu tiên:
 - Level thẻ từ 1 đến 10.
 - Gacha roll level theo bảng xác suất đã định nghĩa, tối đa level 9; level 10 chỉ có qua ghép thẻ.
 - Trang Nâng cấp gom thẻ cùng tướng nằm liền nhau.
-- Nút Nâng cấp nhanh tự ghép mọi cặp thẻ ≤ Lv.5 trong một thao tác nguyên tử.
+- Nút Nâng cấp nhanh tự ghép mọi cặp thẻ thuộc các level được tick chọn (mặc định Lv.1–5) trong một thao tác nguyên tử.
 - Tặng thẻ (đang tạm tắt, bật bằng `ENABLE_GIFT`) cho người chơi khác (chọn từ dropdown mọi người chơi, ưu tiên người giao dịch gần nhất), tối đa 20 thẻ mỗi lần, nguyên tử; nằm trong trang Bộ sưu tập.
 - Có lựa chọn quay 1 lần hoặc ×10; nếu còn ít hơn 10 vé loại đã chọn thì quay hết số vé đó.
 - Nâng cấp cần đúng 2 thẻ cùng level và cùng tướng.
@@ -1494,5 +1495,5 @@ Thứ tự ưu tiên:
 - Bảng xếp hạng Lực chiến (tổng 2^(lv−1), mỗi tướng + cấp tính 1 lần), top 100, ẩn admin.
 - Đấu trường PvP: dàn 6 tướng (2 hàng), khiêu chiến người chơi khác chọn từ bảng xếp hạng; server mô phỏng trọn trận rồi client phát lại; không thưởng, không tiêu vé, không tạo thẻ.
 - Mọi kết quả game do backend xác định.
-- Database SQLite, API Fastify, frontend PixiJS.
+- Database SQLite, API Fastify, frontend SolidJS.
 - Mọi thao tác quan trọng có transaction, lịch sử và cơ chế chống request trùng.

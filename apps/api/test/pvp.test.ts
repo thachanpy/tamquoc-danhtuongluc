@@ -8,11 +8,15 @@ import { simulatePvp, type PvpSideInput } from '../src/managers/pvp.engine.ts';
 import { getCombatStats } from '../src/managers/pvp.manager.ts';
 import {
   BPS_SCALE,
+  PVP_CRIT_DAMAGE_BPS,
   PVP_MAX_ROUNDS,
   PVP_PASSIVE_EFFECT,
-  PVP_SKILL_DEF,
   PVP_SKILL_BUFF_CRIT_POINTS_BPS,
   PVP_SKILL_BUFF_DAMAGE_BPS,
+  PVP_SKILL_BUFF_HP_BPS,
+  PVP_SKILL_BUFF_MAX_LAYERS,
+  PVP_SKILL_BUFF_ROUNDS,
+  PVP_SKILL_DEF,
   PVP_STUN_ROUNDS,
   ROSTER,
   pvpBaseDamage,
@@ -45,6 +49,11 @@ const always0: RandomInt = () => 0;
 const never: RandomInt = (max) => max - 1;
 
 const skillDef = (id: string) => PVP_SKILL_DEF[pvpProfile(id).skill];
+/** Kỹ năng của tướng có phát buff tăng sức mạnh cho đồng minh hay không (nhóm TEAM_/BUFF_ALLIES). */
+const hasTeamBuffOf = (id: string) => {
+  const tb = skillDef(id).teamBuff;
+  return tb.damageBps > 0 || tb.hpBps > 0 || tb.critPointsBps > 0;
+};
 const findGeneral = (pred: (id: string) => boolean): string => {
   const id = ROSTER.find((g) => pred(g.id))?.id;
   assert.ok(id, 'roster phải có tướng thoả điều kiện test');
@@ -276,20 +285,38 @@ test('engine: choáng chỉ kéo dài PVP_STUN_ROUNDS lượt rồi tự hết (
 });
 
 
-test('engine: kỹ năng buff cộng sát thương/chí mạng cho đồng minh còn sống (mục 11.2)', () => {
+test('engine: kỹ năng buff cộng HP tối đa + sát thương + chí mạng cho đồng minh còn sống (mục 11.2)', () => {
   const buffer = findGeneral((id) => skillDef(id).buff);
   const ally = findGeneral((id) => id !== buffer && skillDef(id).damageBps === 0 && !skillDef(id).buff);
   const foe = findGeneral((id) => id !== buffer && id !== ally && skillDef(id).damageBps === 0 && !skillDef(id).buff);
-  const res = simulatePvp([one('a', [{ slot: 1, generalId: buffer, level: 6 }, { slot: 2, generalId: ally, level: 6 }]), one('b', [{ slot: 1, generalId: foe, level: 6 }])], seeded(3));
+  const res = simulatePvp([one('a', [{ slot: 1, generalId: buffer, level: 6 }, { slot: 2, generalId: ally, level: 6 }]), one('b', [{ slot: 1, generalId: foe, level: 6 }])], never);
   const buffEvs = res.events.filter((e): e is Extract<PvpEventDto, { t: 'buff' }> => e.t === 'buff');
   const buffed = buffEvs.map((e) => e.idx);
   assert.ok(buffed.includes(0) && buffed.includes(1), 'cả hai đồng minh đều nhận buff');
   // Sự kiện buff mang lượng tăng cụ thể để client hiện ở Diễn biến chi tiết (mục 6.7).
   assert.equal(buffEvs[0]!.damageBps, PVP_SKILL_BUFF_DAMAGE_BPS);
+  assert.equal(buffEvs[0]!.hpBps, PVP_SKILL_BUFF_HP_BPS);
   assert.equal(buffEvs[0]!.critPointsBps, PVP_SKILL_BUFF_CRIT_POINTS_BPS);
-  // `damageFlat` = lượng sát thương cộng thẳng tính theo damage NỀN của tướng được buff; `expiresRound` để client tự bỏ buff hết hạn.
-  assert.equal(buffEvs[0]!.damageFlat, Math.round((pvpBaseDamage(6) * PVP_SKILL_BUFF_DAMAGE_BPS) / BPS_SCALE));
-  assert.ok(buffEvs[0]!.expiresRound >= 1, 'sự kiện buff phải cho biết lượt hết hạn');
+  assert.equal(buffEvs[0]!.crit, false, 'không chí mạng khi RNG luôn trả max-1');
+  // `damageFlat`/`hpFlat` = lượng cộng thẳng tính theo chỉ số NỀN của tướng được buff
+  // (ảnh chụp đầu trận = chỉ số tĩnh vì buff phát dần khi tới lượt); `expiresRound` để client tự bỏ buff.
+  const u0 = res.units.find((x) => x.idx === buffEvs[0]!.idx)!;
+  assert.equal(buffEvs[0]!.damageFlat, Math.round((u0.damage * PVP_SKILL_BUFF_DAMAGE_BPS) / BPS_SCALE));
+  assert.equal(buffEvs[0]!.hpFlat, Math.round((u0.maxHp * PVP_SKILL_BUFF_HP_BPS) / BPS_SCALE));
+  assert.equal(buffEvs[0]!.expiresRound, 1 + PVP_SKILL_BUFF_ROUNDS - 1, 'lớp buff sống đúng PVP_SKILL_BUFF_ROUNDS lượt');
+  assert.equal(buffEvs[0]!.maxLayers, PVP_SKILL_BUFF_MAX_LAYERS);
+});
+
+test('engine: chí mạng nhân đôi cả %HP và %sát thương của buff — một roll chung cho cả lớp (mục 11.2)', () => {
+  const buffer = findGeneral((id) => skillDef(id).teamBuff.hpBps > 0 && skillDef(id).teamBuff.damageBps > 0);
+  const foe = findGeneral((id) => pvpProfile(id).skill === 'ALL_ALLIES_HEAL');
+  const res = simulatePvp([one('a', [{ slot: 1, generalId: buffer, level: 6 }]), one('b', [{ slot: 1, generalId: foe, level: 10 }])], always0);
+  const ev = res.events.find((e): e is Extract<PvpEventDto, { t: 'buff' }> => e.t === 'buff');
+  assert.ok(ev, 'phải có ít nhất một lớp buff');
+  const mul = (BPS_SCALE + PVP_CRIT_DAMAGE_BPS) / BPS_SCALE;
+  assert.equal(ev!.crit, true, 'RNG luôn 0 nên lớp buff chí mạng');
+  assert.equal(ev!.damageBps, Math.round(PVP_SKILL_BUFF_DAMAGE_BPS * mul));
+  assert.equal(ev!.hpBps, Math.round(PVP_SKILL_BUFF_HP_BPS * mul));
 });
 
 test('engine: buff chỉ số cộng dồn và mỗi lớp kéo dài tối đa 3 lượt (mục 11.2)', () => {
@@ -302,7 +329,7 @@ test('engine: buff chỉ số cộng dồn và mỗi lớp kéo dài tối đa 3
       pvpProfile(id).style === 'support' &&
       skillDef(id).damageBps > 0 &&
       skillDef(id).stun === 'none' &&
-      Object.values(skillDef(id).aura).every((v) => v === 0),
+      !hasTeamBuffOf(id),
   );
   // Địch là tướng hồi máu cấp cao để trận đủ dài cho buff chồng lớp và hết hạn.
   const healer = findGeneral((id) => pvpProfile(id).skill === 'ALL_ALLIES_HEAL');
@@ -339,7 +366,7 @@ test('engine: một bên bị xóa sổ thì kết thúc ngay (wipe — mục 14
   if (end.t === 'end') assert.equal(end.winner, 'a');
 });
 
-test('engine: quá số vòng thì xét % HP còn lại (timeout — mục 14)', () => {
+test('engine: hết PVP_MAX_ROUNDS mà chưa phân thắng bại thì hai đội hoà (timeout — mục 14)', () => {
   const peaceful = peacefulIds();
   assert.ok(peaceful.length >= 2, 'roster phải có ít nhất 2 tướng kỹ năng không gây sát thương');
   const res = simulatePvp([one('a', [{ slot: 1, generalId: peaceful[0]!, level: 3 }]), one('b', [{ slot: 1, generalId: peaceful[1]!, level: 3 }])], seeded(11));
@@ -348,23 +375,37 @@ test('engine: quá số vòng thì xét % HP còn lại (timeout — mục 14)',
   assert.equal(res.winner, 'draw');
 });
 
+test('engine: tướng có kỹ năng giải choáng miễn nhiễm choáng (mục 9)', () => {
+  const stunner = findGeneral((id) => skillDef(id).stun === 'single' && pvpProfile(id).stunPerLevelBps > 0);
+  const target = (id: string) => {
+    const res = simulatePvp([one('a', [{ slot: 1, generalId: stunner, level: 10 }]), one('b', [{ slot: 1, generalId: id, level: 10 }])], always0);
+    const idx = res.units.find((u) => u.generalId === id)!.idx;
+    return res.events.some((e) => e.t === 'stun' && e.idx === idx);
+  };
+  // always0 → luôn trúng choáng nếu mục tiêu không miễn nhiễm.
+  const immune = findGeneral((id) => skillDef(id).cleanse);
+  assert.equal(target(immune), false, 'tướng giải choáng không bao giờ bị choáng');
+  const normal = findGeneral((id) => !skillDef(id).cleanse);
+  assert.equal(target(normal), true, 'đối thủ không miễn nhiễm vẫn bị choáng');
+});
+
 test('engine: mọi kỹ năng của roster đều có định nghĩa trong PVP_SKILL_DEF', () => {
   const skills = new Set<PvpSkill>(ROSTER.map((g) => pvpProfile(g.id).skill));
   for (const s of skills) assert.ok(PVP_SKILL_DEF[s], `thiếu định nghĩa kỹ năng ${s}`);
 });
 
-test('engine: tướng có hiệu ứng toàn đội tự hưởng buff của chính mình (mục 4.3)', () => {
-  const auraOfId = (id: string) => PVP_SKILL_DEF[pvpProfile(id).skill].aura;
-  const id = findGeneral((gid) => auraOfId(gid).teamHpBps > 0);
+test('engine: buff %HP chỉ phát khi tới lượt, không cộng sẵn ở ảnh chụp đầu trận (mục 11.2)', () => {
+  const id = findGeneral((gid) => skillDef(gid).teamBuff.hpBps > 0);
   const p = PVP_PASSIVE_EFFECT[pvpProfile(id).passive];
-  // Solo ở hàng sau: không có buff HP theo hàng nên maxHp = nền × (1 + aura tự HP + aura toàn đội + nội tại HP nếu có).
+  const hpBps = p.stat === 'maxHp' ? p.bps : 0;
+  // Solo ở hàng sau: không có buff HP theo hàng nên trần HP tĩnh = nền × (1 + nội tại HP).
   const res = simulatePvp([one('a', [{ slot: 4, generalId: id, level: 4 }])], never);
-  const aura = auraOfId(id);
-  const hpBps = aura.hpBps + aura.teamHpBps + (p.stat === 'maxHp' ? p.bps : 0);
-  assert.equal(res.units[0]!.maxHp, Math.round(pvpBaseHp(4) * (1 + hpBps / BPS_SCALE)));
-  assert.ok(aura.teamHpBps > 0);
-  // Snapshot mang aura để client hiện LƯỢNG tăng khi tướng thi triển kỹ năng (mục 6.7).
-  assert.deepEqual(res.units[0]!.aura, aura);
+  assert.equal(res.units[0]!.maxHp, Math.round(pvpBaseHp(4) * (1 + hpBps / BPS_SCALE)), 'ảnh chụp đầu trận chỉ gồm chỉ số tĩnh');
+  // Snapshot mang DTO buff để client mô tả LƯỢNG tăng khi tướng thi triển kỹ năng (mục 6.7).
+  const tb = skillDef(id).teamBuff;
+  assert.equal(res.units[0]!.teamBuff?.hpBps, tb.hpBps);
+  assert.equal(res.units[0]!.teamBuff?.rounds, PVP_SKILL_BUFF_ROUNDS);
+  assert.equal(res.units[0]!.teamBuff?.maxLayers, PVP_SKILL_BUFF_MAX_LAYERS);
 });
 
 test('engine: ảnh chụp đầu trận mang tên kỹ năng thật của từng tướng (mục 6.7)', () => {
@@ -377,12 +418,12 @@ test('engine: SELF_HP — hồi 25% HP tối đa mỗi lượt ra đòn, không 
   const def = PVP_SKILL_DEF.SELF_HP;
   // "Bản thân +25% HP tối đa" trong SKILLS.md nghĩa là TỰ HỒI 25% HP tối đa mỗi lượt, không phải tăng trần HP.
   assert.equal(def.selfHealBps, 2500);
-  assert.equal(def.aura.hpBps, 0);
+  assert.equal(def.teamBuff.hpBps, 0);
   const id = findGeneral((gid) => pvpProfile(gid).skill === 'SELF_HP');
   const foe = findGeneral((x) => x !== id && skillDef(x).damageBps > 0);
   const res = simulatePvp([one('a', [{ slot: 1, generalId: id, level: 10 }]), one('b', [{ slot: 1, generalId: foe, level: 10 }])], never);
   const u = res.units.find((x) => x.idx === 0)!;
-  assert.equal(u.aura?.hpBps ?? 0, 0, 'SELF_HP không còn tăng HP tối đa');
+  assert.equal(u.teamBuff?.hpBps ?? 0, 0, 'SELF_HP không còn tăng HP tối đa');
   const heals = res.events.filter((e): e is Extract<PvpEventDto, { t: 'heal' }> => e.t === 'heal' && e.from === 0 && e.idx === 0);
   assert.ok(heals.length > 0, 'phải tự hồi máu mỗi lượt ra đòn khi đã mất máu');
   const expected = Math.round((u.maxHp * pvpProfile(id).selfHealBps) / BPS_SCALE);
@@ -412,6 +453,32 @@ test('engine: tướng hút máu bị giảm 10% hệ số sát thương kỹ n�
   assert.equal(pvpProfile('yue-jin').lifestealPerLevelBps, 200);
   assert.equal(PVP_SKILL_DEF.SINGLE.damageBps, 25000);
   assert.equal(pvpProfile('yue-jin').damageBps, 22500);
+});
+
+test('engine: buff tướng — Quan Vũ, Triệu Vân, Tôn Sách, Điêu Thuyền, Quách Gia (SKILLS.md)', () => {
+  // Quan Vũ: 295% sau hot (26818 × 1.1 ≈ 29500).
+  assert.equal(pvpProfile('guan-yu').damageBps, 29500);
+  // Triệu Vân: giữ 247.5% nhưng hút máu 2.5%/cấp (cấp 10 = 25%).
+  assert.equal(pvpProfile('zhao-yun').lifestealPerLevelBps, 250);
+  assert.equal(pvpProfile('zhao-yun').damageBps, 24750);
+  // Tôn Sách: 247.5% + hút máu 2.5%/cấp (ngang Triệu Vân).
+  assert.equal(pvpProfile('sun-ce').lifestealPerLevelBps, 250);
+  assert.equal(pvpProfile('sun-ce').damageBps, 24750);
+  // Điêu Thuyền: choáng 7.5%/cấp (cấp 10 = 75%), giữ 231%.
+  assert.equal(pvpProfile('diao-chan').stunPerLevelBps, 750);
+  assert.equal(pvpProfile('diao-chan').damageBps, 23100);
+  // Quách Gia: vừa đánh thường 110% vừa phát buff đầy đủ (sát thương + HP + chí mạng).
+  const gj = pvpProfile('guo-jia');
+  assert.equal(gj.skill, 'TEAM_DAMAGE_HP_CRIT');
+  assert.equal(gj.damageBps, 11000);
+  const tb = PVP_SKILL_DEF.TEAM_DAMAGE_HP_CRIT.teamBuff;
+  assert.equal(tb.damageBps, PVP_SKILL_BUFF_DAMAGE_BPS);
+  assert.equal(tb.hpBps, PVP_SKILL_BUFF_HP_BPS);
+  assert.equal(tb.critPointsBps, PVP_SKILL_BUFF_CRIT_POINTS_BPS);
+  // Quách Gia thực sự gây sát thương khi tới lượt (không chỉ buff).
+  const foe = findGeneral((id) => id !== 'guo-jia' && skillDef(id).targeting === 'single' && skillDef(id).damageBps > 0 && pvpProfile(id).lifestealPerLevelBps === 0);
+  const res = simulatePvp([one('a', [{ slot: 1, generalId: 'guo-jia', level: 10 }]), one('b', [{ slot: 1, generalId: foe, level: 10 }])], never);
+  assert.ok(res.events.some((e) => e.t === 'damage' && e.from === 0), 'Quách Gia phải đánh thường kèm buff');
 });
 
 // ===================== HTTP =====================
@@ -522,21 +589,22 @@ test('HTTP: chi tiết chiến đấu của một tướng — chỉ số, kỹ 
   await app.close();
 });
 
-test('HTTP: chi tiết chiến đấu — tướng có hiệu ứng toàn đội tự hưởng (mục 4.3)', async () => {
+test('HTTP: chi tiết chiến đấu — tướng có buff toàn đội mang đúng chỉ số (mục 11.2)', async () => {
   const { app, auth } = await setup();
   const id = findGeneral((gid) => {
-    const a = PVP_SKILL_DEF[pvpProfile(gid).skill].aura;
-    return a.teamHpBps > 0 && a.teamDamageBps > 0;
+    const tb = PVP_SKILL_DEF[pvpProfile(gid).skill].teamBuff;
+    return tb.hpBps > 0 && tb.damageBps > 0;
   });
   const r = await app.inject({ method: 'GET', url: `/api/pvp/generals/${id}/combat?level=5`, headers: auth });
   assert.equal(r.statusCode, 200);
   const c = r.json();
-  const a = c.aura;
-  assert.ok(a.teamHpBps > 0 && a.teamDamageBps > 0, 'tướng này phải có hiệu ứng toàn đội');
-  const hpBps = a.hpBps + a.teamHpBps + (c.passiveEffect.stat === 'maxHp' ? c.passiveEffect.bps : 0);
-  const dmgBps = a.damageBps + a.teamDamageBps + (c.passiveEffect.stat === 'damage' ? c.passiveEffect.bps : 0);
+  assert.equal(c.teamBuff.hpBps, PVP_SKILL_BUFF_HP_BPS);
+  assert.equal(c.teamBuff.damageBps, PVP_SKILL_BUFF_DAMAGE_BPS);
+  assert.equal(c.teamBuff.rounds, PVP_SKILL_BUFF_ROUNDS);
+  assert.equal(c.teamBuff.maxLayers, PVP_SKILL_BUFF_MAX_LAYERS);
+  // Chỉ số của riêng tướng chỉ gồm nội tại (buff đồng minh phát dần khi vào trận, không cộng sẵn).
+  const hpBps = c.passiveEffect.stat === 'maxHp' ? c.passiveEffect.bps : 0;
   assert.equal(c.self.maxHp, Math.round((c.base.maxHp * (c.bpsScale + hpBps)) / c.bpsScale));
-  assert.equal(c.self.damage, Math.round((c.base.damage * (c.bpsScale + dmgBps)) / c.bpsScale));
   await app.close();
 });
 

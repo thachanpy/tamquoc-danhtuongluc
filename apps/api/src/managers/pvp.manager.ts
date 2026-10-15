@@ -8,8 +8,8 @@ import {
   PVP_FRONT_HP_BPS,
   PVP_MAX_ROUNDS,
   PVP_PASSIVE_EFFECT,
-  PVP_SKILL_BUFF_CRIT_POINTS_BPS,
-  PVP_SKILL_BUFF_DAMAGE_BPS,
+  PVP_SKILL_BUFF_MAX_LAYERS,
+  PVP_SKILL_BUFF_ROUNDS,
   PVP_SKILL_DEF,
   PVP_TEAM_SIZE,
   pvpBaseDamage,
@@ -192,17 +192,16 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
   if (!ROSTER_IDS.has(generalId)) throw new AppError(404, 'GENERAL_NOT_FOUND', 'Không tìm thấy tướng.');
   const profile = pvpProfile(generalId);
   const def = PVP_SKILL_DEF[profile.skill];
-  const aura = def.aura;
   const passive = PVP_PASSIVE_EFFECT[profile.passive];
   const baseHp = pvpBaseHp(level);
   const baseDamage = pvpBaseDamage(level);
-  // Chỉ số của chính tướng: hiệu ứng nền "toàn đội" (aura.team*) áp cho cả tướng sở hữu (mục 4.3).
-  // Chưa gồm buff theo hàng và hiệu ứng từ đồng minh khác — khi vào trận mới áp.
-  const hpBps = aura.hpBps + aura.teamHpBps + (passive.stat === 'maxHp' ? passive.bps : 0);
-  const damageBps = aura.damageBps + aura.teamDamageBps + (passive.stat === 'damage' ? passive.bps : 0);
+  // Chỉ số của riêng tướng: chỉ áp nội tại (mục 10.1). Buff theo hàng và buff đồng minh phát
+  // mỗi lượt (TEAM_*/BUFF_ALLIES) KHÔNG cộng sẵn ở đây — chỉ số đó do engine áp khi vào trận.
+  const hpBps = passive.stat === 'maxHp' ? passive.bps : 0;
+  const damageBps = passive.stat === 'damage' ? passive.bps : 0;
   const maxHp = Math.round(baseHp * (1 + hpBps / BPS_SCALE));
   const damage = Math.round(baseDamage * (1 + damageBps / BPS_SCALE));
-  const critBps = level * PVP_CRIT_BPS_PER_LEVEL + aura.teamCritPointsBps + (passive.stat === 'crit' ? passive.pointsBps : 0);
+  const critBps = level * PVP_CRIT_BPS_PER_LEVEL + (passive.stat === 'crit' ? passive.pointsBps : 0);
   // Hồi máu mỗi lần thi triển: hồi đồng minh theo damage, tự hồi theo HP tối đa (hai loại loại trừ nhau).
   const heal =
     (profile.healBps > 0 ? Math.round((damage * profile.healBps) / BPS_SCALE) : 0) +
@@ -227,7 +226,6 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
       // Hút máu ở cấp hiện tại (khớp engine): cấp × hệ số mỗi cấp.
       lifestealBps: level * profile.lifestealPerLevelBps,
     },
-    aura: { ...aura },
     passiveEffect: { ...passive },
     // Hệ số kỹ năng ở đây là của riêng tướng (đã nhân hot) — khớp với engine khi vào trận.
     skillDef: {
@@ -238,11 +236,10 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
       stun: def.stun,
       cleanse: def.cleanse,
       buff: def.buff,
-      aura: { ...aura },
+      teamBuff: { ...def.teamBuff, rounds: PVP_SKILL_BUFF_ROUNDS, maxLayers: PVP_SKILL_BUFF_MAX_LAYERS },
     },
-    teamBuff: def.buff
-      ? { damageBps: PVP_SKILL_BUFF_DAMAGE_BPS, critPointsBps: PVP_SKILL_BUFF_CRIT_POINTS_BPS }
-      : { damageBps: 0, critPointsBps: 0 },
+    // Buff tăng sức mạnh kỹ năng phát cho toàn đội mỗi lượt (kể cả bản thân); tất cả 0 = không buff.
+    teamBuff: { ...def.teamBuff, rounds: PVP_SKILL_BUFF_ROUNDS, maxLayers: PVP_SKILL_BUFF_MAX_LAYERS },
     rowBonus: { frontHpBps: PVP_FRONT_HP_BPS, backDamageBps: PVP_BACK_DAMAGE_BPS },
     bpsScale: BPS_SCALE,
   };

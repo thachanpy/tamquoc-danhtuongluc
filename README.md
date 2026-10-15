@@ -16,7 +16,7 @@ pnpm test         # unit + integration test (game-config, api)
 pnpm typecheck
 ```
 
-Frontend viết bằng **SolidJS** + Vite (`vite-plugin-solid`), hiệu ứng mở thẻ/ghép thẻ bằng PixiJS. Cấu trúc: xem CLAUDE.md mục 2.
+Frontend viết bằng **SolidJS** + Vite (`vite-plugin-solid`); sân khấu mở thẻ/ghép thẻ (`pixi/stage.ts`) và sân đấu PvP (`pixi/arena.ts`) dựng bằng **PixiJS**. Cấu trúc: xem CLAUDE.md mục 2.
 
 Database SQLite nằm ở `data/tamquoc.db` (đổi bằng biến `DB_PATH`). Khởi động không bao giờ reset dữ liệu.
 
@@ -154,7 +154,7 @@ sqlite3 /opt/tamquoc-gacha/data/tamquoc.db ".backup '/opt/tamquoc-gacha/data/bac
 packages/shared        enum, DTO, JSON schema dùng chung
 packages/game-config   roster 100 tướng, tỷ lệ vé / gacha / nâng cấp (basis points), validate, hàm roll
 apps/api               Fastify + SQLite: migration, seed, hồi vé, gacha, ghép 2 thẻ, lịch sử, auth
-apps/web               Vite + PixiJS: quay thẻ, bộ sưu tập, nâng cấp, lịch sử
+apps/web               Vite + SolidJS: quay thẻ, bộ sưu tập, nâng cấp, lịch sử
 ```
 
 ## Điểm chính
@@ -172,7 +172,7 @@ apps/web               Vite + PixiJS: quay thẻ, bộ sưu tập, nâng cấp, 
 - **Trang Nâng cấp** gom thẻ theo tướng (bản sao cùng tướng luôn liền nhau, chia nhóm theo level, đánh dấu nhóm đủ 2 thẻ).
   Logic gom/sắp xếp ở `apps/web/src/upgrade-groups.ts`, có test.
 - **Tặng thẻ** — **đang tạm tắt** (chủ dự án yêu cầu): API trả 404 `FEATURE_DISABLED`, UI ẩn nút. Bật lại bằng biến môi trường `ENABLE_GIFT=1`. Khi bật (`GIFT_MAX_CARDS = 20`): nằm trong trang Bộ sưu tập (nút 🎁), dropdown người nhận sắp theo giao dịch gần nhất (`GET /api/users`), chuyển chủ thẻ nguyên tử, lịch sử ở cả người gửi lẫn người nhận (bảng `card_gifts`, migration v5).
-- **Nâng cấp nhanh** (`QUICK_UPGRADE_MAX_LEVEL = 5`): một nút ghép liên tục mọi cặp thẻ ≤ Lv.5, level thấp trước, trong 1 transaction.
+- **Nâng cấp nhanh** (`QUICK_UPGRADE_MAX_LEVEL = 5` là mức chọn sẵn mặc định): một nút ghép liên tục mọi cặp thẻ thuộc các level người chơi tick chọn (Lv.1–9; mặc định Lv.1–5), level thấp trước, trong 1 transaction.
 - **Quay ×10**: số lượt = min(10, số dư loại vé); tất cả lượt trong 1 transaction, mỗi lượt 1 dòng ledger + lịch sử,
   1 idempotency key cho cả thao tác. Lựa chọn số lần ở `DRAW_COUNT_OPTIONS` trong `rates.ts`.
 - **Ghép 2 thẻ** (`UPGRADE_INPUT_COUNT`) cùng tướng + cùng level (1–9). Roll thành công trước; chỉ khi thất bại mới roll bảng phân phối thất bại.
@@ -196,7 +196,7 @@ apps/web               Vite + PixiJS: quay thẻ, bộ sưu tập, nâng cấp, 
 ## Artwork
 
 Hiện dùng placeholder (màu phe + chữ Hán của phe + chữ viết tắt tên). Mỗi tướng có `artKey` = ID ổn định;
-thay ảnh thật bằng cách map `artKey` → file ảnh trong `apps/web/src/art.ts` và `apps/web/src/pixi/stage.ts`.
+thay ảnh thật bằng cách map `artKey` → file ảnh trong `apps/web/src/art.ts`.
 
 ## API
 
@@ -214,7 +214,7 @@ thay ảnh thật bằng cách map `artKey` → file ảnh trong `apps/web/src/a
 | POST | `/api/upgrades/preview` | `{ cardIds: [a,b,c] }` |
 | GET | `/api/users` | Danh sách người nhận (trừ mình, admin), người giao dịch gần nhất lên đầu; `?q=` tìm theo tên (404 nếu `ENABLE_GIFT` tắt) |
 | POST | `/api/gifts` | `{ toUsername, cardIds[], idempotencyKey }` — tặng 1–20 thẻ cho người chơi khác (404 nếu `ENABLE_GIFT` tắt) |
-| POST | `/api/upgrades/quick` | `{ idempotencyKey }` — Nâng cấp nhanh: tự ghép dây chuyền mọi cặp thẻ ≤ Lv.5 |
+| POST | `/api/upgrades/quick` | `{ idempotencyKey, levels?: number[] }` — Nâng cấp nhanh: tự ghép dây chuyền mọi cặp thẻ thuộc các level đã chọn (mặc định Lv.1–5) |
 | POST | `/api/upgrades/attempt` | `{ cardIds: [a,b,c], idempotencyKey }` |
 | GET | `/api/history` | Lịch sử phân trang (`kind`, `page`, `pageSize`) |
 | GET | `/api/admin/users` | (admin) Người chơi: `q`, `status=pending\|approved`, phân trang; chờ duyệt lên đầu |

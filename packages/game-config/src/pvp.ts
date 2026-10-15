@@ -17,7 +17,7 @@ export const PVP_LANES = 3;
 export const PVP_ROWS = 2;
 export { PVP_TEAM_SIZE };
 
-/** Giới hạn số vòng để tránh trận bất tử. Quá số vòng: xét theo tổng % HP còn lại. */
+/** Giới hạn số vòng để tránh trận bất tử. Quá số vòng mà chưa phân thắng bại thì hai đội hoà. */
 export const PVP_MAX_ROUNDS = 50;
 
 // ===== Chỉ số nền theo cấp (cùng cấp => chỉ số nền tương đương) =====
@@ -34,26 +34,36 @@ export const pvpBaseHp = (level: number) => 10 * pvpBaseDamage(level);
 export const PVP_LC_BY_STYLE: Record<PvpStyle, number> = { attack: 130, support: 120, defense: 110 };
 export const pvpLc = (style: PvpStyle, level: number) => PVP_LC_BY_STYLE[style] + (level - 1) * 2;
 
-// ===== Hiệu ứng nền (aura) =====
+// ===== Buff tăng sức mạnh đồng minh theo kỹ năng =====
 
 /**
- * Hiệu ứng nền áp trước trận cho từng tướng theo KỸ NĂNG của tướng đó (SKILLS.md).
- * Phong cách chỉ còn quyết định lực chiến (LC) và nhãn hiển thị.
+ * Buff tăng sức mạnh mà tướng phát cho toàn bộ đồng minh (kể cả chính mình) MỖI LẦN tới lượt
+ * (SKILLS.md). Mỗi lần thi triển cộng thêm MỘT lớp; các lớp cộng dồn tối đa
+ * `PVP_SKILL_BUFF_MAX_LAYERS` lớp, mỗi lớp hiệu lực `PVP_SKILL_BUFF_ROUNDS` lượt.
+ * Phần % HP và % sát thương của một lớp ăn chí mạng (×1.5) theo MỘT lần roll chung cho cả lớp.
  */
-export interface PvpAura {
-  /** Tăng sát thương của chính tướng. */
+export interface PvpTeamBuff {
+  /** % sát thương cộng mỗi lớp (theo sát thương nền của chính đồng minh nhận buff). */
   damageBps: number;
-  /** Tăng HP tối đa của chính tướng. */
+  /** % HP tối đa cộng mỗi lớp: tăng trần HP và hồi đúng lượng tăng. */
   hpBps: number;
-  /** Tăng sát thương cho toàn bộ đồng minh, kể cả chính tướng (không cộng dồn lặp lại). */
-  teamDamageBps: number;
-  /** Tăng HP tối đa cho toàn bộ đồng minh, kể cả chính tướng. */
-  teamHpBps: number;
-  /** Cộng điểm chí mạng cho toàn bộ đồng minh (bps: 500 = +5 điểm phần trăm). */
-  teamCritPointsBps: number;
+  /** Điểm chí mạng cộng mỗi lớp (bps: 500 = +5 điểm phần trăm). */
+  critPointsBps: number;
 }
 
-export const PVP_NO_AURA: PvpAura = { damageBps: 0, hpBps: 0, teamDamageBps: 0, teamHpBps: 0, teamCritPointsBps: 0 };
+/** Không buff (mặc định cho kỹ năng gây sát thương/hồi máu/choáng...). */
+export const PVP_NO_TEAM_BUFF: PvpTeamBuff = { damageBps: 0, hpBps: 0, critPointsBps: 0 };
+
+/** Số lượt mỗi lớp buff tăng sức mạnh còn hiệu lực (kể cả lượt thi triển). */
+export const PVP_SKILL_BUFF_ROUNDS = 4;
+/** Số lớp buff tăng sức mạnh cộng dồn tối đa (lớp mới nhất thay lớp cũ nhất khi vượt trần). */
+export const PVP_SKILL_BUFF_MAX_LAYERS = 3;
+/** Mỗi lớp buff tăng sức mạnh: +10% sát thương nền của chính đồng minh nhận. */
+export const PVP_SKILL_BUFF_DAMAGE_BPS = 1000;
+/** Mỗi lớp buff tăng sức mạnh: +10% HP tối đa (đồng thời hồi đúng lượng trần HP tăng). */
+export const PVP_SKILL_BUFF_HP_BPS = 1000;
+/** Mỗi lớp buff tăng sức mạnh: +5 điểm phần trăm chí mạng. */
+export const PVP_SKILL_BUFF_CRIT_POINTS_BPS = 500;
 
 // ===== Buff theo vị trí =====
 
@@ -98,47 +108,54 @@ export interface PvpSkillDef {
   stun: 'none' | 'single' | 'row';
   /** Kỹ năng có kiểm tra giải choáng cho đồng minh. */
   cleanse: boolean;
-  /** Kỹ năng buff damage + chí mạng cho đồng minh. */
+  /** Kỹ năng buff đồng minh (không kèm đòn đánh thường). */
   buff: boolean;
-  /** Hiệu ứng nền áp trước trận (kể cả bản thân tướng sở hữu). */
-  aura: PvpAura;
+  /**
+   * Buff tăng sức mạnh phát cho toàn đội mỗi lần tới lượt (kể cả bản thân). Rỗng = không buff.
+   * Tướng nhóm TEAM_* VỪA đánh thường VỪA phát buff; BUFF_ALLIES chỉ phát buff (damageBps = 0).
+   */
+  teamBuff: PvpTeamBuff;
 }
 
 /**
- * Bảng định nghĩa kỹ năng. Các kỹ năng nhóm "hiệu ứng nền" (SELF_HP/TEAM_*) không có chiêu chủ động
- * nên khi tới lượt sẽ đánh thường đơn mục tiêu 100% (damageBps = 10000).
+ * Bảng định nghĩa kỹ năng. Các kỹ năng nhóm TEAM_* khi tới lượt VỪA đánh thường đơn mục tiêu 100%
+ * VỪA phát một lớp buff tăng sức mạnh cho toàn đội; BUFF_ALLIES chỉ phát buff (damageBps = 0).
  */
 export const PVP_SKILL_DEF: Record<PvpSkill, PvpSkillDef> = {
   // Sát thương đánh đơn/hàng được nâng để bù việc đánh diện rộng có tổng sát thương cao hơn:
   // đơn mục tiêu 250% (dứt điểm nhanh 1 mục tiêu), hàng ngang/dọc/hàng sau 180% × ~3 mục tiêu,
   // đánh toàn bộ giữ 100% × tối đa 6 mục tiêu. Kỹ năng kèm choáng hạ nhẹ (210%) vì đã có khống chế.
-  SINGLE: { targeting: 'single', damageBps: 25000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  HORIZONTAL: { targeting: 'lane', damageBps: 18000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  VERTICAL: { targeting: 'row', damageBps: 18000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  BACK_ROW: { targeting: 'back_row', damageBps: 18000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  ALL_ENEMIES: { targeting: 'all_enemies', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  STUN_SINGLE: { targeting: 'single', damageBps: 21000, healBps: 0, selfHealBps: 0, stun: 'single', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  STUN_HORIZONTAL: { targeting: 'lane', damageBps: 18000, healBps: 0, selfHealBps: 0, stun: 'row', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  STUN_VERTICAL: { targeting: 'row', damageBps: 18000, healBps: 0, selfHealBps: 0, stun: 'row', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  STUN_ALL: { targeting: 'all_enemies', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'row', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  SELF_HEAL: { targeting: 'single', damageBps: 21000, healBps: 0, selfHealBps: 1000, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
+  SINGLE: { targeting: 'single', damageBps: 25000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
+  HORIZONTAL: { targeting: 'lane', damageBps: 18000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
+  VERTICAL: { targeting: 'row', damageBps: 18000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
+  BACK_ROW: { targeting: 'back_row', damageBps: 18000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
+  ALL_ENEMIES: { targeting: 'all_enemies', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
+  STUN_SINGLE: { targeting: 'single', damageBps: 21000, healBps: 0, selfHealBps: 0, stun: 'single', cleanse: false, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
+  STUN_HORIZONTAL: { targeting: 'lane', damageBps: 18000, healBps: 0, selfHealBps: 0, stun: 'row', cleanse: false, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
+  STUN_VERTICAL: { targeting: 'row', damageBps: 18000, healBps: 0, selfHealBps: 0, stun: 'row', cleanse: false, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
+  STUN_ALL: { targeting: 'all_enemies', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'row', cleanse: false, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
+  SELF_HEAL: { targeting: 'single', damageBps: 21000, healBps: 0, selfHealBps: 1000, stun: 'none', cleanse: false, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
   // Cân bằng hồi máu: tính theo sát thương cơ bản của người thi triển × hệ số × số mục tiêu hồi.
   // Toàn đội (tối đa 6) hạ còn 110%; hàng trước/sau (tối đa 3) nâng lên 220%; 1 người thấp máu
   // nhất nâng lên 330% để đủ sức cứu nguy (tổng mỗi lần ~660% cho nhóm nhiều mục tiêu).
-  ALL_ALLIES_HEAL: { targeting: 'all_allies', damageBps: 0, healBps: 11000, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
+  ALL_ALLIES_HEAL: { targeting: 'all_allies', damageBps: 0, healBps: 11000, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
   // Hồi máu chọn theo mục tiêu: 1 đồng minh thấp máu nhất / hàng trước / hàng sau (mục 6.4).
-  ALLY_LOWEST_HEAL: { targeting: 'lowest_ally', damageBps: 0, healBps: 33000, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  FRONT_ROW_HEAL: { targeting: 'front_allies', damageBps: 0, healBps: 22000, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  BACK_ROW_HEAL: { targeting: 'back_allies', damageBps: 0, healBps: 22000, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  CLEANSE_ALL: { targeting: 'all_allies', damageBps: 0, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: true, buff: false, aura: PVP_NO_AURA },
-  CLEANSE_DAMAGE_ALL: { targeting: 'all_enemies', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: true, buff: false, aura: PVP_NO_AURA },
-  BUFF_ALLIES: { targeting: 'all_allies', damageBps: 0, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: true, aura: PVP_NO_AURA },
+  ALLY_LOWEST_HEAL: { targeting: 'lowest_ally', damageBps: 0, healBps: 33000, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
+  FRONT_ROW_HEAL: { targeting: 'front_allies', damageBps: 0, healBps: 22000, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
+  BACK_ROW_HEAL: { targeting: 'back_allies', damageBps: 0, healBps: 22000, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
+  CLEANSE_ALL: { targeting: 'all_allies', damageBps: 0, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: true, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
+  CLEANSE_DAMAGE_ALL: { targeting: 'all_enemies', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: true, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
+  // Buff toàn diện: mỗi lớp +10% HP tối đa (hồi đúng lượng trần HP tăng) + 10% sát thương + 5 điểm chí mạng.
+  BUFF_ALLIES: { targeting: 'all_allies', damageBps: 0, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: true, teamBuff: { damageBps: PVP_SKILL_BUFF_DAMAGE_BPS, hpBps: PVP_SKILL_BUFF_HP_BPS, critPointsBps: PVP_SKILL_BUFF_CRIT_POINTS_BPS } },
   // "Bản thân +25% HP tối đa" trong SKILLS.md nghĩa là HỒI 25% HP tối đa mỗi lượt ra đòn (kèm đánh thường 100%).
-  SELF_HP: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 2500, stun: 'none', cleanse: false, buff: false, aura: PVP_NO_AURA },
-  TEAM_DAMAGE: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: { ...PVP_NO_AURA, teamDamageBps: 1000 } },
-  TEAM_HP: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: { ...PVP_NO_AURA, teamHpBps: 1000 } },
-  TEAM_DAMAGE_HP: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: { ...PVP_NO_AURA, teamDamageBps: 1000, teamHpBps: 1000 } },
-  TEAM_CRIT: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, aura: { ...PVP_NO_AURA, teamCritPointsBps: 500 } },
+  SELF_HP: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 2500, stun: 'none', cleanse: false, buff: false, teamBuff: PVP_NO_TEAM_BUFF },
+  // Nhóm TEAM_*: mỗi lượt tới lượt VỪA đánh thường 100% VỪA phát một lớp buff toàn đội (cộng dồn).
+  TEAM_DAMAGE: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, teamBuff: { damageBps: PVP_SKILL_BUFF_DAMAGE_BPS, hpBps: 0, critPointsBps: 0 } },
+  TEAM_HP: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, teamBuff: { damageBps: 0, hpBps: PVP_SKILL_BUFF_HP_BPS, critPointsBps: 0 } },
+  TEAM_DAMAGE_HP: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, teamBuff: { damageBps: PVP_SKILL_BUFF_DAMAGE_BPS, hpBps: PVP_SKILL_BUFF_HP_BPS, critPointsBps: 0 } },
+  TEAM_CRIT: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, teamBuff: { damageBps: 0, hpBps: 0, critPointsBps: PVP_SKILL_BUFF_CRIT_POINTS_BPS } },
+  // Biến thể đầy đủ nhất: vừa đánh thường 100% vừa phát cả ba chỉ số (+sát thương, +HP, +chí mạng).
+  TEAM_DAMAGE_HP_CRIT: { targeting: 'single', damageBps: 10000, healBps: 0, selfHealBps: 0, stun: 'none', cleanse: false, buff: false, teamBuff: { damageBps: PVP_SKILL_BUFF_DAMAGE_BPS, hpBps: PVP_SKILL_BUFF_HP_BPS, critPointsBps: PVP_SKILL_BUFF_CRIT_POINTS_BPS } },
 };
 
 // ===== Tỉ lệ theo cấp =====
@@ -170,19 +187,6 @@ export const PVP_CRIT_DAMAGE_BPS = 5000;
 export const PVP_LIFESTEAL_BPS_PER_LEVEL = 200;
 /** Tướng có hút máu bị giảm 10% hệ số sát thương kỹ năng để bù lại lượng máu hồi thêm. */
 export const PVP_LIFESTEAL_DAMAGE_PENALTY_BPS = 1000;
-
-// ===== Buff từ kỹ năng đặc biệt (BUFF_ALLIES) =====
-
-/**
- * Buff chỉ số chủ động (BUFF_ALLIES) CỘNG DỒN được, mỗi lần thi triển có hiệu lực tối đa
- * `PVP_SKILL_BUFF_ROUNDS` lượt (kể cả lượt thi triển). Nhờ vậy tướng buff đánh liên tục sẽ
- * đạt tối đa 3 lớp chồng nhau rồi dừng (lớp cũ tự hết hạn).
- */
-export const PVP_SKILL_BUFF_ROUNDS = 3;
-/** Mỗi lớp buff: đồng minh còn sống nhận thêm damage bằng 10% damage cơ bản của chính mình. */
-export const PVP_SKILL_BUFF_DAMAGE_BPS = 1000;
-/** Mỗi lớp buff: đồng minh còn sống nhận thêm 5 điểm phần trăm chí mạng. */
-export const PVP_SKILL_BUFF_CRIT_POINTS_BPS = 500;
 
 // ===== Tướng hot (SKILLS.md) =====
 
@@ -234,7 +238,7 @@ const WEI_PVP: RosterPvpRow[] = [
   { id: 'xu-huang', skillName: 'Khai sơn phủ', style: 'attack', skill: 'SINGLE' },
   { id: 'dian-wei', skillName: 'Ác Lai hộ vệ', style: 'defense', skill: 'SELF_HP' },
   { id: 'xu-chu', skillName: 'Hổ si cuồng kích', style: 'defense', skill: 'SINGLE', lifestealPerLevelBps: LIFESTEAL },
-  { id: 'guo-jia', skillName: 'Diệu kế thiên cơ', style: 'support', skill: 'BUFF_ALLIES' },
+  { id: 'guo-jia', skillName: 'Diệu kế thiên cơ', style: 'support', skill: 'TEAM_DAMAGE_HP_CRIT' },
   { id: 'xun-yu', skillName: 'Vương tá chi sách', style: 'support', skill: 'TEAM_DAMAGE' },
   { id: 'xun-you', skillName: 'Liên hoàn kế', style: 'support', skill: 'STUN_VERTICAL' },
   { id: 'jia-xu', skillName: 'Độc kế', style: 'support', skill: 'STUN_SINGLE' },
@@ -249,10 +253,11 @@ const WEI_PVP: RosterPvpRow[] = [
 
 const SHU_PVP: RosterPvpRow[] = [
   { id: 'liu-bei', skillName: 'Nhân đức', style: 'support', skill: 'TEAM_DAMAGE_HP' },
-  { id: 'guan-yu', skillName: 'Thanh Long Yển Nguyệt', style: 'attack', skill: 'SINGLE' },
+  // 295% sau hot: 26818 × 1.1 ≈ 295%.
+  { id: 'guan-yu', skillName: 'Thanh Long Yển Nguyệt', style: 'attack', skill: 'SINGLE', damageBps: 26818 },
   { id: 'zhang-fei', skillName: 'Hổ Khiếu Trường Bản', style: 'attack', skill: 'HORIZONTAL' },
   { id: 'zhuge-liang', skillName: 'Bát trận đồ', style: 'support', skill: 'STUN_ALL' },
-  { id: 'zhao-yun', skillName: 'Thất Tiến Thất Xuất', style: 'attack', skill: 'SINGLE', lifestealPerLevelBps: LIFESTEAL },
+  { id: 'zhao-yun', skillName: 'Thất Tiến Thất Xuất', style: 'attack', skill: 'SINGLE', lifestealPerLevelBps: 250 },
   { id: 'ma-chao', skillName: 'Cẩm Mã Siêu', style: 'attack', skill: 'BACK_ROW', lifestealPerLevelBps: LIFESTEAL },
   { id: 'huang-zhong', skillName: 'Lão Đương Ích Tráng', style: 'attack', skill: 'BACK_ROW' },
   { id: 'wei-yan', skillName: 'Kỳ phong đột kích', style: 'attack', skill: 'VERTICAL' },
@@ -277,7 +282,7 @@ const SHU_PVP: RosterPvpRow[] = [
 
 const WU_PVP: RosterPvpRow[] = [
   { id: 'sun-jian', skillName: 'Giang Đông mãnh hổ', style: 'attack', skill: 'HORIZONTAL', damageBps: 15500 },
-  { id: 'sun-ce', skillName: 'Tiểu Bá Vương', style: 'attack', skill: 'SINGLE', damageBps: 22000, lifestealPerLevelBps: LIFESTEAL },
+  { id: 'sun-ce', skillName: 'Tiểu Bá Vương', style: 'attack', skill: 'SINGLE', lifestealPerLevelBps: 250 },
   { id: 'sun-quan', skillName: 'Đế nghiệp Giang Đông', style: 'support', skill: 'TEAM_DAMAGE_HP' },
   { id: 'zhou-yu', skillName: 'Hỏa thiêu Xích Bích', style: 'support', skill: 'ALL_ENEMIES', damageBps: 12000, lifestealPerLevelBps: LIFESTEAL },
   { id: 'lu-xun', skillName: 'Hỏa kế liên doanh', style: 'support', skill: 'HORIZONTAL' },
@@ -306,7 +311,7 @@ const WU_PVP: RosterPvpRow[] = [
 const QUN_PVP: RosterPvpRow[] = [
   { id: 'dong-zhuo', skillName: 'Bạo chúa', style: 'defense', skill: 'SELF_HP' },
   { id: 'lu-bu', skillName: 'Vô song', style: 'attack', skill: 'STUN_ALL', damageBps: 11500, stunPerLevelBps: 200, lifestealPerLevelBps: LIFESTEAL },
-  { id: 'diao-chan', skillName: 'Bế nguyệt', style: 'support', skill: 'STUN_SINGLE' },
+  { id: 'diao-chan', skillName: 'Bế nguyệt', style: 'support', skill: 'STUN_SINGLE', stunPerLevelBps: 750 },
   { id: 'yuan-shao', skillName: 'Thế gia hào tộc', style: 'support', skill: 'TEAM_DAMAGE_HP' },
   { id: 'yuan-shu', skillName: 'Trọng thị đế nghiệp', style: 'support', skill: 'TEAM_DAMAGE' },
   { id: 'gongsun-zan', skillName: 'Bạch mã nghĩa tùng', style: 'attack', skill: 'BACK_ROW' },
@@ -373,7 +378,7 @@ function buildProfile(row: RosterPvpRow): PvpProfile {
   const mul = hot ? PVP_HOT_MULTIPLIER_BPS : BPS_SCALE;
   const stunPerLevelBps =
     def.stun === 'single'
-      ? PVP_STUN_SINGLE_BPS_PER_LEVEL
+      ? (row.stunPerLevelBps ?? PVP_STUN_SINGLE_BPS_PER_LEVEL)
       : def.stun === 'row'
         ? (row.stunPerLevelBps ?? PVP_STUN_ROW_BPS_PER_LEVEL)
         : 0;
@@ -434,6 +439,14 @@ export function validatePvpConfig(assert: (cond: unknown, msg: string) => void):
     }
   }
   assert(pvpBaseHp(MAX_LEVEL) > 0 && pvpBaseDamage(MAX_LEVEL) > 0, 'Chỉ số nền PvP theo cấp phải > 0');
+  // Kỹ năng buff (BUFF_ALLIES) bắt buộc phát buff tăng sức mạnh cho đồng minh.
+  for (const id of PVP_SKILLS) {
+    const def = PVP_SKILL_DEF[id];
+    if (def.buff) {
+      const tb = def.teamBuff;
+      assert(tb.damageBps > 0 || tb.hpBps > 0 || tb.critPointsBps > 0, `Kỹ năng buff ${id} phải có hiệu ứng tăng sức mạnh`);
+    }
+  }
 }
 
 /** Toàn bộ hồ sơ chiến đấu của roster — dùng cho test cân bằng và hiển thị. */

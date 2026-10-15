@@ -106,7 +106,8 @@ export const LEADERBOARD_TOP = 10;
 export const GIFT_MAX_CARDS = 20;
 
 /**
- * Nâng cấp nhanh (mục 5.5): tự ghép mọi cặp thẻ có level đầu vào ≤ mức này.
+ * Nâng cấp nhanh (mục 5.5): người chơi tick chọn các level đầu vào muốn ghép (Lv.1–9).
+ * QUICK_UPGRADE_MAX_LEVEL: mức level MẶC ĐỊNH được chọn sẵn (Lv.1–mức này) khi mở trang.
  * QUICK_UPGRADE_MAX_MERGES: số lần ghép tối đa trong 1 lần bấm (an toàn); còn nữa thì bấm lại.
  */
 export const QUICK_UPGRADE_MAX_LEVEL = 5;

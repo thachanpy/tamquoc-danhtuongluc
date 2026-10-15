@@ -11,11 +11,10 @@ import { skillNote } from '../combat-notes.ts';
 
 /** Các dòng chỉ số chi tiết: giá trị thực tế, kèm ghi chú chỉ số nền + phần % được cộng. */
 export function statRows(c: PvpCombatDto): { label: string; value: string; note?: string }[] {
-  // Phần trăm cộng thêm từ hiệu ứng nền theo kỹ năng (gồm buff toàn đội tướng tự hưởng) + nội tại:
-  // chỉ số thực tế = nền × (1 + tổng %).
-  const a = c.aura;
-  const hpPct = a.hpBps + a.teamHpBps + (c.passiveEffect.stat === 'maxHp' ? c.passiveEffect.bps : 0);
-  const dmgPct = a.damageBps + a.teamDamageBps + (c.passiveEffect.stat === 'damage' ? c.passiveEffect.bps : 0);
+  // Phần % cộng thêm vào chỉ số của riêng tướng chỉ đến từ nội tại (buff theo hàng và buff
+  // đồng minh phát mỗi lượt do engine áp khi vào trận, không cộng sẵn ở chỉ số "self").
+  const hpPct = c.passiveEffect.stat === 'maxHp' ? c.passiveEffect.bps : 0;
+  const dmgPct = c.passiveEffect.stat === 'damage' ? c.passiveEffect.bps : 0;
   const note = (p: number, base: number) => (p > 0 ? `nền ${base} · +${pct(p)}` : undefined);
   const rows: { label: string; value: string; note?: string }[] = [
     { label: 'HP tối đa', value: `${c.self.maxHp}`, note: note(hpPct, c.base.maxHp) },

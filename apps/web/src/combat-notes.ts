@@ -6,18 +6,18 @@ import { pct } from './art.ts';
  * Dùng chung cho popup ngắm thẻ (Bộ sưu tập) và bảng chọn tướng (Đấu trường) để hai nơi luôn khớp nhau.
  */
 
-/** Mô tả hiệu ứng nền (aura) theo kỹ năng: tự buff bản thân + buff toàn đội (kể cả bản thân). */
-export function auraNote(c: PvpCombatDto): string {
-  const a = c.aura;
-  return [
-    a.damageBps ? `tự +${pct(a.damageBps)} sát thương` : '',
-    a.hpBps ? `tự +${pct(a.hpBps)} HP` : '',
-    a.teamDamageBps ? `cả đội (kể cả bản thân) +${pct(a.teamDamageBps)} sát thương` : '',
-    a.teamHpBps ? `cả đội (kể cả bản thân) +${pct(a.teamHpBps)} HP` : '',
-    a.teamCritPointsBps ? `cả đội (kể cả bản thân) +${a.teamCritPointsBps / 100} điểm chí mạng` : '',
+/** Mô tả buff tăng sức mạnh theo kỹ năng (nhóm TEAM_ và BUFF_ALLIES): phát cho cả đội mỗi lượt, cộng dồn lớp. */
+export function teamBuffNote(c: PvpCombatDto): string {
+  const b = c.teamBuff;
+  if (!b.damageBps && !b.hpBps && !b.critPointsBps) return '';
+  const gains = [
+    b.damageBps ? `+${pct(b.damageBps)} sát thương` : '',
+    b.hpBps ? `+${pct(b.hpBps)} HP tối đa` : '',
+    b.critPointsBps ? `+${b.critPointsBps / 100} điểm chí mạng` : '',
   ]
     .filter(Boolean)
-    .join(' · ');
+    .join(', ');
+  return `mỗi lượt: cả đội (kể cả bản thân) ${gains} · tối đa ${b.maxLayers} lớp, mỗi lớp ${b.rounds} lượt`;
 }
 
 /** Mô tả kỹ năng (mục 6, 8, 9, 11.2) bằng tiếng Việt. */
@@ -32,8 +32,7 @@ export function skillNote(c: PvpCombatDto): string {
   if (c.self.lifestealBps) parts.push(`hút ${pct(c.self.lifestealBps)} sát thương gây ra`);
   if (d.stun !== 'none') parts.push(`choáng ${pct(c.self.stunBps)}`);
   if (d.cleanse) parts.push(`giải choáng ${pct(c.self.cleanseBps)}`);
-  if (d.buff) parts.push(`buff đồng minh +${pct(c.teamBuff.damageBps)} sát thương, +${c.teamBuff.critPointsBps / 100} điểm chí mạng`);
-  const aura = auraNote(c);
-  if (aura) parts.push(aura);
+  const buff = teamBuffNote(c);
+  if (buff) parts.push(buff);
   return parts.join(' · ');
 }

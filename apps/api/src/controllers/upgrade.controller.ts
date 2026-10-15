@@ -24,6 +24,9 @@ export function registerUpgradeRoutes(app: FastifyInstance, ctx: GameContext): v
   app.post(
     '/api/upgrades/quick',
     { preHandler: player, schema: { body: schemas.quickUpgradeBody }, config: LIMIT_20 },
-    async (req) => quickUpgrade(ctx, req.userId, (req.body as { idempotencyKey: string }).idempotencyKey),
+    async (req) => {
+      const { idempotencyKey, levels } = req.body as { idempotencyKey: string; levels?: number[] };
+      return quickUpgrade(ctx, req.userId, idempotencyKey, levels);
+    },
   );
 }

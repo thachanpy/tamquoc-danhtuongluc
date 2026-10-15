@@ -183,7 +183,8 @@ export interface UpgradeResultDto {
 
 /** Kết quả Nâng cấp nhanh: danh sách các lần ghép theo thứ tự thực hiện. */
 export interface QuickUpgradeResultDto {
-  maxLevel: number;
+  /** Các level đầu vào (đã sắp tăng dần) được người chơi chọn cho lần ghép nhanh này. */
+  levels: number[];
   merges: number;
   successes: number;
   failures: number;
@@ -432,7 +433,11 @@ export const schemas = {
     type: 'object',
     additionalProperties: false,
     required: ['idempotencyKey'],
-    properties: { idempotencyKey },
+    properties: {
+      idempotencyKey,
+      // Level đầu vào tham gia ghép nhanh; bỏ trống = mặc định Lv.1–QUICK_UPGRADE_MAX_LEVEL (Lv.5).
+      levels: { type: 'array', minItems: 1, maxItems: 9, uniqueItems: true, items: { type: 'integer', minimum: 1, maximum: 9 } },
+    },
   },
   devTopupBody: {
     type: 'object',
@@ -798,6 +803,7 @@ export const PVP_SKILLS = [
   'TEAM_HP',
   'TEAM_DAMAGE_HP',
   'TEAM_CRIT',
+  'TEAM_DAMAGE_HP_CRIT',
 ] as const;
 export type PvpSkill = (typeof PVP_SKILLS)[number];
 
@@ -824,6 +830,7 @@ export const PVP_SKILL_LABELS: Record<PvpSkill, string> = {
   TEAM_HP: 'Toàn đội tăng HP',
   TEAM_DAMAGE_HP: 'Toàn đội tăng sát thương & HP',
   TEAM_CRIT: 'Toàn đội tăng chí mạng',
+  TEAM_DAMAGE_HP_CRIT: 'Toàn đội tăng sát thương, HP & chí mạng',
 };
 
 /** Cách chọn mục tiêu của kỹ năng (PVP.md mục 2.4). */
@@ -902,8 +909,8 @@ export interface PvpUnitStateDto {
   stunBps: number;
   /** Hút máu: hồi bản thân theo % sát thương gây ra ở cấp hiện tại (bps). 0 = không hút máu. */
   lifestealBps: number;
-  /** Hiệu ứng nền theo kỹ năng của tướng (để client mô tả lượng tăng khi thi triển). */
-  aura?: PvpAuraDto;
+  /** Hiệu ứng tăng sức mạnh theo kỹ năng của tướng (client mô tả lượng tăng khi thi triển). */
+  teamBuff?: PvpTeamBuffDto;
 }
 
 /** Sự kiện trong trận, theo thứ tự phát lại. */
@@ -917,11 +924,13 @@ export type PvpEventDto =
   | { t: 'stun'; idx: number; untilRound: number }
   | { t: 'cleanse'; idx: number }
   /**
-   * Buff kỹ năng đặc biệt: đồng minh nhận thêm % sát thương nền và điểm chí mạng.
-   * `damageFlat` = lượng sát thương cộng thẳng của lớp buff này (client tự cộng vào sát thương hiển thị);
-   * `expiresRound` = lượt cuối còn hiệu lực, để client bỏ lớp buff đã hết hạn khi phát lại.
+   * Buff tăng sức mạnh mỗi lần tướng tới lượt: đồng minh nhận thêm một lớp +% HP tối đa, +% sát thương
+   * và điểm chí mạng. `damageFlat`/`hpFlat` = lượng cộng thẳng của lớp này (client tự cộng vào chỉ số
+   * hiển thị và hồi máu); `hpFlat` = lượng trần HP tăng ⇒ cũng là lượng máu hồi ngay. `crit` = lớp này
+   * ăn chí mạng (×1.5 cho % HP và % sát thương). `expiresRound` = lượt cuối còn hiệu lực;
+   * `maxLayers` = số lớp cộng dồn tối đa (client tự bỏ lớp cũ nhất khi vượt trần).
    */
-  | { t: 'buff'; idx: number; damageBps: number; critPointsBps: number; damageFlat: number; expiresRound: number }
+  | { t: 'buff'; idx: number; damageBps: number; hpBps: number; critPointsBps: number; damageFlat: number; hpFlat: number; crit: boolean; expiresRound: number; maxLayers: number }
   | { t: 'down'; idx: number }
   | { t: 'end'; winner: PvpWinner; rounds: number; reason: 'wipe' | 'timeout' };
 
@@ -980,18 +989,21 @@ export interface PvpOpponentDto {
   saved: boolean;
 }
 
-/** Hiệu ứng nền (aura) của tướng theo kỹ năng (SKILLS.md). Đơn vị bps: 10000 = 100%. */
-export interface PvpAuraDto {
-  /** Tăng sát thương của chính tướng. */
+/**
+ * Buff tăng sức mạnh mà một kỹ năng phát cho toàn đội mỗi lần tướng tới lượt (SKILLS.md).
+ * Đơn vị bps: 10000 = 100%. Tất cả bằng 0 = kỹ năng không buff.
+ */
+export interface PvpTeamBuffDto {
+  /** % sát thương cộng mỗi lớp (theo sát thương nền của chính đồng minh nhận). */
   damageBps: number;
-  /** Tăng HP tối đa của chính tướng. */
+  /** % HP tối đa cộng mỗi lớp (tăng trần HP và hồi đúng lượng tăng). */
   hpBps: number;
-  /** Tăng sát thương cho toàn đội (kể cả bản thân). */
-  teamDamageBps: number;
-  /** Tăng HP tối đa cho toàn đội (kể cả bản thân). */
-  teamHpBps: number;
-  /** Cộng điểm chí mạng cho toàn đội (bps: 500 = +5 điểm phần trăm). */
-  teamCritPointsBps: number;
+  /** Điểm chí mạng cộng mỗi lớp (bps: 500 = +5 điểm phần trăm). */
+  critPointsBps: number;
+  /** Số lượt mỗi lớp còn hiệu lực. */
+  rounds: number;
+  /** Số lớp cộng dồn tối đa. */
+  maxLayers: number;
 }
 
 /** Hiệu ứng nội tại tướng (SKILLS.md). */
@@ -1015,14 +1027,14 @@ export interface PvpSkillDefDto {
   stun: 'none' | 'single' | 'row';
   cleanse: boolean;
   buff: boolean;
-  /** Hiệu ứng nền áp trước trận (không cộng dồn lặp lại). */
-  aura: PvpAuraDto;
+  /** Buff tăng sức mạnh phát cho toàn đội mỗi lần tướng tới lượt (rỗng = không buff). */
+  teamBuff: PvpTeamBuffDto;
 }
 
 /**
  * Chi tiết chiến đấu của một tướng ở một cấp — modal xem thẻ ở Bộ sưu tập.
- * Chỉ số là CỦA RIÊNG tướng (đã gồm hiệu ứng nền theo kỹ năng mà tướng tự hưởng);
- * khi vào trận còn cộng hiệu ứng đồng minh khác và buff theo vị trí (hàng trước/sau).
+ * Chỉ số là CỦA RIÊNG tướng (đã gồm nội tại của tướng);
+ * khi vào trận còn cộng buff theo vị trí (hàng trước/sau) và buff đồng minh phát mỗi lượt.
  */
 export interface PvpCombatDto {
   generalId: string;
@@ -1034,13 +1046,12 @@ export interface PvpCombatDto {
   passive: PvpPassive;
   /** Chỉ số nền theo cấp — chưa tính hiệu ứng kỹ năng, nội tại, vị trí. */
   base: { maxHp: number; damage: number };
-  /** Chỉ số của riêng tướng sau khi áp hiệu ứng kỹ năng + nội tại. */
+  /** Chỉ số của riêng tướng sau khi áp nội tại. */
   self: { maxHp: number; damage: number; lc: number; critBps: number; stunBps: number; cleanseBps: number; heal: number; lifestealBps: number };
-  aura: PvpAuraDto;
   passiveEffect: PvpPassiveEffectDto;
   skillDef: PvpSkillDefDto;
-  /** Hệ số buff đồng minh của kỹ năng đặc biệt; 0 = kỹ năng không buff. */
-  teamBuff: { damageBps: number; critPointsBps: number };
+  /** Buff tăng sức mạnh kỹ năng phát cho toàn đội mỗi lượt; tất cả 0 = kỹ năng không buff. */
+  teamBuff: PvpTeamBuffDto;
   /** Buff theo vị trí khi vào trận. */
   rowBonus: { frontHpBps: number; backDamageBps: number };
   bpsScale: number;

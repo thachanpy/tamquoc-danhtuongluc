@@ -137,8 +137,12 @@ test('HTTP: Nâng cấp nhanh hoạt động qua API, chưa đăng nhập => 401
   if (r.statusCode === 200) {
     const body = r.json();
     assert.equal(body.merges, body.successes + body.failures);
+    assert.deepEqual(body.levels, [1, 2, 3, 4, 5]); // bỏ trống levels => mặc định Lv.1–5
     assert.ok((body.results as { inputLevel: number }[]).every((x) => x.inputLevel <= 5));
   }
+  // Level ngoài khoảng Lv.1–9 bị schema chặn
+  const bad = await app.inject({ method: 'POST', url: '/api/upgrades/quick', headers: auth, payload: { idempotencyKey: 'http-quick-03', levels: [10] } });
+  assert.equal(bad.statusCode, 400);
   const unauth = await app.inject({ method: 'POST', url: '/api/upgrades/quick', payload: { idempotencyKey: 'http-quick-02' } });
   assert.equal(unauth.statusCode, 401);
   await app.close();

@@ -2,7 +2,6 @@ import { For, Show, batch, createEffect, createMemo, createSignal, onCleanup, on
 import type {
   CardDto,
   Faction,
-  PvpAuraDto,
   PvpBattleDto,
   PvpBattleSummaryDto,
   PvpCombatDto,
@@ -22,6 +21,7 @@ import { gen, genStyle, pvpTarget, setPvpTarget } from '../state.ts';
 import { Avatar } from '../components/Avatar.tsx';
 import { CombatDetailModal } from '../components/CombatDetailModal.tsx';
 import { FACTION_STYLE, initials, levelTier, pct, portraitUrl } from '../art.ts';
+import { createArena, type ArenaHandle, type ArenaUnit, type ArenaView } from '../pixi/arena.ts';
 import { toast } from '../ui.ts';
 
 /**
@@ -51,21 +51,20 @@ const statOf = (c: PvpCombatDto): UnitStat => ({ style: c.style, damage: c.self.
 const statKey = (u: PvpUnitDto) => `${u.generalId}|${u.level}`;
 
 /**
- * Mô tả hiệu ứng nền theo kỹ năng kèm LƯỢNG tăng cụ thể (mục 6.7, 11.2):
- * "tự +25% HP", "cả đội +10% sát thương", "cả đội +5 điểm chí mạng"...
+ * Mô tả buff tăng sức mạnh của một kỹ năng (nhóm TEAM_ và BUFF_ALLIES) kèm LƯỢNG tăng mỗi lớp:
+ * "cả đội +10% sát thương", "cả đội +10% HP tối đa", "cả đội +5 điểm chí mạng".
  */
-const AURA_FIELDS: { key: keyof PvpAuraDto; text: (v: number) => string }[] = [
-  { key: 'hpBps', text: (v) => `tự +${pct(v)} HP` },
-  { key: 'damageBps', text: (v) => `tự +${pct(v)} sát thương` },
-  { key: 'teamHpBps', text: (v) => `cả đội +${pct(v)} HP` },
-  { key: 'teamDamageBps', text: (v) => `cả đội +${pct(v)} sát thương` },
-  { key: 'teamCritPointsBps', text: (v) => `cả đội +${v / 100} điểm chí mạng` },
+const TEAM_BUFF_FIELDS: { key: 'damageBps' | 'hpBps' | 'critPointsBps'; text: (v: number) => string }[] = [
+  { key: 'damageBps', text: (v) => `cả đội +${pct(v)} sát thương` },
+  { key: 'hpBps', text: (v) => `cả đội +${pct(v)} HP tối đa` },
+  { key: 'critPointsBps', text: (v) => `cả đội +${v / 100} điểm chí mạng` },
 ];
-function auraText(aura?: PvpAuraDto): string {
-  if (!aura) return '';
-  return AURA_FIELDS.filter((f) => (aura[f.key] ?? 0) > 0)
-    .map((f) => f.text(aura[f.key]))
+function teamBuffText(buff?: PvpUnitStateDto['teamBuff']): string {
+  if (!buff) return '';
+  const gains = TEAM_BUFF_FIELDS.filter((f) => (buff[f.key] ?? 0) > 0)
+    .map((f) => f.text(buff[f.key]))
     .join(' · ');
+  return gains ? `${gains} (tối đa ${buff.maxLayers} lớp, mỗi lớp ${buff.rounds} lượt)` : '';
 }
 
 /** Ảnh đại diện tướng hiện trong modal chi tiết (Đấu trường không có thẻ lớn) — ảnh lỗi thì hiện chữ cái đầu. */
@@ -483,14 +482,17 @@ function Picker(props: {
 
 interface CV {
   hp: number;
+  /** Trần HP hiện tại = trần tĩnh + tổng HP cộng thêm từ các lớp buff đang hiệu lực. */
   maxHp: number;
+  /** Trần HP tĩnh khi vào trận (không đổi) — mốc để tính lại trần khi buff thêm/hết hạn. */
+  maxHpStatic: number;
   alive: boolean;
   stunned: boolean;
   /** Lượt cuối còn bị choáng (khớp engine): sang lượt sau mốc này thì gỡ hiệu ứng. */
   stunnedUntil: number;
   buffed: boolean;
-  /** Các lớp buff đang hiệu lực: sát thương cộng thẳng + lượt hết hạn (khớp engine). */
-  buffs: { flat: number; expiresRound: number }[];
+  /** Các lớp buff đang hiệu lực: sát thương/HP cộng thẳng + lượt hết hạn (khớp engine). */
+  buffs: { flat: number; hpFlat: number; expiresRound: number }[];
 }
 
 const EVENT_MS: Record<PvpEventDto['t'], number> = {
@@ -557,8 +559,8 @@ function createDetailBuilder(units: PvpUnitStateDto[]) {
         return push({ kind: 'round', text: `Lượt ${ev.round}` });
       case 'act': {
         actor = ev.idx;
-        // Kỹ năng hiệu ứng nền (aura): hiện kèm LƯỢNG tăng cụ thể, ví dụ "tự hồi 25% HP tối đa".
-        const extra = auraText(unitByIdx.get(ev.idx)?.aura);
+        // Kỹ năng buff tăng sức mạnh (nhóm TEAM_/BUFF_ALLIES): hiện kèm LƯỢNG tăng mỗi lớp.
+        const extra = teamBuffText(unitByIdx.get(ev.idx)?.teamBuff);
         const sk = unitByIdx.get(ev.idx)?.skillName ?? PVP_SKILL_LABELS[ev.skill];
         return push({ kind: 'act', actor: ev.idx, text: `${nameOf(ev.idx)} dùng ${sk}${extra ? ` (${extra})` : ''}` });
       }
@@ -589,14 +591,23 @@ function createDetailBuilder(units: PvpUnitStateDto[]) {
       case 'cleanse':
         if (actor !== undefined) at(actor).cleanses += 1;
         return push({ kind: 'cleanse', actor, target: ev.idx, text: `${actor !== undefined ? nameOf(actor) : 'Đồng minh'} giải choáng cho ${nameOf(ev.idx)}` });
-      case 'buff':
+      case 'buff': {
         if (actor !== undefined) at(actor).buffs += 1;
+        const gains = [
+          ev.damageBps ? `+${pct(ev.damageBps)} sát thương` : '',
+          ev.hpBps ? `+${pct(ev.hpBps)} HP tối đa` : '',
+          ev.critPointsBps ? `+${ev.critPointsBps / 100} điểm chí mạng` : '',
+        ]
+          .filter(Boolean)
+          .join(' · ');
         return push({
           kind: 'buff',
           actor,
           target: ev.idx,
-          text: `${actor !== undefined ? nameOf(actor) : 'Đồng minh'} tăng sức mạnh cho ${nameOf(ev.idx)} (+${pct(ev.damageBps)} sát thương · +${ev.critPointsBps / 100} điểm chí mạng)`,
+          crit: ev.crit,
+          text: `${actor !== undefined ? nameOf(actor) : 'Đồng minh'} tăng sức mạnh cho ${nameOf(ev.idx)} (${gains}${ev.crit ? ' · CHÍ MẠNG' : ''})`,
         });
+      }
       case 'down':
         return push({ kind: 'down', target: ev.idx, text: `${nameOf(ev.idx)} bị hạ` });
       case 'end':
@@ -665,7 +676,9 @@ function DetailList(props: { rows: DetailRow[]; units: PvpUnitStateDto[]; mySide
                   <Show when={d.amount !== undefined}>
                     <span class="rp-drow-amt" classList={{ heal: d.kind === 'heal', crit: d.crit }}>
                       {d.kind === 'heal' ? `+${num(d.amount!)}` : `-${num(d.amount!)}`}
-                      <Show when={d.crit}>{' CHÍ MẠNG'}</Show>
+                      <Show when={d.crit}>
+                        <span class="rp-drow-crit">CHÍ MẠNG</span>
+                      </Show>
                     </span>
                   </Show>
                 </>
@@ -763,7 +776,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   const skillNameAt = (idx: number, fallback: PvpSkill) => byIdx.get(idx)?.skillName ?? PVP_SKILL_LABELS[fallback];
   const initView = () => {
     const o: Record<number, CV> = {};
-    for (const u of units) o[u.idx] = { hp: u.maxHp, maxHp: u.maxHp, alive: true, stunned: false, stunnedUntil: 0, buffed: false, buffs: [] };
+    for (const u of units) o[u.idx] = { hp: u.maxHp, maxHp: u.maxHp, maxHpStatic: u.maxHp, alive: true, stunned: false, stunnedUntil: 0, buffed: false, buffs: [] };
     return o;
   };
 
@@ -775,7 +788,6 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   const [acting, setActing] = createSignal<number | null>(null);
   const [actingSkill, setActingSkill] = createSignal<PvpSkill | null>(null);
   const [targets, setTargets] = createSignal<number[]>([]);
-  const [floats, setFloats] = createSignal<{ id: number; idx: number; text: string; crit: boolean; heal: boolean }[]>([]);
   /** Diễn biến chi tiết hiện dần trong lúc đang đánh (cùng nội dung với bảng kết quả). */
   const [detail, setDetail] = createSignal<DetailRow[]>([]);
   const [done, setDone] = createSignal(false);
@@ -784,8 +796,10 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   /** Phân tích trọn trận (diễn biến chi tiết + tổng kết chỉ số) — chỉ hiện ở mục kết quả. */
   const analysis = createMemo(() => analyzeBattle(units, props.battle.events));
   let builder = createDetailBuilder(units);
-  let floatId = 0;
   let timer: number | undefined;
+  /** Ô chứa canvas sân đấu PixiJS (chỉ hiển thị lại dữ liệu server đã mô phỏng). */
+  let field!: HTMLDivElement;
+  let arena: ArenaHandle | undefined;
 
   const upd = (idx: number, fn: (s: CV) => CV) =>
     setView((v) => {
@@ -794,11 +808,31 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
       return { ...v, [idx]: fn(s) };
     });
 
-  function addFloat(idx: number, text: string, crit: boolean, heal = false) {
-    const id = ++floatId;
-    setFloats((f) => [...f, { id, idx, text, crit, heal }]);
-    setTimeout(() => setFloats((f) => f.filter((x) => x.id !== id)), 900);
+  /** Đẩy trạng thái tức thời của cả sân sang canvas (số liệu chỉ để hiển thị, không tính toán tại client). */
+  function pushArena() {
+    if (!arena) return;
+    const cur = view();
+    const snap: Record<number, ArenaView> = {};
+    for (const u of units) {
+      const s = cur[u.idx];
+      if (!s) continue;
+      snap[u.idx] = {
+        hp: s.hp,
+        maxHp: s.maxHp,
+        alive: s.alive,
+        stunned: s.stunned,
+        buffed: s.buffed,
+        // Sát thương hiện tại = sát thương nền + các lớp buff đang hiệu lực
+        damage: u.damage + s.buffs.reduce((acc, b) => acc + b.flat, 0),
+      };
+    }
+    const a = acting();
+    const sk = actingSkill();
+    arena.sync({ view: snap, acting: a, skillName: a !== null && sk ? skillNameAt(a, sk) : null, targets: targets() });
   }
+
+  /** Số sát thương/hồi máu bay lên trên ô tướng (vẽ bằng PixiJS). */
+  const addFloat = (idx: number, text: string, crit: boolean, heal = false) => arena?.float(idx, text, crit, heal);
 
   function apply(ev: PvpEventDto) {
     builder.add(ev);
@@ -809,15 +843,18 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         setActing(null);
         setActingSkill(null);
         setTargets([]);
-        // Bỏ các lớp buff đã hết hạn đúng như engine (lớp buff sống PVP_SKILL_BUFF_ROUNDS lượt).
-        // Đồng thời gỡ choáng đã hết hạn ở ĐẦU lượt: choáng gây ở lượt r sống tới hết lượt r+1 (mục 5.3).
+        // Bỏ các lớp buff đã hết hạn đúng như engine (lớp buff sống 4 lượt); hạ trần HP theo lớp bị bỏ
+        // và kẹp máu hiện tại xuống trần mới. Đồng thời gỡ choáng đã hết hạn ở ĐẦU lượt (mục 5.3).
         setView((v) => {
           const next: Record<number, CV> = {};
           for (const k in v) {
             const s = v[k]!;
-            const buffs = s.buffs.some((b) => b.expiresRound < ev.round) ? s.buffs.filter((b) => b.expiresRound >= ev.round) : s.buffs;
+            const expired = s.buffs.some((b) => b.expiresRound < ev.round);
+            const buffs = expired ? s.buffs.filter((b) => b.expiresRound >= ev.round) : s.buffs;
+            const maxHp = s.maxHpStatic + buffs.reduce((sum, b) => sum + b.hpFlat, 0);
             const stunned = s.stunned && ev.round <= s.stunnedUntil;
-            next[k] = buffs === s.buffs && stunned === s.stunned ? s : { ...s, buffs, stunned };
+            next[k] = s;
+            if (expired || stunned !== s.stunned) next[k] = { ...s, buffs, maxHp, hp: Math.min(s.hp, maxHp), stunned };
           }
           return next;
         });
@@ -847,11 +884,20 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
       case 'cleanse':
         upd(ev.idx, (s) => ({ ...s, stunned: false, stunnedUntil: 0 }));
         break;
-      case 'buff':
-        // Cộng thẳng lớp buff vào sát thương hiển thị của tướng và báo bằng số nhảy màu xanh.
-        upd(ev.idx, (s) => ({ ...s, buffed: true, buffs: [...s.buffs, { flat: ev.damageFlat, expiresRound: ev.expiresRound }] }));
-        addFloat(ev.idx, `+${num(ev.damageFlat)} ⚔`, false, true);
+      case 'buff': {
+        // Thêm MỘT lớp cho tướng: cộng thẳng sát thương + tăng trần HP (hồi đúng lượng tăng).
+        // Vượt trần số lớp thì bỏ lớp cũ nhất (khớp engine) — trần HP giảm theo lớp bị bỏ.
+        upd(ev.idx, (s) => {
+          const buffs = [...s.buffs, { flat: ev.damageFlat, hpFlat: ev.hpFlat, expiresRound: ev.expiresRound }];
+          while (buffs.length > ev.maxLayers) buffs.shift();
+          const maxHp = s.maxHpStatic + buffs.reduce((sum, b) => sum + b.hpFlat, 0);
+          const hp = maxHp > s.maxHp ? Math.min(maxHp, s.hp + (maxHp - s.maxHp)) : Math.min(s.hp, maxHp);
+          return { ...s, buffed: true, buffs, maxHp, hp };
+        });
+        const gains = [ev.damageFlat > 0 ? `+${num(ev.damageFlat)} ⚔` : '', ev.hpFlat > 0 ? `+${num(ev.hpFlat)} ❤` : ''].filter(Boolean).join('  ');
+        if (gains) addFloat(ev.idx, gains, ev.crit, true);
         break;
+      }
       case 'down':
         upd(ev.idx, (s) => ({ ...s, alive: false, hp: 0, stunned: false, stunnedUntil: 0 }));
         break;
@@ -861,6 +907,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         setReport(true);
         break;
     }
+    pushArena();
   }
 
   function step() {
@@ -907,10 +954,10 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     setActing(null);
     setActingSkill(null);
     setTargets([]);
-    setFloats([]);
     setDetail([]);
     setDone(false);
     setReport(false);
+    pushArena();
   }
   function toEnd() {
     pause();
@@ -929,91 +976,46 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     step();
   }
 
-  onCleanup(() => clearTimeout(timer));
-  onMount(() => setTimeout(play, 300));
-
-  const idxFor = (side: PvpSide, slot: number) => (side === 'a' ? slot - 1 : 6 + slot - 1);
-  const mineSide = () => props.battle.mySide;
-  const foeSide = (): PvpSide => (props.battle.mySide === 'a' ? 'b' : 'a');
-  // Mỗi bên 2 cột: hàng Sau | hàng Trước; hàng Trước sát vạch giữa vì là tuyến đầu giáp mặt địch.
-  const sideCols = (mine: boolean) => (mine ? [{ slots: BACK, title: 'Hàng sau' }, { slots: FRONT, title: 'Hàng trước' }] : [{ slots: FRONT, title: 'Hàng trước' }, { slots: BACK, title: 'Hàng sau' }]);
-
-  function cell(idx: number) {
-    const u = byIdx.get(idx);
-    if (!u) return <div class="rp-cell empty" />;
-    // Phải là accessor: đọc thẳng `view()[idx]` một lần sẽ đóng băng giá trị, thanh máu/trạng thái không cập nhật.
-    const v = () => view()[idx]!;
-    const hpPct = () => Math.max(0, Math.round((v().hp / v().maxHp) * 100));
-    /** Sát thương hiện tại = sát thương nền + các lớp buff đang hiệu lực (tự cộng khi được buff). */
-    const damageNow = () => u.damage + v().buffs.reduce((s, b) => s + b.flat, 0);
-    const flock = () => floats().filter((f) => f.idx === idx);
-    return (
-      <div
-        class="rp-cell"
-        classList={{
-          dead: !v().alive,
-          acting: acting() === idx,
-          stunned: v().stunned,
-          targeted: targets().includes(idx),
-          buffed: v().buffed,
-          foe: u.side !== mineSide(),
-        }}
-      >
-        <span class="rp-lv" style={{ color: levelTier(u.level).css }}>{`Lv.${u.level}`}</span>
-        <span class="rp-art">
-          <span class="pvp-ini">{initials(gen(u.generalId).name)}</span>
-          <img src={portraitUrl(gen(u.generalId).artKey)} alt="" loading="lazy" decoding="async" onError={(e) => (e.currentTarget.style.display = 'none')} />
-        </span>
-        <span class="rp-name">{gen(u.generalId).name}</span>
-        <span class="rp-hp">
-          <i style={{ width: `${hpPct()}%` }} />
-        </span>
-        {/* Máu hiện tại: số HP thật + % để dễ theo dõi khi đang đánh */}
-        <span class="rp-hp-num" classList={{ low: hpPct() <= 25 }}>
-          {v().alive ? `${num(v().hp)} · ${hpPct()}%` : 'Đã hạ'}
-        </span>
-        <Show when={v().stunned}>
-          <span class="rp-badge stun" title="Đang bị choáng">✦</span>
-        </Show>
-        <Show when={v().buffed}>
-          <span class="rp-badge buff" title="Đã được tăng sức mạnh">▲</span>
-        </Show>
-        <Show when={v().alive}>
-          <span
-            class="rp-info"
-            classList={{ up: v().buffs.length > 0 }}
-            title={`Phong cách: ${PVP_STYLE_LABELS[u.style]} · Nội tại: ${PVP_PASSIVE_LABELS[u.passive]} · Kỹ năng: ${u.skillName} · Choáng ${(u.stunBps / 100).toFixed(0)}%${u.lifestealBps > 0 ? ` · Hút máu ${(u.lifestealBps / 100).toFixed(0)}%` : ''}`}
-          >
-            {`⚔ ${num(damageNow())} · CM ${(u.critBps / 100).toFixed(0)}%`}
-          </span>
-        </Show>
-        <Show when={acting() === idx ? actingSkill() : null}>
-          {(sk) => <span class="rp-skillname">{byIdx.get(idx)?.skillName ?? PVP_SKILL_LABELS[sk()]}</span>}
-        </Show>
-        <For each={flock()}>{(f) => <span class="rp-float" classList={{ crit: f.crit, heal: f.heal }}>{f.text}</span>}</For>
-      </div>
-    );
-  }
-
   const me = () => (props.battle.mySide === 'a' ? props.battle.attacker : props.battle.defender);
   const foe = () => (props.battle.mySide === 'a' ? props.battle.defender : props.battle.attacker);
 
-  /** Một nửa sân: tiêu đề tên đội + 2 cột tướng. */
-  const teamBlock = (side: PvpSide, mine: boolean, label: string) => (
-    <div class="rp-team" classList={{ foe: !mine }}>
-      <div class="rp-team-title">{label}</div>
-      <div class="rp-cols">
-        <For each={sideCols(mine)}>
-          {(c) => (
-            <div class="rp-col">
-              <div class="rp-col-title">{c.title}</div>
-              <For each={c.slots}>{(s) => cell(idxFor(side, s))}</For>
-            </div>
-          )}
-        </For>
-      </div>
-    </div>
-  );
+  /** Tướng trên sân (bất biến trong trận) — dựng một lần cho sân đấu PixiJS. */
+  const arenaUnits: ArenaUnit[] = units.map((u) => {
+    const g = gen(u.generalId);
+    return {
+      idx: u.idx,
+      side: u.side,
+      slot: u.slot,
+      name: g.name,
+      level: u.level,
+      artKey: g.artKey,
+      critBps: u.critBps,
+      damage: u.damage,
+      // Chú thích đầy đủ khi rê chuột lên ô tướng (giống dòng chỉ số cũ)
+      info:
+        `Phong cách: ${PVP_STYLE_LABELS[u.style]} · Nội tại: ${PVP_PASSIVE_LABELS[u.passive]} · Kỹ năng: ${u.skillName} · Choáng ${(u.stunBps / 100).toFixed(0)}%` +
+        (u.lifestealBps > 0 ? ` · Hút máu ${(u.lifestealBps / 100).toFixed(0)}%` : ''),
+    };
+  });
+
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+    clearTimeout(timer);
+    arena?.destroy();
+  });
+  // Canvas PixiJS dựng bất đồng bộ; xong thì đẩy trạng thái đầu trận rồi tự phát lại
+  onMount(() => {
+    void createArena(field, arenaUnits, props.battle.mySide).then((a) => {
+      if (disposed) {
+        a.destroy();
+        return;
+      }
+      arena = a;
+      pushArena();
+      setTimeout(play, 300);
+    });
+  });
 
   return (
     <div class="pvp-modal rp-modal" role="dialog" aria-modal="true">
@@ -1037,14 +1039,8 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
           </div>
         </div>
 
-        <Show
-          when={!report()}
-          fallback={
-            <div class="rp-report-wrap">
-              <BattleReport units={units} mySide={props.battle.mySide} analysis={analysis()} />
-            </div>
-          }
-        >
+        {/* Sân đấu + diễn biến: luôn nằm trong DOM để canvas PixiJS không bị hủy khi mở bảng kết quả */}
+        <div class="rp-live" hidden={report()}>
           {/* Tên kỹ năng đang thi triển */}
           <div class="rp-cast" classList={{ on: !!actingSkill() }}>
             <Show when={actingSkill() && acting() !== null} fallback={<span class="rp-cast-hint">Diễn biến trận đấu</span>}>
@@ -1054,20 +1050,19 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
             </Show>
           </div>
 
-          {/* Sân đấu: 2 đội 2 bên trái/phải, ngăn bằng dải phân cách giữa */}
-          <div class="rp-field">
-            {teamBlock(mineSide(), true, me().displayName)}
-            <div class="rp-divider" aria-hidden="true">
-              <span>VS</span>
-            </div>
-            {teamBlock(foeSide(), false, foe().displayName)}
-          </div>
+          {/* Sân đấu vẽ bằng PixiJS: 2 đội 2 bên, ngăn bằng dải phân cách giữa (dựng trong arena.ts) */}
+          <div class="rp-canvas" ref={field} />
 
           {/* Diễn biến chi tiết hiện dần trong lúc đang đánh (giống hệt bảng kết quả sau trận) */}
           <DetailList rows={detail()} units={units} mySide={props.battle.mySide} follow />
 
           <div class="rp-progress">
             <i style={{ width: `${props.battle.events.length ? (cursor() / props.battle.events.length) * 100 : 0}%` }} />
+          </div>
+        </div>
+        <Show when={report()}>
+          <div class="rp-report-wrap">
+            <BattleReport units={units} mySide={props.battle.mySide} analysis={analysis()} />
           </div>
         </Show>
 

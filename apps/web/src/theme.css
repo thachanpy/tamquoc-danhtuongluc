@@ -689,10 +689,10 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .pvp-hist-row { display: grid; grid-template-columns: 62px 72px 32px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; width: 100%; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: rgba(10, 6, 4, .35); color: var(--text); font: inherit; cursor: pointer; text-align: left; }
 .pvp-hist-row:hover { border-color: var(--gold); background: rgba(212, 168, 74, .08); }
 .pvp-hist-row:focus-visible { outline: 2px solid var(--gold-2); outline-offset: -2px; }
-.hist-res { font: 700 13px/1 var(--num, sans-serif); text-align: center; }
-.hist-res.win { color: var(--ok); }
-.hist-res.loss { color: var(--bad); }
-.hist-res.draw { color: var(--muted); }
+.hist-res { font: 800 15px/1 var(--num, sans-serif); letter-spacing: .02em; text-align: center; }
+.hist-res.win { color: #7fe0a8; text-shadow: 0 0 10px rgba(63, 191, 127, .5); }
+.hist-res.loss { color: #ff8a86; text-shadow: 0 0 10px rgba(217, 83, 79, .5); }
+.hist-res.draw { color: var(--gold-2); text-shadow: 0 0 10px rgba(255, 215, 94, .45); }
 .hist-role { font-size: 12px; color: var(--muted); }
 .hist-avatar { width: 32px; height: 32px; font-size: 13px; }
 .hist-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
@@ -751,20 +751,21 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-avatar { width: 40px; height: 40px; font-size: 15px; }
 .rp-mid { display: grid; justify-items: center; gap: 2px; }
 .rp-round { font: 600 13px/1 var(--num, sans-serif); color: var(--muted); }
-.rp-result { font: 800 18px/1 var(--num, sans-serif); letter-spacing: .04em; }
-.rp-result.win { color: var(--ok); }
-.rp-result.loss { color: var(--bad); }
-.rp-result.draw { color: var(--gold-2); }
-.rp-field { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: stretch; }
-/* Mỗi nửa sân: tên đội + 2 cột tướng (hàng Trước sát vạch giữa) */
-.rp-team { display: grid; grid-template-rows: auto 1fr; gap: 6px; padding: 8px; border: 1px solid rgba(212, 168, 74, .18); border-radius: 12px; background: rgba(10, 6, 4, .26); }
-.rp-team.foe { border-color: rgba(217, 83, 79, .26); }
-.rp-team-title { font: 700 12px/1.2 var(--num, sans-serif); text-align: center; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rp-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-/* Dải phân cách 2 đội */
-.rp-divider { position: relative; display: grid; place-items: center; width: 28px; }
-.rp-divider::before { content: ''; position: absolute; top: 4px; bottom: 4px; left: 50%; width: 2px; transform: translateX(-50%); border-radius: 999px; background: linear-gradient(180deg, transparent, rgba(212, 168, 74, .55), transparent); }
-.rp-divider > span { position: relative; padding: 3px 7px; border: 1px solid rgba(212, 168, 74, .45); border-radius: 999px; background: var(--panel); font: 800 11px/1 var(--num, sans-serif); color: var(--gold-2); }
+/* Kết quả trận: cỡ lớn, có quầng sáng để nhìn là thấy ngay Thắng/Hòa/Thua */
+.rp-result { font: 900 30px/1.05 var(--num, sans-serif); letter-spacing: .06em; padding: 1px 14px; border-radius: 10px; animation: rp-result-pop .4s ease-out both; }
+.rp-result.win { color: #7fe0a8; text-shadow: 0 2px 0 #04221a, 0 0 18px rgba(63, 191, 127, .85); }
+.rp-result.loss { color: #ff8a86; text-shadow: 0 2px 0 #2a0808, 0 0 18px rgba(217, 83, 79, .85); }
+.rp-result.draw { color: #ffd75e; text-shadow: 0 2px 0 #2a1e00, 0 0 18px rgba(255, 215, 94, .85); }
+@keyframes rp-result-pop {
+  0% { transform: scale(.6); opacity: .3; }
+  60% { transform: scale(1.12); }
+  100% { transform: scale(1); opacity: 1; }
+}
+/* Sân đấu vẽ bằng PixiJS (pixi/arena.ts): canvas tự giữ tỉ lệ 900:444, lấp hết bề ngang khung */
+.rp-live { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.rp-live[hidden] { display: none; }
+.rp-canvas { position: relative; width: 100%; border-radius: 12px; overflow: hidden; }
+.rp-canvas canvas { display: block; width: 100%; height: auto; }
 /* Bảng tên kỹ năng đang thi triển */
 .rp-cast { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 32px; padding: 4px 12px; border: 1px solid rgba(212, 168, 74, .2); border-radius: 999px; background: rgba(10, 6, 4, .4); transition: border-color .2s, box-shadow .2s; }
 .rp-cast.on { border-color: var(--gold); box-shadow: 0 0 14px rgba(212, 168, 74, .28); }
@@ -772,60 +773,6 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-cast-who { font-weight: 700; color: var(--gold-2); }
 .rp-cast-tag { color: var(--muted); font-size: 12px; }
 .rp-cast-skill { font: 800 14px/1 var(--num, sans-serif); letter-spacing: .04em; text-transform: uppercase; color: #ffe8a8; }
-.rp-col { display: grid; gap: 6px; }
-.rp-col-title { font: 600 11px/1 var(--num, sans-serif); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); text-align: center; }
-.rp-cell { position: relative; display: grid; grid-template-rows: 1fr repeat(4, auto); gap: 2px; align-items: center; justify-items: center; min-height: 96px; padding: 6px 4px; border: 1px solid var(--line); border-radius: 10px; background: rgba(10, 6, 4, .45); overflow: visible; transition: transform .12s, box-shadow .12s, opacity .2s; }
-.rp-cell.empty { border-style: dashed; background: rgba(10, 6, 4, .18); }
-.rp-cell.foe { border-color: rgba(217, 83, 79, .35); }
-.rp-cell.acting { box-shadow: 0 0 0 2px var(--gold-2) inset, 0 0 14px rgba(212, 168, 74, .4); transform: translateY(-2px); }
-.rp-cell.targeted { box-shadow: 0 0 0 2px var(--bad) inset; }
-.rp-cell.stunned { filter: saturate(.45); }
-.rp-cell.dead { opacity: .35; filter: grayscale(1); }
-.rp-cell.buffed .rp-art { border-color: var(--ok); box-shadow: 0 0 10px rgba(63, 191, 127, .7); }
-.rp-lv { position: absolute; top: 3px; left: 5px; font: 700 10px/1 var(--num, sans-serif); }
-.rp-art { position: relative; display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; overflow: hidden; background: linear-gradient(160deg, #2a2112, var(--panel-2)); border: 1px solid var(--line); }
-.rp-art > img { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
-.rp-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; }
-.rp-hp { width: 100%; height: 6px; border-radius: 999px; background: rgba(255, 255, 255, .1); overflow: hidden; }
-.rp-hp i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #3fbf7f, #7fe0a8); transition: width .25s; }
-.rp-cell.foe .rp-hp i { background: linear-gradient(90deg, #d9534f, #f08b88); }
-/* Máu hiện tại: số HP thật + % (đổi màu khi sắp hết máu) */
-.rp-hp-num { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 10.5px/1.2 var(--num, sans-serif); color: #b9e8cd; }
-.rp-cell.foe .rp-hp-num { color: #f3b6b2; }
-.rp-hp-num.low { color: #ffd75e; animation: rp-hp-pulse 1s ease-in-out infinite; }
-@keyframes rp-hp-pulse { 50% { opacity: .45; } }
-.rp-badge { position: absolute; top: 3px; right: 5px; font-size: 13px; }
-.rp-badge.stun { color: #ffd75e; }
-.rp-badge.buff { color: var(--ok); }
-.rp-info { position: relative; z-index: 2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 11px/1.4 var(--num, sans-serif); color: #ffcf8a; }
-/* Sát thương đang được buff: sáng lên để thấy chỉ số đã cộng thêm */
-.rp-info.up { color: #9df3c2; text-shadow: 0 0 8px rgba(63, 191, 127, .5); }
-/* Tên kỹ năng bay lên trên tướng đang ra đòn (xuất hiện mỗi lượt hành động) */
-.rp-skillname { position: absolute; z-index: 6; top: -18px; left: 50%; transform: translateX(-50%); padding: 4px 12px; border: 1px solid var(--gold); border-radius: 999px; background: rgba(10, 6, 4, .94); box-shadow: 0 0 20px rgba(212, 168, 74, .8); font: 900 15px/1.2 var(--num, sans-serif); letter-spacing: .04em; text-transform: uppercase; color: #ffe8a8; white-space: nowrap; pointer-events: none; animation: rp-skill-rise .35s ease-out both; }
-@keyframes rp-skill-rise {
-  0% { opacity: 0; transform: translate(-50%, 12px) scale(.8); }
-  100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
-}
-/*
- * Số sát thương / hồi máu / buff nhảy lên rồi tan (z-index cao để không bị ảnh tướng che).
- * Cỡ chữ lớn + viền tối + quầng sáng để đọc rõ ngay cả khi trận chạy nhanh.
- */
-.rp-float { position: absolute; z-index: 7; left: 50%; top: 26%; transform: translateX(-50%); font: 900 26px/1 var(--num, sans-serif); color: #ff7a66; -webkit-text-stroke: 1px rgba(0, 0, 0, .8); text-shadow: 0 2px 0 #000, 0 0 14px rgba(255, 122, 102, .9); pointer-events: none; animation: rp-float-up .95s ease-out forwards; }
-.rp-float.heal { color: #6ef0a6; text-shadow: 0 2px 0 #000, 0 0 14px rgba(110, 240, 166, .9); }
-/* Chí mạng: số to gấp rưỡi và nổi bật hơn hẳn (cả sát thương lẫn hồi máu) */
-.rp-float.crit { font-size: 44px; letter-spacing: .01em; color: #ffd75e; -webkit-text-stroke: 1.5px rgba(58, 28, 0, .9); text-shadow: 0 3px 0 #000, 0 0 24px rgba(255, 215, 94, 1); animation: rp-crit-up 1.05s ease-out forwards; }
-.rp-float.crit.heal { color: #b6ffd8; text-shadow: 0 3px 0 #000, 0 0 24px rgba(127, 224, 168, 1); }
-@keyframes rp-float-up {
-  0% { opacity: 0; transform: translate(-50%, 6px) scale(.85); }
-  25% { opacity: 1; }
-  100% { opacity: 0; transform: translate(-50%, -26px) scale(1.05); }
-}
-@keyframes rp-crit-up {
-  0% { opacity: 0; transform: translate(-50%, 8px) scale(.6); }
-  20% { opacity: 1; transform: translate(-50%, 0) scale(1.3); }
-  45% { transform: translate(-50%, -8px) scale(1.12); }
-  100% { opacity: 0; transform: translate(-50%, -36px) scale(1); }
-}
 .rp-progress { height: 4px; border-radius: 999px; background: rgba(255, 255, 255, .1); overflow: hidden; }
 .rp-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--gold), var(--gold-2)); transition: width .2s; }
 .rp-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -874,6 +821,8 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-drow-amt { flex: 0 0 auto; font: 900 18px/1 var(--num, sans-serif); color: #ff8a7a; white-space: nowrap; }
 .rp-drow-amt.heal { color: #7fe0a8; }
 .rp-drow-amt.crit { font-size: 23px; color: #ffd75e; text-shadow: 0 0 10px rgba(255, 215, 94, .75); }
+/* Nhãn chí mạng: chip nhỏ đi kèm con số (không phình theo cỡ số chí mạng) */
+.rp-drow-crit { display: inline-block; margin-left: 5px; padding: 1px 6px; border: 1px solid rgba(255, 215, 94, .45); border-radius: 999px; background: rgba(255, 215, 94, .14); font: 800 10px/1.5 var(--num, sans-serif); letter-spacing: .04em; vertical-align: 2px; }
 /* Khung cuộn của danh sách diễn biến khi ĐANG ĐÁNH (bảng kết quả dùng khung cuộn của chính nó) */
 .rp-drows { display: grid; gap: 3px; align-content: start; }
 .rp-drows.scroll { height: 156px; overflow-y: auto; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(10, 6, 4, .4); }
@@ -898,26 +847,11 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
   .hist-name { grid-area: name; }
   .hist-power { grid-area: power; }
   .hist-time { grid-area: time; }
-  .rp-field { gap: 5px; }
-  .rp-team { padding: 5px; gap: 4px; }
-  .rp-cols { gap: 5px; }
-  .rp-divider { width: 16px; }
-  .rp-divider > span { padding: 2px 4px; font-size: 9px; }
   .rp-cast { min-height: 28px; padding: 3px 8px; gap: 6px; }
   .rp-cast-skill { font-size: 12px; }
-  .rp-cell { min-height: 78px; padding: 5px 3px; }
-  .rp-art { width: 40px; height: 40px; }
-  .rp-name { font-size: 11px; }
-  /* Màn hẹp vẫn phải thấy sát thương hiện tại của tướng (chỉ thu nhỏ chữ) */
-  .rp-info { font-size: 10px; }
-  .rp-hp-num { font-size: 9.5px; }
   .rp-drows.scroll { height: 118px; font-size: 12.5px; }
   .rp-drow { padding: 4px 6px; gap: 5px; font-size: 12.5px; }
   .rp-drow-amt { font-size: 16px; }
-  /* Số nổi vẫn to, rõ trên màn hẹp nhưng nhỏ hơn desktop để không tràn ô tướng */
-  .rp-float { font-size: 20px; }
-  .rp-float.crit { font-size: 32px; }
-  .rp-skillname { padding: 3px 9px; font-size: 12px; }
   .rp-drow-side { padding: 1px 4px; font-size: 9px; }
   .rp-avatar { width: 34px; height: 34px; font-size: 13px; }
   .rp-side-name { font-size: 13px; }

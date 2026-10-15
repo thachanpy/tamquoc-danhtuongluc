@@ -23,8 +23,10 @@ type QuickSummary =
 export function UpgradePage(): JSX.Element {
   /** Số thẻ mỗi lần ghép — lấy từ cấu hình server. */
   const N = state.config!.upgradeInputCount;
-  /** Nâng cấp nhanh áp dụng cho thẻ ≤ mức này (cấu hình server). */
+  /** Mức level mặc định được chọn sẵn cho Nâng cấp nhanh (cấu hình server, mặc định 5). */
   const Q = state.config!.quickUpgradeMaxLevel;
+  /** Mọi level có thể chọn ở Nâng cấp nhanh (Lv.1–9; Lv.10 không ghép tiếp được). */
+  const allLevels = state.config!.upgradeRates.map((r) => r.level);
 
   /** null = chưa tải xong lần nào. */
   const [cards, setCards] = createSignal<CardDto[] | null>(null);
@@ -38,6 +40,8 @@ export function UpgradePage(): JSX.Element {
   const [upMsg, setUpMsg] = createSignal('');
   const [quickConfirming, setQuickConfirming] = createSignal(false);
   const [quickSummary, setQuickSummary] = createSignal<QuickSummary | null>(null);
+  /** Các level đầu vào tham gia Nâng cấp nhanh; mặc định chọn sẵn Lv.1–Q. */
+  const [quickLevels, setQuickLevels] = createSignal<number[]>(allLevels.filter((lv) => lv <= Q));
   const [fFaction, setFFaction] = createSignal('');
   const [fLevel, setFLevel] = createSignal('');
   const [fSort, setFSort] = createSignal<UpgradeSort>('level_desc');
@@ -50,13 +54,25 @@ export function UpgradePage(): JSX.Element {
   const list = () => cards() ?? [];
   const byId = createMemo(() => new Map(list().map((c) => [c.id, c])));
 
-  /** Số cặp có thể ghép NGAY ở level ≤ Q (chỉ để hiển thị; server tự tính lại và ghép dây chuyền). */
+  /** Số cặp có thể ghép NGAY trong các level đã chọn (chỉ để hiển thị; server tự tính lại và ghép dây chuyền). */
   const quickPairs = createMemo(() => {
+    const sel = new Set(quickLevels());
     const count = new Map<string, number>();
-    for (const c of list()) if (c.level <= Q) count.set(`${c.generalId}|${c.level}`, (count.get(`${c.generalId}|${c.level}`) ?? 0) + 1);
+    for (const c of list()) if (sel.has(c.level)) count.set(`${c.generalId}|${c.level}`, (count.get(`${c.generalId}|${c.level}`) ?? 0) + 1);
     return [...count.values()].reduce((s, n) => s + Math.floor(n / N), 0);
   });
-  const quickRates = state.config!.upgradeRates.filter((r) => r.level <= Q);
+  /** Bảng tỷ lệ của đúng các level đang chọn. */
+  const quickRates = createMemo(() => {
+    const sel = new Set(quickLevels());
+    return state.config!.upgradeRates.filter((r) => sel.has(r.level));
+  });
+
+  /** Bật/tắt một level trong danh sách ghép nhanh. */
+  function toggleQuickLevel(lv: number) {
+    if (busy()) return;
+    const cur = quickLevels();
+    setQuickLevels(cur.includes(lv) ? cur.filter((x) => x !== lv) : [...cur, lv].sort((a, b) => a - b));
+  }
 
   /** Các nhóm đủ N thẻ cùng tướng + cùng level (chip chọn nhanh). */
   const readyGroups = createMemo(() => {
@@ -163,7 +179,7 @@ export function UpgradePage(): JSX.Element {
     setBusy(true);
     quickKey ??= newKey();
     try {
-      const r = await api.upgradeQuick(quickKey);
+      const r = await api.upgradeQuick(quickKey, quickLevels());
       quickKey = null;
       const byLevel = new Map<number, { n: number; ok: number }>();
       for (const x of r.results) {
@@ -246,14 +262,25 @@ export function UpgradePage(): JSX.Element {
           <Show when={cards()}>
             <div class="quick-box">
               <div class="quick-head">
-                <button class="btn primary" data-quick disabled={busy() || quickPairs() === 0 || quickConfirming()} onClick={() => setQuickConfirming(true)}>
-                  ⚡ Nâng cấp nhanh (≤ Lv.{Q})
+                <button class="btn primary" data-quick disabled={busy() || quickLevels().length === 0 || quickPairs() === 0 || quickConfirming()} onClick={() => setQuickConfirming(true)}>
+                  ⚡ Nâng cấp nhanh
                 </button>
                 <span class="muted small">
                   {quickPairs() > 0
-                    ? `${quickPairs()} cặp có thể ghép ngay. Tự ghép liên tục mọi cặp ${N} thẻ cùng tướng, cùng level từ Lv.1 đến Lv.${Q}.`
-                    : `Chưa có cặp thẻ nào ≤ Lv.${Q} để ghép nhanh.`}
+                    ? `${quickPairs()} cặp có thể ghép ngay. Tự ghép liên tục mọi cặp ${N} thẻ cùng tướng, cùng level trong các mức đã chọn.`
+                    : 'Chưa có cặp thẻ nào trong các mức đã chọn để ghép nhanh.'}
                 </span>
+              </div>
+              <div class="quick-levels">
+                <span class="muted small">Level ghép nhanh:</span>
+                <For each={allLevels}>
+                  {(lv) => (
+                    <label class="lv-chk" classList={{ on: quickLevels().includes(lv) }}>
+                      <input type="checkbox" checked={quickLevels().includes(lv)} disabled={busy()} onChange={() => toggleQuickLevel(lv)} />
+                      Lv.{lv}
+                    </label>
+                  )}
+                </For>
               </div>
               <Show when={quickConfirming()}>
                 <div class="quick-confirm">
@@ -267,7 +294,7 @@ export function UpgradePage(): JSX.Element {
                       </tr>
                     </thead>
                     <tbody>
-                      <For each={quickRates}>
+                      <For each={quickRates()}>
                         {(r) => {
                           const fail = 10000 - r.successBps;
                           const keep = r.failureDistribution.find((e) => e.level === r.level)?.bps ?? 0;
@@ -286,7 +313,7 @@ export function UpgradePage(): JSX.Element {
                     </tbody>
                   </table>
                   <p class="warn">
-                    ⚠ Mỗi lần ghép tiêu thụ {N} thẻ, có thể thất bại hoặc tụt level. Thẻ mới tạo ra (≤ Lv.{Q}) sẽ được ghép tiếp. Thẻ trên Lv.{Q} không bị
+                    ⚠ Mỗi lần ghép tiêu thụ {N} thẻ, có thể thất bại hoặc tụt level. Thẻ mới tạo ra thuộc mức đã chọn sẽ được ghép tiếp. Thẻ ở mức không chọn không bị
                     đụng tới.
                   </p>
                   <button class="btn ghost" data-quick-no onClick={() => setQuickConfirming(false)}>

@@ -130,7 +130,8 @@ export const api = {
   users: (q = '') => call<{ items: RecipientDto[] }>('GET', '/api/users?' + qs({ q, limit: 500 })),
   gift: (toUsername: string, cardIds: number[], idempotencyKey: string) =>
     call<GiftResultDto>('POST', '/api/gifts', { toUsername, cardIds, idempotencyKey }),
-  upgradeQuick: (idempotencyKey: string) => call<QuickUpgradeResultDto>('POST', '/api/upgrades/quick', { idempotencyKey }),
+  upgradeQuick: (idempotencyKey: string, levels: number[]) =>
+    call<QuickUpgradeResultDto>('POST', '/api/upgrades/quick', { idempotencyKey, levels }),
   upgradeAttempt: (cardIds: number[], idempotencyKey: string) =>
     call<UpgradeResultDto>('POST', '/api/upgrades/attempt', { cardIds, idempotencyKey }),
   giftcodes: () =>

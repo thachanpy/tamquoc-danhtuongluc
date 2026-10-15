@@ -852,6 +852,30 @@ test('nâng cấp nhanh: không đụng thẻ có level > 5; thẻ lên Lv6 khô
   assert.deepEqual(h.levels(), ['cao-cao:6', 'cao-cao:6', 'liu-bei:7', 'liu-bei:7']);
 });
 
+test('nâng cấp nhanh: chỉ ghép các level được chọn; chọn tới Lv9 ghép được lên Lv10', () => {
+  // Chỉ chọn Lv3: 2 thẻ Lv3 ghép, 2 thẻ Lv1 để nguyên.
+  let h = quickSetup([['cao-cao', 3], ['cao-cao', 3], ['cao-cao', 1], ['cao-cao', 1]]);
+  h.ctx.rand = () => 0;
+  const r = quickUpgrade(h.ctx, h.userId, 'quick-000001', [3]);
+  assert.equal(r.merges, 1);
+  assert.deepEqual(r.levels, [3]);
+  assert.deepEqual(h.levels(), ['cao-cao:1', 'cao-cao:1', 'cao-cao:4']);
+
+  // Chọn tới Lv9: 2 thẻ Lv9 ghép thành Lv10 (Lv10 không ghép tiếp).
+  h = quickSetup([['cao-cao', 9], ['cao-cao', 9]]);
+  h.ctx.rand = () => 0;
+  const r2 = quickUpgrade(h.ctx, h.userId, 'quick-000002', [9]);
+  assert.equal(r2.merges, 1);
+  assert.deepEqual(h.levels(), ['cao-cao:10']);
+});
+
+test('nâng cấp nhanh: danh sách level rỗng hoặc ngoài khoảng Lv.1–9 bị chặn', () => {
+  const h = quickSetup([['cao-cao', 1], ['cao-cao', 1]]);
+  assert.throws(() => quickUpgrade(h.ctx, h.userId, 'quick-000001', []), errCode('INVALID_LEVELS'));
+  assert.throws(() => quickUpgrade(h.ctx, h.userId, 'quick-000002', [10]), errCode('INVALID_LEVELS'));
+  assert.throws(() => quickUpgrade(h.ctx, h.userId, 'quick-000003', [0]), errCode('INVALID_LEVELS'));
+});
+
 test('nâng cấp nhanh: thất bại tụt level vẫn được ghép lại nếu còn cặp; kết thúc khi hết cặp', () => {
   const h = quickSetup([['cao-cao', 3], ['cao-cao', 3], ['cao-cao', 2]]);
   // Lần 1 (Lv3): r=9999 thất bại, r=0 -> tụt về Lv2 => có cặp Lv2; lần 2 (Lv2): r=0 thành công -> Lv3
