@@ -1,9 +1,35 @@
-import { TICKET_LABELS, type HistoryEntryDto } from '@tq/shared';
+import { FACTION_LABELS, TICKET_LABELS, type Faction, type HistoryEntryDto } from '@tq/shared';
 import { api } from '../api.ts';
 import { gen } from '../state.ts';
 import { esc, pct } from '../art.ts';
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('vi-VN');
+
+/** Nhãn dòng ledger nhiệm vụ/thành tựu từ khoá phần thưởng (mục 3.10). */
+function questLabel(key: string): string {
+  const p = key.split(':');
+  const n = (x?: string) => Number(x ?? 0).toLocaleString('vi-VN');
+  const dm = (d?: string) => (d ? `${Number(d.slice(8, 10))}/${Number(d.slice(5, 7))}` : '');
+  switch (p[0]) {
+    case 'reset':
+      return `Thưởng ngày mới ${dm(p[1])}`;
+    case 'd':
+      return `Nhiệm vụ hằng ngày ${dm(p[1])}`;
+    case 'f':
+      return `Nhiệm vụ phe ${FACTION_LABELS[p[2] as Faction] ?? ''} ${dm(p[1])}`;
+    case 'login':
+      return `Điểm danh ngày ${dm(p[1])}`;
+    case 'a':
+      if (p[1] === 'draws') return `Thành tựu: chiêu mộ ${n(p[2])} lần`;
+      if (p[1] === 'collect') return `Thành tựu: sưu tầm ${n(p[2])} tướng`;
+      if (p[1] === 'fcollect') return `Thành tựu: sưu tầm ${n(p[3])} tướng ${FACTION_LABELS[p[2] as Faction] ?? ''}`;
+      if (p[1] === 'own') return `Thành tựu: sở hữu ${n(p[3])} thẻ Lv.${p[2]}`;
+      if (p[1] === 'cards') return `Thành tựu: nhận ${n(p[2])} thẻ`;
+      return 'Thành tựu';
+    default:
+      return 'Nhiệm vụ';
+  }
+}
 
 function row(e: HistoryEntryDto): string {
   if (e.kind === 'ticket') {
@@ -19,6 +45,9 @@ function row(e: HistoryEntryDto): string {
     }
     if (e.reason === 'admin_grant') {
       return `<div class="h-row"><span class="tag ok">+${e.amountDelta} vé</span><div>Quản trị viên tặng: nhận <b>${label} ×${e.amountDelta}</b></div><time>${fmt(e.createdAt)}</time></div>`;
+    }
+    if (e.reason === 'daily_reset' || e.reason === 'mission' || e.reason === 'achievement') {
+      return `<div class="h-row"><span class="tag ok">+${e.amountDelta} vé</span><div>${esc(questLabel(e.referenceId ?? ''))}: nhận <b>${label} ×${e.amountDelta}</b></div><time>${fmt(e.createdAt)}</time></div>`;
     }
     if (e.reason === 'signup_bonus') {
       return `<div class="h-row"><span class="tag ok">+${e.amountDelta} vé</span><div>Quà tân thủ: nhận <b>${label} ×${e.amountDelta}</b></div><time>${fmt(e.createdAt)}</time></div>`;

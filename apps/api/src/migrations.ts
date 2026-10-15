@@ -416,6 +416,63 @@ ALTER TABLE sessions_new RENAME TO sessions;
 CREATE INDEX idx_sessions_user ON sessions(user_id);
 `,
   },
+  {
+    // Nhiệm vụ hằng ngày, thưởng reset 05:00, điểm danh theo tháng và thành tựu (mục 3.10, chủ dự án yêu cầu).
+    // - Ledger thêm reason daily_reset / mission / achievement; unique index chặn cộng 2 lần cùng phần thưởng.
+    // - reward_claims: mỗi phần thưởng (khoá) chỉ nhận 1 lần, vĩnh viễn; auto = 1 khi server tự nhận lúc qua ngày.
+    // - login_days: ngày game (reset 05:00) và ngày dương lịch Việt Nam người chơi đã vào game.
+    // - daily_state: ngày gần nhất đã xử lý cho mỗi người chơi (để chỉ xử lý ngày mới 1 lần).
+    // Không đổi dữ liệu cũ; thành tựu tính cả lịch sử cũ.
+    version: 12,
+    name: 'quests_achievements',
+    disableForeignKeys: true,
+    sql: `
+CREATE TABLE ticket_transactions_new (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER NOT NULL REFERENCES users(id),
+  ticket_type     TEXT NOT NULL CHECK (ticket_type IN ('normal','shu','wei','wu','qun')),
+  amount_delta    INTEGER NOT NULL CHECK (amount_delta <> 0),
+  reason          TEXT NOT NULL CHECK (reason IN ('time_recovery','signup_bonus','dev_topup','admin_grant','giftcode','gacha_draw','daily_reset','mission','achievement')),
+  reference_id    TEXT,
+  idempotency_key TEXT,
+  created_at      TEXT NOT NULL
+);
+INSERT INTO ticket_transactions_new (id, user_id, ticket_type, amount_delta, reason, reference_id, idempotency_key, created_at)
+  SELECT id, user_id, ticket_type, amount_delta, reason, reference_id, idempotency_key, created_at FROM ticket_transactions;
+DROP TABLE ticket_transactions;
+ALTER TABLE ticket_transactions_new RENAME TO ticket_transactions;
+CREATE INDEX idx_ttx_user ON ticket_transactions(user_id, id);
+CREATE UNIQUE INDEX uq_ttx_recovery_slot ON ticket_transactions(user_id, reference_id) WHERE reason = 'time_recovery';
+CREATE UNIQUE INDEX uq_ttx_signup_bonus ON ticket_transactions(user_id, ticket_type) WHERE reason = 'signup_bonus';
+CREATE UNIQUE INDEX uq_ttx_dev_topup ON ticket_transactions(user_id, reference_id, ticket_type) WHERE reason = 'dev_topup';
+CREATE UNIQUE INDEX uq_ttx_admin_grant ON ticket_transactions(user_id, reference_id, ticket_type) WHERE reason = 'admin_grant';
+CREATE UNIQUE INDEX uq_ttx_giftcode ON ticket_transactions(user_id, reference_id, ticket_type) WHERE reason = 'giftcode';
+CREATE UNIQUE INDEX uq_ttx_quest ON ticket_transactions(user_id, reference_id, ticket_type) WHERE reason IN ('daily_reset','mission','achievement');
+
+CREATE TABLE reward_claims (
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  reward_key TEXT NOT NULL,
+  auto       INTEGER NOT NULL DEFAULT 0 CHECK (auto IN (0,1)),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, reward_key)
+);
+CREATE TABLE login_days (
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  kind       TEXT NOT NULL CHECK (kind IN ('game','calendar')),
+  day        TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, kind, day)
+);
+CREATE TABLE daily_state (
+  user_id       INTEGER PRIMARY KEY REFERENCES users(id),
+  last_game_day TEXT NOT NULL,
+  last_cal_date TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+CREATE INDEX idx_gacha_user_time ON gacha_history(user_id, created_at);
+CREATE INDEX idx_upgrade_user_time ON upgrade_history(user_id, created_at);
+`,
+  },
 ];
 
 /** target: chỉ chạy tới version này (dùng khi test migration). */

@@ -71,11 +71,12 @@ export function renderDraw(root: HTMLElement): () => void {
 
   function renderPicker() {
     const b = state.tickets?.balances;
+    const cap = state.tickets?.recoveryCap; // trần vé hồi theo loại (vé từ nguồn khác có thể vượt)
     picker.innerHTML = TICKET_TYPES.map(
       (t) => `
       <button role="radio" aria-checked="${t === selected}" class="ticket t-${t} ${t === selected ? 'on' : ''}" data-t="${t}">
         <span class="t-name">${TICKET_LABELS[t]}</span>
-        <span class="t-count">${b ? b[t] : '–'}</span>
+        <span class="t-count ${b && cap && b[t] >= cap[t] ? 'full' : ''}" title="${cap ? `Vé hồi theo thời gian tối đa ${cap[t]}; nhiệm vụ, giftcode… vẫn cộng vượt được` : ''}">${b ? b[t] : '–'}${cap ? `<small class="t-cap"> / ${cap[t]}</small>` : ''}</span>
         <span class="t-pool muted">${poolSize(t)} tướng${t === 'normal' ? '' : ` ${FACTION_LABELS[t]}`}</span>
       </button>`,
     ).join('');

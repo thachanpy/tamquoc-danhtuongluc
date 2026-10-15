@@ -5,14 +5,16 @@ import { openDatabase } from '../src/db.ts';
 import { AppError, type GameContext } from '../src/context.ts';
 import { register as rawRegister } from '../src/auth.ts';
 import { approveUser } from '../src/admin.ts';
-import { claimRecovery, devTopup, getTickets, readBalances, syncRecovery } from '../src/tickets.ts';
+import { applyTicketDelta, claimRecovery, devTopup, getTickets, readBalances, syncRecovery } from '../src/tickets.ts';
 import { draw } from '../src/gacha.ts';
 import { attemptUpgrade, previewUpgrade, quickUpgrade } from '../src/upgrade.ts';
 import { giftCards, listRecipients } from '../src/gift.ts';
 import { listCards, listHistory } from '../src/queries.ts';
 import { seedGenerals } from '../src/seed.ts';
+import { getLeaderboard } from '../src/leaderboard.ts';
 import { runMigrations } from '../src/migrations.ts';
 import { DatabaseSync } from 'node:sqlite';
+import { RECOVERY_CAP_PER_TYPE } from '@tq/game-config';
 import { SIGNUP_BONUS_TICKETS as BONUS, DEV_TOPUP_TICKETS, UPGRADE_INPUT_COUNT, RECOVERY_INTERVAL_MS, GIFT_MAX_CARDS } from '@tq/game-config';
 
 /** Đăng ký + duyệt ngay (tài khoản đầu tiên tự được duyệt; các tài khoản sau được admin duyệt). */
@@ -381,15 +383,57 @@ test('ví dụ đặc tả: xử lý 10:00, offline đến 10:30 => đúng 6 vé
   assert.deepEqual(slots, ['05', '10', '15', '20', '25', '30'].map((m) => `2026-10-14T10:${m}:00.000Z`));
 });
 
-test('qua giờ mới / ngày mới / offline dài (30 ngày, nhiều batch) cấp đủ, không trần', () => {
+test('qua giờ mới / ngày mới / offline dài (30 ngày, nhiều batch): vé hồi lấp đầy tới trần 500 mỗi loại rồi dừng', () => {
   const h = makeCtx(Date.UTC(2026, 9, 14, 23, 55, 0));
   const { userId } = register(h.ctx, 'alice', 'secret123');
   h.setNow(Date.UTC(2026, 9, 15, 0, 2, 0));
   assert.equal(claimRecovery(h.ctx, userId).grantedTotal, 1); // 00:00 ngày mới
   h.advance(30 * 24 * 60 * 60 * 1000); // 30 ngày = 8640 mốc 5 phút
   const r = claimRecovery(h.ctx, userId);
-  assert.equal(r.grantedTotal, 8640);
-  assert.equal(r.total, BONUS + 8641);
+  const cap = Object.values(RECOVERY_CAP_PER_TYPE).reduce((s, n) => s + n, 0); // 1000 + 4×500
+  assert.equal(r.grantedTotal, cap - BONUS - 1); // chỉ lấp tới trần
+  assert.equal(r.skippedFull, 8640 - r.grantedTotal); // các mốc còn lại bỏ, không cộng bù
+  assert.deepEqual(readBalances(h.ctx.db, userId), { normal: 1000, shu: 500, wei: 500, wu: 500, qun: 500 });
+  assert.deepEqual(r.recoveryCap, RECOVERY_CAP_PER_TYPE);
+  assert.deepEqual(ledgerSum(h.ctx, userId), readBalances(h.ctx.db, userId));
+  // Đã xử lý hết các mốc (không xử lý lại khi gọi tiếp)
+  assert.equal(claimRecovery(h.ctx, userId).grantedTotal, 0);
+});
+
+test('trần vé hồi theo loại (thường 1000, phe 500): chỉ random trong loại còn dưới trần; vé vượt trần từ nguồn khác được giữ', () => {
+  const h = makeCtx(Date.UTC(2026, 9, 14, 10, 0, 0));
+  const { userId } = register(h.ctx, 'alice', 'secret123');
+  const nowIso = () => new Date(h.ctx.now()).toISOString();
+  // Mọi RNG trả 0 => nếu không lọc thì luôn ra Vé thường
+  h.ctx.rand = () => 0;
+  // Vé thường 600 (> 500 nhưng < trần 1000) vẫn được hồi
+  const b0 = readBalances(h.ctx.db, userId);
+  applyTicketDelta(h.ctx.db, userId, 'normal', 600 - b0.normal, 'admin_grant', 'admin:test:0', null, nowIso());
+  h.advance(SLOT);
+  assert.equal(claimRecovery(h.ctx, userId).granted.normal, 1);
+  // Đưa Vé thường lên 1010 bằng nguồn không bị trần (admin cộng)
+  applyTicketDelta(h.ctx.db, userId, 'normal', 1010 - readBalances(h.ctx.db, userId).normal, 'admin_grant', 'admin:test:1', null, nowIso());
+  h.advance(20 * SLOT);
+  const r = claimRecovery(h.ctx, userId);
+  assert.equal(r.granted.normal, 0);
+  assert.equal(r.grantedTotal, 20);
+  assert.equal(readBalances(h.ctx.db, userId).normal, 1010); // giữ nguyên 1010, không bị cắt
+  // Cả 5 loại đầy => mốc không cấp vé, không ghi ledger
+  for (const t of ['shu', 'wei', 'wu', 'qun'] as const) {
+    const cur = readBalances(h.ctx.db, userId)[t];
+    applyTicketDelta(h.ctx.db, userId, t, 500 - cur, 'admin_grant', `admin:test:${t}`, null, nowIso());
+  }
+  const before = (h.ctx.db.prepare("SELECT COUNT(*) AS n FROM ticket_transactions WHERE reason='time_recovery'").get() as { n: number }).n;
+  h.advance(5 * SLOT);
+  const full = claimRecovery(h.ctx, userId);
+  assert.equal(full.grantedTotal, 0);
+  assert.equal(full.skippedFull, 5);
+  const after = (h.ctx.db.prepare("SELECT COUNT(*) AS n FROM ticket_transactions WHERE reason='time_recovery'").get() as { n: number }).n;
+  assert.equal(after, before);
+  // Dùng bớt 1 Vé Thục => mốc kế tiếp cấp đúng Vé Thục (loại duy nhất còn chỗ)
+  applyTicketDelta(h.ctx.db, userId, 'shu', -1, 'gacha_draw', null, null, nowIso());
+  h.advance(SLOT);
+  assert.deepEqual(claimRecovery(h.ctx, userId).granted, { normal: 0, shu: 1, wei: 0, wu: 0, qun: 0 });
   assert.deepEqual(ledgerSum(h.ctx, userId), readBalances(h.ctx.db, userId));
 });
 
@@ -417,7 +461,7 @@ test('unique index chặn cấp trùng mốc kể cả khi state bị lùi', () 
 test('batch lỗi giữa chừng: batch đã commit giữ nguyên, lần sau tiếp tục không mất/không trùng', () => {
   const h = makeCtx(Date.UTC(2026, 9, 14, 10, 0, 0));
   const { userId } = register(h.ctx, 'alice', 'secret123');
-  h.advance(2500 * SLOT); // 2500 mốc => 3 batch (1000/1000/500)
+  h.advance(1800 * SLOT); // 1800 mốc => 2 batch (1000/800); tổng vẫn dưới trần 500×5
   let calls = 0;
   const realRand = h.ctx.rand;
   h.ctx.rand = (max) => {
@@ -429,9 +473,9 @@ test('batch lỗi giữa chừng: batch đã commit giữ nguyên, lần sau ti�
   assert.equal(getTickets(h.ctx, userId).total, BONUS + 1000); // batch 1 đã commit, batch 2 rollback
   h.ctx.rand = realRand;
   syncRecovery(h.ctx, userId);
-  assert.equal(getTickets(h.ctx, userId).total, BONUS + 2500);
+  assert.equal(getTickets(h.ctx, userId).total, BONUS + 1800);
   const distinct = (h.ctx.db.prepare("SELECT COUNT(DISTINCT reference_id) AS n FROM ticket_transactions WHERE reason='time_recovery'").get() as { n: number }).n;
-  assert.equal(distinct, 2500);
+  assert.equal(distinct, 1800);
 });
 
 test('khởi động lại server (mở lại file DB) không mất mốc, không reset dữ liệu', async () => {
@@ -1051,4 +1095,63 @@ test('giftcode nguyên tử: lỗi giữa chừng => không cộng vé nào, ch�
   redeemGiftCode(h.ctx, userId, 'ATOM');
   const b1 = readBalances(h.ctx.db, userId);
   assert.deepEqual([b1.wu - b0.wu, b1.qun - b0.qun], [50, 50]);
+});
+
+// ======================= Bảng xếp hạng =======================
+
+test('leaderboard: Lực chiến = tổng 2^(lv-1), đồng điểm đồng hạng, ẩn admin, bỏ thẻ đã tiêu thụ', () => {
+  const { ctx } = makeCtx();
+  const admin = register(ctx, 'boss', 'secret123').userId; // tài khoản đầu tiên = admin
+  const a = register(ctx, 'alice', 'secret123').userId;
+  const b = register(ctx, 'bob', 'secret123').userId;
+  const c = register(ctx, 'carol', 'secret123').userId;
+  register(ctx, 'nocards', 'secret123');
+  insertCard(ctx, admin, 'cao-cao', 10); // admin không được xếp hạng
+  insertCard(ctx, a, 'cao-cao', 10); // 512
+  insertCard(ctx, a, 'liu-bei', 1); // +1 => 513
+  insertCard(ctx, b, 'liu-bei', 9); // 256
+  insertCard(ctx, b, 'liu-bei', 9); // 512
+  const used = insertCard(ctx, b, 'liu-bei', 1);
+  ctx.db.prepare("UPDATE user_cards SET status = 'consumed', consumed_at = 'x' WHERE id = ?").run(used); // không tính
+  insertCard(ctx, c, 'sun-quan', 10); // 512, max Lv10 => đứng trên bob trong cùng hạng
+
+  const lb = getLeaderboard(ctx, b);
+  assert.equal(lb.totalRanked, 3);
+  assert.deepEqual(
+    lb.items.map((e) => [e.rank, e.username, e.power, e.maxLevel]),
+    [
+      [1, 'alice', 513, 10],
+      [2, 'carol', 512, 10],
+      [2, 'bob', 512, 9],
+    ],
+  );
+  assert.equal(lb.items.find((e) => e.isMe)?.username, 'bob');
+  assert.deepEqual(lb.me, { rank: 2, username: 'bob', power: 512, cardCount: 2, maxLevel: 9, isMe: true });
+  assert.equal(lb.powerByLevel[10], 512);
+
+  // Admin xem: không có hạng của mình, không xuất hiện trong bảng
+  const asAdmin = getLeaderboard(ctx, admin);
+  assert.equal(asAdmin.me, null);
+  assert.ok(!asAdmin.items.some((e) => e.username === 'boss'));
+
+  // Người chưa có thẻ: chưa xếp hạng
+  const none = getLeaderboard(ctx, Number((ctx.db.prepare("SELECT id FROM users WHERE username='nocards'").get() as { id: number }).id));
+  assert.deepEqual(none.me, { rank: null, username: 'nocards', power: 0, cardCount: 0, maxLevel: null, isMe: true });
+});
+
+test('leaderboard: tối đa 100 người, hạng của mình ngoài top vẫn trả về', () => {
+  const { ctx } = makeCtx();
+  register(ctx, 'boss', 'secret123');
+  let last = 0;
+  for (let i = 0; i < 105; i++) {
+    const id = register(ctx, `p${String(i).padStart(3, '0')}`, 'secret123').userId;
+    for (let k = 0; k <= 105 - i; k++) insertCard(ctx, id, 'cao-cao', 1); // p000 nhiều thẻ nhất
+    last = id;
+  }
+  const lb = getLeaderboard(ctx, last);
+  assert.equal(lb.items.length, 100);
+  assert.equal(lb.totalRanked, 105);
+  assert.equal(lb.items[0]!.username, 'p000');
+  assert.equal(lb.me?.rank, 105);
+  assert.ok(!lb.items.some((e) => e.isMe));
 });

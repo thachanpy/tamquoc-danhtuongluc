@@ -1,6 +1,6 @@
 import './style.css';
 import './theme.css';
-import { TICKET_TYPES, TICKET_LABELS } from '@tq/shared';
+import { TICKET_TYPES, TICKET_LABELS, type DailyEventsDto } from '@tq/shared';
 import { api, setToken, hasToken, type ApiError } from './api.ts';
 import { state, setTickets, onTickets } from './state.ts';
 import { esc } from './art.ts';
@@ -9,6 +9,8 @@ import { renderDraw } from './pages/draw.ts';
 import { renderCollection } from './pages/collection.ts';
 import { renderUpgrade } from './pages/upgrade.ts';
 import { renderHistory } from './pages/history.ts';
+import { renderLeaderboard } from './pages/leaderboard.ts';
+import { renderQuests } from './pages/quests.ts';
 import { renderAdmin } from './pages/admin.ts';
 import { renderGiftCode, rewardText } from './pages/giftcode.ts';
 
@@ -36,6 +38,8 @@ const PAGES = {
   collection: { label: 'Bộ sưu tập', render: renderCollection },
   draw: { label: 'Quay thẻ', render: renderDraw },
   upgrade: { label: 'Nâng cấp', render: renderUpgrade },
+  quests: { label: 'Nhiệm vụ', render: renderQuests },
+  leaderboard: { label: 'Xếp hạng', render: renderLeaderboard },
   history: { label: 'Lịch sử', render: renderHistory },
   giftcode: { label: 'Giftcode', render: renderGiftCode },
   admin: { label: 'Quản trị', render: renderAdmin, adminOnly: true },
@@ -116,7 +120,7 @@ function renderShell() {
   app.innerHTML = `
     <div class="app-head">
     <header class="top">
-      <div class="brand"><img class="logo" src="/icons/icon-192.png" alt="" aria-hidden="true" />Tam Quốc: <span>Danh Tướng Lục</span></div>
+      <div class="brand"><img class="logo" src="/icons/icon-192.png" alt="" aria-hidden="true" />Tam Quốc<i class="brand-sep">:</i> <span>Danh Tướng Lục</span></div>
       <div class="tickets-bar" aria-live="polite"></div>
       <div class="user">
         <div data-music></div><span>${esc(state.username)}</span><button class="btn ghost small" data-logout>Đăng xuất</button>
@@ -124,7 +128,7 @@ function renderShell() {
     </header>
     <nav class="tabs">${Object.entries(PAGES)
       .filter(([, p]) => !('adminOnly' in p) || state.isAdmin)
-      .map(([id, p]) => `<a href="#${id}" data-tab="${id}">${p.label}${'adminOnly' in p ? ' <span class="badge" data-pending hidden></span>' : ''}</a>`)
+      .map(([id, p]) => `<a href="#${id}" data-tab="${id}">${p.label}${'adminOnly' in p ? ' <span class="badge" data-pending hidden></span>' : ''}${id === 'quests' ? ' <span class="badge" data-quests hidden></span>' : ''}</a>`)
       .join('')}</nav>
     </div>
     <main id="page"></main>`;
@@ -144,10 +148,21 @@ function renderShell() {
   const drawBar = () => {
     const t = state.tickets;
     if (!t) return;
+    // Trần vé hồi theo thời gian (mỗi loại); vé từ nhiệm vụ/giftcode… có thể vượt trần
+    const cap = t.recoveryCap;
+    const full = (k: (typeof TICKET_TYPES)[number]) => t.balances[k] >= cap[k];
+    const allFull = TICKET_TYPES.every(full);
     bar.innerHTML = `
-      ${TICKET_TYPES.map((k) => `<span class="tb t-${k}" title="${TICKET_LABELS[k]}">${TICKET_LABELS[k].replace('Vé ', '')} <b>${t.balances[k]}</b></span>`).join('')}
+      ${TICKET_TYPES.map(
+        (k) =>
+          `<span class="tb t-${k} ${full(k) ? 'full' : ''}" title="${TICKET_LABELS[k]}${full(k) ? ` — đã đạt trần vé hồi ${cap[k]}, không hồi thêm loại này` : ` — vé hồi tối đa ${cap[k]}`}">${TICKET_LABELS[k].replace('Vé ', '')} <b>${t.balances[k]}</b><small class="tb-cap">/${cap[k]}</small></span>`,
+      ).join('')}
       <span class="tb total">Tổng <b>${t.total}</b></span>
-      <span class="tb timer" title="Vé kế tiếp lúc ${new Date(t.nextRecoveryAt).toLocaleTimeString('vi-VN')}">+1 vé sau <b data-cd>${fmtCountdown(state.nextRecoveryLocal - performance.now())}</b></span>`;
+      ${
+        allFull
+          ? `<span class="tb timer full" title="Mọi loại vé đã đạt trần (thường ${cap.normal}, phe ${cap.shu}): vé hồi theo thời gian tạm dừng (nhiệm vụ, giftcode vẫn cộng được)">Vé hồi đã đầy</span>`
+          : `<span class="tb timer" title="Vé kế tiếp lúc ${new Date(t.nextRecoveryAt).toLocaleTimeString('vi-VN')}. Vé hồi tối đa: thường ${cap.normal}, mỗi loại phe ${cap.shu}">+1 vé sau <b data-cd>${fmtCountdown(state.nextRecoveryLocal - performance.now())}</b></span>`
+      }`;
   };
   onTickets(drawBar);
   drawBar();
@@ -163,6 +178,8 @@ function renderShell() {
       try {
         const r = await api.claimRecovery();
         setTickets(r);
+        if (r.dailyEvents) showDailyEvents(r.dailyEvents);
+        void refreshQuestBadge();
         if (r.grantedTotal > 0) toast(`Nhận ${r.grantedTotal} vé: ${TICKET_TYPES.filter((k) => r.granted[k]).map((k) => `${TICKET_LABELS[k]} ×${r.granted[k]}`).join(', ')}`);
       } catch {
         state.nextRecoveryLocal = performance.now() + 15_000; // thử lại sau
@@ -186,6 +203,36 @@ async function refreshPendingBadge() {
   }
 }
 
+/** Số phần thưởng nhiệm vụ/thành tựu đang chờ nhận (badge tab Nhiệm vụ). */
+let questBadgeSeq = 0;
+async function refreshQuestBadge() {
+  const seq = ++questBadgeSeq;
+  try {
+    const q = await api.quests();
+    if (seq === questBadgeSeq) setQuestBadge(q.claimable);
+  } catch {
+    /* chỉ là badge hiển thị */
+  }
+}
+function setQuestBadge(n: number) {
+  const el = app.querySelector<HTMLSpanElement>('[data-quests]');
+  if (!el) return;
+  el.textContent = String(n);
+  el.hidden = n === 0;
+}
+
+/** Thông báo sự kiện ngày mới do server xử lý (thưởng reset 05:00, nhiệm vụ hôm trước tự nhận). */
+function showDailyEvents(ev: DailyEventsDto) {
+  if (ev.resetBonus) {
+    const total = TICKET_TYPES.reduce((s, t) => s + ev.resetBonus![t], 0);
+    toast(`Ngày mới! Nhận ${total} vé thưởng (${TICKET_TYPES.map((t) => `${TICKET_LABELS[t]} ×${ev.resetBonus![t]}`).join(', ')})`, 6000);
+  }
+  if (ev.autoClaimed.length) {
+    const total = ev.autoClaimed.reduce((s, a) => s + a.count, 0);
+    setTimeout(() => toast(`Tự nhận ${ev.autoClaimed.length} phần thưởng nhiệm vụ chưa nhận: +${total} vé`, 6000), ev.resetBonus ? 6200 : 0);
+  }
+}
+
 function toast(text: string, ms = 4000) {
   const el = document.createElement('div');
   el.className = 'toast';
@@ -200,7 +247,11 @@ function route() {
   const page = PAGES[id] && (!('adminOnly' in PAGES[id]) || state.isAdmin) ? PAGES[id] : PAGES.collection;
   cleanupPage?.();
   app.querySelectorAll<HTMLAnchorElement>('[data-tab]').forEach((a) => a.classList.toggle('on', a.dataset.tab === id));
+  // Mobile: thanh tab cuộn ngang => đưa tab đang chọn vào tầm nhìn
+  app.querySelector<HTMLAnchorElement>('[data-tab].on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   cleanupPage = page.render(document.getElementById('page')!);
+  // Quay/ghép ở trang khác có thể làm xong nhiệm vụ => cập nhật badge khi đổi trang
+  if (id !== 'quests') void refreshQuestBadge();
 }
 
 /**
@@ -261,6 +312,8 @@ async function maybeShowGiftCodePopup() {
 
 // Trang Quản trị báo khi duyệt/từ chối để cập nhật badge (tránh import vòng main <-> pages).
 window.addEventListener('tq:pending-changed', () => void refreshPendingBadge());
+// Trang Nhiệm vụ báo số phần thưởng còn chờ nhận sau mỗi lần tải/nhận
+window.addEventListener('tq:quests-changed', (e) => setQuestBadge(Number((e as CustomEvent).detail) || 0));
 
 async function boot() {
   if (!hasToken()) return renderLogin();
@@ -278,6 +331,9 @@ async function boot() {
     renderShell();
     setTickets(me.tickets);
     if (claimed.grantedTotal > 0) toast(`Nhận ${claimed.grantedTotal} vé hồi trong lúc vắng mặt`);
+    // Request đầu tiên trong ngày (claimRecovery hoặc me) mang sự kiện ngày mới
+    const daily = claimed.dailyEvents ?? me.dailyEvents;
+    if (daily) setTimeout(() => showDailyEvents(daily), claimed.grantedTotal > 0 ? 4200 : 0);
     window.onhashchange = route;
     route();
     if (state.isAdmin) void refreshPendingBadge();

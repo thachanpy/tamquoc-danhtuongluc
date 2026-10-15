@@ -5,6 +5,12 @@ export const BPS_SCALE = 10_000;
 
 /** Mốc hồi vé: mỗi 5 phút theo đồng hồ server (UTC). Mục 3.6. (Trước đây 10 phút; chủ dự án đổi thành 5.) */
 export const RECOVERY_INTERVAL_MS = 5 * 60 * 1000;
+/**
+ * Trần vé HỒI THEO THỜI GIAN theo từng loại vé (chủ dự án yêu cầu): Vé thường 1000, vé phe 500. Mỗi mốc hồi chỉ random trong các loại
+ * còn dưới trần; cả 5 loại đều ≥ trần thì mốc đó không cấp vé (không cộng bù).
+ * Chỉ chặn vé hồi: nhiệm vụ, thành tựu, thưởng 05:00, giftcode, admin, quà đăng ký vẫn cộng vượt trần (VD 510/500 vé phe).
+ */
+export const RECOVERY_CAP_PER_TYPE: Record<TicketType, number> = { normal: 1000, shu: 500, wei: 500, wu: 500, qun: 500 };
 /** Số mốc tối đa xử lý trong MỘT transaction nội bộ. Không phải trần vé — vòng lặp xử lý đến hết. */
 export const RECOVERY_BATCH_SIZE = 1_000;
 
@@ -80,6 +86,16 @@ export const GACHA_LEVEL_RATES: WeightEntry[] = [
  * Trước đây là 3; chủ dự án đổi thành 2.
  */
 export const UPGRADE_INPUT_COUNT = 2;
+
+/**
+ * Bảng xếp hạng Lực chiến (mục 6.6): điểm mỗi thẻ đang có theo level, Lv.n = 2^(n-1)
+ * (2 thẻ Lv.n ghép thành công = 1 thẻ Lv.n+1 giữ nguyên điểm). LEADERBOARD_SIZE: số người hiển thị tối đa.
+ */
+export const LEADERBOARD_POWER_BY_LEVEL: Record<number, number> = Object.fromEntries(
+  Array.from({ length: 10 }, (_, i) => [i + 1, 2 ** i]),
+);
+export const LEADERBOARD_SIZE = 100;
+export const LEADERBOARD_TOP = 10;
 
 /** Tặng thẻ (mục 5.6): số thẻ tối đa trong một lần tặng. */
 export const GIFT_MAX_CARDS = 20;

@@ -10,6 +10,10 @@ import {
   UPGRADE_INPUT_COUNT,
   QUICK_UPGRADE_MAX_LEVEL,
   GIFT_MAX_CARDS,
+  RECOVERY_CAP_PER_TYPE,
+  LEADERBOARD_POWER_BY_LEVEL,
+  LEADERBOARD_SIZE,
+  LEADERBOARD_TOP,
   QUICK_UPGRADE_MAX_MERGES,
   TICKET_GRANT_WEIGHTS,
   TICKET_POOL_FACTION,
@@ -18,6 +22,7 @@ import {
   UPGRADE_SUCCESS_BPS,
   UPGRADE_FAILURE_DISTRIBUTION,
 } from './rates.ts';
+import { validateQuestConfig } from './quests.ts';
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`[game-config] ${msg}`);
@@ -117,4 +122,18 @@ export function validateGameConfig(): void {
     checkWeights(`FAILURE[${lv}]`, dist, MIN_LEVEL, lv);
   }
   assert(UPGRADE_SUCCESS_BPS[MAX_LEVEL] === undefined, 'không được có tỷ lệ nâng cấp từ level 10');
+
+  // Bảng xếp hạng: điểm nguyên dương cho mọi level 1–10, level cao không ít điểm hơn level thấp
+  for (let lv = MIN_LEVEL; lv <= MAX_LEVEL; lv++) {
+    const p = LEADERBOARD_POWER_BY_LEVEL[lv];
+    assert(p !== undefined && Number.isSafeInteger(p) && p >= 1, `LEADERBOARD_POWER_BY_LEVEL[${lv}] không hợp lệ`);
+    if (lv > MIN_LEVEL) assert(p >= LEADERBOARD_POWER_BY_LEVEL[lv - 1]!, 'LEADERBOARD_POWER_BY_LEVEL phải không giảm theo level');
+  }
+  assert(Number.isInteger(LEADERBOARD_SIZE) && LEADERBOARD_SIZE >= 1 && LEADERBOARD_SIZE <= 500, 'LEADERBOARD_SIZE phải trong 1–500');
+  for (const t of TICKET_TYPES) {
+    const c = RECOVERY_CAP_PER_TYPE[t];
+    assert(Number.isSafeInteger(c) && c >= 1, `RECOVERY_CAP_PER_TYPE.${t} phải là số nguyên ≥ 1`);
+  }
+  validateQuestConfig(assert);
+  assert(Number.isInteger(LEADERBOARD_TOP) && LEADERBOARD_TOP >= 1 && LEADERBOARD_TOP <= LEADERBOARD_SIZE, 'LEADERBOARD_TOP không hợp lệ');
 }

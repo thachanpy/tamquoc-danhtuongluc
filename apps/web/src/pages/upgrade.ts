@@ -207,6 +207,8 @@ export function renderUpgrade(root: HTMLElement): () => void {
 
   function renderSide() {
     root.querySelector('.sel-count')!.textContent = String(selected.length);
+    // Mobile: khung "Đã chọn" dính đáy màn hình khi đang chọn thẻ (CSS .side.has-sel)
+    root.querySelector('.side')!.classList.toggle('has-sel', selected.length > 0);
     const m = byId();
     slotsEl.innerHTML = Array.from({ length: N }, (_, i) => i)
       .map((i) => {

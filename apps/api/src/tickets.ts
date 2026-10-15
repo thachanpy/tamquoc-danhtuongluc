@@ -12,7 +12,9 @@ import {
   RECOVERY_BATCH_SIZE,
   SIGNUP_BONUS_TICKETS,
   DEV_TOPUP_TICKETS,
+  RECOVERY_CAP_PER_TYPE,
   rollTicketType,
+  rollTicketTypeAmong,
 } from '@tq/game-config';
 import { AppError, iso, findIdempotent, saveIdempotent, type GameContext } from './context.ts';
 import { tx, type DB } from './db.ts';
@@ -116,10 +118,17 @@ export function devTopup(ctx: GameContext, userId: number, idempotencyKey: strin
  * - Chia batch nội bộ; mỗi batch là 1 transaction: cấp vé + ledger + cập nhật mốc.
  *   Nếu lỗi giữa chừng, các batch đã commit được giữ, lần gọi sau tiếp tục từ mốc đã lưu.
  * - Unique index (user_id, reference_id) cho reason=time_recovery chặn cấp trùng mốc.
- * - KHÔNG có trần tồn kho.
+ * - Trần RECOVERY_CAP_PER_TYPE theo loại (Vé thường 1000, vé phe 500) CHỈ cho vé hồi: mỗi mốc random trong các loại còn dưới trần;
+ *   cả 5 loại đã đầy thì mốc đó được đánh dấu đã xử lý mà không cấp vé (không cộng bù).
+ *   Số dư vượt trần do nguồn khác (nhiệm vụ, giftcode…) được giữ nguyên.
  */
 export function syncRecovery(ctx: GameContext, userId: number): TicketBalances {
+  return syncRecoveryDetailed(ctx, userId).granted;
+}
+
+export function syncRecoveryDetailed(ctx: GameContext, userId: number): { granted: TicketBalances; skippedFull: number } {
   const granted = emptyBalances();
+  let skippedFull = 0;
   for (;;) {
     const done = tx(ctx.db, () => {
       const now = ctx.now();
@@ -136,10 +145,17 @@ export function syncRecovery(ctx: GameContext, userId: number): TicketBalances {
       const pending = (nowSlot - last) / RECOVERY_INTERVAL_MS;
       const n = Math.min(pending, RECOVERY_BATCH_SIZE);
       const nowIso = iso(now);
+      const bal = readBalances(ctx.db, userId);
       for (let i = 1; i <= n; i++) {
+        const open = TICKET_TYPES.filter((t) => bal[t] < RECOVERY_CAP_PER_TYPE[t]);
+        const type = rollTicketTypeAmong(ctx.rand, open);
+        if (type === null) {
+          skippedFull++; // cả 5 loại đã đầy: mốc này không cấp vé
+          continue;
+        }
         const slotIso = iso(last + i * RECOVERY_INTERVAL_MS);
-        const type = rollTicketType(ctx.rand);
         applyTicketDelta(ctx.db, userId, type, 1, 'time_recovery', slotIso, null, nowIso);
+        bal[type]++;
         granted[type]++;
       }
       const newLast = iso(last + n * RECOVERY_INTERVAL_MS);
@@ -152,7 +168,7 @@ export function syncRecovery(ctx: GameContext, userId: number): TicketBalances {
       if (upd.changes !== 1) throw new AppError(409, 'CONCURRENT_UPDATE', 'Trạng thái hồi vé vừa thay đổi.');
       return n === pending;
     });
-    if (done) return granted;
+    if (done) return { granted, skippedFull };
   }
 }
 
@@ -170,14 +186,16 @@ export function getTickets(ctx: GameContext, userId: number): TicketsDto {
     nextRecoveryAt: iso(next),
     serverNow: iso(now),
     msUntilNextRecovery: next - now,
+    recoveryCap: { ...RECOVERY_CAP_PER_TYPE },
   };
 }
 
 export function claimRecovery(ctx: GameContext, userId: number): ClaimRecoveryDto {
-  const granted = syncRecovery(ctx, userId);
+  const { granted, skippedFull } = syncRecoveryDetailed(ctx, userId);
   return {
     ...getTickets(ctx, userId),
     granted,
+    skippedFull,
     grantedTotal: TICKET_TYPES.reduce((s, t) => s + granted[t], 0),
   };
 }

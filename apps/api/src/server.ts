@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
-import { schemas, type TicketType, type MeDto } from '@tq/shared';
+import { schemas, type TicketType, type MeDto, type DailyEventsDto } from '@tq/shared';
 import { ROSTER, DEV_TOPUP_TICKETS } from '@tq/game-config';
 import { AppError, type GameContext } from './context.ts';
 import { register, login, logout, authenticate, getUsername, isAdmin } from './auth.ts';
@@ -28,11 +28,15 @@ import {
 } from './giftcode.ts';
 import type { GiftCodeReward } from '@tq/shared';
 import { getSettings, setRequireApproval } from './settings.ts';
+import { getLeaderboard } from './leaderboard.ts';
+import { touchDaily, getQuests, claimQuests } from './quests.ts';
 import { listCards, listHistory, type CardsQuery, type HistoryQuery } from './queries.ts';
 
 declare module 'fastify' {
   interface FastifyRequest {
     userId: number;
+    /** Sự kiện ngày mới (thưởng reset 05:00, nhiệm vụ ngày cũ tự nhận) xử lý trong request này. */
+    dailyEvents: DailyEventsDto | null;
   }
 }
 
@@ -74,6 +78,14 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
 
   const auth = async (req: FastifyRequest) => {
     req.userId = authenticate(ctx, bearer(req));
+    // Ngày mới: ghi nhận đăng nhập, thưởng reset 05:00, tự nhận nhiệm vụ ngày cũ (mục 3.10).
+    // Lỗi ở đây không được chặn thao tác chính của người chơi; lần request sau sẽ xử lý lại.
+    try {
+      req.dailyEvents = touchDaily(ctx, req.userId);
+    } catch (err) {
+      req.dailyEvents = null;
+      req.log.error(err);
+    }
   };
   // Chỉ admin (users.is_admin = 1). Kiểm tra ở server cho mọi route /api/admin/*.
   const adminAuth = async (req: FastifyRequest) => {
@@ -107,6 +119,7 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
       isAdmin: isAdmin(ctx, req.userId),
       tickets: getTickets(ctx, req.userId),
       features: { devTopup: !!ctx.features?.devTopup, devTopupAmount: DEV_TOPUP_TICKETS },
+      ...(req.dailyEvents ? { dailyEvents: req.dailyEvents } : {}),
     };
   });
   app.get('/api/generals', async () => ({ items: ROSTER }));
@@ -116,7 +129,10 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
 
   // ---------- Vé ----------
   app.get('/api/tickets', { preHandler: auth }, async (req) => getTickets(ctx, req.userId));
-  app.post('/api/tickets/claim-recovery', { preHandler: auth }, async (req) => claimRecovery(ctx, req.userId));
+  app.post('/api/tickets/claim-recovery', { preHandler: auth }, async (req) => ({
+    ...claimRecovery(ctx, req.userId),
+    ...(req.dailyEvents ? { dailyEvents: req.dailyEvents } : {}),
+  }));
   // Nút cộng vé thử nghiệm — chỉ hoạt động khi ENABLE_DEV_TOPUP bật (service trả 404 nếu tắt)
   app.post(
     '/api/tickets/dev-topup',
@@ -218,6 +234,21 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
     '/api/admin/giftcodes/:id/active',
     { preHandler: adminAuth, schema: { params: schemas.idParams, body: schemas.adminGiftCodeActiveBody }, config: adminLimit },
     async (req) => adminSetGiftCodeActive(ctx, (req.params as { id: number }).id, (req.body as { isActive: boolean }).isActive),
+  );
+
+  // ---------- Nhiệm vụ & thành tựu (mục 3.10) ----------
+  app.get('/api/quests', { preHandler: auth, config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req) =>
+    getQuests(ctx, req.userId),
+  );
+  app.post(
+    '/api/quests/claim',
+    { preHandler: auth, schema: { body: schemas.questClaimBody }, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    async (req) => claimQuests(ctx, req.userId, (req.body as { keys?: string[] } | undefined)?.keys),
+  );
+
+  // ---------- Bảng xếp hạng (mục 6.6) ----------
+  app.get('/api/leaderboard', { preHandler: auth, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req) =>
+    getLeaderboard(ctx, req.userId),
   );
 
   // ---------- Lịch sử ----------

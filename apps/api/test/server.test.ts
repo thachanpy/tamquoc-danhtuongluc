@@ -4,6 +4,10 @@ import { openDatabase } from '../src/db.ts';
 import { createContext } from '../src/context.ts';
 import { buildServer } from '../src/server.ts';
 import { setRequireApproval } from '../src/settings.ts';
+import { DAILY_RESET_BONUS } from '@tq/game-config';
+
+/** Thưởng reset 05:00 (mục 3.10) được cộng ở request đầu tiên trong ngày của mỗi người chơi. */
+const RESET = Object.values(DAILY_RESET_BONUS).reduce((s, n) => s + n, 0);
 
 /** Test HTTP thật qua Fastify inject (không mở cổng mạng). */
 /** Các test duyệt tài khoản chạy với cài đặt "Duyệt tài khoản" bật; mặc định thật của server là tắt. */
@@ -34,16 +38,16 @@ test('HTTP: dev-topup bật => +50 vé; /api/me báo tính năng bật', async (
   const { app, auth } = await setup(true);
   const me = (await app.inject({ method: 'GET', url: '/api/me', headers: auth })).json();
   assert.deepEqual(me.features, { devTopup: true, devTopupAmount: 50 });
-  assert.equal(me.tickets.total, 100);
+  assert.equal(me.tickets.total, 100 + RESET);
 
   const r = await app.inject({ method: 'POST', url: '/api/tickets/dev-topup', headers: auth, payload: { idempotencyKey: 'http-topup-01' } });
   assert.equal(r.statusCode, 200);
   assert.equal(r.json().grantedTotal, 50);
-  assert.equal(r.json().tickets.total, 150);
+  assert.equal(r.json().tickets.total, 150 + RESET);
 
   // Retry cùng key
   const r2 = await app.inject({ method: 'POST', url: '/api/tickets/dev-topup', headers: auth, payload: { idempotencyKey: 'http-topup-01' } });
-  assert.equal(r2.json().tickets.total, 150);
+  assert.equal(r2.json().tickets.total, 150 + RESET);
   await app.close();
 });
 
@@ -215,7 +219,7 @@ test('HTTP: đăng ký mới => chờ duyệt, không token, không đăng nhậ
   const nAuth = { authorization: `Bearer ${login.json().token}` };
   const nMe = (await app.inject({ method: 'GET', url: '/api/me', headers: nAuth })).json();
   assert.equal(nMe.isAdmin, false);
-  assert.equal(nMe.tickets.total, 100);
+  assert.equal(nMe.tickets.total, 100 + RESET);
   await app.close();
 });
 
@@ -309,7 +313,7 @@ test('HTTP: admin xem thẻ của mọi người chơi, lọc theo người chơ
   const users = (await app.inject({ method: 'GET', url: '/api/admin/users?status=approved', headers: auth })).json();
   const pc = (users.items as { username: string; cardCount: number; ticketTotal: number }[]).find((u) => u.username === 'player_c')!;
   assert.equal(pc.cardCount, 10);
-  assert.equal(pc.ticketTotal, 90);
+  assert.equal(pc.ticketTotal, 90 + RESET);
   await app.close();
 });
 
@@ -360,7 +364,7 @@ test('HTTP: cài đặt Duyệt tài khoản tắt (mặc định) => đăng ký
   assert.equal(r.json().isAdmin, false);
   const me = (await app.inject({ method: 'GET', url: '/api/me', headers: { authorization: `Bearer ${r.json().token}` } })).json();
   assert.equal(me.isAdmin, false);
-  assert.equal(me.tickets.total, 100);
+  assert.equal(me.tickets.total, 100 + RESET);
   const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'quick_user', password: 'secret123' } });
   assert.equal(login.statusCode, 200);
   await app.close();
@@ -421,4 +425,48 @@ test('HTTP: phiên đăng nhập lưu SQLite — khởi động lại server v�
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('HTTP: /api/leaderboard cần đăng nhập; admin không có hạng', async () => {
+  const { app, auth } = await setup(false, false);
+  assert.equal((await app.inject({ method: 'GET', url: '/api/leaderboard' })).statusCode, 401);
+  const r = await app.inject({ method: 'GET', url: '/api/leaderboard', headers: auth });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(body.metric, 'power');
+  assert.equal(body.me, null); // tester là tài khoản đầu tiên => admin
+  assert.ok(!body.items.some((e: { username: string }) => e.username === 'tester'));
+
+  const reg = await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username: 'player_lb', password: 'secret123' } });
+  const pAuth = { authorization: `Bearer ${reg.json().token}` };
+  await app.inject({ method: 'POST', url: '/api/gacha/draw', headers: pAuth, payload: { ticketType: 'normal', count: 1, idempotencyKey: 'lb-draw-0001' } });
+  const mine = (await app.inject({ method: 'GET', url: '/api/leaderboard', headers: pAuth })).json();
+  assert.equal(mine.me.rank, 1);
+  assert.equal(mine.me.username, 'player_lb');
+  assert.ok(mine.me.power >= 1);
+});
+
+test('HTTP: nhiệm vụ — /api/me báo thưởng reset; /api/quests + nhận tất cả; nhận lại => 409', async () => {
+  const { app, auth } = await setup(false, false);
+  assert.equal((await app.inject({ method: 'GET', url: '/api/quests' })).statusCode, 401);
+  const me = (await app.inject({ method: 'GET', url: '/api/me', headers: auth })).json();
+  assert.equal(Object.values(me.dailyEvents.resetBonus as Record<string, number>).reduce((s, n) => s + n, 0), RESET);
+  const me2 = (await app.inject({ method: 'GET', url: '/api/me', headers: auth })).json();
+  assert.equal(me2.dailyEvents, undefined);
+
+  const q = (await app.inject({ method: 'GET', url: '/api/quests', headers: auth })).json();
+  assert.equal(q.resetBonus.granted, true);
+  assert.equal(q.daily.find((d: { key: string }) => d.key.endsWith(':login')).status, 'claimable');
+  assert.ok(q.claimable >= 2); // đăng nhập + điểm danh hôm nay
+
+  const r = await app.inject({ method: 'POST', url: '/api/quests/claim', headers: auth, payload: {} });
+  assert.equal(r.statusCode, 200);
+  const keys = r.json().claimed.map((c: { key: string }) => c.key);
+  assert.ok(keys.some((k: string) => k.endsWith(':login')));
+  assert.ok(keys.some((k: string) => k.startsWith('login:')));
+  const again = await app.inject({ method: 'POST', url: '/api/quests/claim', headers: auth, payload: {} });
+  assert.equal(again.statusCode, 409);
+  assert.equal(again.json().error.code, 'NOTHING_TO_CLAIM');
+  const bad = await app.inject({ method: 'POST', url: '/api/quests/claim', headers: auth, payload: { keys: ['a:draws:999999'] } });
+  assert.equal(bad.statusCode, 409);
 });

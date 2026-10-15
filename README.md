@@ -158,7 +158,8 @@ apps/web               Vite + PixiJS: quay thẻ, bộ sưu tập, nâng cấp, 
 
 - **Server quyết định mọi thứ**: RNG (`crypto.randomInt`), số vé, loại vé, tướng, level, kết quả ghép.
 - **Hồi vé** theo mốc 5 phút UTC (`RECOVERY_INTERVAL_MS`, 288 vé/ngày); offline vẫn tích lũy đủ; xử lý theo batch, mỗi batch 1 transaction;
-  unique index `(user_id, reference_id)` cho `time_recovery` chặn cấp trùng mốc. Không có trần tồn kho.
+  unique index `(user_id, reference_id)` cho `time_recovery` chặn cấp trùng mốc. Vé hồi dừng ở trần: Vé thường 1000,
+  mỗi vé phe 500 (`RECOVERY_CAP_PER_TYPE`); nguồn khác (nhiệm vụ, giftcode, admin…) vẫn cộng vượt trần.
 - **Gacha / nâng cấp** chạy trong `BEGIN IMMEDIATE` transaction, có idempotency key gắn với người dùng + thao tác.
   Retry trả lại kết quả cũ; dùng cùng key cho yêu cầu khác → 409.
 - **Cộng vé thử nghiệm**: không còn nút trên UI; endpoint `/api/tickets/dev-topup` chỉ chạy khi server có
@@ -176,6 +177,10 @@ apps/web               Vite + PixiJS: quay thẻ, bộ sưu tập, nâng cấp, 
 - **Trang Quản trị** (tab chỉ admin thấy, `users.is_admin`): duyệt/từ chối đăng ký, danh sách người chơi (số vé, số thẻ),
   cộng vé cho người chơi (chọn loại + số lượng, tối đa `ADMIN_GRANT_MAX_TICKETS` mỗi lần, ledger `admin_grant`),
   cấp/thu quyền admin, xem mọi thẻ của mọi người chơi. Migration v6: tài khoản cũ coi như đã duyệt, tài khoản id nhỏ nhất thành admin.
+- **Nhiệm vụ** (tab Nhiệm vụ): nhiệm vụ hằng ngày (chung + theo phe, reset 05:00 giờ Việt Nam), thưởng ngày mới 25 vé,
+  điểm danh theo ngày trong tháng và thành tựu dài hạn; bấm Nhận (nhiệm vụ ngày quên nhận được tự nhận khi sang ngày).
+- **Xếp hạng** (tab Xếp hạng): bảng xếp hạng Lực chiến = tổng điểm thẻ đang có (Lv.n = 2^(n−1), Lv.10 = 512);
+  top 10 nổi bật, cuộn tới top 100, luôn hiện hạng của mình; không tính tài khoản quản trị.
 - **Giftcode** (tab Giftcode): người chơi nhập code nhận **vé quay** (chỉ vé, không tặng thẻ), mỗi code 1 lần/người,
   hạn sử dụng tuỳ chọn. Admin tạo/bật/tắt code ở tab Quản trị → Giftcode. Có sẵn 4 code tân thủ
   `THUCQUOC`, `NGUYQUOC`, `NGOQUOC`, `QUANQUOC` (200 vé mỗi phe, không hạn); người chơi mới thấy popup mời nhập.
@@ -183,7 +188,7 @@ apps/web               Vite + PixiJS: quay thẻ, bộ sưu tập, nâng cấp, 
 - Mọi thay đổi số dư vé đều có dòng ledger trong `ticket_transactions`.
 - **Quà đăng ký** 100 vé cấp trong cùng transaction duyệt tài khoản, ledger reason `signup_bonus`,
   unique index chặn cấp lần hai. Migration v2 dựng lại bảng ledger để thêm reason này, giữ nguyên dữ liệu cũ.
-- Không có Vàng, nạp tiền, cửa hàng, daily login (ledger chỉ cho phép `time_recovery`/`signup_bonus`/`dev_topup`/`admin_grant`/`gacha_draw`).
+- Không có Vàng, nạp tiền, cửa hàng (ledger chỉ cho phép `time_recovery`/`signup_bonus`/`dev_topup`/`admin_grant`/`giftcode`/`gacha_draw`/`daily_reset`/`mission`/`achievement`).
 
 ## Artwork
 
@@ -214,6 +219,9 @@ thay ảnh thật bằng cách map `artKey` → file ảnh trong `apps/web/src/a
 | GET/POST | `/api/admin/settings` | (admin) `{ requireApproval }` — bật/tắt duyệt tài khoản đăng ký |
 | POST | `/api/admin/users/:id/admin` | (admin) `{ isAdmin }` — cấp/thu quyền admin (không tự thu của mình) |
 | POST | `/api/admin/tickets/grant` | (admin) `{ userId, ticketType, amount, idempotencyKey }` — cộng vé |
+| GET | `/api/quests` | Nhiệm vụ ngày, điểm danh, thành tựu (tiến trình + trạng thái) |
+| POST | `/api/quests/claim` | `{ keys? }` — nhận thưởng (bỏ trống = nhận tất cả) |
+| GET | `/api/leaderboard` | Bảng xếp hạng Lực chiến (top 100 + hạng của mình) |
 | GET | `/api/giftcodes` | Code gợi ý (+ đã nhập chưa) và các code mình đã nhập |
 | POST | `/api/giftcodes/redeem` | `{ code }` — nhập giftcode, nhận vé quay |
 | GET/POST | `/api/admin/giftcodes` | (admin) Danh sách / tạo giftcode `{ code, rewards: [{pool,count}], expiresAt?, featured? }` (chỉ vé quay) |

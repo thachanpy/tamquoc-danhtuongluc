@@ -5,6 +5,7 @@ import { BPS_SCALE, TICKET_GRANT_WEIGHTS, TICKET_POOL_FACTION } from './rates.ts
 
 export * from './roster.ts';
 export * from './rates.ts';
+export * from './quests.ts';
 export { validateGameConfig } from './validate.ts';
 
 /** Nguồn số ngẫu nhiên: trả về số nguyên trong [0, max). Backend dùng crypto.randomInt. */
@@ -30,6 +31,16 @@ export function rollLevel(table: readonly WeightEntry[], rand: RandomInt): numbe
 
 export function rollTicketType(rand: RandomInt): TicketType {
   return rollWeighted(TICKET_TYPES, (t) => TICKET_GRANT_WEIGHTS[t], rand);
+}
+
+/**
+ * Roll loại vé chỉ trong các loại được phép (giữ tỷ lệ tương đối theo TICKET_GRANT_WEIGHTS).
+ * Không còn loại nào hợp lệ (hoặc tổng trọng số 0) => null.
+ */
+export function rollTicketTypeAmong(rand: RandomInt, allowed: readonly TicketType[]): TicketType | null {
+  const items = allowed.filter((t) => TICKET_GRANT_WEIGHTS[t] > 0);
+  if (!items.length) return null;
+  return rollWeighted(items, (t) => TICKET_GRANT_WEIGHTS[t], rand);
 }
 
 export function poolForTicket(ticketType: TicketType): GeneralDto[] {

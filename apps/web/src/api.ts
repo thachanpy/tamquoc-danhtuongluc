@@ -3,6 +3,9 @@ import type {
   AdminGiftCodeDto,
   GiftCodePublicDto,
   GiftCodeRedemptionDto,
+  LeaderboardDto,
+  QuestsDto,
+  QuestClaimResultDto,
   GiftCodeReward,
   AdminApproveDto,
   AdminCardDto,
@@ -133,6 +136,9 @@ export const api = {
     cards: (q: { userId?: number; faction?: Faction; level?: number; q?: string; sort?: string; page?: number; pageSize?: number }) =>
       call<Page<AdminCardDto>>('GET', '/api/admin/cards?' + qs(q)),
   },
+  quests: () => call<QuestsDto>('GET', '/api/quests'),
+  claimQuests: (keys?: string[]) => call<QuestClaimResultDto>('POST', '/api/quests/claim', keys ? { keys } : {}),
+  leaderboard: () => call<LeaderboardDto>('GET', '/api/leaderboard'),
   history: (q: { kind?: string; page?: number; pageSize?: number }) => call<Page<HistoryEntryDto>>('GET', '/api/history?' + qs(q)),
 };
 

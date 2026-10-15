@@ -24,7 +24,17 @@ export const TICKET_LABELS: Record<TicketType, string> = {
   qun: 'Vé Quần',
 };
 
-export const TICKET_REASONS = ['time_recovery', 'signup_bonus', 'dev_topup', 'admin_grant', 'giftcode', 'gacha_draw'] as const;
+export const TICKET_REASONS = [
+  'time_recovery',
+  'signup_bonus',
+  'dev_topup',
+  'admin_grant',
+  'giftcode',
+  'gacha_draw',
+  'daily_reset',
+  'mission',
+  'achievement',
+] as const;
 export type TicketReason = (typeof TICKET_REASONS)[number];
 
 export type UpgradeOutcome = 'success' | 'failure';
@@ -54,11 +64,16 @@ export interface TicketsDto {
   nextRecoveryAt: string;
   serverNow: string;
   msUntilNextRecovery: number;
+  /** Trần vé hồi theo thời gian theo từng loại (VD thường 1000, phe 500); vé từ nguồn khác vẫn có thể vượt. */
+  recoveryCap: TicketBalances;
 }
 
 export interface ClaimRecoveryDto extends TicketsDto {
   granted: TicketBalances;
   grantedTotal: number;
+  /** Số mốc hồi bị bỏ vì cả 5 loại vé đã đạt trần. */
+  skippedFull: number;
+  dailyEvents?: DailyEventsDto;
 }
 
 export interface MeDto {
@@ -69,6 +84,8 @@ export interface MeDto {
   tickets: TicketsDto;
   /** Tính năng bật/tắt theo cấu hình server. */
   features: { devTopup: boolean; devTopupAmount: number };
+  /** Sự kiện ngày mới vừa xử lý trong request này (thưởng reset 05:00, nhiệm vụ ngày cũ tự nhận). */
+  dailyEvents?: DailyEventsDto;
 }
 
 /** Kết quả bấm nút cộng vé thử nghiệm. */
@@ -478,6 +495,14 @@ export const schemas = {
       pageSize: { type: 'integer', minimum: 1, maximum: 500, default: 60 },
     },
   },
+  questClaimBody: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      /** Bỏ trống = nhận tất cả phần thưởng đang nhận được. */
+      keys: { type: 'array', minItems: 1, maxItems: 500, items: { type: 'string', minLength: 1, maxLength: 64 } },
+    },
+  },
   giftCodeRedeemBody: {
     type: 'object',
     additionalProperties: false,
@@ -532,3 +557,101 @@ export const schemas = {
     },
   },
 } as const;
+
+// ======================= Bảng xếp hạng (mục 6.6) =======================
+
+export interface LeaderboardEntryDto {
+  /** Hạng theo Lực chiến (đồng điểm => đồng hạng). null = chưa có thẻ nên chưa xếp hạng. */
+  rank: number | null;
+  username: string;
+  power: number;
+  cardCount: number;
+  maxLevel: number | null;
+  isMe: boolean;
+}
+
+export interface LeaderboardDto {
+  metric: 'power';
+  /** Điểm Lực chiến mỗi thẻ theo level (cấu hình server). */
+  powerByLevel: Record<number, number>;
+  /** Số hạng đầu được làm nổi bật (top 10). */
+  top: number;
+  /** Tối đa LEADERBOARD_SIZE người, đã sắp theo hạng. */
+  items: LeaderboardEntryDto[];
+  /** Hạng của người đang xem; null nếu là tài khoản quản trị (không tham gia xếp hạng). */
+  me: LeaderboardEntryDto | null;
+  /** Tổng số người chơi có thẻ được xếp hạng. */
+  totalRanked: number;
+  generatedAt: string;
+}
+
+// ======================= Nhiệm vụ & thành tựu (mục 3.10) =======================
+
+export interface QuestRewardDto {
+  pool: TicketType;
+  count: number;
+}
+
+/** progress: chưa đạt; claimable: đạt, chờ bấm Nhận; claimed: đã nhận (bấm tay hoặc tự nhận khi qua ngày). */
+export type QuestStatus = 'progress' | 'claimable' | 'claimed';
+
+export interface QuestItemDto {
+  /** Khoá phần thưởng duy nhất, gửi lên khi bấm Nhận. */
+  key: string;
+  name: string;
+  desc: string;
+  progress: number;
+  target: number;
+  reward: QuestRewardDto;
+  status: QuestStatus;
+}
+
+export interface AchievementGroupDto {
+  id: string;
+  title: string;
+  desc: string;
+  progress: number;
+  items: QuestItemDto[];
+}
+
+export interface LoginDayDto {
+  date: string; // YYYY-MM-DD (lịch Việt Nam)
+  day: number;
+  reward: number;
+  /** missed: đã qua mà không đăng nhập; future: chưa tới. */
+  status: 'missed' | 'future' | QuestStatus;
+}
+
+export interface QuestsDto {
+  /** Ngày game hiện tại (reset 05:00 giờ Việt Nam), YYYY-MM-DD. */
+  gameDay: string;
+  nextResetAt: string;
+  /** Ngày dương lịch Việt Nam hiện tại. */
+  calendarDate: string;
+  resetBonus: { tickets: TicketBalances; granted: boolean };
+  daily: QuestItemDto[];
+  faction: Record<Faction, QuestItemDto[]>;
+  login: { month: string; days: LoginDayDto[] };
+  achievements: AchievementGroupDto[];
+  /** Số phần thưởng đang chờ bấm Nhận (badge tab). */
+  claimable: number;
+}
+
+export interface QuestClaimedDto {
+  key: string;
+  name: string;
+  pool: TicketType;
+  count: number;
+}
+
+export interface QuestClaimResultDto {
+  claimed: QuestClaimedDto[];
+  balances: TicketsDto;
+}
+
+export interface DailyEventsDto {
+  /** Thưởng reset vừa cộng (null nếu không có). */
+  resetBonus: TicketBalances | null;
+  /** Nhiệm vụ ngày cũ đạt nhưng chưa nhận, server đã tự cộng. */
+  autoClaimed: QuestClaimedDto[];
+}

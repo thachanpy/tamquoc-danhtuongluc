@@ -15,6 +15,8 @@ Xây dựng game web gacha thu thập thẻ tướng Tam Quốc. Trọng tâm:
 - Tặng thẻ cho người chơi khác (tối đa 20 thẻ mỗi lần).
 - Trang quản trị: duyệt tài khoản đăng ký, danh sách người chơi, cộng vé, xem mọi thẻ, tạo giftcode (mục 3.8).
 - Giftcode tặng vé quay (mục 3.9).
+- Nhiệm vụ hằng ngày, thưởng reset 05:00, điểm danh theo tháng và thành tựu — chỉ thưởng vé (mục 3.10).
+- Bảng xếp hạng Lực chiến (mục 6.6).
 - Hiệu ứng hình ảnh và trải nghiệm mở thẻ.
 
 Không có chiến đấu, dàn trận, đội hình, PvP hoặc gameplay chiến thuật trong MVP.
@@ -28,9 +30,9 @@ Các nguyên tắc bắt buộc:
 - Vé miễn phí được cấp tự động theo thời gian, cộng 100 vé quà đăng ký một lần cho tài khoản mới (cấp lúc được admin duyệt).
 - Duyệt tài khoản (mục 3.8) bật/tắt **trên trang Quản trị** (cài đặt lưu ở server, bảng `app_settings`); mặc định tắt: đăng ký là được duyệt ngay.
 - Không còn nút "+50 vé" trên UI (chủ dự án yêu cầu bỏ); endpoint cộng vé thử nghiệm chỉ còn ở server, mặc định tắt (mục 3.7). Cộng vé cho người chơi dùng trang Quản trị.
-- Không có thưởng đăng nhập hằng ngày trong MVP.
+- Có nhiệm vụ hằng ngày (gồm nhiệm vụ đăng nhập), thưởng reset 05:00 giờ Việt Nam, điểm danh theo tháng và thành tựu (mục 3.10, chủ dự án yêu cầu; trước đây MVP không có thưởng đăng nhập). Chỉ thưởng vé.
 - Vé được chia thành 5 loại (thường, Thục, Ngụy, Ngô, Quần) và được xác định ngẫu nhiên khi cấp.
-- Không giới hạn số lượng vé tích trữ.
+- **Trần vé hồi theo loại: Vé thường 1000, mỗi loại vé phe 500** (`RECOVERY_CAP_PER_TYPE`, chủ dự án yêu cầu): chỉ chặn vé hồi theo thời gian; vé từ nguồn khác vẫn cộng vượt trần (VD 510/500 vé phe) và được giữ nguyên (mục 3.6). Ngoài ra không giới hạn số vé tích trữ.
 - Mỗi lần nâng cấp cần đúng 2 thẻ cùng level và cùng tướng; không có thẻ chính hoặc thẻ mồi.
 - Mọi thao tác thay đổi nhiều dữ liệu liên quan phải nguyên tử.
 - Các quy tắc game và tỷ lệ phải cấu hình được, có kiểm thử.
@@ -257,8 +259,8 @@ Quy tắc:
 - Vé không thể quy đổi thành tiền hoặc tài nguyên khác.
 - Mỗi loại vé có số dư riêng.
 - UI hiển thị số lượng từng loại vé và tổng số vé.
-- Không giới hạn số vé tối đa có thể tích trữ.
-- Số lượng vé của bất kỳ loại nào cũng không bị giới hạn bởi một mức trần nghiệp vụ tùy ý.
+- Vé **hồi theo thời gian** dừng khi loại vé đó đạt trần: **Vé thường 1000, mỗi loại vé phe 500** (`RECOVERY_CAP_PER_TYPE`, mục 3.6). Đây là trần duy nhất: các nguồn khác (quà đăng ký, giftcode, admin, nhiệm vụ, thành tựu, thưởng 05:00, cộng vé thử nghiệm) vẫn cộng vượt trần, số dư vượt trần được giữ nguyên, không bị cắt.
+- Ngoài trần vé hồi, số lượng vé không bị giới hạn bởi mức trần nghiệp vụ nào khác.
 - Backend vẫn phải chống số âm, integer overflow, dữ liệu sai và thao tác cộng vé trùng.
 
 ### 3.5. Cấp vé ngẫu nhiên
@@ -311,11 +313,13 @@ Quy tắc:
 - Không tính chu kỳ riêng từ thời điểm đăng nhập.
 - Người chơi offline vẫn tích lũy vé theo các mốc hợp lệ đã qua.
 - Khi người chơi quay lại, server xác định các mốc hợp lệ chưa xử lý kể từ trạng thái đã ghi nhận gần nhất.
-- Mỗi mốc hợp lệ tạo ra đúng 1 vé ngẫu nhiên.
+- Mỗi mốc hợp lệ tạo ra tối đa 1 vé ngẫu nhiên.
 - Loại vé được roll độc lập cho từng mốc, theo bảng xác suất tại mục 3.5.
-- Không giới hạn tổng số vé tích trữ hoặc số lượng của từng loại.
-- Khi người chơi offline trong thời gian dài, phải cấp đủ số vé từ tất cả các mốc chưa xử lý, không giới hạn số mốc được xử lý theo một trần vé.
-- Không bỏ qua mốc hợp lệ chỉ vì số vé đang có nhiều.
+- **Trần vé hồi theo loại** (`RECOVERY_CAP_PER_TYPE`, chủ dự án yêu cầu): **Vé thường 1000**; Vé Thục/Ngụy/Ngô/Quần **mỗi loại 500**.
+  - Mỗi mốc chỉ random trong các loại vé có số dư **dưới trần của loại đó** (giữ tỷ lệ tương đối của mục 3.5 giữa các loại còn chỗ).
+  - Cả 5 loại đều đạt trần thì mốc đó vẫn được đánh dấu đã xử lý nhưng **không cấp vé**, không ghi ledger và **không cộng bù** sau này (response `skippedFull`).
+  - Trần chỉ áp dụng cho vé hồi. Vé từ nguồn khác cộng vượt trần vẫn được giữ (VD nhiệm vụ đưa Vé Thục lên 510 thì giữ 510, Vé thường lên 1010 thì giữ 1010; vé hồi không cấp thêm loại đó cho tới khi xuống dưới trần).
+- Khi người chơi offline trong thời gian dài, server xử lý đủ mọi mốc chưa xử lý (theo batch), cấp vé cho tới khi chạm trần như trên.
 - Không cấp trùng vé cho cùng một mốc.
 - Không bỏ mất các mốc đã đến hạn chỉ vì request bị retry hoặc server khởi động lại.
 - Server phải lưu trạng thái đủ để xác định các mốc đã xử lý.
@@ -334,17 +338,20 @@ Ví dụ:
 - Server cấp đúng 6 vé, từng vé được random loại độc lập.
 - Refresh hoặc gửi lại request không được cấp thêm vé cho các mốc này.
 
-Nếu cần xử lý lượng mốc rất lớn sau thời gian offline dài, có thể chia thành các batch nội bộ, nhưng phải bảo đảm tiến trình có thể tiếp tục an toàn mà không bỏ sót hoặc cấp trùng mốc. Không được đặt trần tồn kho hoặc giới hạn tích trữ để làm mất quyền nhận vé hợp lệ.
+Nếu cần xử lý lượng mốc rất lớn sau thời gian offline dài, có thể chia thành các batch nội bộ, nhưng phải bảo đảm tiến trình có thể tiếp tục an toàn mà không bỏ sót hoặc cấp trùng mốc. Trần duy nhất là trần vé hồi (Vé thường 1000, mỗi loại vé phe 500) ở trên.
 
 ### 3.7. Nguồn vé trong MVP
 
-MVP có năm nguồn cấp vé:
+MVP có các nguồn cấp vé sau:
 
 1. **Hồi vé theo mốc 5 phút** (mục 3.6).
 2. **Quà đăng ký (tân thủ)**: khi tài khoản được admin duyệt, người chơi nhận **100 vé** một lần duy nhất.
 3. **Cộng vé thử nghiệm** (endpoint server, **không còn nút trên UI** — chủ dự án đã yêu cầu bỏ nút "+50 vé"): mỗi lần gọi cộng **50 vé**, chỉ hoạt động khi server bật cấu hình (xem bên dưới).
 4. **Admin cộng vé** (chủ dự án yêu cầu): admin chọn người chơi, loại vé và số lượng tại trang Quản trị (mục 3.8).
 5. **Giftcode** (chủ dự án yêu cầu): giftcode có dòng phần thưởng vé cộng đúng loại + số lượng đã cấu hình, mỗi người chơi 1 lần (mục 3.9). Ledger reason `giftcode`.
+6. **Thưởng reset 05:00** (mục 3.10): 5 vé mỗi loại khi vào game lần đầu trong ngày game. Ledger reason `daily_reset`.
+7. **Nhiệm vụ hằng ngày** (chung + theo phe, mục 3.10). Ledger reason `mission`.
+8. **Điểm danh theo tháng và thành tựu** (mục 3.10). Ledger reason `achievement`.
 
 Quy tắc quà đăng ký:
 
@@ -355,7 +362,7 @@ Quy tắc quà đăng ký:
 - Ghi ledger với reason `signup_bonus`, mỗi loại vé một dòng (`amount_delta` = số vé loại đó).
 - Mỗi người chơi chỉ nhận một lần; đăng nhập lại hoặc duyệt lại không cấp thêm. Unique constraint chặn cấp lần hai.
 - Chỉ áp dụng cho tài khoản tạo mới, không cấp hồi tố cho tài khoản đã tồn tại.
-- Đây không phải thưởng đăng nhập hằng ngày.
+- Quà đăng ký là quà một lần, tách biệt với nhiệm vụ/điểm danh (mục 3.10).
 
 Quy tắc nút cộng vé thử nghiệm (dành cho giai đoạn mới chơi/playtest):
 
@@ -378,8 +385,7 @@ Quy tắc admin cộng vé:
 
 Các quy tắc khác:
 
-- Không có thưởng đăng nhập hằng ngày.
-- Không có endpoint, UI, bảng database, ledger reason hoặc test cho daily login claim.
+- Thưởng đăng nhập chỉ có dưới dạng nhiệm vụ "Đăng nhập mỗi ngày" và điểm danh theo tháng (mục 3.10); không có endpoint `daily-claim` riêng.
 - Không có phần thưởng Vàng.
 - Không có hệ thống mua hoặc đổi vé.
 - Nếu sau này bổ sung nguồn vé khác, phải được chủ dự án yêu cầu và cập nhật đặc tả.
@@ -429,6 +435,54 @@ Do chủ dự án yêu cầu. Giftcode **chỉ tặng vé quay**, không tặng 
 - **Popup lần đầu đăng nhập**: nếu còn code gợi ý chưa nhập, hiện popup liệt kê các code đó; nút "Đến trang nhập Giftcode" chuyển sang tab Giftcode. Chỉ hiện 1 lần mỗi tài khoản trên mỗi trình duyệt (localStorage `tq.gcPopup.<username>`).
 - Lịch sử hiển thị "Nhập giftcode X: nhận Vé … ×N" (`GET /api/history?kind=giftcode`; lượt nhập code thẻ cũ vẫn hiện danh sách thẻ); dòng ledger vé hiển thị "Giftcode: nhận Vé X ×N".
 - Trang Quản trị có tab **Giftcode**: form tạo code (số vé từng loại), danh sách code (phần thưởng, hạn, số lượt nhập, trạng thái, nút Bật/Tắt; code thẻ cũ ghi "Code thẻ cũ", không có nút Bật).
+
+### 3.10. Nhiệm vụ hằng ngày và thành tựu
+
+Do chủ dự án yêu cầu. Chỉ thưởng vé. Cấu hình ở `packages/game-config/src/quests.ts`; logic server `apps/api/src/quests.ts`; UI tab **Nhiệm vụ** (`#quests`, `apps/web/src/pages/quests.ts`, có badge số phần thưởng chờ nhận).
+
+Thời gian:
+
+- **Ngày game** reset lúc **05:00 giờ Việt Nam** (Asia/Ho_Chi_Minh = UTC+7 cố định, `DAILY_RESET_HOUR`). Nhiệm vụ hằng ngày và thưởng reset theo ngày game.
+- **Điểm danh theo tháng** dùng **ngày dương lịch Việt Nam** (00:00).
+- "Đăng nhập" = có request đã xác thực trong ngày (mở game). Server ghi `login_days` (ngày game + ngày dương lịch).
+
+Nhận thưởng (chủ dự án chọn):
+
+- Đạt điều kiện thì hiện nút **Nhận**; có **Nhận tất cả** và nhận theo nhóm thành tựu. Server tính lại điều kiện khi nhận; mỗi khoá phần thưởng chỉ nhận 1 lần (bảng `reward_claims`, PK `user_id + reward_key`). Nhận lại → 409 `NOTHING_TO_CLAIM`.
+- **Nhiệm vụ ngày đã đạt mà chưa bấm nhận**: khi sang ngày game mới, server **tự nhận** cho người chơi (ở request đầu tiên của ngày mới; `reward_claims.auto = 1`) và UI báo toast.
+- **Điểm danh** ngày nào chưa bấm nhận trong tháng thì sang tháng mới server tự nhận.
+- **Thưởng reset 05:00** tự cộng ở request đầu tiên trong ngày game: Vé thường/Thục/Ngụy/Ngô/Quần mỗi loại 5 (`DAILY_RESET_BONUS`, 25 vé). **Chỉ ngày hiện tại**: vắng nhiều ngày không cộng bù.
+- Xử lý ngày mới chạy trong preHandler xác thực (`touchDaily`), một transaction, chỉ một lần mỗi ngày (bảng `daily_state`); lỗi ở bước này không chặn thao tác chính.
+
+Nhiệm vụ chung (vé thường; tối đa 52 vé/ngày):
+
+| Nhiệm vụ | Điều kiện | Thưởng |
+|---|---|---:|
+| Đăng nhập mỗi ngày | Đăng nhập game | 4 |
+| Chiêu mộ tướng | Quay 10 lần (mọi loại vé) | 6 |
+| Chiêu mộ chăm chỉ | Quay 30 lần | 10 |
+| Nâng cấp tướng | Nâng cấp **thành công** 3 lần (tính cả Nâng cấp nhanh) | 6 |
+| Nâng cấp chuyên cần | Nâng cấp thành công 10 lần | 10 |
+| Thu thập thẻ | Nhận 20 thẻ (từ chiêu mộ, tính cả thẻ trùng) | 6 |
+| Hoàn thành nhiệm vụ | Hoàn thành 5 nhiệm vụ **chung** khác (đạt điều kiện, không cần đã nhận; không tính chính nó, không tính nhiệm vụ phe) | 10 |
+
+Nhiệm vụ theo phe (mỗi phe Ngụy/Thục/Ngô/Quần, vé đúng phe; tối đa 14 vé/phe, 56 vé/ngày): quay 5 lần bằng vé phe → 4; quay 15 lần bằng vé phe → 6; nhận 10 thẻ thuộc phe (từ mọi loại vé) → 4.
+
+Tiến trình ngày được tính từ lịch sử server trong khung ngày game (`gacha_history`, `upgrade_history` outcome `success`, `login_days`), không có bộ đếm riêng. Quay 30 lần đồng thời đạt nhiệm vụ quay 10; nâng cấp 10 lần đồng thời đạt nâng cấp 3.
+
+Thành tựu (không reset, mỗi mốc nhận 1 lần, **tính cả lịch sử trước khi có tính năng**):
+
+- **Điểm danh ngày trong tháng**: đăng nhập ngày d (dương lịch) → 9 + d vé thường (ngày 1 = 10 … ngày 31 = 40). Không cần liên tục; tháng mới quay về 10.
+- **Chiêu mộ** (tổng lượt quay mọi loại vé): 10→10, 50→20, 100→40, 500→100, 1.000→200, 5.000→500, 10.000→1.000, 50.000→2.000 vé thường.
+- **Sưu tầm tướng** (số tướng khác nhau đã thu thập): 10→20, 25→50, 50→100, 100→250 vé thường.
+- **Sưu tầm theo phe** (mỗi phe độc lập): 5→5, 10→10, 15→20, 25→50 vé đúng phe.
+- **Sở hữu thẻ cấp 1–10**: mỗi cấp 25 mốc (đang sở hữu 1…25 thẻ active cùng cấp, tính thẻ trùng); thưởng vé thường theo bảng khoảng mốc (1–4, 5–9, 10–14, 15–19, 20–24, 25) × cấp trong `ownLevelReward`. Mốc đã nhận lưu vĩnh viễn.
+- **Tổng số thẻ đã nhận**: 10→5, 100→15, 500→40, 1.000→100, 5.000→250, 10.000→500 vé thường.
+- "Thẻ đã nhận" / "đã thu thập" = thẻ từ **chiêu mộ** (+ thẻ từ giftcode thẻ cũ trước v9). **Không tính** thẻ tạo ra khi ghép và **thẻ được người khác tặng** (chống cày bằng tài khoản phụ).
+
+Không có: thành tựu số lần nâng cấp, nhiệm vụ tuần, rương hoạt động, thành tựu reset hằng ngày, thưởng ngoài vé.
+
+Khoá phần thưởng / `reference_id` ledger: `reset:{ngày}`, `d:{ngày}:{id}`, `f:{ngày}:{phe}:{id}`, `login:{YYYY-MM-DD}`, `a:draws:{n}`, `a:collect:{n}`, `a:fcollect:{phe}:{n}`, `a:own:{lv}:{n}`, `a:cards:{n}`. Lịch sử hiển thị nhãn theo khoá.
 
 ## 4. Gacha
 
@@ -741,7 +795,7 @@ Hiển thị lịch sử phân trang:
 - Giao diện chủ đề Tam Quốc nằm ở `apps/web/src/theme.css` (ghi đè thẩm mỹ của `style.css`): nền chiến trường 4 phe theo mẫu chủ dự án cung cấp (núi, thành lũy, cờ Ngụy/Ngô trong `public/theme/landscape.svg`; vầng sáng 4 màu phe và vignette bằng CSS gradient; 40 tia lửa màu phe bay lên do `main.ts` tạo, tắt khi `prefers-reduced-motion`), panel sơn mài đỏ–đen viền vàng với góc hồi văn (`public/theme/corner-*.svg`), dải hồi văn dưới thanh trên (`public/theme/fret.svg`), tab đang chọn và nút chính màu son; logo game là icon Gia Cát Lượng. Font từ Google Fonts (đều có đủ dấu tiếng Việt trừ font chữ Hán): Playfair Display SC cho tiêu đề và tab (chữ hoa nhỏ kiểu khắc bia); Oswald cho nút, số vé, nhãn Lv. và số liệu; Charm (nét bút lông) cho tên game mạ vàng gradient và dòng kết quả mở thẻ; Noto Serif cho nội dung; Ma Shan Zheng (bút lông) cho chữ Hán biểu tượng phe, có font dự phòng khi offline.
 - UI hiện đại, tương phản tốt, responsive cho desktop và mobile.
 - Thanh trên (tên game, vé, nhạc, tài khoản) và thanh tab luôn dính trên cùng khi cuộn (`.app-head`, sticky); chiều cao đo bằng JS vào biến CSS `--head-h` để khung "Đã chọn" ở trang Nâng cấp dính ngay bên dưới.
-- Phân biệt phe bằng màu và biểu tượng nhất quán.
+- **Mobile web (≤ 640px)** — khối CSS cuối `theme.css` (chủ dự án yêu cầu tối ưu mobile): thanh trên chỉ còn logo + "Tam Quốc", nút nhạc (ẩn thanh âm lượng) và Đăng xuất; thanh vé là một hàng cuộn ngang; tab cuộn ngang và tự cuộn tới tab đang chọn; ô nhập cỡ chữ ≥ 16px (iOS không tự phóng to), lọc/form full-width, nút cao ≥ 40px; lưới thẻ ~3 cột; nút quay 1/×10 chia đôi bề ngang. Trang Nâng cấp: khi đang chọn thẻ, khung "Đã chọn" thành bottom sheet dính đáy màn hình (class `.side.has-sel`, tối đa 62dvh, cuộn trong). Bộ sưu tập: khung tặng thẻ dính dưới thanh trên khi bật chế độ tặng. Popup mở thẻ/ngắm thẻ dùng `dvh` và safe-area; các nút "Quay tiếp"/"Đóng" tự xuống dòng.
 - Khung thẻ theo cấp (chủ dự án cung cấp bộ khung tham chiếu): Cấp 1 Đồng, 2 Bạc, 3 Lục, 4 Vàng, 5 Đỏ, 6 Huyền, 7 Tử, 8 Cam, 9 Bạch kim, 10 Kim cương. Cấp 1–5 là khung kim loại (cấp 5 có đá đỏ phát sáng); cấp 6–10 có đá quý, hào quang, cánh/rồng/phượng. Phần trang trí cấp 6–10 được phép tràn ra ngoài thân thẻ.
 - Thân thẻ (avatar + tên) luôn cùng kích thước ở mọi cấp trong cùng một ô: thẻ Lv.6–10 cần chừa chỗ khung lớn hơn nên được phóng to (≈1,171×) kèm lề âm để thân thẻ trùng đúng vị trí/kích thước thân thẻ Lv.1–5; khung Lv.6+ tràn ra ngoài ô, ô chứa thẻ Lv.6+ được nới rộng. Thẻ luôn căn giữa ô; các ô nhóm level trong cùng một tướng cao bằng nhau và dùng chung đệm (nhóm có thẻ Lv.6+ thì mọi ô cùng nới), nên thân thẻ các cấp thẳng hàng. Kích thước ô đặt bằng biến CSS `--cw` (`style.css`).
 - Ảnh khung nằm ở `apps/web/public/frames/lv1.png` … `lv10.png` (PNG nền trong suốt, tách từ bộ khung tham chiếu bản 3 bằng color-to-alpha nên giữ được hào quang mờ; thân thẻ rộng 240px trong ảnh khung). Vị trí đặt khung so với thân thẻ khai báo ở `FRAME_LAYOUT` trong `apps/web/src/art.ts`; dùng chung cho thẻ DOM và thẻ PixiJS (animation mở thẻ, ghép thẻ). Thay khung = thay file PNG cùng tên (nếu tỉ lệ khung đổi thì cập nhật `FRAME_LAYOUT`).
@@ -754,6 +808,18 @@ Hiển thị lịch sử phân trang:
 - Giải phóng texture/tài nguyên khi đổi màn hình để tránh rò rỉ bộ nhớ.
 - Hiệu ứng không được cản trở thao tác.
 - Hỗ trợ reduced motion.
+
+### 6.6. Bảng xếp hạng
+
+Do chủ dự án yêu cầu. Tab **Xếp hạng** (`#leaderboard`, `apps/web/src/pages/leaderboard.ts`), chỉ đọc, không ảnh hưởng vé/thẻ.
+
+- Chỉ số duy nhất: **Lực chiến** = tổng điểm các thẻ **đang active** của người chơi; điểm mỗi thẻ theo level ở `LEADERBOARD_POWER_BY_LEVEL` (game-config): Lv.n = 2^(n−1) (Lv.1 = 1, Lv.2 = 2, Lv.3 = 4, …, Lv.10 = 512). Validate khi khởi động: đủ Lv.1–10, nguyên dương, không giảm theo level.
+- Server tính trực tiếp từ `user_cards` mỗi lần gọi (không lưu bảng riêng). Thẻ đã tiêu thụ không tính; thẻ tặng đi tính cho người nhận.
+- Chỉ xếp hạng tài khoản đã duyệt, **không phải admin** (chủ dự án yêu cầu ẩn admin) và có ít nhất 1 thẻ.
+- Đồng Lực chiến → đồng hạng (`RANK`); trong cùng hạng sắp theo level cao nhất giảm dần rồi tên A→Z.
+- Trả tối đa `LEADERBOARD_SIZE` (100) người; UI làm nổi bật top `LEADERBOARD_TOP` (10, huy chương vàng/bạc/đồng cho 1–3), khung danh sách cao vừa top 10, cuộn trong khung để xem tới top 100.
+- Luôn hiện **hạng của tôi** (kể cả ngoài top 100) kèm nút "Xem vị trí của tôi" khi nằm trong danh sách nhưng ngoài top 10. Admin thấy "Tài khoản quản trị không tham gia xếp hạng"; người chưa có thẻ thấy "chưa có thẻ".
+- Mỗi dòng: hạng, tên, level cao nhất (màu bậc khung), số thẻ, Lực chiến. Có nút Làm mới.
 
 ## 7. Database SQLite
 
@@ -819,7 +885,7 @@ Ràng buộc:
 - `ticket_type` thuộc `normal`, `shu`, `wei`, `wu`, `qun` (`qun` được thêm bằng migration v4; tài khoản cũ nhận dòng số dư Vé Quần = 0).
 - Mỗi người chơi có tối đa một bản ghi cho mỗi loại vé.
 - Số dư không âm.
-- Không có giới hạn tồn kho nghiệp vụ.
+- Không có giới hạn tồn kho nghiệp vụ; chỉ vé hồi theo thời gian dừng ở trần (thường 1000, phe 500, mục 3.6). Số dư có thể vượt trần nhờ nguồn khác.
 - Chống overflow và giá trị không hợp lệ.
 - Tổng số vé có thể được tính từ năm số dư hoặc được cache nếu cần, nhưng dữ liệu cache phải đồng bộ chính xác.
 
@@ -837,7 +903,7 @@ Quy tắc:
 - Trạng thái đủ để xác định mốc 5 phút đã xử lý.
 - Không dùng bộ nhớ tiến trình làm nguồn trạng thái duy nhất.
 - Xử lý mốc hồi, cấp vé và cập nhật trạng thái phải an toàn với request đồng thời.
-- Không đặt trần số vé hoặc bỏ mốc vì tồn kho nhiều.
+- Mốc hồi chỉ bỏ (không cấp vé) khi cả 5 loại vé đều đạt `RECOVERY_CAP_PER_TYPE` (thường 1000, phe 500); mốc vẫn được đánh dấu đã xử lý.
 
 Có thể gộp bảng này vào bảng tài khoản nếu thiết kế phù hợp, miễn là giữ nguyên tính nguyên tử và khả năng chống cấp trùng.
 
@@ -862,12 +928,13 @@ Các reason tối thiểu:
 - `admin_grant` (migration v6)
 - `giftcode` (migration v8)
 - `gacha_draw`
+- `daily_reset`, `mission`, `achievement` (migration v12, mục 3.10)
 
 Quy tắc:
 
 - Ghi nhận từng loại vé đã cấp hoặc tiêu thụ.
 - Số lượng cấp từ hồi thời gian được ghi rõ theo từng mốc.
-- Không có reason `daily_claim`.
+- Không có reason `daily_claim` (thưởng ngày dùng `daily_reset`/`mission`/`achievement`, mục 3.10).
 - Không cập nhật balance mà không có ledger phù hợp.
 - Cấp vé, cập nhật trạng thái mốc hồi và ghi ledger phải nguyên tử.
 
@@ -929,6 +996,14 @@ Lịch sử tặng thẻ (migration v5).
 
 - `key` (PK), `value`, `updated_at`, `updated_by`. Hiện có `require_approval` (`'0'`/`'1'`, mặc định `'0'`).
 
+### 7.8e. Nhiệm vụ (migration v12)
+
+- `reward_claims`: `user_id`, `reward_key`, `auto` (0 bấm tay / 1 server tự nhận), `created_at`; PK (`user_id`, `reward_key`) — mỗi phần thưởng nhận 1 lần.
+- `login_days`: `user_id`, `kind` (`game` | `calendar`), `day`, `created_at`; PK (`user_id`, `kind`, `day`).
+- `daily_state`: `user_id` (PK), `last_game_day`, `last_cal_date`, `updated_at` — ngày mới chỉ xử lý 1 lần.
+- Index `gacha_history(user_id, created_at)`, `upgrade_history(user_id, created_at)`.
+- Ledger thêm reason `daily_reset`, `mission`, `achievement`; unique index (`user_id`, `reference_id`, `ticket_type`) cho 3 reason này.
+
 ### 7.9. Idempotency
 
 Có thể dùng bảng idempotency riêng hoặc các unique constraint phù hợp để bảo đảm:
@@ -945,7 +1020,7 @@ Có thể dùng bảng idempotency riêng hoặc các unique constraint phù h�
 - Dùng transaction cho thao tác gacha, nâng cấp và cấp vé hồi.
 - Không cho phép hai thao tác đồng thời tiêu thụ cùng một thẻ.
 - Không cho phép hai request cấp vé cho cùng một mốc.
-- Không có quy trình nhận thưởng đăng nhập hằng ngày.
+- Xử lý ngày mới (thưởng reset, tự nhận nhiệm vụ ngày cũ) nguyên tử và chỉ một lần mỗi ngày (mục 3.10).
 - Không xóa hoặc reset database người dùng khi khởi động.
 - Migration có version, chạy theo thứ tự và an toàn.
 - Nếu thay đổi schema, không làm mất lịch sử hoặc dữ liệu thẻ hiện có.
@@ -984,9 +1059,9 @@ Server phải:
 
 Các bước ghi dữ liệu phải nguyên tử hoặc có cơ chế batch/idempotency đủ an toàn để tiếp tục sau lỗi mà không mất hoặc cấp trùng vé.
 
-Không đặt giới hạn tồn kho hoặc bỏ qua mốc hợp lệ vì số vé đã tích trữ nhiều.
+Áp dụng trần vé hồi (Vé thường 1000, mỗi loại vé phe 500) (mục 3.6): chỉ random trong loại còn dưới trần; cả 5 loại đầy thì mốc không cấp vé. Response có thêm `skippedFull` (số mốc bị bỏ) và `GET /api/tickets` có `recoveryCap` (trần theo từng loại).
 
-Không triển khai `POST /api/daily-claim` hoặc bất kỳ API thưởng đăng nhập hằng ngày nào.
+Không triển khai `POST /api/daily-claim`. Thưởng ngày đi qua nhiệm vụ (mục 3.10, `POST /api/quests/claim`).
 
 ### 8.3. Gacha
 
@@ -1049,12 +1124,22 @@ Server phải:
 - `POST /api/admin/giftcodes/:id/active` bật code thẻ cũ → 409 `GIFTCODE_LEGACY`.
 - `GET /api/gacha/config` trả thêm `giftCodeMaxTickets`.
 
+### 8.4e. Bảng xếp hạng (mục 6.6)
+
+- `GET /api/leaderboard`: cần đăng nhập, có rate limit. Trả `{ metric: 'power', powerByLevel, top, items[] (≤ 100: rank, username, power, cardCount, maxLevel, isMe), me (null nếu là admin; rank null nếu chưa có thẻ), totalRanked, generatedAt }`. Không lộ thông tin khác của người chơi.
+
+### 8.4f. Nhiệm vụ & thành tựu (mục 3.10)
+
+- `GET /api/quests`: `gameDay`, `nextResetAt`, `calendarDate`, `resetBonus { tickets, granted }`, `daily[]`, `faction{wei,shu,wu,qun}[]`, `login { month, days[] }`, `achievements[] (nhóm + mốc)`, `claimable`. Mỗi mục có `key`, `progress`, `target`, `reward {pool,count}`, `status` (`progress` | `claimable` | `claimed`).
+- `POST /api/quests/claim`: body `{ keys?: string[] }` (bỏ trống = nhận tất cả). Trả `{ claimed[], balances }`. Không có gì để nhận → 409 `NOTHING_TO_CLAIM`. Có rate limit.
+- `GET /api/me` và `POST /api/tickets/claim-recovery` trả thêm `dailyEvents { resetBonus, autoClaimed[] }` khi request đó vừa xử lý ngày mới.
+
 ### 8.5. Lịch sử
 
 - `GET /api/history`: lịch sử phân trang.
 - Có thể bổ sung endpoint lịch sử vé nếu cần.
 
-Không tạo API ví Vàng, mua vé, nạp tiền hoặc daily claim trong MVP. Ngoại lệ: `POST /api/tickets/dev-topup` (cộng vé thử nghiệm miễn phí, bật/tắt bằng cấu hình) và `POST /api/admin/tickets/grant` (admin cộng vé, mục 3.7–3.8).
+Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng trong MVP (thưởng ngày đi qua nhiệm vụ, mục 3.10). Ngoại lệ: `POST /api/tickets/dev-topup` (cộng vé thử nghiệm miễn phí, bật/tắt bằng cấu hình) và `POST /api/admin/tickets/grant` (admin cộng vé, mục 3.7–3.8).
 
 ## 9. Bảo mật và tính đúng đắn
 
@@ -1070,7 +1155,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc daily claim trong MVP. 
 - Dùng transaction, unique constraint và concurrency control.
 - Tính mốc hồi bằng thời gian server và UTC.
 - Không dùng đồng hồ client để cấp vé.
-- Không giới hạn số vé tích trữ.
+- Trần duy nhất là trần vé hồi (Vé thường 1000, mỗi loại vé phe 500) (mục 3.6); nguồn khác cộng vượt trần được.
 - Chống integer overflow và số dư âm.
 - Validate tất cả bảng tỷ lệ trước khi sử dụng.
 - Phân phối thất bại chỉ được roll sau khi xác định nâng cấp thất bại.
@@ -1101,7 +1186,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc daily claim trong MVP. 
 - Không dùng RNG client.
 - Retry không tạo vé trùng.
 - Ledger khớp với số dư từng loại.
-- Không tồn tại logic thưởng đăng nhập hoặc cấp thêm 20 vé mỗi ngày.
+- Thưởng ngày chỉ đến từ mục 3.10 (reset 05:00, nhiệm vụ, điểm danh), không cấp vé ngày ở chỗ khác.
 - Tài khoản mới nhận đúng 100 vé quà đăng ký, loại vé roll độc lập; ledger khớp số dư.
 - Đăng nhập lại hoặc đăng ký trùng tên không cấp thêm quà đăng ký.
 - Admin cộng vé: đúng loại + số lượng, ledger `admin_grant` khớp số dư; retry cùng key không cộng thêm; quá trần/số âm bị từ chối; không cộng cho tài khoản chờ duyệt; người không phải admin bị 403.
@@ -1113,9 +1198,9 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc daily claim trong MVP. 
 - Hồi đúng mỗi mốc 5 phút (phút 00, 05, 10, …, 55).
 - Không hồi sớm hơn mốc.
 - Xử lý đúng qua giờ mới, ngày mới và thời gian offline dài.
-- Cấp đủ vé cho mọi mốc chưa xử lý.
-- Không có giới hạn số vé tích trữ.
-- Không mất vé do tồn kho lớn.
+- Xử lý đủ mọi mốc chưa xử lý; cấp vé tới trần rồi dừng (offline 30 ngày → Vé thường đúng 1000, mỗi vé phe đúng 500).
+- Mốc hồi chỉ ra loại còn dưới trần (Vé thường 600 vẫn được hồi); cả 5 loại đầy thì không cấp vé, không ghi ledger, không cộng bù.
+- Vé vượt trần từ nguồn khác (VD Vé thường 1010) được giữ nguyên.
 - Không cấp trùng khi refresh hoặc retry.
 - Xử lý an toàn với request đồng thời.
 - Không mất mốc khi server khởi động lại.
@@ -1189,6 +1274,25 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc daily claim trong MVP. 
 - Code hết hạn, đã tắt, không tồn tại bị từ chối, không cộng vé.
 - Admin tạo code chặn trùng mã, vượt trần, hạn trong quá khứ; người thường bị 403.
 
+### 10.5e. Bảng xếp hạng
+
+- Lực chiến = tổng 2^(lv−1) các thẻ active; thẻ đã tiêu thụ không tính.
+- Đồng điểm đồng hạng; trong cùng hạng level cao nhất xếp trước.
+- Admin không xuất hiện, `me` = null; người chưa có thẻ có `rank` null.
+- Tối đa 100 người; hạng của mình ngoài top vẫn trả về đúng.
+- `/api/leaderboard` 401 khi chưa đăng nhập.
+
+### 10.5f. Nhiệm vụ & thành tựu
+
+- Ngày game đổi lúc 05:00 giờ Việt Nam; ngày dương lịch đổi lúc 00:00 giờ Việt Nam.
+- Thưởng reset 25 vé chỉ 1 lần mỗi ngày game; vắng nhiều ngày không cộng bù.
+- Quay 30 lần đạt cả nhiệm vụ quay 10; "Hoàn thành 5 nhiệm vụ" chỉ đếm 6 nhiệm vụ chung khác.
+- Nhiệm vụ phe đếm đúng loại vé/phe, thưởng vé đúng phe.
+- Nhận 2 lần → `NOTHING_TO_CLAIM`; ledger khớp số vé.
+- Sang ngày mới tự nhận nhiệm vụ ngày cũ đã đạt chưa nhận; sang tháng mới tự nhận điểm danh chưa nhận.
+- Thành tựu sở hữu thẻ: mỗi mốc 1 lần, bỏ thẻ ra rồi đưa lại không nhận lần nữa.
+- Thành tựu tính cả lịch sử cũ.
+
 ### 10.6. Database và API
 
 - Phiên đăng nhập còn sau khi khởi động lại server (mở lại file DB), không hết hạn; đăng xuất xoá phiên, token cũ → 401.
@@ -1201,12 +1305,13 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc daily claim trong MVP. 
 - API xác thực và validate đầu vào.
 - API không để client quyết định kết quả RNG.
 - Lịch sử và ledger phản ánh chính xác thay đổi dữ liệu.
-- Không có endpoint hoặc bảng daily claim mới.
+- Không có endpoint `daily-claim` riêng; thưởng ngày qua `/api/quests` (mục 3.10).
 
 ### 10.7. UI
 
 - Hiển thị chính xác số dư từng loại vé và tổng số vé.
-- Hiển thị đồng hồ đến mốc hồi kế tiếp.
+- Số vé hiển thị kèm trần vé hồi dạng `số dư / trần` (VD `510 / 500`, Vé thường `/ 1000`) ở thanh vé và ô chọn vé trang Quay thẻ.
+- Hiển thị đồng hồ đến mốc hồi kế tiếp; loại vé đạt trần (thường 1000, phe 500) có nhãn MAX, cả 5 loại đầy thì hiện "Vé hồi đã đầy".
 - Có loading, empty state và error state.
 - Chọn đúng pool tướng theo loại vé.
 - Animation khớp với kết quả server.
@@ -1215,7 +1320,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc daily claim trong MVP. 
 - UI hiển thị đầy đủ phân phối thất bại.
 - UI cảnh báo hai thẻ đầu vào sẽ bị tiêu thụ.
 - Chặn thao tác lặp khi request đang xử lý.
-- Hoạt động trên desktop và mobile.
+- Hoạt động trên desktop và mobile (≤ 640px: thanh trên gọn, vé/tab cuộn ngang, bottom sheet "Đã chọn" ở Nâng cấp, ô nhập ≥ 16px).
 - Hỗ trợ reduced motion.
 - Không có thưởng đăng nhập, nút nạp tiền, cửa hàng vé hoặc mua vé bằng Vàng.
 - Không có nút "+50 vé" trên UI.
@@ -1224,6 +1329,8 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc daily claim trong MVP. 
 - Bộ sưu tập gom thẻ theo tướng; tặng thẻ nằm trong Bộ sưu tập với dropdown người nhận có tìm kiếm, sắp theo giao dịch gần nhất.
 - Đăng ký hiển thị thông báo chờ duyệt; tab Quản trị chỉ hiện với admin.
 - Có tab Giftcode; popup lần đầu đăng nhập mời nhập code gợi ý.
+- Có tab Xếp hạng: top 10 nổi bật, cuộn tới top 100, luôn hiện hạng của mình; không có admin.
+- Có tab Nhiệm vụ (Hằng ngày / Điểm danh / Thành tựu) với nút Nhận, Nhận tất cả, badge số phần thưởng chờ nhận, đồng hồ tới 05:00; toast khi có thưởng ngày mới hoặc tự nhận.
 
 ## 11. Nguyên tắc triển khai cho Claude Code
 
@@ -1266,9 +1373,9 @@ Thứ tự ưu tiên:
 - Giftcode chỉ tặng vé quay (nhiều loại + số lượng, hạn tuỳ chọn, mỗi người nhập 1 lần); 4 code tân thủ THUCQUOC/NGUYQUOC/NGOQUOC/QUANQUOC, mỗi code 200 vé phe tương ứng.
 - Không có nút "+50 vé" trên UI; endpoint thử nghiệm chỉ chạy khi server bật `ENABLE_DEV_TOPUP` (mặc định tắt).
 - Người chơi offline vẫn tích lũy đầy đủ các mốc hợp lệ.
-- Không có thưởng đăng nhập hằng ngày.
+- Nhiệm vụ hằng ngày (chung + phe), thưởng reset 05:00 (25 vé, chỉ ngày hiện tại), điểm danh theo tháng, thành tựu; bấm Nhận, nhiệm vụ ngày cũ tự nhận khi sang ngày.
 - Mỗi vé được cấp sẽ random loại với xác suất mặc định 20% cho mỗi loại.
-- Không giới hạn số lượng vé tích trữ.
+- Vé hồi theo thời gian dừng ở trần: Vé thường 1000, mỗi vé phe 500; nhiệm vụ/giftcode/admin… vẫn cộng vượt trần (giữ nguyên số dư vượt).
 - Có vé Quần, quay trong 25 tướng Quần.
 - Không có nạp tiền, mua vé bằng Vàng, thanh toán thật hoặc cửa hàng vé.
 - Vé thường quay trong toàn bộ 100 tướng.
@@ -1284,6 +1391,7 @@ Thứ tự ưu tiên:
 - Nâng cấp thành công tiêu thụ 2 thẻ và tạo 1 thẻ cùng tướng ở level cao hơn đúng 1.
 - Nâng cấp thất bại tiêu thụ 2 thẻ và tạo 1 thẻ cùng tướng theo phân phối kết quả thất bại riêng theo level đầu vào.
 - Bảng phân phối thất bại ưu tiên giảm cảm giác mất tiến trình, nhất là ở level cao.
+- Bảng xếp hạng Lực chiến (tổng 2^(lv−1) các thẻ), top 100, ẩn admin.
 - Mọi kết quả game do backend xác định.
 - Database SQLite, API Fastify, frontend PixiJS.
 - Mọi thao tác quan trọng có transaction, lịch sử và cơ chế chống request trùng.
