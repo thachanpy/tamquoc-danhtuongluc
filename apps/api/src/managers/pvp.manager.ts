@@ -246,6 +246,8 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
       counter: def.counter,
       selfBurn: def.selfBurn,
       selfBurnRounds: def.selfBurnRounds,
+      burnCritMulBps: def.burnCritMulBps,
+      burnLifesteal: def.burnLifesteal,
     },
     // Buff tăng sức mạnh kỹ năng phát mỗi lượt; tất cả 0 = kỹ năng không buff.
     buff: def.buff,

@@ -130,9 +130,9 @@ button.chip { cursor: pointer; margin: 4px 4px 0 0; }
 .tq-art .glyph { position: absolute; font-size: 72px; font-weight: 800; color: rgba(255,255,255,.22); }
 .tq-art .portrait { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
 .tq-art .ini { position: relative; font-size: 22px; font-weight: 800; letter-spacing: 2px; text-shadow: 0 2px 6px rgba(0,0,0,.5); }
-/* Huy hiệu phong cách chiến đấu (mục 6.7) — màu theo phong cách, đặt ở góc trên-trái ảnh thẻ. */
-.tq-role { position: absolute; top: 3px; left: 3px; z-index: 3; padding: 0 5px; border: 1px solid currentColor; border-radius: 999px;
-  background: rgba(8, 6, 4, .72); font: 600 9px/1.7 var(--num); white-space: nowrap; letter-spacing: .2px; }
+/* Huy hiệu phong cách chiến đấu (mục 6.7) — icon kiếm/khiên/sách, màu theo phong cách, ở góc trên-trái ảnh thẻ. */
+.tq-role { position: absolute; top: 3px; left: 3px; z-index: 3; display: inline-flex; align-items: center; padding: 2px; border: 1px solid currentColor; border-radius: 999px;
+  background: rgba(8, 6, 4, .72); line-height: 0; }
 .tq-card.framed.tier-6 .tq-role, .tq-card.framed.tier-7 .tq-role, .tq-card.framed.tier-8 .tq-role,
 .tq-card.framed.tier-9 .tq-role, .tq-card.framed.tier-10 .tq-role { top: 6%; left: 6%; }
 /* Tên + phe/Lv nằm đè lên phần dưới chân dung (giống bảng tên trên ảnh gốc), nên thân thẻ giữ đúng tỉ lệ ảnh 286×378 và tỉ lệ khung */

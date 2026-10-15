@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal, onCleanup, type JSX } from 'solid-js';
-import { FACTIONS, FACTION_LABELS, type CardDto, type UpgradePreviewDto } from '@tq/shared';
+import { FACTIONS, FACTION_LABELS, PVP_STYLES, PVP_STYLE_LABELS, type CardDto, type UpgradePreviewDto } from '@tq/shared';
 import { api, fetchAllCards, newKey, type ApiError } from '../api.ts';
-import { gen, state } from '../state.ts';
+import { gen, genStyle, state } from '../state.ts';
 import { pct } from '../art.ts';
 import { playUpgrade } from '../pixi/stage.ts';
 import { groupCardsByGeneral, type UpgradeSort } from '../upgrade-groups.ts';
@@ -43,6 +43,7 @@ export function UpgradePage(): JSX.Element {
   /** Các level đầu vào tham gia Nâng cấp nhanh; mặc định chọn sẵn Lv.1–Q. */
   const [quickLevels, setQuickLevels] = createSignal<number[]>(allLevels.filter((lv) => lv <= Q));
   const [fFaction, setFFaction] = createSignal('');
+  const [fStyle, setFStyle] = createSignal('');
   const [fLevel, setFLevel] = createSignal('');
   const [fSort, setFSort] = createSignal<UpgradeSort>('level_desc');
 
@@ -88,6 +89,7 @@ export function UpgradePage(): JSX.Element {
   const filtered = createMemo(() =>
     list().filter((c) => {
       if (fFaction() && gen(c.generalId).faction !== fFaction()) return false;
+      if (fStyle() && genStyle(c.generalId) !== fStyle()) return false;
       if (fLevel() && c.level !== Number(fLevel())) return false;
       return true;
     }),
@@ -368,6 +370,10 @@ export function UpgradePage(): JSX.Element {
             <select data-f="faction" aria-label="Phe" onInput={(e) => setFFaction(e.currentTarget.value)}>
               <option value="">Mọi phe</option>
               <For each={FACTIONS}>{(f) => <option value={f}>{FACTION_LABELS[f]}</option>}</For>
+            </select>
+            <select data-f="style" aria-label="Phong cách" onInput={(e) => setFStyle(e.currentTarget.value)}>
+              <option value="">Mọi phong cách</option>
+              <For each={PVP_STYLES}>{(st) => <option value={st}>{PVP_STYLE_LABELS[st]}</option>}</For>
             </select>
             <select data-f="level" aria-label="Level" onInput={(e) => setFLevel(e.currentTarget.value)}>
               <option value="">Mọi level</option>

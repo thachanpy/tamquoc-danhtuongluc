@@ -915,17 +915,19 @@ export type PvpEventDto =
    * Buff có lợi phát cho đồng minh: mỗi lần tướng tới lượt cộng MỘT lớp. Các giá trị `*Flat` là lượng
    * cộng thẳng của lớp này theo chỉ số nền của CHÍNH tướng nhận (client tự cộng vào chỉ số hiển thị).
    * `crit` = lớp này ăn chí mạng (×ST chí mạng cho % sát thương/HP). `expiresRound` = lượt cuối hiệu lực;
-   * `maxLayers` = số lớp cộng dồn tối đa (client tự bỏ lớp cũ nhất khi vượt trần).
+   * `from` = idx người thi triển; `maxLayers` = số lớp cộng dồn tối đa THEO TỪNG nguồn (client bỏ lớp cũ
+   * nhất của cùng `from` khi vượt trần; nhiều tướng khác nguồn vẫn cộng dồn).
    */
-  | { t: 'buff'; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; crit: boolean; expiresRound: number; maxLayers: number }
+  | { t: 'buff'; from: number; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; crit: boolean; expiresRound: number; maxLayers: number }
   /**
    * Áp một lớp hiệu ứng bất lợi lên mục tiêu địch: giảm sát thương gây ra (`damageFlat`),
    * giảm trần HP (`hpFlat`), giảm chí mạng (`critBps`), giảm ST chí mạng (`critDamageBps`)
-   * và/hoặc thiêu đốt mỗi lượt (`burnFlat`). `maxLayers` = số lớp cộng dồn tối đa.
+   * và/hoặc thiêu đốt mỗi lượt (`burnFlat`). `from` = idx người thi triển;
+   * `maxLayers` = số lớp cộng dồn tối đa THEO TỪNG nguồn.
    */
-  | { t: 'debuff'; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; burnFlat: number; expiresRound: number; maxLayers: number }
-  /** Thiêu đốt: gây sát thương vào đầu mỗi lượt cho tướng đang bị thiêu đốt. */
-  | { t: 'burn'; idx: number; amount: number; hp: number }
+  | { t: 'debuff'; from: number; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; burnFlat: number; expiresRound: number; maxLayers: number }
+  /** Thiêu đốt: gây sát thương vào đầu mỗi lượt cho tướng đang bị thiêu đốt (có thể ăn chí mạng). */
+  | { t: 'burn'; idx: number; amount: number; crit: boolean; hp: number }
   /** Xóa toàn bộ hiệu ứng có lợi (lớp buff) của mục tiêu. */
   | { t: 'dispel'; idx: number }
   /** Thanh tẩy hiệu ứng bất lợi của đồng minh (trừ choáng và thiêu đốt). */
@@ -1087,6 +1089,10 @@ export interface PvpSkillDefDto {
   selfBurn: boolean;
   /** Số lượt tự thiêu đốt. */
   selfBurnRounds: number;
+  /** Hệ số nhân tỷ lệ chí mạng & ST chí mạng riêng cho đòn thiêu đốt (bps; 10000 = không đổi). */
+  burnCritMulBps: number;
+  /** Hút máu cả từ sát thương thiêu đốt gây ra (không chỉ đòn đánh trực tiếp). */
+  burnLifesteal: boolean;
 }
 
 /**

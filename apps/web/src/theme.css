@@ -270,6 +270,8 @@ h1, h2, h3, .tabs a, .t-name, .quick-head b, .gen-head b {
 .cmb-key { font-size: 12px; font-weight: 700; color: var(--gold, #e6bf45); }
 .cmb-val { font-size: 12.5px; display: grid; gap: 1px; }
 .cmb-val b { font-size: 13px; }
+/* Phong cách ở khối chi tiết chiến đấu: icon định danh đứng cạnh nhãn chữ */
+.cmb-style { display: inline-flex; align-items: center; gap: 5px; }
 .cmb-val i { font-style: normal; font-size: 11.5px; color: var(--muted); }
 .cmb-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 5px; margin-top: 2px; }
 .cmb-stat { display: grid; gap: 1px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; background: rgba(10, 6, 4, .5); }
@@ -655,7 +657,8 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .pvp-cell-stat { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 6px; max-width: 100%; font: 600 10.5px/1.35 var(--num, sans-serif); color: var(--muted); }
 .pvp-cell-stat.loading { opacity: .55; }
 .pvp-cell-num { color: var(--text); white-space: nowrap; }
-.pvp-style { padding: 0 6px; border: 1px solid currentColor; border-radius: 999px; font-size: 10px; line-height: 1.6; opacity: .95; }
+/* Huy hiệu phong cách: icon kiếm/khiên/sách (nhãn chữ ở tooltip) — màu theo phong cách. */
+.pvp-style { display: inline-flex; align-items: center; padding: 1px 4px; border: 1px solid currentColor; border-radius: 999px; line-height: 0; opacity: .95; }
 .pvp-style.attack { color: #ef6f6a; }
 .pvp-style.defense { color: #5aa2ff; }
 .pvp-style.support { color: #3fbf7f; }
@@ -733,7 +736,7 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .pvp-pick-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
 .pvp-pick-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 .pvp-pick-faction { padding: 0 7px; border: 1px solid currentColor; border-radius: 999px; font: 600 10.5px/1.7 var(--num, sans-serif); opacity: .9; }
-.pvp-pick-style { padding: 0 7px; border: 1px solid currentColor; border-radius: 999px; font: 600 10.5px/1.7 var(--num, sans-serif); opacity: .9; }
+.pvp-pick-style { display: inline-flex; align-items: center; padding: 1px 5px; border: 1px solid currentColor; border-radius: 999px; line-height: 0; opacity: .9; }
 .pvp-pick-style.attack { color: #ef6f6a; }
 .pvp-pick-style.defense { color: #5aa2ff; }
 .pvp-pick-style.support { color: #3fbf7f; }

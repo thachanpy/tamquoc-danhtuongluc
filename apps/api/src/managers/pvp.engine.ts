@@ -10,7 +10,6 @@ import {
   PVP_CRIT_BPS_PER_LEVEL,
   PVP_CRIT_DAMAGE_BPS,
   PVP_FRONT_HP_BPS,
-  PVP_MAX_BURN_LAYERS,
   PVP_MAX_ROUNDS,
   PVP_PASSIVE_EFFECT,
   isAllyTargeting,
@@ -87,7 +86,7 @@ interface Unit {
   buffs: BuffInstance[];
   /** Các lớp hiệu ứng suy yếu đang chịu — cộng dồn, hết hạn sau vài lượt (phe Ngụy). */
   debuffs: DebuffInstance[];
-  /** Các lớp Thiêu đốt đang chịu — mỗi nguồn cộng dồn riêng, trần toàn hệ thống 5 lớp (mục 8). */
+  /** Các lớp Thiêu đốt đang chịu — trần cộng dồn tính riêng theo TỪNG nguồn, không có trần toàn hệ thống (mục 8). */
   burns: BurnInstance[];
 }
 
@@ -97,6 +96,8 @@ interface Unit {
  * và giảm sát thương gánh chịu.
  */
 interface BuffInstance {
+  /** idx của tướng phát lớp buff — dùng để giới hạn số lớp cộng dồn theo TỪNG nguồn. */
+  sourceIdx: number;
   /** Damage cộng thẳng (theo damage nền của chính tướng được buff). */
   damageFlat: number;
   /** Trần HP cộng thẳng (theo HP nền của chính tướng được buff); cũng là lượng hồi khi nhận lớp. */
@@ -116,6 +117,8 @@ interface BuffInstance {
  * giảm sát thương mục tiêu gây ra, giảm trần HP, giảm điểm chí mạng và/hoặc giảm ST chí mạng.
  */
 interface DebuffInstance {
+  /** idx của tướng áp lớp suy yếu — dùng để giới hạn số lớp cộng dồn theo TỪNG nguồn. */
+  sourceIdx: number;
   /** Giảm sát thương mục tiêu gây ra (cộng thẳng, tính theo damage nền của chính mục tiêu). */
   damageDownFlat: number;
   /** Trần HP bị giảm (cộng thẳng, tính theo HP nền của chính mục tiêu). */
@@ -262,26 +265,38 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
   /** Chọn mục tiêu theo hệ tọa độ đội hình (mục 2.4, 13.1) — chỉ tướng còn sống. */
   function pickTargets(u: Unit, targeting: PvpTargeting): Unit[] {
     const enemies = enemiesOf(u);
+    const front = enemies.filter((e) => e.row === 'front');
+    const back = enemies.filter((e) => e.row === 'back');
     switch (targeting) {
       case 'single': {
         // Ưu tiên cùng lane (hàng ngang), sau đó tới các lane khác theo slot.
         const sameLane = enemies.filter((e) => e.lane === u.lane);
         return sameLane.length ? [sameLane[0]!] : enemies.length ? [enemies[0]!] : [];
       }
-      case 'lane':
-        return enemies.filter((e) => e.lane === u.lane);
-      case 'row':
-        return enemies.filter((e) => e.row === u.row);
+      case 'lane': {
+        // Hàng ngang: nếu cả cặp trước/sau ở lane này đã chết hết thì quay sang toàn bộ địch còn lại.
+        const sameLane = enemies.filter((e) => e.lane === u.lane);
+        return sameLane.length ? sameLane : enemies;
+      }
+      case 'row': {
+        // Hàng dọc: đánh hàng của bản thân; nếu hàng đó đã sạch thì quay sang hàng còn lại.
+        const sameRow = enemies.filter((e) => e.row === u.row);
+        if (sameRow.length) return sameRow;
+        return u.row === 'front' ? back : front;
+      }
       case 'back_row':
-        return enemies.filter((e) => e.row === 'back');
+        // Đánh hàng sau: nếu hàng sau chết hết thì quay ra đánh hàng trước.
+        return back.length ? back : front;
       case 'back_single': {
-        // Một tướng hàng sau: ưu tiên cùng lane, sau đó tới hàng sau gần nhất.
-        const backs = enemies.filter((e) => e.row === 'back');
-        const sameLane = backs.filter((e) => e.lane === u.lane);
-        return sameLane.length ? [sameLane[0]!] : backs.length ? [backs[0]!] : [];
+        // Một tướng hàng sau: ưu tiên cùng lane, rồi tới hàng sau; nếu hàng sau sạch thì đánh hàng trước.
+        const sameLane = back.filter((e) => e.lane === u.lane);
+        if (sameLane.length) return [sameLane[0]!];
+        if (back.length) return [back[0]!];
+        return front.length ? [front[0]!] : [];
       }
       case 'front_enemies':
-        return enemies.filter((e) => e.row === 'front');
+        // Đánh hàng trước: nếu hàng trước chết hết thì quay ra đánh hàng sau.
+        return front.length ? front : back;
       case 'all_enemies':
         return enemies;
       case 'all_allies':
@@ -331,8 +346,34 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
   const debuffCritDown = (u: Unit) => u.debuffs.reduce((s, d) => s + d.critDownBps, 0);
   /** ST chí mạng bị giảm bởi các lớp suy yếu đang chịu. */
   const debuffCritDamageDown = (u: Unit) => u.debuffs.reduce((s, d) => s + d.critDamageDownBps, 0);
-  /** Tổng sát thương thiêu đốt mỗi lượt từ các lớp đang chịu. */
-  const burnTotal = (u: Unit) => u.burns.reduce((s, b) => s + b.amount, 0);
+  /**
+   * Sát thương Thiêu đốt mỗi lượt: gom các lớp theo TỪNG nguồn, mỗi nguồn roll chí mạng RIÊNG theo
+   * chỉ số của người thi triển (mục 8 — thiêu đốt vẫn ăn chí mạng như các đòn sát thương khác).
+   * Chu Du (`burnCritMulBps`) được nhân thêm tỷ lệ chí mạng VÀ ST chí mạng cho riêng đòn thiêu đốt.
+   * Trả về cả chi tiết từng nguồn để tính hút máu thiêu đốt (Lục Tốn).
+   */
+  function rollBurnTotal(u: Unit): { amount: number; crit: boolean; parts: { src: Unit | undefined; damage: number; crit: boolean }[] } {
+    const bySource = new Map<number, number>();
+    for (const b of u.burns) bySource.set(b.sourceIdx, (bySource.get(b.sourceIdx) ?? 0) + b.amount);
+    let amount = 0;
+    let crit = false;
+    const parts: { src: Unit | undefined; damage: number; crit: boolean }[] = [];
+    for (const [sourceIdx, sum] of bySource) {
+      const src = units.find((x) => x.idx === sourceIdx);
+      const mul = src && src.profile.def.burnCritMulBps > 0 ? src.profile.def.burnCritMulBps : BPS_SCALE;
+      let dmg = sum;
+      let c = false;
+      if (src && rand(BPS_SCALE) < Math.round((critBpsOf(src) * mul) / BPS_SCALE)) {
+        const cdBps = Math.round((critDamageBpsOf(src) * mul) / BPS_SCALE);
+        dmg = Math.round((dmg * (BPS_SCALE + cdBps)) / BPS_SCALE);
+        c = true;
+        crit = true;
+      }
+      amount += dmg;
+      parts.push({ src, damage: dmg, crit: c });
+    }
+    return { amount, crit, parts };
+  }
 
   /** Sát thương hiệu dụng khi ra đòn = nền + buff − suy yếu (không âm). */
   const effectiveDamage = (u: Unit) => Math.max(0, u.damage + buffDamage(u) - debuffDamageDown(u));
@@ -413,7 +454,11 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     return { amount, crit };
   }
 
-  /** Thêm một lớp Thiêu đốt từ `source` lên `target`, tôn trọng trần theo nguồn và trần toàn hệ thống. */
+  /**
+   * Thêm một lớp Thiêu đốt từ `source` lên `target`.
+   * Trần `maxLayers` chỉ áp dụng theo TỪNG nguồn (từng tướng): mỗi tướng gây tối đa `maxLayers` lớp,
+   * nhưng NHIỀU tướng cùng thiêu đốt một mục tiêu thì các lớp vẫn cộng dồn (không có trần toàn hệ thống).
+   */
   function addBurn(target: Unit, source: Unit, amount: number, rounds: number, maxLayers: number): void {
     const expiresRound = currentRound + rounds - 1;
     const sameCount = target.burns.filter((b) => b.sourceIdx === source.idx).length;
@@ -422,7 +467,6 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
       if (at >= 0) target.burns.splice(at, 1);
     }
     target.burns.push({ sourceIdx: source.idx, amount, expiresRound });
-    if (target.burns.length > PVP_MAX_BURN_LAYERS) target.burns.splice(0, target.burns.length - PVP_MAX_BURN_LAYERS);
   }
 
   let currentRound = 0;
@@ -449,10 +493,15 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         // Lượng cộng thẳng tính theo chỉ số nền của CHÍNH tướng được buff.
         const damageFlat = Math.round((a.damage * damageBps) / BPS_SCALE);
         const hpFlat = Math.round((a.maxHpStatic * hpBps) / BPS_SCALE);
-        a.buffs.push({ damageFlat, hpFlat, critBps: b.critBps, critDamageBps: b.critDamageBps, takenDownBps: b.takenDownBps, expiresRound });
-        if (a.buffs.length > b.maxLayers) a.buffs.shift();
+        a.buffs.push({ sourceIdx: u.idx, damageFlat, hpFlat, critBps: b.critBps, critDamageBps: b.critDamageBps, takenDownBps: b.takenDownBps, expiresRound });
+        // Trần `maxLayers` tính theo TỪNG nguồn: mỗi tướng tối đa `maxLayers` lớp, nhiều tướng vẫn cộng dồn.
+        const mine = a.buffs.filter((x) => x.sourceIdx === u.idx);
+        if (mine.length > b.maxLayers) {
+          const at = a.buffs.indexOf(mine[0]!);
+          if (at >= 0) a.buffs.splice(at, 1);
+        }
         syncMaxHp(a);
-        events.push({ t: 'buff', idx: a.idx, damageFlat, hpFlat, critBps: b.critBps, critDamageBps: b.critDamageBps, takenDownBps: b.takenDownBps, crit, expiresRound, maxLayers: b.maxLayers });
+        events.push({ t: 'buff', from: u.idx, idx: a.idx, damageFlat, hpFlat, critBps: b.critBps, critDamageBps: b.critDamageBps, takenDownBps: b.takenDownBps, crit, expiresRound, maxLayers: b.maxLayers });
       }
     }
 
@@ -543,8 +592,13 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         if (weaken) {
           damageDownFlat = Math.round((t.damage * db.damageDownBps) / BPS_SCALE);
           hpDownFlat = Math.round((t.baseHp * db.hpDownBps) / BPS_SCALE);
-          t.debuffs.push({ damageDownFlat, hpDownFlat, critDownBps: db.critDownBps, critDamageDownBps: db.critDamageDownBps, expiresRound });
-          if (t.debuffs.length > db.maxLayers) t.debuffs.shift();
+          t.debuffs.push({ sourceIdx: u.idx, damageDownFlat, hpDownFlat, critDownBps: db.critDownBps, critDamageDownBps: db.critDamageDownBps, expiresRound });
+          // Trần `maxLayers` tính theo TỪNG nguồn: mỗi tướng tối đa `maxLayers` lớp, nhiều tướng vẫn cộng dồn.
+          const mine = t.debuffs.filter((x) => x.sourceIdx === u.idx);
+          if (mine.length > db.maxLayers) {
+            const at = t.debuffs.indexOf(mine[0]!);
+            if (at >= 0) t.debuffs.splice(at, 1);
+          }
           syncMaxHp(t);
         }
         let burnFlat = 0;
@@ -552,7 +606,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
           burnFlat = Math.round((effectiveDamage(u) * db.burnBps) / BPS_SCALE);
           addBurn(t, u, burnFlat, db.burnRounds, db.burnMaxLayers > 0 ? db.burnMaxLayers : 1);
         }
-        events.push({ t: 'debuff', idx: t.idx, damageFlat: damageDownFlat, hpFlat: hpDownFlat, critBps: db.critDownBps, critDamageBps: db.critDamageDownBps, burnFlat, expiresRound, maxLayers: db.maxLayers });
+        events.push({ t: 'debuff', from: u.idx, idx: t.idx, damageFlat: damageDownFlat, hpFlat: hpDownFlat, critBps: db.critDownBps, critDamageBps: db.critDamageDownBps, burnFlat, expiresRound, maxLayers: db.maxLayers });
       }
     }
 
@@ -560,7 +614,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     if (def.selfBurn) {
       const burnFlat = Math.round((effectiveDamage(u) * PVP_BURN_BPS) / BPS_SCALE);
       addBurn(u, u, burnFlat, def.selfBurnRounds, PVP_BURN_MAX_LAYERS_LONG);
-      events.push({ t: 'debuff', idx: u.idx, damageFlat: 0, hpFlat: 0, critBps: 0, critDamageBps: 0, burnFlat, expiresRound: round + def.selfBurnRounds - 1, maxLayers: PVP_BURN_MAX_LAYERS_LONG });
+      events.push({ t: 'debuff', from: u.idx, idx: u.idx, damageFlat: 0, hpFlat: 0, critBps: 0, critDamageBps: 0, burnFlat, expiresRound: round + def.selfBurnRounds - 1, maxLayers: PVP_BURN_MAX_LAYERS_LONG });
     }
 
     // Thanh tẩy hiệu ứng bất lợi cho đồng minh (mục 15): gỡ toàn bộ lớp suy yếu nhưng GIỮ LẠI
@@ -618,10 +672,19 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
       // Thiêu đốt: gây sát thương vào ĐẦU mỗi lượt (sát thương gián tiếp — KHÔNG kích phản kích).
       for (const u of units) {
         if (!u.alive) continue;
-        const burn = burnTotal(u);
-        if (burn <= 0) continue;
-        u.hp = Math.max(0, u.hp - burn);
-        events.push({ t: 'burn', idx: u.idx, amount: burn, hp: u.hp });
+        const burn = rollBurnTotal(u);
+        if (burn.amount <= 0) continue;
+        u.hp = Math.max(0, u.hp - burn.amount);
+        events.push({ t: 'burn', idx: u.idx, amount: burn.amount, crit: burn.crit, hp: u.hp });
+        // Hút máu từ chính sát thương THIÊU ĐỐT (Lục Tốn): hồi cho nguồn theo % ST gây ra, ăn chí mạng
+        // của đòn thiêu đốt đó. Chỉ áp cho tướng có `burnLifesteal`.
+        for (const p of burn.parts) {
+          if (!p.src || !p.src.alive || p.damage <= 0) continue;
+          if (!p.src.profile.def.burnLifesteal || p.src.lifestealBps <= 0) continue;
+          let heal = Math.round((p.damage * p.src.lifestealBps) / BPS_SCALE);
+          if (p.crit) heal = Math.round((heal * (BPS_SCALE + critDamageBpsOf(p.src))) / BPS_SCALE);
+          healUnit(p.src, p.src, heal, p.crit);
+        }
         if (u.hp === 0 && u.alive) {
           u.alive = false;
           events.push({ t: 'down', idx: u.idx });

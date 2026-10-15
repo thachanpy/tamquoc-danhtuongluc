@@ -346,6 +346,70 @@ test('engine: buff chỉ số cộng dồn, giữ tối đa PVP_BUFF_MAX_LAYERS 
   assert.ok(buffOfAlly >= 3, 'đồng minh nhận lớp buff mới qua các lượt');
 });
 
+test('engine: Lục Tốn đánh hàng DỌC (row) chứ không phải hàng ngang (mục 13.2)', () => {
+  assert.equal(skillDef('lu-xun').targeting, 'row');
+});
+
+test('engine: hàng mục tiêu trống thì quay sang hàng còn lại (mục 2.4)', () => {
+  // Thái Sử Từ đánh một tướng hàng SAU; địch chỉ có hàng TRƯỚC → vẫn phải đánh được sang hàng trước.
+  const backSniper = simulatePvp(
+    [one('a', [{ slot: 1, generalId: 'taishi-ci', level: 3 }]), one('b', [{ slot: 1, generalId: 'da-qiao', level: 10 }])],
+    never,
+  );
+  assert.ok(backSniper.events.some((e) => e.t === 'damage' && e.from === 0), 'hàng sau địch trống → đánh sang hàng trước');
+  // Viên Thuật giảm máu tối đa HÀNG TRƯỚC; địch chỉ có hàng SAU → vẫn phải áp được hiệu ứng sang hàng sau.
+  const frontDebuff = simulatePvp(
+    [one('a', [{ slot: 1, generalId: 'yuan-shu', level: 3 }]), one('b', [{ slot: 4, generalId: 'da-qiao', level: 10 }])],
+    never,
+  );
+  assert.ok(frontDebuff.events.some((e) => e.t === 'debuff' && e.hpFlat > 0), 'hàng trước địch trống → áp hiệu ứng sang hàng sau');
+});
+
+test('engine: Thiêu đốt vẫn ăn chí mạng (mục 8)', () => {
+  const res = simulatePvp(
+    [one('a', [{ slot: 1, generalId: 'zhu-huan', level: 5 }]), one('b', [{ slot: 1, generalId: 'da-qiao', level: 10 }])],
+    always0,
+  );
+  const burns = res.events.filter((e): e is Extract<PvpEventDto, { t: 'burn' }> => e.t === 'burn');
+  assert.ok(burns.length > 0, 'phải có sát thương thiêu đốt');
+  assert.ok(burns.every((e) => e.crit), 'RNG luôn 0 → thiêu đốt chí mạng');
+});
+
+test('engine: Chu Du tăng thêm 50% chí mạng và ST chí mạng cho riêng đòn Thiêu đốt (mục 8)', () => {
+  // Cùng cấp 5, cùng 1 lớp thiêu đốt, cùng ST cơ bản → chỉ khác hệ số nhân chí mạng của Chu Du.
+  const firstBurn = (id: string) => {
+    const res = simulatePvp(
+      [one('a', [{ slot: 1, generalId: id, level: 5 }]), one('b', [{ slot: 1, generalId: 'da-qiao', level: 10 }])],
+      always0,
+    );
+    const e = res.events.find((x): x is Extract<PvpEventDto, { t: 'burn' }> => x.t === 'burn');
+    assert.ok(e, `${id} phải gây thiêu đốt`);
+    return e.amount;
+  };
+  const normal = firstBurn('zhu-huan');
+  const zhouYu = firstBurn('zhou-yu');
+  // ST chí mạng của Chu Du cho thiêu đốt = 1.5 × 5000 = 7500 (thay vì 5000) → 350 so với 300.
+  assert.equal(zhouYu, Math.round((normal * 7) / 6), 'thiêu đốt của Chu Du phải mạnh hơn nhờ ×1.5 ST chí mạng');
+});
+
+test('engine: Lục Tốn hút máu từ cả sát thương Thiêu đốt và giảm HP tối đa địch (mục 8, 13)', () => {
+  const res = simulatePvp(
+    [one('a', [{ slot: 4, generalId: 'lu-xun', level: 10 }]), one('b', [{ slot: 4, generalId: 'zhu-huan', level: 10 }])],
+    always0,
+  );
+  const lx = res.units.find((u) => u.generalId === 'lu-xun')!.idx;
+  const ev = res.events;
+  // Sát thương thiêu đốt lên địch, kèm giảm HP tối đa.
+  assert.ok(ev.some((e) => e.t === 'burn'), 'phải có sát thương thiêu đốt');
+  assert.ok(ev.some((e) => e.t === 'debuff' && e.hpFlat > 0), 'Lục Tốn phải giảm HP tối đa của địch');
+  // Hút máu từ thiêu đốt: ngay sau đòn thiêu đốt đầu tiên, Lục Tốn được hồi máu TRƯỚC lượt hành động kế tiếp của mình.
+  const burnAt = ev.findIndex((e) => e.t === 'burn');
+  const healAt = ev.findIndex((e, i) => i > burnAt && e.t === 'heal' && e.from === lx);
+  const nextActAt = ev.findIndex((e, i) => i > burnAt && e.t === 'act' && e.idx === lx);
+  assert.ok(healAt >= 0, 'Lục Tốn phải hồi máu từ sát thương thiêu đốt');
+  assert.ok(nextActAt < 0 || healAt < nextActAt, 'hồi máu thiêu đốt phải xảy ra ở đầu vòng, trước lượt hành động');
+});
+
 test('engine: một bên bị xóa sổ thì kết thúc ngay (wipe — mục 14)', () => {
   const strong = [1, 2, 3, 4, 5, 6].map((slot) => ({ slot, generalId: ROSTER[slot]!.id, level: 10 }));
   const res = simulatePvp([one('a', strong), one('b', [{ slot: 1, generalId: ROSTER[40]!.id, level: 1 }])], seeded(9));
@@ -445,30 +509,64 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(gy.def.buff.critBps, 3000);
   assert.equal(gy.def.buff.critDamageBps, 3000);
   assert.equal(gy.def.buffScope, 'self');
-  // Triệu Vân: hút máu 3%/cấp + tự buff chí mạng (SKILLS.md không có tự hồi HP).
+  // Triệu Vân: hàng ngang 200%, tự buff chí mạng 20% + giảm ST nhận 20%, hút máu 3%/cấp.
   const zy = pvpProfile('zhao-yun');
-  assert.equal(zy.def.damageBps, 28000);
+  assert.equal(zy.def.damageBps, 20000);
+  assert.equal(zy.def.targeting, 'lane');
   assert.equal(zy.lifestealPerLevelBps, 300);
   assert.equal(zy.def.selfHealBps, 0);
   assert.equal(zy.def.buff.critBps, 2000);
-  // Tôn Sách: hút máu 2.5%/cấp, không tự hồi HP.
+  assert.equal(zy.def.buff.takenDownBps, 2000);
+  assert.equal(zy.def.counter.damageBps, 0, 'Triệu Vân không còn phản kích');
+  // Tôn Sách: AoE 123.5% (đã +30%), tự buff ST 20%, hút máu 2.5%/cấp, phản kích đơn.
   const sc = pvpProfile('sun-ce');
-  assert.equal(sc.def.damageBps, 28500);
+  assert.equal(sc.def.damageBps, 12350);
+  assert.equal(sc.def.targeting, 'all_enemies');
   assert.equal(sc.lifestealPerLevelBps, 250);
   assert.equal(sc.def.selfHealBps, 0);
-  // Trương Liêu: hàng ngang 225%, giảm ST địch 10%, hút máu 2%/cấp, phản kích diện rộng (không tự buff ST).
+  assert.equal(sc.def.counter.damageBps, 5000);
+  // Mã Siêu: đánh đơn 280%, hút máu 10%/cấp (max 100%), tự tăng 10% HP tối đa.
+  const mc = pvpProfile('ma-chao');
+  assert.equal(mc.def.damageBps, 28000);
+  assert.equal(mc.def.targeting, 'single');
+  assert.equal(mc.lifestealPerLevelBps, 1000);
+  assert.equal(mc.def.buff.hpBps, 1000);
+  // Lữ Mông: đánh đơn 290% + tăng 10% HP tối đa toàn đội (không còn xóa buff địch).
+  const lm = pvpProfile('lu-meng');
+  assert.equal(lm.def.damageBps, 29000);
+  assert.equal(lm.def.buff.hpBps, 1000);
+  assert.equal(lm.def.buffScope, 'all_allies');
+  assert.equal(lm.def.dispel, false);
+  // Tào Tháo: AoE 97.5% (đã +30%), 50% xóa buff địch, tự buff ST 15%.
+  const cc = pvpProfile('cao-cao');
+  assert.equal(cc.def.damageBps, 9750);
+  assert.equal(cc.def.dispelChanceBps, 5000);
+  assert.equal(cc.def.buff.damageBps, 1500);
+  // Trương Liêu: hàng ngang 225%, giảm ST địch 10%, hút máu 3%/cấp (max 30%), phản kích diện rộng (không tự buff ST).
   const zl = pvpProfile('zhang-liao');
   assert.equal(zl.def.damageBps, 22500);
+  assert.equal(zl.def.targeting, 'lane');
   assert.equal(zl.def.debuff.damageDownBps, 1000);
+  assert.equal(zl.def.debuff.rounds, 2, 'debuff không ghi số lượt mặc định 2 lượt');
+  assert.equal(zl.lifestealPerLevelBps, 300);
   assert.equal(zl.def.buffScope, 'none');
   assert.equal(zl.def.counter.scope, 'all');
+  assert.equal(zl.def.counter.damageBps, 3000);
+  // Lữ Bố: AoE 117% (đã +30%), tự buff chí mạng 20% + 20% ST chí mạng, hút máu 3%/cấp, phản kích diện rộng — KHÔNG còn choáng.
+  const lb = pvpProfile('lu-bu');
+  assert.equal(lb.def.damageBps, 11700);
+  assert.equal(lb.def.targeting, 'all_enemies');
+  assert.equal(lb.def.stun, 'none');
+  assert.equal(lb.def.stunPerLevelBps, 0);
+  assert.equal(lb.lifestealPerLevelBps, 300);
+  assert.equal(lb.def.counter.scope, 'all');
   // Nhạc Tiến: đánh đơn 290%, xóa buff địch.
   const yj = pvpProfile('yue-jin');
   assert.equal(yj.def.damageBps, 29000);
   assert.ok(yj.def.dispel);
-  // Tân Hiến Anh: AoE 55% + giải choáng.
+  // Tân Hiến Anh: AoE 71.5% (đã +30%) + giải choáng.
   const xx = pvpProfile('xin-xianying');
-  assert.equal(xx.def.damageBps, 5500);
+  assert.equal(xx.def.damageBps, 7150);
   assert.ok(xx.def.cleanse);
   // Gia Cát Quả: giảm ST nhận toàn đội 10% + giải choáng (không hồi máu).
   const zg = pvpProfile('zhuge-guo');
@@ -487,25 +585,54 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(dc.def.damageBps, 11000);
   assert.equal(dc.def.stunPerLevelBps, 800);
   assert.equal(dc.def.debuff.damageDownBps, 2000);
-  // Quách Gia: xóa buff địch + giảm chí mạng địch, sát thương thấp.
+  // Quách Gia: AoE 70% (nhóm AoE thuần buff đồng đội → GIỮ NGUYÊN, không +30%) + tăng 10% HP tối đa toàn đội.
   const gj = pvpProfile('guo-jia');
   assert.equal(gj.def.damageBps, 7000);
-  assert.ok(gj.def.dispel);
-  assert.equal(gj.def.debuff.critDownBps, 1500);
+  assert.equal(gj.def.dispel, false);
+  assert.equal(gj.def.buff.hpBps, 1000);
+  assert.equal(gj.def.buffScope, 'all_allies');
   // Phản kích: Điển Vi đánh trả đơn 50% ST cơ bản, tỉ lệ 3%/cấp.
   const dw = pvpProfile('dian-wei');
   assert.equal(dw.def.counter.damageBps, 5000);
   assert.equal(dw.def.counter.perLevelBps, 300);
   assert.equal(dw.def.counter.scope, 'single');
-  // Hoả công: Chu Du thiêu đốt 30% ST, 4 lượt, cộng dồn 3 lớp.
+  // Hoả công: Chu Du thiêu đốt 50% ST, 4 lượt, cộng dồn 3 lớp; AoE 117% (đã +30%).
   const zyu = pvpProfile('zhou-yu');
-  assert.equal(zyu.def.debuff.burnBps, 3000);
+  assert.equal(zyu.def.damageBps, 11700);
+  assert.equal(zyu.def.debuff.burnBps, 5000);
   assert.equal(zyu.def.debuff.burnRounds, 4);
   assert.equal(zyu.def.debuff.burnMaxLayers, 3);
+  // Chu Du: riêng đòn thiêu đốt được ×1.5 tỷ lệ chí mạng VÀ ST chí mạng.
+  assert.equal(zyu.def.burnCritMulBps, 15000);
+  // Lục Tốn: hút máu cả từ thiêu đốt + giảm HP tối đa địch.
+  const lx = pvpProfile('lu-xun');
+  assert.equal(lx.def.burnLifesteal, true);
+  assert.equal(lx.def.debuff.hpDownBps, 1000);
+  assert.ok(lx.lifestealPerLevelBps > 0, 'Lục Tốn phải có hút máu theo cấp');
   // Thiêu đốt thường (Chu Hoàn): 3 lượt.
   const zh = pvpProfile('zhu-huan');
-  assert.equal(zh.def.debuff.burnBps, 3000);
+  assert.equal(zh.def.debuff.burnBps, 5000);
   assert.equal(zh.def.debuff.burnRounds, 3);
+  // Bảng AoE: nhóm gây sát thương đã +30%; nhóm thuần buff đồng đội (Quách Gia, Bàng Thống, Hoàng Nguyệt Anh) giữ nguyên.
+  const aoes: [string, number][] = [
+    ['cao-cao', 9750],
+    ['sima-yi', 11700],
+    ['xin-xianying', 7150],
+    ['zhuge-liang', 10400],
+    ['sun-ce', 12350],
+    ['zhou-yu', 11700],
+    ['lu-bu', 11700],
+    ['zhang-jiao', 11050],
+    ['meng-huo', 10400],
+    ['guo-jia', 7000],
+    ['pang-tong', 8500],
+    ['huang-yueying', 7500],
+  ];
+  for (const [id, bps] of aoes) {
+    const d = skillDef(id);
+    assert.equal(d.targeting, 'all_enemies', `${id} phải đánh toàn bộ địch`);
+    assert.equal(d.damageBps, bps, `${id}: hệ số AoE chốt`);
+  }
 });
 
 // ===================== HTTP =====================

@@ -58,6 +58,9 @@ export function skillNote(c: PvpCombatDto): string {
     parts.push(`phản kích bị động ${pct(d.counter.damageBps)} sát thương cơ bản lên ${scope}`);
   }
   if (d.selfBurn) parts.push(`tự thiêu đốt bản thân ${d.selfBurnRounds} lượt`);
+  // Thiêu đốt đặc biệt: Chu Du nhân thêm chí mạng cho đòn thiêu đốt, Lục Tốn hút máu cả từ thiêu đốt.
+  if (d.burnCritMulBps) parts.push(`sát thương thiêu đốt +${pct(d.burnCritMulBps - 10000)} tỷ lệ chí mạng và ST chí mạng`);
+  if (d.burnLifesteal) parts.push('hút máu cả từ sát thương thiêu đốt');
   const buff = teamBuffNote(c);
   if (buff) parts.push(buff);
   const debuff = debuffNote(c);

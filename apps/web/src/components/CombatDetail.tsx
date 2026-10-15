@@ -2,6 +2,7 @@ import { For, Show } from 'solid-js';
 import { PVP_PASSIVE_LABELS, PVP_STYLE_LABELS, type PvpCombatDto } from '@tq/shared';
 import { STYLE_COLOR, pct } from '../art.ts';
 import { skillNote } from '../combat-notes.ts';
+import { StyleIcon } from './StyleIcon.tsx';
 
 /**
  * Khối "chi tiết chiến đấu" của một tướng (mục 6.7): phong cách, kỹ năng, nội tại và các chỉ số
@@ -37,7 +38,10 @@ export function CombatDetail(props: { c: PvpCombatDto }) {
       <div class="cmb-row">
         <span class="cmb-key">Phong cách</span>
         <span class="cmb-val">
-          <b style={{ color: STYLE_COLOR[props.c.style] }}>{PVP_STYLE_LABELS[props.c.style]}</b>
+          <b class="cmb-style" style={{ color: STYLE_COLOR[props.c.style] }}>
+            <StyleIcon style={props.c.style} size={12} />
+            {PVP_STYLE_LABELS[props.c.style]}
+          </b>
         </span>
       </div>
       <div class="cmb-row">

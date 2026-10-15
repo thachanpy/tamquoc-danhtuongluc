@@ -1,7 +1,7 @@
 import { For, Match, Show, Switch, createMemo, createSignal, onCleanup, type JSX } from 'solid-js';
-import { FACTIONS, FACTION_LABELS, type CardDto, type RecipientDto } from '@tq/shared';
+import { FACTIONS, FACTION_LABELS, PVP_STYLES, PVP_STYLE_LABELS, type CardDto, type RecipientDto } from '@tq/shared';
 import { api, fetchAllCards, newKey, type ApiError } from '../api.ts';
-import { gen, state } from '../state.ts';
+import { gen, genStyle, state } from '../state.ts';
 import { Card } from '../components/Card.tsx';
 import { groupCardsByGeneral, type UpgradeSort } from '../upgrade-groups.ts';
 import { openCardViewer } from '../viewer.tsx';
@@ -42,6 +42,7 @@ export function CollectionPage(): JSX.Element {
   const [loadError, setLoadError] = createSignal<string | null>(null);
   const [q, setQ] = createSignal('');
   const [faction, setFaction] = createSignal('');
+  const [style, setStyle] = createSignal('');
   const [level, setLevel] = createSignal('');
   const [view, setView] = createSignal('mine');
   const [sort, setSort] = createSignal<UpgradeSort>('level_desc');
@@ -76,7 +77,7 @@ export function CollectionPage(): JSX.Element {
   const matchGeneral = (id: string) => {
     const g = gen(id);
     const fq = fold(q().trim());
-    return (!faction() || g.faction === faction()) && (!fq || fold(g.name).includes(fq));
+    return (!faction() || g.faction === faction()) && (!style() || genStyle(g.id) === style()) && (!fq || fold(g.name).includes(fq));
   };
   const missing = createMemo(() => state.generals.filter((g) => !ownedIds().has(g.id) && matchGeneral(g.id)));
   const filtered = createMemo(() => cards().filter((c) => matchGeneral(c.generalId) && (!level() || c.level === Number(level()))));
@@ -393,6 +394,16 @@ export function CollectionPage(): JSX.Element {
           >
             <option value="">Mọi phe</option>
             <For each={FACTIONS}>{(f) => <option value={f}>{FACTION_LABELS[f]}</option>}</For>
+          </select>
+          <select
+            aria-label="Phong cách"
+            onInput={(e) => {
+              setStyle(e.currentTarget.value);
+              redraw();
+            }}
+          >
+            <option value="">Mọi phong cách</option>
+            <For each={PVP_STYLES}>{(st) => <option value={st}>{PVP_STYLE_LABELS[st]}</option>}</For>
           </select>
           <select
             aria-label="Level"
