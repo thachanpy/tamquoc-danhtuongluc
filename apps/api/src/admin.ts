@@ -157,6 +157,8 @@ export function adminGrantTickets(
     if (prev) return prev;
     const row = getUserRow(ctx, userId);
     if (row.status !== 'approved') throw new AppError(409, 'NOT_APPROVED', 'Tài khoản chưa được duyệt, chưa thể cộng vé.');
+    // Tài khoản quản trị không chơi game => không cộng vé cho admin
+    if (row.is_admin === 1) throw new AppError(409, 'TARGET_IS_ADMIN', 'Không cộng vé cho tài khoản quản trị (admin không chơi game).');
     const nowIso = iso(ctx.now());
     applyTicketDelta(ctx.db, userId, ticketType, amount, 'admin_grant', `admin:${adminId}:${idempotencyKey}`, idempotencyKey, nowIso);
     const result: AdminGrantDto = {

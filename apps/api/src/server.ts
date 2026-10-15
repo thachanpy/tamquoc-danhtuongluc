@@ -78,6 +78,9 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
 
   const auth = async (req: FastifyRequest) => {
     req.userId = authenticate(ctx, bearer(req));
+    req.dailyEvents = null;
+    // Tài khoản quản trị không chơi game (chủ dự án yêu cầu): không ghi đăng nhập/thưởng ngày/nhiệm vụ
+    if (isAdmin(ctx, req.userId)) return;
     // Ngày mới: ghi nhận đăng nhập, thưởng reset 05:00, tự nhận nhiệm vụ ngày cũ (mục 3.10).
     // Lỗi ở đây không được chặn thao tác chính của người chơi; lần request sau sẽ xử lý lại.
     try {
@@ -85,6 +88,13 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
     } catch (err) {
       req.dailyEvents = null;
       req.log.error(err);
+    }
+  };
+  // Thao tác chơi game (quay, ghép, tặng, giftcode, nhiệm vụ, hồi vé): admin bị chặn 403 ADMIN_NOT_PLAYER.
+  const playerAuth = async (req: FastifyRequest) => {
+    await auth(req);
+    if (isAdmin(ctx, req.userId)) {
+      throw new AppError(403, 'ADMIN_NOT_PLAYER', 'Tài khoản quản trị chỉ dùng để quản trị, không tham gia chơi game.');
     }
   };
   // Chỉ admin (users.is_admin = 1). Kiểm tra ở server cho mọi route /api/admin/*.
@@ -112,7 +122,8 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
 
   // ---------- Tài khoản & bộ sưu tập ----------
   app.get('/api/me', { preHandler: auth }, async (req): Promise<MeDto> => {
-    syncRecovery(ctx, req.userId);
+    // Admin không chơi game => không hồi vé
+    if (!isAdmin(ctx, req.userId)) syncRecovery(ctx, req.userId);
     return {
       id: req.userId,
       username: getUsername(ctx, req.userId),
@@ -129,20 +140,20 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
 
   // ---------- Vé ----------
   app.get('/api/tickets', { preHandler: auth }, async (req) => getTickets(ctx, req.userId));
-  app.post('/api/tickets/claim-recovery', { preHandler: auth }, async (req) => ({
+  app.post('/api/tickets/claim-recovery', { preHandler: playerAuth }, async (req) => ({
     ...claimRecovery(ctx, req.userId),
     ...(req.dailyEvents ? { dailyEvents: req.dailyEvents } : {}),
   }));
   // Nút cộng vé thử nghiệm — chỉ hoạt động khi ENABLE_DEV_TOPUP bật (service trả 404 nếu tắt)
   app.post(
     '/api/tickets/dev-topup',
-    { preHandler: auth, schema: { body: schemas.devTopupBody }, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    { preHandler: playerAuth, schema: { body: schemas.devTopupBody }, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (req) => devTopup(ctx, req.userId, (req.body as { idempotencyKey: string }).idempotencyKey),
   );
 
   // ---------- Gacha ----------
   app.get('/api/gacha/config', async () => getGachaConfig());
-  app.post('/api/gacha/draw', { preHandler: auth, schema: { body: schemas.drawBody }, config: strictLimit }, async (req) => {
+  app.post('/api/gacha/draw', { preHandler: playerAuth, schema: { body: schemas.drawBody }, config: strictLimit }, async (req) => {
     const { ticketType, idempotencyKey, count } = req.body as { ticketType: TicketType; idempotencyKey: string; count?: number };
     return draw(ctx, req.userId, ticketType, idempotencyKey, count ?? 1);
   });
@@ -150,12 +161,12 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
   // ---------- Nâng cấp ----------
   app.post(
     '/api/upgrades/preview',
-    { preHandler: auth, schema: { body: schemas.upgradePreviewBody }, config: strictLimit },
+    { preHandler: playerAuth, schema: { body: schemas.upgradePreviewBody }, config: strictLimit },
     async (req) => previewUpgrade(ctx, req.userId, (req.body as { cardIds: number[] }).cardIds),
   );
   app.post(
     '/api/upgrades/attempt',
-    { preHandler: auth, schema: { body: schemas.upgradeAttemptBody }, config: strictLimit },
+    { preHandler: playerAuth, schema: { body: schemas.upgradeAttemptBody }, config: strictLimit },
     async (req) => {
       const { cardIds, idempotencyKey } = req.body as { cardIds: number[]; idempotencyKey: string };
       return attemptUpgrade(ctx, req.userId, cardIds, idempotencyKey);
@@ -164,18 +175,18 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
 
   app.post(
     '/api/upgrades/quick',
-    { preHandler: auth, schema: { body: schemas.quickUpgradeBody }, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    { preHandler: playerAuth, schema: { body: schemas.quickUpgradeBody }, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (req) => quickUpgrade(ctx, req.userId, (req.body as { idempotencyKey: string }).idempotencyKey),
   );
 
   // ---------- Tặng thẻ ----------
-  app.get('/api/users', { preHandler: auth, schema: { querystring: schemas.usersQuery } }, async (req) => {
+  app.get('/api/users', { preHandler: playerAuth, schema: { querystring: schemas.usersQuery } }, async (req) => {
     const { q, limit } = req.query as { q?: string; limit?: number };
     return { items: listRecipients(ctx, req.userId, q ?? '', limit ?? 200) };
   });
   app.post(
     '/api/gifts',
-    { preHandler: auth, schema: { body: schemas.giftBody }, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+    { preHandler: playerAuth, schema: { body: schemas.giftBody }, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (req) => {
       const { toUsername, cardIds, idempotencyKey } = req.body as { toUsername: string; cardIds: number[]; idempotencyKey: string };
       return giftCards(ctx, req.userId, toUsername, cardIds, idempotencyKey);
@@ -183,13 +194,13 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
   );
 
   // ---------- Giftcode (mục 3.9) ----------
-  app.get('/api/giftcodes', { preHandler: auth }, async (req) => ({
+  app.get('/api/giftcodes', { preHandler: playerAuth }, async (req) => ({
     featured: listFeaturedGiftCodes(ctx, req.userId),
     redeemed: listMyRedemptions(ctx, req.userId),
   }));
   app.post(
     '/api/giftcodes/redeem',
-    { preHandler: auth, schema: { body: schemas.giftCodeRedeemBody }, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    { preHandler: playerAuth, schema: { body: schemas.giftCodeRedeemBody }, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (req) => redeemGiftCode(ctx, req.userId, (req.body as { code: string }).code),
   );
 
@@ -237,12 +248,12 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
   );
 
   // ---------- Nhiệm vụ & thành tựu (mục 3.10) ----------
-  app.get('/api/quests', { preHandler: auth, config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req) =>
+  app.get('/api/quests', { preHandler: playerAuth, config: { rateLimit: { max: 120, timeWindow: '1 minute' } } }, async (req) =>
     getQuests(ctx, req.userId),
   );
   app.post(
     '/api/quests/claim',
-    { preHandler: auth, schema: { body: schemas.questClaimBody }, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    { preHandler: playerAuth, schema: { body: schemas.questClaimBody }, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (req) => claimQuests(ctx, req.userId, (req.body as { keys?: string[] } | undefined)?.keys),
   );
 

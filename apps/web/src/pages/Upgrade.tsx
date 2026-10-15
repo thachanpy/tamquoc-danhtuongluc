@@ -241,7 +241,7 @@ export function UpgradePage(): JSX.Element {
       <section class="panel">
         <h2>Ghép {N} thẻ</h2>
         <p class="muted">
-          Chọn đúng {N} thẻ <b>cùng tướng</b> và <b>cùng level</b> (Lv.1–9). Không có thẻ chính/thẻ mồi.
+          Chọn đúng {N} thẻ <b>cùng tướng</b> và <b>cùng level</b> (Lv.1–9).
         </p>
         <div class="quick">
           <Show when={cards()}>

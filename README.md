@@ -113,6 +113,7 @@ Certbot tự thêm cấu hình 443, chuyển hướng 80 → 443 và tự gia h�
 ### 6. Tài khoản admin đầu tiên
 
 - Database mới: người **đăng ký đầu tiên** tự thành admin — đăng ký tài khoản của bạn ngay sau khi chạy.
+- Tài khoản admin **chỉ quản trị, không chơi game** (không quay thẻ, không nhận vé/thẻ, không vào bảng xếp hạng). Muốn chơi thì đăng ký thêm một tài khoản người chơi riêng.
 - Dùng lại database cũ: dừng API (`pm2 stop tamquoc-api`), copy file `.db` vào `data/tamquoc.db`, rồi `pm2 start tamquoc-api`. Tài khoản id nhỏ nhất là admin.
 - Sau đó mọi đăng ký mới phải chờ admin duyệt ở tab **Quản trị**.
 
@@ -181,7 +182,7 @@ apps/web               Vite + PixiJS: quay thẻ, bộ sưu tập, nâng cấp, 
   cấp/thu quyền admin, xem mọi thẻ của mọi người chơi. Migration v6: tài khoản cũ coi như đã duyệt, tài khoản id nhỏ nhất thành admin.
 - **Nhiệm vụ** (tab Nhiệm vụ): nhiệm vụ hằng ngày (chung + theo phe, reset 05:00 giờ Việt Nam), thưởng ngày mới 25 vé,
   điểm danh theo ngày trong tháng và thành tựu dài hạn; bấm Nhận (nhiệm vụ ngày quên nhận được tự nhận khi sang ngày).
-- **Xếp hạng** (tab Xếp hạng): bảng xếp hạng Lực chiến = tổng điểm thẻ đang có (Lv.n = 2^(n−1), Lv.10 = 512);
+- **Xếp hạng** (tab Xếp hạng): bảng xếp hạng Lực chiến = tổng điểm thẻ đang có, mỗi tướng + cấp tính 1 lần (Lv.n = 2^(n−1), Lv.10 = 512);
   top 10 nổi bật, cuộn tới top 100, luôn hiện hạng của mình; không tính tài khoản quản trị.
 - **Giftcode** (tab Giftcode): người chơi nhập code nhận **vé quay** (chỉ vé, không tặng thẻ), mỗi code 1 lần/người,
   hạn sử dụng tuỳ chọn. Admin tạo/bật/tắt code ở tab Quản trị → Giftcode. Có sẵn 4 code tân thủ

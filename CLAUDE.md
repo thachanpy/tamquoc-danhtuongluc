@@ -387,7 +387,7 @@ Quy tắc nút cộng vé thử nghiệm (dành cho giai đoạn mới chơi/pla
 
 Quy tắc admin cộng vé:
 
-- Chỉ admin (mục 3.8); server kiểm tra quyền. Chỉ cộng cho tài khoản đã duyệt (`NOT_APPROVED`).
+- Chỉ admin (mục 3.8); server kiểm tra quyền. Chỉ cộng cho tài khoản đã duyệt (`NOT_APPROVED`) và không phải admin (409 `TARGET_IS_ADMIN`; trang Quản trị ẩn nút Cộng vé ở dòng admin).
 - Admin chọn loại vé (1 trong 5 loại) và số lượng nguyên 1–`ADMIN_GRANT_MAX_TICKETS` (cấu hình game, mặc định 10.000) mỗi lần. Đây là trần mỗi thao tác chống nhập nhầm, không phải trần tồn kho. Không có thao tác trừ vé.
 - Cộng số dư và ghi ledger trong một transaction. Ledger reason `admin_grant`, `reference_id = admin:{adminId}:{key}`, unique index chặn ghi trùng.
 - Idempotency key gắn với admin; retry trả kết quả cũ; cùng key với yêu cầu khác → 409.
@@ -420,6 +420,9 @@ Quyền admin:
 
 - Cột `users.is_admin`. Mọi route `/api/admin/*` kiểm tra ở server (chưa đăng nhập 401, không phải admin 403 `FORBIDDEN`).
 - Admin cấp/thu quyền admin cho người chơi đã duyệt; không tự thu quyền của chính mình (`ADMIN_SELF`), nên luôn còn ít nhất 1 admin.
+
+- **Tài khoản admin chỉ thấy trang Quản trị** (chủ dự án yêu cầu): giao diện admin chỉ có tab Quản trị (mọi hash khác chuyển về `#admin`), không có thanh vé/đồng hồ hồi vé, popup giftcode, badge và toast nhiệm vụ. Người chơi thường thấy mọi tab trừ Quản trị.
+- **Admin không chơi game, chỉ quản trị** (chủ dự án yêu cầu): server chặn mọi thao tác người chơi của admin bằng 403 `ADMIN_NOT_PLAYER` (quay thẻ, nhận vé hồi, cộng vé thử nghiệm, nâng cấp/nâng cấp nhanh, tặng thẻ và danh sách người nhận, giftcode, nhiệm vụ). Admin không được xử lý ngày mới (`touchDaily`: không ghi `login_days`, không thưởng reset 05:00, không tự nhận nhiệm vụ) và `/api/me` không đồng bộ vé hồi cho admin. Không cộng vé cho admin (`TARGET_IS_ADMIN`), không tặng thẻ cho admin (`RECIPIENT_IS_ADMIN`), admin không có trong danh sách người nhận và bảng xếp hạng. Vé/thẻ admin đã có từ trước được giữ nguyên (không xoá). Client admin không gọi `claim-recovery` lúc vào game.
 
 Trang Quản trị (`apps/web/src/pages/Admin.tsx`, tab "Quản trị" chỉ hiện với admin, có badge số tài khoản chờ duyệt):
 
@@ -727,7 +730,7 @@ Trang Nâng cấp có nút **"Nâng cấp nhanh (≤ Lv.5)"** do chủ dự án 
 
 Người chơi có thể tặng thẻ cho bất kỳ người chơi nào khác, do chủ dự án yêu cầu.
 
-- Người nhận xác định bằng tên đăng nhập (không phân biệt hoa thường). Không được tặng cho chính mình.
+- Người nhận xác định bằng tên đăng nhập (không phân biệt hoa thường). Không được tặng cho chính mình, không tặng cho tài khoản quản trị (`RECIPIENT_IS_ADMIN`, mục 3.8).
 - Mỗi lần tặng từ 1 đến `GIFT_MAX_CARDS` thẻ (cấu hình server, mặc định **20**).
 - Thẻ thuộc mọi level đều tặng được, kể cả Lv.10. Chỉ tặng được thẻ đang active của chính mình; thẻ đã bị ghép (tiêu thụ) không tặng được.
 - Người nhận có thẻ ngay, không cần chấp nhận. Thẻ đã tặng không lấy lại được.
@@ -737,7 +740,7 @@ Người chơi có thể tặng thẻ cho bất kỳ người chơi nào khác, 
 - Không tặng vé; vé vẫn không thể chuyển hoặc quy đổi (mục 3.4).
 - Lịch sử hiển thị cho cả hai phía: người gửi thấy "Tặng N thẻ cho X", người nhận thấy "Nhận N thẻ từ Y", kèm danh sách thẻ (snapshot tướng + level tại thời điểm tặng).
 - UI: tặng thẻ nằm **trong trang Bộ sưu tập** (không còn tab riêng; link `#gift` cũ tự chuyển về Bộ sưu tập). Bấm nút **🎁 Tặng thẻ** để bật chế độ chọn thẻ; đếm số đã chọn (tối đa 20); bước xác nhận liệt kê thẻ sắp tặng và cảnh báo thẻ Lv.6+; khóa nút khi đang xử lý.
-- Ô người nhận là dropdown có tìm kiếm, liệt kê **mọi người chơi** (trừ chính mình). Thứ tự: người có giao dịch tặng/nhận thẻ với mình **gần nhất** lên đầu (kèm nhãn "Gần đây · x phút trước"), người chưa từng giao dịch xếp sau theo tên A→Z. Chỉ gửi được khi tên khớp một người trong danh sách. Sau khi tặng, danh sách tải lại để người vừa nhận lên đầu.
+- Ô người nhận là dropdown có tìm kiếm, liệt kê **mọi người chơi** (trừ chính mình và tài khoản quản trị). Thứ tự: người có giao dịch tặng/nhận thẻ với mình **gần nhất** lên đầu (kèm nhãn "Gần đây · x phút trước"), người chưa từng giao dịch xếp sau theo tên A→Z. Chỉ gửi được khi tên khớp một người trong danh sách. Sau khi tặng, danh sách tải lại để người vừa nhận lên đầu.
 - Rủi ro đã biết: khi `ENABLE_DEV_TOPUP` bật, người chơi có thể tạo tài khoản phụ để cày vé rồi tặng thẻ cho tài khoản chính. Phải tắt cờ này khi chạy thật.
 
 ## 6. Giao diện và trải nghiệm
@@ -825,7 +828,7 @@ Hiển thị lịch sử phân trang:
 
 Do chủ dự án yêu cầu. Tab **Xếp hạng** (`#leaderboard`, `apps/web/src/pages/Leaderboard.tsx`), chỉ đọc, không ảnh hưởng vé/thẻ.
 
-- Chỉ số duy nhất: **Lực chiến** = tổng điểm các thẻ **đang active** của người chơi; điểm mỗi thẻ theo level ở `LEADERBOARD_POWER_BY_LEVEL` (game-config): Lv.n = 2^(n−1) (Lv.1 = 1, Lv.2 = 2, Lv.3 = 4, …, Lv.10 = 512). Validate khi khởi động: đủ Lv.1–10, nguyên dương, không giảm theo level.
+- Chỉ số duy nhất: **Lực chiến** = tổng điểm các thẻ **đang active** của người chơi, **mỗi cặp (tướng, cấp) chỉ tính 1 lần** (chủ dự án yêu cầu: 5 thẻ Tào Tháo Lv.5 tính như 1 thẻ; Tào Tháo Lv.5 và Lưu Bị Lv.5 vẫn tính riêng; số thẻ hiển thị vẫn là tổng thẻ); điểm mỗi thẻ theo level ở `LEADERBOARD_POWER_BY_LEVEL` (game-config): Lv.n = 2^(n−1) (Lv.1 = 1, Lv.2 = 2, Lv.3 = 4, …, Lv.10 = 512). Validate khi khởi động: đủ Lv.1–10, nguyên dương, không giảm theo level.
 - Server tính trực tiếp từ `user_cards` mỗi lần gọi (không lưu bảng riêng). Thẻ đã tiêu thụ không tính; thẻ tặng đi tính cho người nhận.
 - Chỉ xếp hạng tài khoản đã duyệt, **không phải admin** (chủ dự án yêu cầu ẩn admin) và có ít nhất 1 thẻ.
 - Đồng Lực chiến → đồng hạng (`RANK`); trong cùng hạng sắp theo level cao nhất giảm dần rồi tên A→Z.
@@ -1110,8 +1113,8 @@ Server phải:
 
 ### 8.4b. Tặng thẻ
 
-- `POST /api/gifts`: body `{ toUsername, cardIds[], idempotencyKey }`. Server kiểm tra người nhận tồn tại và khác người gửi, số thẻ 1–20, không trùng ID, mọi thẻ thuộc người gửi và còn active, rồi đổi chủ nguyên tử. Lỗi: `RECIPIENT_NOT_FOUND`, `GIFT_TO_SELF`, `GIFT_CARD_COUNT`, `DUPLICATE_CARD`, `CARD_NOT_FOUND`, `CARD_CONSUMED`. Có rate limit.
-- `GET /api/users?q=&limit=`: danh sách người nhận cho dropdown, mọi người chơi trừ chính mình, sắp theo lần tặng/nhận thẻ gần nhất với mình rồi theo tên; `q` lọc theo tên không phân biệt hoa thường. Cần đăng nhập. Chỉ trả `username` và `lastGiftAt`, không lộ thông tin khác.
+- `POST /api/gifts`: body `{ toUsername, cardIds[], idempotencyKey }`. Server kiểm tra người nhận tồn tại và khác người gửi, số thẻ 1–20, không trùng ID, mọi thẻ thuộc người gửi và còn active, rồi đổi chủ nguyên tử. Lỗi: `RECIPIENT_NOT_FOUND`, `GIFT_TO_SELF`, `RECIPIENT_IS_ADMIN`, `GIFT_CARD_COUNT`, `DUPLICATE_CARD`, `CARD_NOT_FOUND`, `CARD_CONSUMED`. Có rate limit.
+- `GET /api/users?q=&limit=`: danh sách người nhận cho dropdown, mọi người chơi trừ chính mình và admin, sắp theo lần tặng/nhận thẻ gần nhất với mình rồi theo tên; `q` lọc theo tên không phân biệt hoa thường. Cần đăng nhập. Chỉ trả `username` và `lastGiftAt`, không lộ thông tin khác.
 - `GET /api/gacha/config` trả thêm `giftMaxCards`.
 - `GET /api/history?kind=gift` lọc lịch sử tặng/nhận thẻ.
 
@@ -1123,7 +1126,8 @@ Server phải:
 - `POST /api/admin/users/:id/approve`, `POST /api/admin/users/:id/reject`.
 - `POST /api/admin/users/:id/admin`: body `{ isAdmin }`.
 - `GET /api/admin/settings` → `{ requireApproval }`; `POST /api/admin/settings` body `{ requireApproval }` (bật/tắt duyệt tài khoản).
-- `POST /api/admin/tickets/grant`: body `{ userId, ticketType, amount, idempotencyKey }`. Lỗi: `INVALID_AMOUNT`, `NOT_APPROVED`, `IDEMPOTENCY_KEY_REUSED`.
+- `POST /api/admin/tickets/grant`: body `{ userId, ticketType, amount, idempotencyKey }`. Lỗi: `INVALID_AMOUNT`, `NOT_APPROVED`, `TARGET_IS_ADMIN`, `IDEMPOTENCY_KEY_REUSED`.
+- Route chơi game gọi bằng tài khoản admin → 403 `ADMIN_NOT_PLAYER` (mục 3.8).
 - `GET /api/admin/cards?userId=&faction=&level=&q=&sort=&page=&pageSize=`: thẻ active của mọi người chơi kèm `username`.
 - Có rate limit cho các thao tác ghi.
 
@@ -1273,6 +1277,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 - Bật: tài khoản đầu tiên là admin, được duyệt; tài khoản sau `pending`, không token, đăng nhập → `ACCOUNT_PENDING`.
 - Duyệt cấp đúng 100 vé, mốc hồi tính từ lúc duyệt; từ chối xoá đăng ký, tên dùng lại được.
 - Route admin: 401 khi chưa đăng nhập, 403 khi không phải admin; không tự thu quyền admin.
+- Admin không chơi game: thao tác người chơi → 403 `ADMIN_NOT_PLAYER`, không có thưởng ngày; không cộng vé cho admin (`TARGET_IS_ADMIN`); không tặng thẻ cho admin (`RECIPIENT_IS_ADMIN`); danh sách người nhận không có admin.
 - Admin xem được thẻ của mọi người chơi, lọc theo người chơi.
 - Migration v6 giữ nguyên dữ liệu, tài khoản cũ đã duyệt, id nhỏ nhất là admin.
 
@@ -1289,7 +1294,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 
 ### 10.5e. Bảng xếp hạng
 
-- Lực chiến = tổng 2^(lv−1) các thẻ active; thẻ đã tiêu thụ không tính.
+- Lực chiến = tổng 2^(lv−1) của các cặp (tướng, cấp) khác nhau đang active (thẻ trùng tướng + cấp không cộng thêm); thẻ đã tiêu thụ không tính.
 - Đồng điểm đồng hạng; trong cùng hạng level cao nhất xếp trước.
 - Admin không xuất hiện, `me` = null; người chưa có thẻ có `rank` null.
 - Tối đa 100 người; hạng của mình ngoài top vẫn trả về đúng.
@@ -1340,7 +1345,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 - Mọi danh sách thẻ (Bộ sưu tập, Nâng cấp, Quản trị) mặc định sắp xếp level cao nhất.
 - Nút Nâng cấp nhanh hiển thị số cặp có thể ghép, bảng tỷ lệ Lv.1–5, bước xác nhận, khóa khi đang xử lý và tổng kết sau khi xong.
 - Bộ sưu tập gom thẻ theo tướng; tặng thẻ nằm trong Bộ sưu tập với dropdown người nhận có tìm kiếm, sắp theo giao dịch gần nhất.
-- Đăng ký hiển thị thông báo chờ duyệt; tab Quản trị chỉ hiện với admin.
+- Đăng ký hiển thị thông báo chờ duyệt; tab Quản trị chỉ hiện với admin; admin chỉ thấy tab Quản trị (không có tab game, thanh vé).
 - Có tab Giftcode; popup lần đầu đăng nhập mời nhập code gợi ý.
 - Có tab Xếp hạng: top 10 nổi bật, cuộn tới top 100, luôn hiện hạng của mình; không có admin.
 - Có tab Nhiệm vụ (Hằng ngày / Điểm danh / Thành tựu) với nút Nhận, Nhận tất cả, badge số phần thưởng chờ nhận, đồng hồ tới 05:00; toast khi có thưởng ngày mới hoặc tự nhận.
@@ -1404,7 +1409,7 @@ Thứ tự ưu tiên:
 - Nâng cấp thành công tiêu thụ 2 thẻ và tạo 1 thẻ cùng tướng ở level cao hơn đúng 1.
 - Nâng cấp thất bại tiêu thụ 2 thẻ và tạo 1 thẻ cùng tướng theo phân phối kết quả thất bại riêng theo level đầu vào.
 - Bảng phân phối thất bại ưu tiên giảm cảm giác mất tiến trình, nhất là ở level cao.
-- Bảng xếp hạng Lực chiến (tổng 2^(lv−1) các thẻ), top 100, ẩn admin.
+- Bảng xếp hạng Lực chiến (tổng 2^(lv−1), mỗi tướng + cấp tính 1 lần), top 100, ẩn admin.
 - Mọi kết quả game do backend xác định.
 - Database SQLite, API Fastify, frontend PixiJS.
 - Mọi thao tác quan trọng có transaction, lịch sử và cơ chế chống request trùng.

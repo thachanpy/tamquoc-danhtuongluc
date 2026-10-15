@@ -351,9 +351,12 @@ function UsersPane(props: { alive: () => boolean; viewCards: (userId: number) =>
             when={u.status === 'pending'}
             fallback={
               <>
-                <button class="btn small" data-act="grant-open" disabled={busy()} onClick={() => toggleGrant(u.id)}>
-                  + Cộng vé
-                </button>
+                {/* Admin không chơi game => không cộng vé cho admin (server trả TARGET_IS_ADMIN) */}
+                <Show when={!u.isAdmin}>
+                  <button class="btn small" data-act="grant-open" disabled={busy()} onClick={() => toggleGrant(u.id)}>
+                    + Cộng vé
+                  </button>
+                </Show>
                 <button
                   class="btn ghost small"
                   data-act="cards"

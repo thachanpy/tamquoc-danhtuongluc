@@ -14,7 +14,7 @@ import { seedGenerals } from '../src/seed.ts';
 import { getLeaderboard } from '../src/leaderboard.ts';
 import { runMigrations } from '../src/migrations.ts';
 import { DatabaseSync } from 'node:sqlite';
-import { RECOVERY_CAP_PER_TYPE, DRAW_ALL_MAX } from '@tq/game-config';
+import { RECOVERY_CAP_PER_TYPE, DRAW_ALL_MAX, ROSTER } from '@tq/game-config';
 import { SIGNUP_BONUS_TICKETS as BONUS, DEV_TOPUP_TICKETS, UPGRADE_INPUT_COUNT, RECOVERY_INTERVAL_MS, GIFT_MAX_CARDS } from '@tq/game-config';
 
 /** Đăng ký + duyệt ngay (tài khoản đầu tiên tự được duyệt; các tài khoản sau được admin duyệt). */
@@ -894,6 +894,7 @@ test('nâng cấp nhanh chỉ dùng thẻ của chính người chơi', () => {
 
 function giftSetup(n: number, level = 1) {
   const h = makeCtx();
+  register(h.ctx, 'boss', 'secret123'); // tài khoản đầu tiên = admin (không chơi game)
   const alice = register(h.ctx, 'alice', 'secret123').userId;
   const bob = register(h.ctx, 'bob', 'secret123').userId;
   const ids = Array.from({ length: n }, (_, i) => insertCard(h.ctx, alice, i % 2 ? 'liu-bei' : 'cao-cao', level + (i % 3)));
@@ -933,6 +934,7 @@ test('tặng thẻ: từ chối tặng chính mình, người nhận không tồ
   const h = giftSetup(4);
   assert.throws(() => giftCards(h.ctx, h.alice, 'alice', h.ids, 'g-00000001'), errCode('GIFT_TO_SELF'));
   assert.throws(() => giftCards(h.ctx, h.alice, 'nobody', h.ids, 'g-00000002'), errCode('RECIPIENT_NOT_FOUND'));
+  assert.throws(() => giftCards(h.ctx, h.alice, 'boss', h.ids, 'g-00000006'), errCode('RECIPIENT_IS_ADMIN'));
   assert.throws(() => giftCards(h.ctx, h.bob, 'alice', h.ids, 'g-00000003'), errCode('CARD_NOT_FOUND'));
   assert.throws(() => giftCards(h.ctx, h.alice, 'bob', [h.ids[0]!, h.ids[0]!], 'g-00000004'), errCode('DUPLICATE_CARD'));
   // Thẻ đã bị ghép (tiêu thụ) thì không tặng được; cả giao dịch bị huỷ
@@ -957,6 +959,7 @@ test('tặng thẻ: retry cùng key trả kết quả cũ, không chuyển lần
 
 test('danh sách người nhận: mọi người trừ mình, người giao dịch gần nhất lên đầu, còn lại A→Z, có tìm kiếm', () => {
   const h = makeCtx();
+  register(h.ctx, 'boss', 'secret123'); // admin: không có trong danh sách người nhận
   const me = register(h.ctx, 'me_user', 'secret123').userId;
   for (const n of ['zoe', 'anna', 'bob', 'carl']) register(h.ctx, n, 'secret123');
   const carl = (h.ctx.db.prepare("SELECT id FROM users WHERE username = 'carl'").get() as { id: number }).id;
@@ -1126,7 +1129,7 @@ test('giftcode nguyên tử: lỗi giữa chừng => không cộng vé nào, ch�
 
 // ======================= Bảng xếp hạng =======================
 
-test('leaderboard: Lực chiến = tổng 2^(lv-1), đồng điểm đồng hạng, ẩn admin, bỏ thẻ đã tiêu thụ', () => {
+test('leaderboard: Lực chiến = tổng 2^(lv-1) mỗi (tướng, cấp) tính 1 lần, đồng điểm đồng hạng, ẩn admin, bỏ thẻ đã tiêu thụ', () => {
   const { ctx } = makeCtx();
   const admin = register(ctx, 'boss', 'secret123').userId; // tài khoản đầu tiên = admin
   const a = register(ctx, 'alice', 'secret123').userId;
@@ -1137,10 +1140,11 @@ test('leaderboard: Lực chiến = tổng 2^(lv-1), đồng điểm đồng hạ
   insertCard(ctx, a, 'cao-cao', 10); // 512
   insertCard(ctx, a, 'liu-bei', 1); // +1 => 513
   insertCard(ctx, b, 'liu-bei', 9); // 256
-  insertCard(ctx, b, 'liu-bei', 9); // 512
-  const used = insertCard(ctx, b, 'liu-bei', 1);
+  insertCard(ctx, b, 'liu-bei', 9); // cùng tướng + cùng cấp => không cộng thêm
+  insertCard(ctx, b, 'cao-cao', 9); // tướng khác cùng cấp => +256 = 512
+  const used = insertCard(ctx, b, 'zhao-yun', 1);
   ctx.db.prepare("UPDATE user_cards SET status = 'consumed', consumed_at = 'x' WHERE id = ?").run(used); // không tính
-  insertCard(ctx, c, 'sun-quan', 10); // 512, max Lv10 => đứng trên bob trong cùng hạng
+  for (let i = 0; i < 5; i++) insertCard(ctx, c, 'sun-quan', 10); // 5 thẻ Tôn Quyền Lv.10 => chỉ 512; max Lv10 => trên bob
 
   const lb = getLeaderboard(ctx, b);
   assert.equal(lb.totalRanked, 3);
@@ -1153,7 +1157,8 @@ test('leaderboard: Lực chiến = tổng 2^(lv-1), đồng điểm đồng hạ
     ],
   );
   assert.equal(lb.items.find((e) => e.isMe)?.username, 'bob');
-  assert.deepEqual(lb.me, { rank: 2, username: 'bob', power: 512, cardCount: 2, maxLevel: 9, isMe: true });
+  assert.deepEqual(lb.me, { rank: 2, username: 'bob', power: 512, cardCount: 3, maxLevel: 9, isMe: true });
+  assert.equal(lb.items.find((e) => e.username === 'carol')!.cardCount, 5); // số thẻ vẫn đếm đủ
   assert.equal(lb.powerByLevel[10], 512);
 
   // Admin xem: không có hạng của mình, không xuất hiện trong bảng
@@ -1170,9 +1175,11 @@ test('leaderboard: tối đa 100 người, hạng của mình ngoài top vẫn t
   const { ctx } = makeCtx();
   register(ctx, 'boss', 'secret123');
   let last = 0;
+  // Cặp (tướng, cấp) khác nhau: 100 tướng Lv.1 + 6 tướng Lv.2 => p000 nhiều cặp nhất, Lực chiến giảm dần
+  const pairs = [...ROSTER.map((g) => [g.id, 1] as const), ...ROSTER.slice(0, 6).map((g) => [g.id, 2] as const)];
   for (let i = 0; i < 105; i++) {
     const id = register(ctx, `p${String(i).padStart(3, '0')}`, 'secret123').userId;
-    for (let k = 0; k <= 105 - i; k++) insertCard(ctx, id, 'cao-cao', 1); // p000 nhiều thẻ nhất
+    for (let k = 0; k <= 105 - i; k++) insertCard(ctx, id, pairs[k]![0], pairs[k]![1]);
     last = id;
   }
   const lb = getLeaderboard(ctx, last);

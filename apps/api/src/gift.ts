@@ -33,10 +33,12 @@ export function giftCards(
     const prev = findIdempotent<GiftResultDto>(ctx.db, fromUserId, 'gift_cards', idempotencyKey, requestHash);
     if (prev) return prev;
 
-    const to = ctx.db.prepare(`SELECT id, username FROM users WHERE username = ? AND status = 'approved'`).get(toUsername) as
-      | { id: number; username: string }
-      | undefined;
+    const to = ctx.db
+      .prepare(`SELECT id, username, is_admin FROM users WHERE username = ? AND status = 'approved'`)
+      .get(toUsername) as { id: number; username: string; is_admin: number } | undefined;
     if (!to) throw new AppError(404, 'RECIPIENT_NOT_FOUND', `Không tìm thấy người chơi "${toUsername}".`);
+    // Tài khoản quản trị không chơi game => không nhận thẻ tặng
+    if (to.is_admin === 1) throw new AppError(400, 'RECIPIENT_IS_ADMIN', 'Không thể tặng thẻ cho tài khoản quản trị.');
     if (to.id === fromUserId) throw new AppError(400, 'GIFT_TO_SELF', 'Không thể tặng thẻ cho chính mình.');
 
     const rows = ctx.db
@@ -86,7 +88,7 @@ export function listRecipients(ctx: GameContext, userId: number, q = '', limit =
               (SELECT MAX(g.created_at) FROM card_gifts g
                 WHERE (g.from_user_id = $me AND g.to_user_id = u.id) OR (g.from_user_id = u.id AND g.to_user_id = $me)) AS last_gift_at
          FROM users u
-        WHERE u.id <> $me AND u.status = 'approved' AND u.username LIKE $q ESCAPE '\\'
+        WHERE u.id <> $me AND u.status = 'approved' AND u.is_admin = 0 AND u.username LIKE $q ESCAPE '\\'
         ORDER BY last_gift_at IS NULL, last_gift_at DESC, u.username COLLATE NOCASE ASC
         LIMIT $limit`,
     )

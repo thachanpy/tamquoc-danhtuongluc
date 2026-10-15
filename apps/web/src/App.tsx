@@ -59,21 +59,22 @@ export function App() {
     }
     setPhase({ kind: 'loading' });
     try {
-      // Nhận các mốc chưa xử lý ngay khi vào (offline vẫn tích lũy) — server quyết định.
-      const claimed = await api.claimRecovery();
       const [me, generals, config] = await Promise.all([api.me(), api.generals(), api.gachaConfig()]);
+      // Người chơi: nhận các mốc chưa xử lý ngay khi vào (offline vẫn tích lũy) — server quyết định.
+      // Tài khoản quản trị không chơi game (server chặn ADMIN_NOT_PLAYER) nên bỏ qua.
+      const claimed = me.isAdmin ? null : await api.claimRecovery();
       state.username = me.username;
       state.isAdmin = me.isAdmin;
       state.features = me.features;
       state.generals = generals.items;
       state.generalsById = new Map(generals.items.map((g) => [g.id, g]));
       state.config = config;
-      setTickets(me.tickets);
+      setTickets(claimed ?? me.tickets);
       setPhase({ kind: 'game' });
-      if (claimed.grantedTotal > 0) toast(`Nhận ${claimed.grantedTotal} vé hồi trong lúc vắng mặt`);
-      // Request đầu tiên trong ngày (claimRecovery hoặc me) mang sự kiện ngày mới
-      const daily = claimed.dailyEvents ?? me.dailyEvents;
-      if (daily) setTimeout(() => showDailyEvents(daily), claimed.grantedTotal > 0 ? 4200 : 0);
+      if (claimed && claimed.grantedTotal > 0) toast(`Nhận ${claimed.grantedTotal} vé hồi trong lúc vắng mặt`);
+      // Request đầu tiên trong ngày (me hoặc claimRecovery) mang sự kiện ngày mới
+      const daily = me.dailyEvents ?? claimed?.dailyEvents;
+      if (claimed && daily) setTimeout(() => showDailyEvents(daily), claimed.grantedTotal > 0 ? 4200 : 0);
       void refreshPendingBadge();
     } catch (e) {
       const err = e as ApiError;
@@ -140,7 +141,7 @@ function Login(props: { message?: string; info?: JSX.Element; onLogin: () => Pro
         setToken(r.token);
         await props.onLogin();
         const total = TICKET_TYPES.reduce((s, k) => s + r.signupBonus[k], 0);
-        toast(
+        if (!state.isAdmin) toast(
           `Quà tân thủ: ${total} vé — ${TICKET_TYPES.filter((k) => r.signupBonus[k])
             .map((k) => `${TICKET_LABELS[k]} ×${r.signupBonus[k]}`)
             .join(', ')}`,
@@ -205,10 +206,12 @@ function Login(props: { message?: string; info?: JSX.Element; onLogin: () => Pro
 // ======================= Khung game: thanh trên, tab, trang =======================
 
 function readRoute(): PageId {
+  // Tài khoản quản trị chỉ thấy trang Quản trị (chủ dự án yêu cầu)
+  if (state.isAdmin) return 'admin';
   const raw = location.hash.slice(1) || 'collection';
   const id = (raw === 'gift' ? 'collection' : raw) as PageId;
   const p = PAGES[id] as PageDef | undefined;
-  return p && (!p.adminOnly || state.isAdmin) ? id : 'collection';
+  return p && !p.adminOnly ? id : 'collection';
 }
 
 function Shell(props: { onLogout: () => void }) {
@@ -229,7 +232,7 @@ function Shell(props: { onLogout: () => void }) {
     // Mobile: thanh tab cuộn ngang => đưa tab đang chọn vào tầm nhìn
     queueMicrotask(() => nav.querySelector<HTMLAnchorElement>(`[data-tab="${id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
     // Quay/ghép ở trang khác có thể làm xong nhiệm vụ => cập nhật badge khi đổi trang
-    if (id !== 'quests') void refreshQuestBadge();
+    if (id !== 'quests' && !state.isAdmin) void refreshQuestBadge();
   });
 
   onMount(() => {
@@ -239,7 +242,7 @@ function Shell(props: { onLogout: () => void }) {
     const ro = new ResizeObserver(sync);
     ro.observe(head);
     onCleanup(() => ro.disconnect());
-    void maybeShowGiftCodePopup();
+    if (!state.isAdmin) void maybeShowGiftCodePopup();
   });
 
   const logout = async () => {
@@ -248,7 +251,8 @@ function Shell(props: { onLogout: () => void }) {
     props.onLogout();
   };
 
-  const tabs = (Object.entries(PAGES) as [PageId, PageDef][]).filter(([, p]) => !p.adminOnly || state.isAdmin);
+  // Admin chỉ có tab Quản trị; người chơi có mọi tab trừ Quản trị
+  const tabs = (Object.entries(PAGES) as [PageId, PageDef][]).filter(([, p]) => !!p.adminOnly === state.isAdmin);
 
   return (
     <>
@@ -258,7 +262,9 @@ function Shell(props: { onLogout: () => void }) {
             <img class="logo" src="/icons/icon-192.png" alt="" aria-hidden="true" />
             Tam Quốc<i class="brand-sep">:</i> <span>Danh Tướng Lục</span>
           </div>
-          <TicketsBar />
+          <Show when={!state.isAdmin}>
+            <TicketsBar />
+          </Show>
           <div class="user">
             <MusicControl />
             <span>{state.username}</span>

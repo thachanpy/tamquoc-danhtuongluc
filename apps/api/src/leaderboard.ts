@@ -4,7 +4,9 @@ import { iso, type GameContext } from './context.ts';
 
 /**
  * Bảng xếp hạng Lực chiến (mục 6.6) — chỉ đọc, tính trực tiếp từ thẻ đang active.
- * - Lực chiến = tổng điểm các thẻ đang có, điểm theo level lấy từ LEADERBOARD_POWER_BY_LEVEL (Lv.n = 2^(n-1)).
+ * - Lực chiến = tổng điểm theo LEADERBOARD_POWER_BY_LEVEL (Lv.n = 2^(n-1)) của các cặp (tướng, cấp) KHÁC NHAU đang có:
+ *   mỗi tướng + cấp chỉ tính 1 lần (chủ dự án yêu cầu) — VD 5 thẻ Tào Tháo Lv.5 tính 1 lần,
+ *   nhưng Tào Tháo Lv.5 và Lưu Bị Lv.5 tính riêng. Số thẻ (cardCount) vẫn là tổng thẻ đang có.
  * - Chỉ xếp hạng tài khoản đã duyệt, KHÔNG phải admin, và có ít nhất 1 thẻ.
  * - Đồng Lực chiến => đồng hạng (RANK). Trong cùng hạng: level cao nhất giảm dần, rồi tên A→Z.
  */
@@ -14,9 +16,13 @@ const POWER_CASE = `CASE c.level ${Object.entries(LEADERBOARD_POWER_BY_LEVEL)
   .map(([lv, p]) => `WHEN ${Number(lv)} THEN ${Number(p)}`)
   .join(' ')} ELSE 0 END`;
 
-const RANKED = `WITH s AS (
-    SELECT u.id, u.username, SUM(${POWER_CASE}) AS power, COUNT(*) AS card_count, MAX(c.level) AS max_level
-      FROM users u JOIN user_cards c ON c.user_id = u.id AND c.status = 'active'
+const RANKED = `WITH g AS (
+    SELECT c.user_id, c.general_id, c.level, COUNT(*) AS n
+      FROM user_cards c WHERE c.status = 'active'
+     GROUP BY c.user_id, c.general_id, c.level
+  ), s AS (
+    SELECT u.id, u.username, SUM(${POWER_CASE}) AS power, SUM(c.n) AS card_count, MAX(c.level) AS max_level
+      FROM users u JOIN g c ON c.user_id = u.id
      WHERE u.status = 'approved' AND u.is_admin = 0
      GROUP BY u.id
   ), r AS (
