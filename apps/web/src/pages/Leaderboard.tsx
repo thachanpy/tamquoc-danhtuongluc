@@ -87,7 +87,7 @@ export function LeaderboardPage() {
     const lv = d.powerByLevel;
     return (
       `Lực chiến = tổng điểm các thẻ đang có, mỗi tướng + cấp chỉ tính 1 lần (5 thẻ Tào Tháo Lv.5 tính như 1): Lv.1 = ${lv[1]} · Lv.2 = ${lv[2]} · Lv.3 = ${lv[3]} · … · Lv.10 = ${num(lv[10] ?? 0)}. ` +
-      `Ghép thẻ lên level cao để leo hạng. Đồng điểm thì đồng hạng. Không tính tài khoản quản trị.`
+      `Ghép thẻ lên level cao để leo hạng. Đồng điểm thì đồng hạng.`
     );
   };
 
