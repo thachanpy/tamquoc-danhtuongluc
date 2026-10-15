@@ -473,6 +473,18 @@ CREATE INDEX idx_gacha_user_time ON gacha_history(user_id, created_at);
 CREATE INDEX idx_upgrade_user_time ON upgrade_history(user_id, created_at);
 `,
   },
+  {
+    // Hồ sơ người chơi (mục 3.11, chủ dự án yêu cầu): tên hiển thị + ảnh đại diện.
+    // - display_name mặc định = username (tài khoản cũ lấy luôn username).
+    // - avatar: data URL ảnh tự tải (đã thu nhỏ ở client) hoặc đường dẫn chân dung tướng /generals/{artKey}.jpg; NULL = mặc định.
+    version: 13,
+    name: 'user_profile',
+    sql: `
+ALTER TABLE users ADD COLUMN display_name TEXT;
+ALTER TABLE users ADD COLUMN avatar TEXT;
+UPDATE users SET display_name = username;
+`,
+  },
 ];
 
 /** target: chỉ chạy tới version này (dùng khi test migration). */

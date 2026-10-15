@@ -16,18 +16,12 @@ import {
   rollSuccess,
   rollLevel,
 } from '@tq/game-config';
-import { AppError, iso, sha256, findIdempotent, saveIdempotent, type GameContext } from './context.ts';
-import { tx, type DB } from './db.ts';
-
-interface CardRow {
-  id: number;
-  user_id: number;
-  general_id: string;
-  level: number;
-  status: string;
-}
-
-const marks = (ids: number[]) => ids.map(() => '?').join(',');
+import { AppError, type GameContext } from '../context.ts';
+import { iso, sha256 } from '../utils.ts';
+import { tx, type DB } from '../db.ts';
+import { findCardsByIds, consumeActiveCards, attachConsumedByUpgrade, insertCard, listActiveCardsUpTo } from '../repositories/card.repository.ts';
+import { insertUpgrade } from '../repositories/upgrade.repository.ts';
+import { findIdempotent, saveIdempotent } from '../repositories/idempotency.repository.ts';
 
 function normalizeIds(cardIds: number[]): number[] {
   const n = UPGRADE_INPUT_COUNT;
@@ -43,9 +37,7 @@ function normalizeIds(cardIds: number[]): number[] {
 
 /** Kiểm tra các thẻ đầu vào theo mục 5.1/8.4 và trả về (generalId, level). Không ghi dữ liệu. */
 function loadAndValidate(db: DB, userId: number, ids: number[]): { generalId: string; level: number } {
-  const rows = db
-    .prepare(`SELECT id, user_id, general_id, level, status FROM user_cards WHERE id IN (${marks(ids)})`)
-    .all(...ids) as unknown as CardRow[];
+  const rows = findCardsByIds(db, ids);
   // Không phân biệt "không tồn tại" và "của người khác" để tránh lộ thông tin.
   if (rows.length !== ids.length || rows.some((r) => r.user_id !== userId)) {
     throw new AppError(404, 'CARD_NOT_FOUND', 'Có thẻ không tồn tại hoặc không thuộc về bạn.');
@@ -96,41 +88,26 @@ function performUpgradeInTx(ctx: GameContext, userId: number, ids: number[], his
 
   const nowIso = iso(ctx.now());
   // Tiêu thụ có điều kiện: chỉ thẻ còn active của chính người chơi. Phải đúng số thẻ đầu vào.
-  const consumed = ctx.db
-    .prepare(
-      `UPDATE user_cards SET status = 'consumed', consumed_at = ?, updated_at = ?
-       WHERE id IN (${marks(ids)}) AND user_id = ? AND status = 'active'`,
-    )
-    .run(nowIso, nowIso, ...ids, userId);
-  if (consumed.changes !== ids.length) throw new AppError(409, 'CARD_CONSUMED', 'Có thẻ vừa bị thao tác khác sử dụng.');
+  const consumed = consumeActiveCards(ctx.db, ids, userId, nowIso);
+  if (consumed !== ids.length) throw new AppError(409, 'CARD_CONSUMED', 'Có thẻ vừa bị thao tác khác sử dụng.');
 
-  const card = ctx.db
-    .prepare('INSERT INTO user_cards (user_id, general_id, level, created_at, updated_at) VALUES (?,?,?,?,?)')
-    .run(userId, generalId, resultLevel, nowIso, nowIso);
-  const resultCardId = Number(card.lastInsertRowid);
+  const resultCardId = insertCard(ctx.db, userId, generalId, resultLevel, nowIso);
 
-  const hist = ctx.db
-    .prepare(
-      `INSERT INTO upgrade_history (user_id, input_card_ids_snapshot, input_general_id, input_level, result_card_id,
-         result_level, success_chance, failure_chance, outcome, failure_distribution_snapshot, idempotency_key, created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-    )
-    .run(
-      userId,
-      JSON.stringify(ids.map((id) => ({ id, generalId, level }))),
-      generalId,
-      level,
-      resultCardId,
-      resultLevel,
-      successBps,
-      failureBps,
-      success ? 'success' : 'failure',
-      JSON.stringify(failureDistribution),
-      historyKey,
-      nowIso,
-    );
-  const upgradeId = Number(hist.lastInsertRowid);
-  ctx.db.prepare(`UPDATE user_cards SET consumed_by_upgrade_id = ? WHERE id IN (${marks(ids)})`).run(upgradeId, ...ids);
+  const upgradeId = insertUpgrade(ctx.db, {
+    userId,
+    inputCardIdsSnapshot: JSON.stringify(ids.map((id) => ({ id, generalId, level }))),
+    inputGeneralId: generalId,
+    inputLevel: level,
+    resultCardId,
+    resultLevel,
+    successBps,
+    failureBps,
+    outcome: success ? 'success' : 'failure',
+    failureDistributionSnapshot: failureDistribution,
+    idempotencyKey: historyKey,
+    createdAt: nowIso,
+  });
+  attachConsumedByUpgrade(ctx.db, upgradeId, ids);
 
   return {
     upgradeId,
@@ -172,12 +149,7 @@ export function quickUpgrade(ctx: GameContext, userId: number, idempotencyKey: s
     if (prev) return prev;
 
     // Hàng đợi thẻ theo (tướng, level), chỉ thẻ active và level ≤ trần
-    const rows = ctx.db
-      .prepare(
-        `SELECT id, general_id, level FROM user_cards
-         WHERE user_id = ? AND status = 'active' AND level <= ? ORDER BY id`,
-      )
-      .all(userId, QUICK_UPGRADE_MAX_LEVEL) as { id: number; general_id: string; level: number }[];
+    const rows = listActiveCardsUpTo(ctx.db, userId, QUICK_UPGRADE_MAX_LEVEL);
     const buckets = new Map<string, number[]>();
     const keyOf = (g: string, lv: number) => `${lv}|${g}`;
     for (const r of rows) {

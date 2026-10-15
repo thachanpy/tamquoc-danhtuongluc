@@ -1,66 +1,15 @@
-import type { CardDto, GiftCardSnapshot, Faction, HistoryEntryDto, Page, TicketReason, TicketType, UpgradeOutcome, WeightEntry } from '@tq/shared';
-import { ROSTER } from '@tq/game-config';
-import type { GameContext } from './context.ts';
+import type {
+  GiftCardSnapshot,
+  HistoryEntryDto,
+  Page,
+  TicketReason,
+  TicketType,
+  UpgradeOutcome,
+  WeightEntry,
+} from '@tq/shared';
+import type { DB } from '../db.ts';
 
-/** Bỏ dấu tiếng Việt để tìm kiếm tên không phân biệt dấu/hoa thường. */
-export function foldVi(s: string): string {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
-}
-
-export interface CardsQuery {
-  faction?: Faction;
-  level?: number;
-  generalId?: string;
-  q?: string;
-  sort?: 'newest' | 'level_desc' | 'level_asc' | 'name';
-  page?: number;
-  pageSize?: number;
-}
-
-export function listCards(ctx: GameContext, userId: number, query: CardsQuery): Page<CardDto> {
-  const page = query.page ?? 1;
-  const pageSize = query.pageSize ?? 100;
-  const where = ["c.user_id = ?", "c.status = 'active'"];
-  const params: (string | number)[] = [userId];
-  if (query.faction) {
-    where.push('g.faction = ?');
-    params.push(query.faction);
-  }
-  if (query.level) {
-    where.push('c.level = ?');
-    params.push(query.level);
-  }
-  if (query.generalId) {
-    where.push('c.general_id = ?');
-    params.push(query.generalId);
-  }
-  if (query.q && query.q.trim()) {
-    const needle = foldVi(query.q.trim());
-    const ids = ROSTER.filter((g) => foldVi(g.name).includes(needle) || g.id.includes(needle)).map((g) => g.id);
-    if (ids.length === 0) return { items: [], page, pageSize, total: 0 };
-    where.push(`c.general_id IN (${ids.map(() => '?').join(',')})`);
-    params.push(...ids);
-  }
-  const order =
-    query.sort === 'level_desc'
-      ? 'c.level DESC, c.id DESC'
-      : query.sort === 'level_asc'
-        ? 'c.level ASC, c.id DESC'
-        : query.sort === 'name'
-          ? 'g.name ASC, c.level DESC, c.id ASC'
-          : 'c.id DESC';
-  const from = `FROM user_cards c JOIN generals g ON g.id = c.general_id WHERE ${where.join(' AND ')}`;
-  const total = (ctx.db.prepare(`SELECT COUNT(*) AS n ${from}`).get(...params) as { n: number }).n;
-  const rows = ctx.db
-    .prepare(`SELECT c.id, c.general_id, c.level, c.created_at ${from} ORDER BY ${order} LIMIT ? OFFSET ?`)
-    .all(...params, pageSize, (page - 1) * pageSize) as { id: number; general_id: string; level: number; created_at: string }[];
-  return {
-    items: rows.map((r) => ({ id: r.id, generalId: r.general_id, level: r.level, createdAt: r.created_at })),
-    page,
-    pageSize,
-    total,
-  };
-}
+/** Truy vấn gộp lịch sử phân trang: ledger vé, gacha, nâng cấp, tặng thẻ, giftcode (mục 6.4). */
 
 export interface HistoryQuery {
   kind?: 'ticket' | 'gacha' | 'upgrade' | 'gift' | 'giftcode';
@@ -68,8 +17,7 @@ export interface HistoryQuery {
   pageSize?: number;
 }
 
-/** Lịch sử phân trang gộp: ledger vé, gacha, nâng cấp (mục 6.4). */
-export function listHistory(ctx: GameContext, userId: number, query: HistoryQuery): Page<HistoryEntryDto> {
+export function listHistory(db: DB, userId: number, query: HistoryQuery): Page<HistoryEntryDto> {
   const page = query.page ?? 1;
   const pageSize = query.pageSize ?? 20;
   const parts: string[] = [];
@@ -83,20 +31,20 @@ export function listHistory(ctx: GameContext, userId: number, query: HistoryQuer
     parts.push(`SELECT 'giftcode' AS kind, id, created_at FROM gift_code_redemptions WHERE user_id = $u`);
   }
   const union = parts.join(' UNION ALL ');
-  const total = (ctx.db.prepare(`SELECT COUNT(*) AS n FROM (${union})`).get({ u: userId }) as { n: number }).n;
-  const refs = ctx.db
+  const total = (db.prepare(`SELECT COUNT(*) AS n FROM (${union})`).get({ u: userId }) as { n: number }).n;
+  const refs = db
     .prepare(`SELECT kind, id, created_at FROM (${union}) ORDER BY created_at DESC, kind, id DESC LIMIT $l OFFSET $o`)
     .all({ u: userId, l: pageSize, o: (page - 1) * pageSize }) as { kind: HistoryEntryDto['kind']; id: number }[];
 
-  const tStmt = ctx.db.prepare('SELECT * FROM ticket_transactions WHERE id = ?');
-  const gStmt = ctx.db.prepare('SELECT * FROM gacha_history WHERE id = ?');
-  const uStmt = ctx.db.prepare('SELECT * FROM upgrade_history WHERE id = ?');
-  const giftStmt = ctx.db.prepare(
+  const tStmt = db.prepare('SELECT * FROM ticket_transactions WHERE id = ?');
+  const gStmt = db.prepare('SELECT * FROM gacha_history WHERE id = ?');
+  const uStmt = db.prepare('SELECT * FROM upgrade_history WHERE id = ?');
+  const giftStmt = db.prepare(
     `SELECT g.*, uf.username AS from_name, ut.username AS to_name FROM card_gifts g
      JOIN users uf ON uf.id = g.from_user_id JOIN users ut ON ut.id = g.to_user_id WHERE g.id = ?`,
   );
 
-  const gcStmt = ctx.db.prepare(
+  const gcStmt = db.prepare(
     'SELECT r.*, g.code FROM gift_code_redemptions r JOIN gift_codes g ON g.id = r.code_id WHERE r.id = ?',
   );
 

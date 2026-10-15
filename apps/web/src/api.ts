@@ -23,6 +23,7 @@ import type {
   HistoryEntryDto,
   MeDto,
   Page,
+  ProfileDto,
   QuickUpgradeResultDto,
   RecipientDto,
   TicketType,
@@ -99,6 +100,10 @@ export const api = {
   login: (username: string, password: string) => call<{ token: string }>('POST', '/api/auth/login', { username, password }),
   logout: () => call<{ ok: true }>('POST', '/api/auth/logout'),
   me: () => call<MeDto>('GET', '/api/me'),
+  profile: () => call<ProfileDto>('GET', '/api/me/profile'),
+  updateProfile: (patch: { displayName?: string; avatar?: string | null }) => call<ProfileDto>('POST', '/api/me/profile', patch),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    call<{ ok: true }>('POST', '/api/me/password', { currentPassword, newPassword }),
   generals: () => call<{ items: GeneralDto[] }>('GET', '/api/generals'),
   cards: (q: { faction?: Faction; level?: number; q?: string; sort?: string; page?: number; pageSize?: number }) =>
     call<Page<CardDto>>('GET', '/api/cards?' + qs(q)),

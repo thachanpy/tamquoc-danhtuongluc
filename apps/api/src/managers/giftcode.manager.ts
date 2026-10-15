@@ -7,9 +7,26 @@ import {
   type TicketType,
 } from '@tq/shared';
 import { GIFT_CODE_MAX_TICKETS } from '@tq/game-config';
-import { AppError, iso, type GameContext } from './context.ts';
-import { tx } from './db.ts';
-import { applyTicketDelta, getTickets } from './tickets.ts';
+import { AppError, type GameContext } from '../context.ts';
+import { iso } from '../utils.ts';
+import { tx } from '../db.ts';
+import { applyTicketDelta } from '../repositories/ticket.repository.ts';
+import {
+  findGiftCodeByCode,
+  findGiftCodeRewards,
+  giftCodeExists,
+  hasRedemption,
+  insertRedemption,
+  listFeaturedGiftCodes as repoListFeaturedGiftCodes,
+  listUserRedemptions,
+  insertGiftCode,
+  setGiftCodeActive,
+  listAdminGiftCodes as repoListAdminGiftCodes,
+  findAdminGiftCode,
+  type GiftCodeRow,
+  type AdminGiftCodeRow,
+} from '../repositories/giftcode.repository.ts';
+import { getTickets } from './ticket.manager.ts';
 
 /**
  * Giftcode (mục 3.9) — CHỈ tặng vé quay.
@@ -21,19 +38,6 @@ import { applyTicketDelta, getTickets } from './tickets.ts';
 
 const CODE_RE = /^[A-Z0-9_-]{3,32}$/;
 export const normalizeCode = (code: string) => code.trim().toUpperCase();
-
-interface CodeRow {
-  id: number;
-  code: string;
-  rewards: string;
-  total_cards: number;
-  total_tickets: number;
-  expires_at: string | null;
-  is_active: number;
-  featured: number;
-  created_by: number | null;
-  created_at: string;
-}
 
 /** Đọc phần thưởng đã lưu; dòng cũ (trước migration v8) không có `kind` là thẻ (code thẻ cũ). */
 const parseRewards = (json: string) =>
@@ -60,7 +64,7 @@ export function normalizeRewards(rewards: Partial<GiftCodeReward>[]): GiftCodeRe
   return out;
 }
 
-const isExpired = (row: CodeRow, now: number) => row.expires_at !== null && Date.parse(row.expires_at) <= now;
+const isExpired = (row: GiftCodeRow, now: number) => row.expires_at !== null && Date.parse(row.expires_at) <= now;
 
 /**
  * Người chơi nhập giftcode. Kiểm tra code tồn tại, đang bật, chưa hết hạn, người chơi chưa nhập;
@@ -70,12 +74,11 @@ export function redeemGiftCode(ctx: GameContext, userId: number, rawCode: string
   const code = normalizeCode(rawCode);
   if (!CODE_RE.test(code)) throw new AppError(404, 'GIFTCODE_NOT_FOUND', 'Giftcode không tồn tại.');
   const stored = tx(ctx.db, () => {
-    const row = ctx.db.prepare('SELECT * FROM gift_codes WHERE code = ?').get(code) as CodeRow | undefined;
+    const row = findGiftCodeByCode(ctx.db, code);
     if (!row || row.is_active !== 1) throw new AppError(404, 'GIFTCODE_NOT_FOUND', 'Giftcode không tồn tại.');
     const now = ctx.now();
     if (isExpired(row, now)) throw new AppError(410, 'GIFTCODE_EXPIRED', 'Giftcode đã hết hạn.');
-    const used = ctx.db.prepare('SELECT 1 FROM gift_code_redemptions WHERE code_id = ? AND user_id = ?').get(row.id, userId);
-    if (used) throw new AppError(409, 'GIFTCODE_ALREADY_REDEEMED', 'Bạn đã nhập giftcode này rồi.');
+    if (hasRedemption(ctx.db, row.id, userId)) throw new AppError(409, 'GIFTCODE_ALREADY_REDEEMED', 'Bạn đã nhập giftcode này rồi.');
 
     const nowIso = iso(now);
     const rewards = parseRewards(row.rewards);
@@ -88,11 +91,7 @@ export function redeemGiftCode(ctx: GameContext, userId: number, rawCode: string
       tickets.push({ pool: r.pool, count: r.count });
     }
     // UNIQUE (code_id, user_id) chặn nhập 2 lần kể cả khi 2 request chạy đồng thời
-    ctx.db
-      .prepare(
-        'INSERT INTO gift_code_redemptions (code_id, user_id, cards_snapshot, card_count, tickets_snapshot, created_at) VALUES (?,?,?,?,?,?)',
-      )
-      .run(row.id, userId, '[]', 0, JSON.stringify(tickets), nowIso);
+    insertRedemption(ctx.db, { codeId: row.id, userId, ticketsSnapshot: JSON.stringify(tickets), createdAt: nowIso });
     return { code: row.code, rewards, tickets, createdAt: nowIso };
   });
   return { ...stored, balances: getTickets(ctx, userId) };
@@ -101,13 +100,7 @@ export function redeemGiftCode(ctx: GameContext, userId: number, rawCode: string
 /** Giftcode gợi ý (featured, đang bật, chưa hết hạn) kèm trạng thái đã nhập của người chơi. */
 export function listFeaturedGiftCodes(ctx: GameContext, userId: number): GiftCodePublicDto[] {
   const now = ctx.now();
-  const rows = ctx.db
-    .prepare(
-      `SELECT g.*, EXISTS(SELECT 1 FROM gift_code_redemptions r WHERE r.code_id = g.id AND r.user_id = ?) AS redeemed
-         FROM gift_codes g WHERE g.featured = 1 AND g.is_active = 1 ORDER BY g.id`,
-    )
-    .all(userId) as unknown as (CodeRow & { redeemed: number })[];
-  return rows
+  return repoListFeaturedGiftCodes(ctx.db, userId)
     .filter((r) => !isExpired(r, now))
     .map((r) => ({ code: r.code, rewards: parseRewards(r.rewards), expiresAt: r.expires_at, redeemed: r.redeemed === 1 }));
 }
@@ -117,22 +110,15 @@ export function listMyRedemptions(
   ctx: GameContext,
   userId: number,
 ): { code: string; cardCount: number; ticketCount: number; createdAt: string }[] {
-  return ctx.db
-    .prepare(
-      `SELECT g.code, r.card_count, r.tickets_snapshot, r.created_at FROM gift_code_redemptions r JOIN gift_codes g ON g.id = r.code_id
-        WHERE r.user_id = ? ORDER BY r.id DESC LIMIT 200`,
-    )
-    .all(userId)
-    .map((r) => {
-      const x = r as { code: string; card_count: number; tickets_snapshot: string; created_at: string };
-      const ticketCount = (JSON.parse(x.tickets_snapshot) as { count: number }[]).reduce((s, t) => s + t.count, 0);
-      return { code: x.code, cardCount: x.card_count, ticketCount, createdAt: x.created_at };
-    });
+  return listUserRedemptions(ctx.db, userId).map((x) => {
+    const ticketCount = (JSON.parse(x.tickets_snapshot) as { count: number }[]).reduce((s, t) => s + t.count, 0);
+    return { code: x.code, cardCount: x.card_count, ticketCount, createdAt: x.created_at };
+  });
 }
 
 // ======================= Admin =======================
 
-function toAdminDto(r: CodeRow & { redemption_count: number; creator: string | null }): AdminGiftCodeDto {
+function toAdminDto(r: AdminGiftCodeRow): AdminGiftCodeDto {
   return {
     id: r.id,
     code: r.code,
@@ -148,11 +134,8 @@ function toAdminDto(r: CodeRow & { redemption_count: number; creator: string | n
   };
 }
 
-const ADMIN_SELECT = `SELECT g.*, (SELECT COUNT(*) FROM gift_code_redemptions r WHERE r.code_id = g.id) AS redemption_count,
-  u.username AS creator FROM gift_codes g LEFT JOIN users u ON u.id = g.created_by`;
-
 export function adminListGiftCodes(ctx: GameContext): AdminGiftCodeDto[] {
-  return (ctx.db.prepare(`${ADMIN_SELECT} ORDER BY g.id DESC`).all() as unknown as Parameters<typeof toAdminDto>[0][]).map(toAdminDto);
+  return repoListAdminGiftCodes(ctx.db).map(toAdminDto);
 }
 
 /** Admin tạo giftcode. Code duy nhất (không phân biệt hoa thường), lưu dạng IN HOA. expiresAt null = không hạn. */
@@ -172,27 +155,28 @@ export function adminCreateGiftCode(
     expiresAt = iso(t);
   }
   return tx(ctx.db, () => {
-    if (ctx.db.prepare('SELECT 1 FROM gift_codes WHERE code = ?').get(code)) {
-      throw new AppError(409, 'GIFTCODE_EXISTS', `Giftcode "${code}" đã tồn tại.`);
-    }
-    const r = ctx.db
-      .prepare(
-        `INSERT INTO gift_codes (code, rewards, total_cards, total_tickets, expires_at, is_active, featured, created_by, created_at)
-         VALUES (?,?,?,?,?,1,?,?,?)`,
-      )
-      .run(code, JSON.stringify(rewards), 0, rewards.reduce((s, r) => s + r.count, 0), expiresAt, input.featured ? 1 : 0, adminId, iso(ctx.now()));
-    return toAdminDto(ctx.db.prepare(`${ADMIN_SELECT} WHERE g.id = ?`).get(Number(r.lastInsertRowid)) as never);
+    if (giftCodeExists(ctx.db, code)) throw new AppError(409, 'GIFTCODE_EXISTS', `Giftcode "${code}" đã tồn tại.`);
+    const id = insertGiftCode(ctx.db, {
+      code,
+      rewards: JSON.stringify(rewards),
+      totalTickets: rewards.reduce((s, r) => s + r.count, 0),
+      expiresAt,
+      featured: !!input.featured,
+      createdBy: adminId,
+      createdAt: iso(ctx.now()),
+    });
+    return toAdminDto(findAdminGiftCode(ctx.db, id)!);
   });
 }
 
 /** Bật/tắt giftcode. Code đã tắt không nhập được; lượt nhập cũ và thẻ đã nhận giữ nguyên. */
 export function adminSetGiftCodeActive(ctx: GameContext, id: number, isActive: boolean): AdminGiftCodeDto {
-  const row = ctx.db.prepare('SELECT rewards FROM gift_codes WHERE id = ?').get(id) as { rewards: string } | undefined;
+  const row = findGiftCodeRewards(ctx.db, id);
   if (!row) throw new AppError(404, 'GIFTCODE_NOT_FOUND', 'Giftcode không tồn tại.');
   if (isActive && hasCards(parseRewards(row.rewards))) {
     throw new AppError(409, 'GIFTCODE_LEGACY', 'Giftcode tặng thẻ cũ không còn dùng được (giftcode chỉ tặng vé quay).');
   }
-  const upd = ctx.db.prepare('UPDATE gift_codes SET is_active = ? WHERE id = ?').run(isActive ? 1 : 0, id);
-  if (upd.changes !== 1) throw new AppError(404, 'GIFTCODE_NOT_FOUND', 'Giftcode không tồn tại.');
-  return toAdminDto(ctx.db.prepare(`${ADMIN_SELECT} WHERE g.id = ?`).get(id) as never);
+  const changes = setGiftCodeActive(ctx.db, id, isActive);
+  if (changes !== 1) throw new AppError(404, 'GIFTCODE_NOT_FOUND', 'Giftcode không tồn tại.');
+  return toAdminDto(findAdminGiftCode(ctx.db, id)!);
 }

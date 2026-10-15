@@ -10,37 +10,30 @@ import {
   type TicketType,
   type UserStatus,
 } from '@tq/shared';
-import { ADMIN_GRANT_MAX_TICKETS, ROSTER } from '@tq/game-config';
-import { AppError, iso, sha256, findIdempotent, saveIdempotent, type GameContext } from './context.ts';
-import { tx } from './db.ts';
-import { activateAccount } from './auth.ts';
-import { applyTicketDelta, readBalances } from './tickets.ts';
-import { foldVi } from './queries.ts';
+import { ADMIN_GRANT_MAX_TICKETS } from '@tq/game-config';
+import { AppError, type GameContext } from '../context.ts';
+import { iso, sha256, searchGeneralIds } from '../utils.ts';
+import { tx } from '../db.ts';
+import {
+  queryAdminUsers,
+  findAdminUserRow,
+  approveUserRow,
+  deletePendingUser,
+  deleteSessionsForUser,
+  updateUserAdmin,
+  type AdminUserRow,
+} from '../repositories/user.repository.ts';
+import { applyTicketDelta, readBalances } from '../repositories/ticket.repository.ts';
+import { listAllCards, type AdminCardsFilter } from '../repositories/card.repository.ts';
+import { findIdempotent, saveIdempotent } from '../repositories/idempotency.repository.ts';
+import { activateAccount } from './auth.manager.ts';
 
 /**
  * Trang quản trị (mục 3.8). Mọi hàm ở đây giả định người gọi ĐÃ được xác thực là admin
- * (server.ts kiểm tra bằng preHandler adminAuth).
+ * (controller/admin.controller.ts kiểm tra bằng preHandler adminGuard).
  */
 
-const likeEscape = (q: string) => `%${q.trim().replace(/[%_\\]/g, (m) => '\\' + m)}%`;
-
-interface UserRow {
-  id: number;
-  username: string;
-  status: UserStatus;
-  is_admin: number;
-  created_at: string;
-  approved_at: string | null;
-  card_count: number;
-  max_level: number | null;
-}
-
-const USER_SELECT = `SELECT u.id, u.username, u.status, u.is_admin, u.created_at, u.approved_at,
-  (SELECT COUNT(*) FROM user_cards c WHERE c.user_id = u.id AND c.status = 'active') AS card_count,
-  (SELECT MAX(level) FROM user_cards c WHERE c.user_id = u.id AND c.status = 'active') AS max_level
-  FROM users u`;
-
-function toDto(ctx: GameContext, r: UserRow): AdminUserDto {
+function toDto(ctx: GameContext, r: AdminUserRow): AdminUserDto {
   const tickets = readBalances(ctx.db, r.id);
   return {
     id: r.id,
@@ -56,8 +49,8 @@ function toDto(ctx: GameContext, r: UserRow): AdminUserDto {
   };
 }
 
-function getUserRow(ctx: GameContext, userId: number): UserRow {
-  const r = ctx.db.prepare(`${USER_SELECT} WHERE u.id = ?`).get(userId) as UserRow | undefined;
+function getUserRow(ctx: GameContext, userId: number): AdminUserRow {
+  const r = findAdminUserRow(ctx.db, userId);
   if (!r) throw new AppError(404, 'USER_NOT_FOUND', 'Không tìm thấy người chơi.');
   return r;
 }
@@ -73,22 +66,12 @@ export interface AdminUsersQuery {
 export function adminListUsers(ctx: GameContext, query: AdminUsersQuery): AdminUsersPage {
   const page = query.page ?? 1;
   const pageSize = query.pageSize ?? 50;
-  const where: string[] = [];
-  const params: Record<string, string | number> = {};
-  if (query.q?.trim()) {
-    where.push(`u.username LIKE $q ESCAPE '\\'`);
-    params.q = likeEscape(query.q);
-  }
-  if (query.status) {
-    where.push('u.status = $status');
-    params.status = query.status;
-  }
-  const w = where.length ? ` WHERE ${where.join(' AND ')}` : '';
-  const total = (ctx.db.prepare(`SELECT COUNT(*) AS n FROM users u${w}`).get(params) as { n: number }).n;
-  const rows = ctx.db
-    .prepare(`${USER_SELECT}${w} ORDER BY (u.status = 'pending') DESC, u.id DESC LIMIT $limit OFFSET $offset`)
-    .all({ ...params, limit: pageSize, offset: (page - 1) * pageSize }) as unknown as UserRow[];
-  const pendingCount = (ctx.db.prepare(`SELECT COUNT(*) AS n FROM users WHERE status = 'pending'`).get() as { n: number }).n;
+  const { rows, total, pendingCount } = queryAdminUsers(ctx.db, {
+    username: query.q,
+    status: query.status,
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+  });
   return { items: rows.map((r) => toDto(ctx, r)), page, pageSize, total, pendingCount, grantMaxTickets: ADMIN_GRANT_MAX_TICKETS };
 }
 
@@ -101,10 +84,8 @@ export function approveUser(ctx: GameContext, userId: number): AdminApproveDto {
     const row = getUserRow(ctx, userId);
     if (row.status !== 'pending') throw new AppError(409, 'ALREADY_APPROVED', 'Tài khoản đã được duyệt.');
     const now = ctx.now();
-    const upd = ctx.db
-      .prepare(`UPDATE users SET status = 'approved', approved_at = ? WHERE id = ? AND status = 'pending'`)
-      .run(iso(now), userId);
-    if (upd.changes !== 1) throw new AppError(409, 'ALREADY_APPROVED', 'Tài khoản đã được duyệt.');
+    const changes = approveUserRow(ctx.db, userId, iso(now));
+    if (changes !== 1) throw new AppError(409, 'ALREADY_APPROVED', 'Tài khoản đã được duyệt.');
     const signupBonus = activateAccount(ctx, userId, now);
     return { user: toDto(ctx, getUserRow(ctx, userId)), signupBonus };
   });
@@ -115,8 +96,8 @@ export function rejectUser(ctx: GameContext, userId: number): { ok: true; userna
   return tx(ctx.db, () => {
     const row = getUserRow(ctx, userId);
     if (row.status !== 'pending') throw new AppError(409, 'NOT_PENDING', 'Chỉ từ chối được tài khoản đang chờ duyệt.');
-    ctx.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
-    ctx.db.prepare(`DELETE FROM users WHERE id = ? AND status = 'pending'`).run(userId);
+    deleteSessionsForUser(ctx.db, userId);
+    deletePendingUser(ctx.db, userId);
     return { ok: true as const, username: row.username };
   });
 }
@@ -127,7 +108,7 @@ export function setAdmin(ctx: GameContext, actorId: number, userId: number, valu
     const row = getUserRow(ctx, userId);
     if (row.status !== 'approved') throw new AppError(409, 'NOT_APPROVED', 'Tài khoản chưa được duyệt.');
     if (!value && userId === actorId) throw new AppError(400, 'ADMIN_SELF', 'Không thể tự thu quyền quản trị của chính mình.');
-    ctx.db.prepare('UPDATE users SET is_admin = ? WHERE id = ?').run(value ? 1 : 0, userId);
+    updateUserAdmin(ctx.db, userId, value);
     return toDto(ctx, getUserRow(ctx, userId));
   });
 }
@@ -187,49 +168,16 @@ export interface AdminCardsQuery {
 export function adminListCards(ctx: GameContext, query: AdminCardsQuery): Page<AdminCardDto> {
   const page = query.page ?? 1;
   const pageSize = query.pageSize ?? 60;
-  const where = ["c.status = 'active'"];
-  const params: (string | number)[] = [];
-  if (query.userId) {
-    where.push('c.user_id = ?');
-    params.push(query.userId);
-  }
-  if (query.faction) {
-    where.push('g.faction = ?');
-    params.push(query.faction);
-  }
-  if (query.level) {
-    where.push('c.level = ?');
-    params.push(query.level);
-  }
-  if (query.q?.trim()) {
-    const needle = foldVi(query.q.trim());
-    const ids = ROSTER.filter((g) => foldVi(g.name).includes(needle) || g.id.includes(needle)).map((g) => g.id);
-    if (ids.length === 0) return { items: [], page, pageSize, total: 0 };
-    where.push(`c.general_id IN (${ids.map(() => '?').join(',')})`);
-    params.push(...ids);
-  }
-  const order =
-    query.sort === 'level_desc'
-      ? 'c.level DESC, c.id DESC'
-      : query.sort === 'level_asc'
-        ? 'c.level ASC, c.id DESC'
-        : query.sort === 'name'
-          ? 'g.name ASC, c.level DESC, c.id ASC'
-          : query.sort === 'owner'
-            ? 'u.username COLLATE NOCASE ASC, c.level DESC, c.id ASC'
-            : 'c.id DESC';
-  const from = `FROM user_cards c JOIN generals g ON g.id = c.general_id JOIN users u ON u.id = c.user_id WHERE ${where.join(' AND ')}`;
-  const total = (ctx.db.prepare(`SELECT COUNT(*) AS n ${from}`).get(...params) as { n: number }).n;
-  const rows = ctx.db
-    .prepare(`SELECT c.id, c.user_id, u.username, c.general_id, c.level, c.created_at ${from} ORDER BY ${order} LIMIT ? OFFSET ?`)
-    .all(...params, pageSize, (page - 1) * pageSize) as {
-    id: number;
-    user_id: number;
-    username: string;
-    general_id: string;
-    level: number;
-    created_at: string;
-  }[];
+  const filter: AdminCardsFilter = {
+    userId: query.userId,
+    faction: query.faction,
+    level: query.level,
+    generalIds: query.q?.trim() ? searchGeneralIds(query.q) : undefined,
+    sort: query.sort,
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+  };
+  const { rows, total } = listAllCards(ctx.db, filter);
   return {
     items: rows.map((r) => ({
       id: r.id,

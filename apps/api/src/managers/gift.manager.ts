@@ -1,9 +1,12 @@
 import type { GiftCardSnapshot, GiftResultDto, RecipientDto } from '@tq/shared';
 import { GIFT_MAX_CARDS } from '@tq/game-config';
-import { AppError, iso, sha256, findIdempotent, saveIdempotent, type GameContext } from './context.ts';
-import { tx } from './db.ts';
-
-const marks = (ids: number[]) => ids.map(() => '?').join(',');
+import { AppError, type GameContext } from '../context.ts';
+import { iso, sha256, likeContains } from '../utils.ts';
+import { tx } from '../db.ts';
+import { findApprovedUserByUsername } from '../repositories/user.repository.ts';
+import { findCardsByIds, transferActiveCards } from '../repositories/card.repository.ts';
+import { insertGift, listGiftRecipients } from '../repositories/gift.repository.ts';
+import { findIdempotent, saveIdempotent } from '../repositories/idempotency.repository.ts';
 
 /**
  * Tặng thẻ (mục 5.6): chuyển 1–GIFT_MAX_CARDS thẻ của mình cho người chơi khác theo tên đăng nhập.
@@ -33,17 +36,13 @@ export function giftCards(
     const prev = findIdempotent<GiftResultDto>(ctx.db, fromUserId, 'gift_cards', idempotencyKey, requestHash);
     if (prev) return prev;
 
-    const to = ctx.db
-      .prepare(`SELECT id, username, is_admin FROM users WHERE username = ? AND status = 'approved'`)
-      .get(toUsername) as { id: number; username: string; is_admin: number } | undefined;
+    const to = findApprovedUserByUsername(ctx.db, toUsername);
     if (!to) throw new AppError(404, 'RECIPIENT_NOT_FOUND', `Không tìm thấy người chơi "${toUsername}".`);
     // Tài khoản quản trị không chơi game => không nhận thẻ tặng
     if (to.is_admin === 1) throw new AppError(400, 'RECIPIENT_IS_ADMIN', 'Không thể tặng thẻ cho tài khoản quản trị.');
     if (to.id === fromUserId) throw new AppError(400, 'GIFT_TO_SELF', 'Không thể tặng thẻ cho chính mình.');
 
-    const rows = ctx.db
-      .prepare(`SELECT id, user_id, general_id, level, status FROM user_cards WHERE id IN (${marks(ids)})`)
-      .all(...ids) as { id: number; user_id: number; general_id: string; level: number; status: string }[];
+    const rows = findCardsByIds(ctx.db, ids);
     if (rows.length !== ids.length || rows.some((r) => r.user_id !== fromUserId)) {
       throw new AppError(404, 'CARD_NOT_FOUND', 'Có thẻ không tồn tại hoặc không thuộc về bạn.');
     }
@@ -51,25 +50,22 @@ export function giftCards(
 
     const nowIso = iso(ctx.now());
     // Đổi chủ có điều kiện: chỉ thẻ active của người gửi. Phải đổi đúng đủ số thẻ.
-    const moved = ctx.db
-      .prepare(
-        `UPDATE user_cards SET user_id = ?, updated_at = ?
-         WHERE id IN (${marks(ids)}) AND user_id = ? AND status = 'active'`,
-      )
-      .run(to.id, nowIso, ...ids, fromUserId);
-    if (moved.changes !== ids.length) throw new AppError(409, 'CARD_CONSUMED', 'Có thẻ vừa bị thao tác khác sử dụng.');
+    const moved = transferActiveCards(ctx.db, ids, fromUserId, to.id, nowIso);
+    if (moved !== ids.length) throw new AppError(409, 'CARD_CONSUMED', 'Có thẻ vừa bị thao tác khác sử dụng.');
 
     const cards: GiftCardSnapshot[] = rows
       .sort((a, b) => a.id - b.id)
       .map((r) => ({ id: r.id, generalId: r.general_id, level: r.level }));
-    const ins = ctx.db
-      .prepare(
-        `INSERT INTO card_gifts (from_user_id, to_user_id, cards_snapshot, card_count, idempotency_key, created_at)
-         VALUES (?,?,?,?,?,?)`,
-      )
-      .run(fromUserId, to.id, JSON.stringify(cards), cards.length, idempotencyKey, nowIso);
+    const giftId = insertGift(ctx.db, {
+      fromUserId,
+      toUserId: to.id,
+      cardsSnapshot: JSON.stringify(cards),
+      cardCount: cards.length,
+      idempotencyKey,
+      createdAt: nowIso,
+    });
 
-    const result: GiftResultDto = { giftId: Number(ins.lastInsertRowid), toUsername: to.username, cards, createdAt: nowIso };
+    const result: GiftResultDto = { giftId, toUsername: to.username, cards, createdAt: nowIso };
     saveIdempotent(ctx.db, fromUserId, 'gift_cards', idempotencyKey, requestHash, result, nowIso);
     return result;
   });
@@ -81,17 +77,8 @@ export function giftCards(
  * q: lọc theo tên (không phân biệt hoa thường, chứa chuỗi).
  */
 export function listRecipients(ctx: GameContext, userId: number, q = '', limit = 200): RecipientDto[] {
-  const needle = `%${q.trim().replace(/[%_\\]/g, (m) => '\\' + m)}%`;
-  const rows = ctx.db
-    .prepare(
-      `SELECT u.username,
-              (SELECT MAX(g.created_at) FROM card_gifts g
-                WHERE (g.from_user_id = $me AND g.to_user_id = u.id) OR (g.from_user_id = u.id AND g.to_user_id = $me)) AS last_gift_at
-         FROM users u
-        WHERE u.id <> $me AND u.status = 'approved' AND u.is_admin = 0 AND u.username LIKE $q ESCAPE '\\'
-        ORDER BY last_gift_at IS NULL, last_gift_at DESC, u.username COLLATE NOCASE ASC
-        LIMIT $limit`,
-    )
-    .all({ me: userId, q: needle, limit }) as { username: string; last_gift_at: string | null }[];
-  return rows.map((r) => ({ username: r.username, lastGiftAt: r.last_gift_at }));
+  return listGiftRecipients(ctx.db, userId, likeContains(q), limit).map((r) => ({
+    username: r.username,
+    lastGiftAt: r.last_gift_at,
+  }));
 }

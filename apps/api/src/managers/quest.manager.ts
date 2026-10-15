@@ -7,7 +7,6 @@ import {
   type DailyEventsDto,
   type Faction,
   type LoginDayDto,
-  type QuestClaimedDto,
   type QuestClaimResultDto,
   type QuestItemDto,
   type QuestsDto,
@@ -30,10 +29,30 @@ import {
   ownLevelReward,
   type Milestones,
 } from '@tq/game-config';
-import { AppError, iso, type GameContext } from './context.ts';
-import type { DB } from './db.ts';
-import { tx } from './db.ts';
-import { applyTicketDelta, getTickets } from './tickets.ts';
+import { AppError, type GameContext } from '../context.ts';
+import { iso } from '../utils.ts';
+import { tx, type DB } from '../db.ts';
+import { applyTicketDelta } from '../repositories/ticket.repository.ts';
+import {
+  listClaimedKeys,
+  insertClaim,
+  hasClaim,
+  insertClaimIgnoring,
+  insertLoginDayIgnoring,
+  hasLoginDay,
+  listLoginDays,
+  listUnclaimedOldCalendarDates,
+  countDrawsByTicketType,
+  countDrawsByFaction,
+  countUpgradeSuccess,
+  countTotalDraws,
+  sumLegacyGiftCodeCards,
+  countCollectedByFaction,
+  countOwnedByLevel,
+  findDailyState,
+  upsertDailyState,
+} from '../repositories/quest.repository.ts';
+import { getTickets } from './ticket.manager.ts';
 
 /**
  * Nhiệm vụ hằng ngày, thưởng reset, điểm danh theo tháng và thành tựu (mục 3.10).
@@ -68,16 +87,11 @@ interface Grant {
   reason: TicketReason;
 }
 
-const claimedSet = (db: DB, userId: number, like: string): Set<string> =>
-  new Set(
-    (db.prepare('SELECT reward_key FROM reward_claims WHERE user_id = ? AND reward_key LIKE ?').all(userId, like) as { reward_key: string }[]).map(
-      (r) => r.reward_key,
-    ),
-  );
+const claimedSet = (db: DB, userId: number, like: string): Set<string> => new Set(listClaimedKeys(db, userId, like));
 
 /** Ghi nhận 1 phần thưởng: claim (PK chặn trùng) + cộng vé + ledger. Gọi bên trong transaction. */
 function grant(db: DB, userId: number, g: Grant, auto: boolean, nowIso: string): void {
-  db.prepare('INSERT INTO reward_claims (user_id, reward_key, auto, created_at) VALUES (?,?,?,?)').run(userId, g.key, auto ? 1 : 0, nowIso);
+  insertClaim(db, userId, g.key, auto, nowIso);
   applyTicketDelta(db, userId, g.pool, g.count, g.reason, g.key, null, nowIso);
 }
 
@@ -100,34 +114,21 @@ function dayMetrics(db: DB, userId: number, day: string): DayMetrics {
   const start = iso(gameDayStart(day));
   const end = iso(gameDayStart(day) + DAY_MS);
   const m: DayMetrics = {
-    login: !!db.prepare(`SELECT 1 FROM login_days WHERE user_id = ? AND kind = 'game' AND day = ?`).get(userId, day),
+    login: hasLoginDay(db, userId, 'game', day),
     draws: 0,
     upgradeSuccess: 0,
     cardsReceived: 0,
     factionDraws: zeroFactions(),
     factionCards: zeroFactions(),
   };
-  const byTicket = db
-    .prepare('SELECT ticket_type AS t, COUNT(*) AS n FROM gacha_history WHERE user_id = ? AND created_at >= ? AND created_at < ? GROUP BY ticket_type')
-    .all(userId, start, end) as { t: TicketType; n: number }[];
-  for (const r of byTicket) {
+  for (const r of countDrawsByTicketType(db, userId, start, end)) {
     m.draws += r.n;
     if (r.t !== 'normal') m.factionDraws[r.t] += r.n;
   }
   // Thẻ nhận trong ngày = thẻ từ chiêu mộ (không tính thẻ tạo ra khi ghép, không tính thẻ được tặng)
   m.cardsReceived = m.draws;
-  const byFaction = db
-    .prepare(
-      `SELECT g.faction AS f, COUNT(*) AS n FROM gacha_history h JOIN generals g ON g.id = h.general_id
-        WHERE h.user_id = ? AND h.created_at >= ? AND h.created_at < ? GROUP BY g.faction`,
-    )
-    .all(userId, start, end) as { f: Faction; n: number }[];
-  for (const r of byFaction) m.factionCards[r.f] = r.n;
-  m.upgradeSuccess = (
-    db
-      .prepare(`SELECT COUNT(*) AS n FROM upgrade_history WHERE user_id = ? AND outcome = 'success' AND created_at >= ? AND created_at < ?`)
-      .get(userId, start, end) as { n: number }
-  ).n;
+  for (const r of countDrawsByFaction(db, userId, start, end)) m.factionCards[r.f] = r.n;
+  m.upgradeSuccess = countUpgradeSuccess(db, userId, start, end);
   return m;
 }
 
@@ -174,11 +175,7 @@ const daysInMonth = (ym: string) => new Date(Date.UTC(Number(ym.slice(0, 4)), Nu
 
 function loginView(db: DB, userId: number, today: string, claimed: Set<string>): { month: string; days: LoginDayDto[] } {
   const month = today.slice(0, 7);
-  const logged = new Set(
-    (
-      db.prepare(`SELECT day FROM login_days WHERE user_id = ? AND kind = 'calendar' AND day LIKE ?`).all(userId, `${month}-%`) as { day: string }[]
-    ).map((r) => r.day),
-  );
+  const logged = new Set(listLoginDays(db, userId, `${month}-%`));
   const days: LoginDayDto[] = [];
   for (let d = 1; d <= daysInMonth(month); d++) {
     const date = `${month}-${String(d).padStart(2, '0')}`;
@@ -218,32 +215,14 @@ function milestoneItems(
 }
 
 function achievementView(db: DB, userId: number, claimed: Set<string>): AchievementGroupDto[] {
-  const draws = (db.prepare('SELECT COUNT(*) AS n FROM gacha_history WHERE user_id = ?').get(userId) as { n: number }).n;
+  const draws = countTotalDraws(db, userId);
   // Thẻ nhận từ giftcode thẻ cũ (trước khi giftcode chỉ tặng vé) cũng là thẻ người chơi nhận được
-  const legacyCodeCards = (
-    db.prepare('SELECT COALESCE(SUM(card_count), 0) AS n FROM gift_code_redemptions WHERE user_id = ?').get(userId) as { n: number }
-  ).n;
+  const legacyCodeCards = sumLegacyGiftCodeCards(db, userId);
   // Tướng khác nhau đã thu thập: từ chiêu mộ + giftcode thẻ cũ (không tính thẻ được người khác tặng)
-  const collected = db
-    .prepare(
-      `SELECT g.faction AS f, COUNT(*) AS n FROM generals g WHERE g.id IN (
-         SELECT general_id FROM gacha_history WHERE user_id = ?
-         UNION
-         SELECT json_extract(j.value, '$.generalId') FROM gift_code_redemptions r, json_each(r.cards_snapshot) j WHERE r.user_id = ?
-       ) GROUP BY g.faction`,
-    )
-    .all(userId, userId) as { f: Faction; n: number }[];
   const perFaction = zeroFactions();
-  for (const r of collected) perFaction[r.f] = r.n;
+  for (const r of countCollectedByFaction(db, userId)) perFaction[r.f] = r.n;
   const totalCollected = FACTIONS.reduce((s, f) => s + perFaction[f], 0);
-  const owned = new Map(
-    (
-      db.prepare(`SELECT level, COUNT(*) AS n FROM user_cards WHERE user_id = ? AND status = 'active' GROUP BY level`).all(userId) as {
-        level: number;
-        n: number;
-      }[]
-    ).map((r) => [r.level, r.n]),
-  );
+  const owned = new Map(countOwnedByLevel(db, userId).map((r) => [r.level, r.n]));
 
   const groups: AchievementGroupDto[] = [
     {
@@ -308,7 +287,7 @@ function buildView(ctx: GameContext, userId: number): QuestsDto {
     calendarDate: today,
     resetBonus: {
       tickets: { ...DAILY_RESET_BONUS },
-      granted: !!db.prepare('SELECT 1 FROM reward_claims WHERE user_id = ? AND reward_key = ?').get(userId, `reset:${day}`),
+      granted: hasClaim(db, userId, `reset:${day}`),
     },
     daily: daily.general,
     faction: daily.faction,
@@ -369,10 +348,7 @@ export function touchDaily(ctx: GameContext, userId: number): DailyEventsDto | n
   const now = ctx.now();
   const day = gameDayOf(now);
   const today = calendarDateOf(now);
-  const read = () =>
-    ctx.db.prepare('SELECT last_game_day, last_cal_date FROM daily_state WHERE user_id = ?').get(userId) as
-      | { last_game_day: string; last_cal_date: string }
-      | undefined;
+  const read = () => findDailyState(ctx.db, userId);
   const pre = read();
   if (pre && pre.last_game_day === day && pre.last_cal_date === today) return null;
 
@@ -382,8 +358,8 @@ export function touchDaily(ctx: GameContext, userId: number): DailyEventsDto | n
     const db = ctx.db;
     const nowIso = iso(now);
     const events: DailyEventsDto = { resetBonus: null, autoClaimed: [] };
-    db.prepare(`INSERT OR IGNORE INTO login_days (user_id, kind, day, created_at) VALUES (?, 'game', ?, ?)`).run(userId, day, nowIso);
-    db.prepare(`INSERT OR IGNORE INTO login_days (user_id, kind, day, created_at) VALUES (?, 'calendar', ?, ?)`).run(userId, today, nowIso);
+    insertLoginDayIgnoring(db, userId, 'game', day, nowIso);
+    insertLoginDayIgnoring(db, userId, 'calendar', today, nowIso);
 
     if (!st || st.last_game_day !== day) {
       // 2. Ngày game trước (ngày gần nhất người chơi có vào game) — tự nhận nhiệm vụ đạt mà chưa nhận
@@ -400,8 +376,7 @@ export function touchDaily(ctx: GameContext, userId: number): DailyEventsDto | n
       }
       // 3. Thưởng reset của ngày hiện tại
       const key = `reset:${day}`;
-      const ins = db.prepare('INSERT OR IGNORE INTO reward_claims (user_id, reward_key, auto, created_at) VALUES (?,?,1,?)').run(userId, key, nowIso);
-      if (ins.changes === 1) {
+      if (insertClaimIgnoring(db, userId, key, nowIso) === 1) {
         const got = {} as TicketBalances;
         for (const t of TICKET_TYPES) {
           got[t] = DAILY_RESET_BONUS[t];
@@ -413,23 +388,14 @@ export function touchDaily(ctx: GameContext, userId: number): DailyEventsDto | n
 
     if (st && st.last_cal_date.slice(0, 7) < today.slice(0, 7)) {
       // 4. Tháng mới: tự nhận ngày điểm danh của các tháng trước chưa nhận
-      const old = db
-        .prepare(
-          `SELECT l.day FROM login_days l WHERE l.user_id = ? AND l.kind = 'calendar' AND l.day < ?
-             AND NOT EXISTS (SELECT 1 FROM reward_claims c WHERE c.user_id = l.user_id AND c.reward_key = 'login:' || l.day)`,
-        )
-        .all(userId, `${today.slice(0, 7)}-01`) as { day: string }[];
-      for (const { day: d } of old) {
+      for (const d of listUnclaimedOldCalendarDates(db, userId, `${today.slice(0, 7)}-01`)) {
         const g: Grant = { key: `login:${d}`, name: `Điểm danh ngày ${Number(d.slice(8))}`, pool: 'normal', count: loginDayReward(Number(d.slice(8))), reason: 'achievement' };
         grant(db, userId, g, true, nowIso);
         events.autoClaimed.push({ key: g.key, name: g.name, pool: g.pool, count: g.count });
       }
     }
 
-    db.prepare(
-      `INSERT INTO daily_state (user_id, last_game_day, last_cal_date, updated_at) VALUES (?,?,?,?)
-       ON CONFLICT(user_id) DO UPDATE SET last_game_day = excluded.last_game_day, last_cal_date = excluded.last_cal_date, updated_at = excluded.updated_at`,
-    ).run(userId, day, today, nowIso);
+    upsertDailyState(db, userId, day, today, nowIso);
     return events.resetBonus || events.autoClaimed.length ? events : null;
   });
 }

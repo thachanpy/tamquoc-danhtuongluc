@@ -1,8 +1,6 @@
 import {
   TICKET_TYPES,
   type TicketBalances,
-  type TicketReason,
-  type TicketType,
   type TicketsDto,
   type ClaimRecoveryDto,
   type DevTopupDto,
@@ -16,60 +14,22 @@ import {
   rollTicketType,
   rollTicketTypeAmong,
 } from '@tq/game-config';
-import { AppError, iso, findIdempotent, saveIdempotent, type GameContext } from './context.ts';
-import { tx, type DB } from './db.ts';
-
-const MAX_BALANCE = Number.MAX_SAFE_INTEGER;
-
-export const floorToSlot = (ms: number) => Math.floor(ms / RECOVERY_INTERVAL_MS) * RECOVERY_INTERVAL_MS;
-
-const emptyBalances = (): TicketBalances =>
-  Object.fromEntries(TICKET_TYPES.map((t) => [t, 0])) as TicketBalances;
-
-export function readBalances(db: DB, userId: number): TicketBalances {
-  const rows = db.prepare('SELECT ticket_type, balance FROM user_tickets WHERE user_id = ?').all(userId) as {
-    ticket_type: TicketType;
-    balance: number;
-  }[];
-  const b = emptyBalances();
-  for (const r of rows) b[r.ticket_type] = r.balance;
-  return b;
-}
+import { AppError, type GameContext } from '../context.ts';
+import { iso } from '../utils.ts';
+import { tx } from '../db.ts';
+import {
+  applyTicketDelta,
+  readBalances,
+  emptyBalances,
+  floorToSlot,
+  findRecoveryState,
+  advanceRecoveryState,
+} from '../repositories/ticket.repository.ts';
+import { findIdempotent, saveIdempotent } from '../repositories/idempotency.repository.ts';
 
 /**
- * Thay đổi số dư 1 loại vé + ghi ledger. PHẢI gọi bên trong transaction.
- * Chống số âm và overflow. Trả về id dòng ledger.
+ * Nghiệp vụ vé (mục 3.6, 3.7, 8.2): quà đăng ký, nút cộng vé thử nghiệm, hồi vé theo mốc.
  */
-export function applyTicketDelta(
-  db: DB,
-  userId: number,
-  ticketType: TicketType,
-  delta: number,
-  reason: TicketReason,
-  referenceId: string | null,
-  idempotencyKey: string | null,
-  nowIso: string,
-): number {
-  if (!Number.isSafeInteger(delta) || delta === 0) throw new AppError(500, 'INVALID_DELTA', 'Delta vé không hợp lệ.');
-  const row = db.prepare('SELECT balance FROM user_tickets WHERE user_id = ? AND ticket_type = ?').get(userId, ticketType) as
-    | { balance: number }
-    | undefined;
-  if (!row) throw new AppError(500, 'TICKET_ROW_MISSING', 'Thiếu dòng số dư vé.');
-  const next = row.balance + delta;
-  if (next < 0) throw new AppError(409, 'NO_TICKETS', 'Không đủ vé loại này.');
-  if (next > MAX_BALANCE) throw new AppError(409, 'BALANCE_OVERFLOW', 'Số dư vé vượt giới hạn số học.');
-  const upd = db
-    .prepare('UPDATE user_tickets SET balance = ?, updated_at = ? WHERE user_id = ? AND ticket_type = ? AND balance = ?')
-    .run(next, nowIso, userId, ticketType, row.balance);
-  if (upd.changes !== 1) throw new AppError(409, 'CONCURRENT_UPDATE', 'Số dư vé vừa thay đổi, hãy thử lại.');
-  const ins = db
-    .prepare(
-      `INSERT INTO ticket_transactions (user_id, ticket_type, amount_delta, reason, reference_id, idempotency_key, created_at)
-       VALUES (?,?,?,?,?,?,?)`,
-    )
-    .run(userId, ticketType, delta, reason, referenceId, idempotencyKey, nowIso);
-  return Number(ins.lastInsertRowid);
-}
 
 /**
  * Quà đăng ký: cấp SIGNUP_BONUS_TICKETS vé, mỗi vé roll loại độc lập (server RNG).
@@ -118,14 +78,9 @@ export function devTopup(ctx: GameContext, userId: number, idempotencyKey: strin
  * - Chia batch nội bộ; mỗi batch là 1 transaction: cấp vé + ledger + cập nhật mốc.
  *   Nếu lỗi giữa chừng, các batch đã commit được giữ, lần gọi sau tiếp tục từ mốc đã lưu.
  * - Unique index (user_id, reference_id) cho reason=time_recovery chặn cấp trùng mốc.
- * - Trần RECOVERY_CAP_PER_TYPE theo loại (Vé thường 1000, vé phe 500) CHỈ cho vé hồi: mỗi mốc random trong các loại còn dưới trần;
+ * - Trần RECOVERY_CAP_PER_TYPE theo loại CHỈ cho vé hồi: mỗi mốc random trong các loại còn dưới trần;
  *   cả 5 loại đã đầy thì mốc đó được đánh dấu đã xử lý mà không cấp vé (không cộng bù).
- *   Số dư vượt trần do nguồn khác (nhiệm vụ, giftcode…) được giữ nguyên.
  */
-export function syncRecovery(ctx: GameContext, userId: number): TicketBalances {
-  return syncRecoveryDetailed(ctx, userId).granted;
-}
-
 export function syncRecoveryDetailed(ctx: GameContext, userId: number): { granted: TicketBalances; skippedFull: number } {
   const granted = emptyBalances();
   let skippedFull = 0;
@@ -133,9 +88,7 @@ export function syncRecoveryDetailed(ctx: GameContext, userId: number): { grante
     const done = tx(ctx.db, () => {
       const now = ctx.now();
       const nowSlot = floorToSlot(now);
-      const state = ctx.db
-        .prepare('SELECT last_processed_recovery_at FROM ticket_recovery_state WHERE user_id = ?')
-        .get(userId) as { last_processed_recovery_at: string } | undefined;
+      const state = findRecoveryState(ctx.db, userId);
       if (!state) throw new AppError(500, 'RECOVERY_STATE_MISSING', 'Thiếu trạng thái hồi vé.');
       const last = Date.parse(state.last_processed_recovery_at);
       if (!Number.isFinite(last) || last % RECOVERY_INTERVAL_MS !== 0) {
@@ -159,24 +112,21 @@ export function syncRecoveryDetailed(ctx: GameContext, userId: number): { grante
         granted[type]++;
       }
       const newLast = iso(last + n * RECOVERY_INTERVAL_MS);
-      const upd = ctx.db
-        .prepare(
-          `UPDATE ticket_recovery_state SET last_processed_recovery_at = ?, updated_at = ?
-           WHERE user_id = ? AND last_processed_recovery_at = ?`,
-        )
-        .run(newLast, nowIso, userId, state.last_processed_recovery_at);
-      if (upd.changes !== 1) throw new AppError(409, 'CONCURRENT_UPDATE', 'Trạng thái hồi vé vừa thay đổi.');
+      const changes = advanceRecoveryState(ctx.db, userId, newLast, state.last_processed_recovery_at, nowIso);
+      if (changes !== 1) throw new AppError(409, 'CONCURRENT_UPDATE', 'Trạng thái hồi vé vừa thay đổi.');
       return n === pending;
     });
     if (done) return { granted, skippedFull };
   }
 }
 
+export function syncRecovery(ctx: GameContext, userId: number): TicketBalances {
+  return syncRecoveryDetailed(ctx, userId).granted;
+}
+
 export function getTickets(ctx: GameContext, userId: number): TicketsDto {
   const balances = readBalances(ctx.db, userId);
-  const state = ctx.db
-    .prepare('SELECT last_processed_recovery_at FROM ticket_recovery_state WHERE user_id = ?')
-    .get(userId) as { last_processed_recovery_at: string };
+  const state = findRecoveryState(ctx.db, userId) as { last_processed_recovery_at: string };
   const now = ctx.now();
   const next = floorToSlot(now) + RECOVERY_INTERVAL_MS;
   return {

@@ -17,6 +17,7 @@ Xây dựng game web gacha thu thập thẻ tướng Tam Quốc. Trọng tâm:
 - Giftcode tặng vé quay (mục 3.9).
 - Nhiệm vụ hằng ngày, thưởng reset 05:00, điểm danh theo tháng và thành tựu — chỉ thưởng vé (mục 3.10).
 - Bảng xếp hạng Lực chiến (mục 6.6).
+- Hồ sơ người chơi: đổi ảnh đại diện, tên hiển thị và mật khẩu (mục 3.11).
 - Hiệu ứng hình ảnh và trải nghiệm mở thẻ.
 
 Không có chiến đấu, dàn trận, đội hình, PvP hoặc gameplay chiến thuật trong MVP.
@@ -63,9 +64,9 @@ Cấu trúc gợi ý:
 Cấu trúc frontend (SolidJS, `apps/web/src`):
 
 - `main.tsx`: nạp CSS, tia lửa nền, nhạc, `render(<App/>)`. `App.tsx`: đăng nhập/đăng ký, khung game (thanh trên, thanh vé + đồng hồ hồi vé, tab, router theo hash `#id`), popup giftcode lần đầu, toast sự kiện ngày mới.
-- `pages/*.tsx`: mỗi tab một component (`CollectionPage`, `DrawPage`, `UpgradePage`, `QuestsPage`, `LeaderboardPage`, `HistoryPage`, `GiftCodePage`, `AdminPage`); router mount/unmount bằng `<Dynamic>`, rời trang thì component bị dispose (timer/listener dọn trong `onCleanup`).
-- `state.ts`: dữ liệu nạp lúc vào game (object `state`) + signal `tickets()` (số dư vé), `questBadge`/`pendingBadge`; `badges.ts` tải lại badge; `ui.ts` toast.
-- `components/Card.tsx` (thẻ tướng DOM, dùng chung mọi trang), `components/MusicControl.tsx`, `viewer.tsx` (popup ngắm thẻ, `openCardViewer`).
+- `pages/*.tsx`: mỗi tab một component (`CollectionPage`, `DrawPage`, `UpgradePage`, `QuestsPage`, `LeaderboardPage`, `HistoryPage`, `GiftCodePage`, `ProfilePage`, `AdminPage`); router mount/unmount bằng `<Dynamic>`, rời trang thì component bị dispose (timer/listener dọn trong `onCleanup`).
+- `state.ts`: dữ liệu nạp lúc vào game (object `state`) + signal `tickets()` (số dư vé), `profile()` (tên hiển thị + ảnh đại diện), `questBadge`/`pendingBadge`; `badges.ts` tải lại badge; `ui.ts` toast.
+- `components/Card.tsx` (thẻ tướng DOM, dùng chung mọi trang), `components/Avatar.tsx` (ảnh đại diện, dùng ở thanh trên + trang Hồ sơ), `components/MusicControl.tsx`, `viewer.tsx` (popup ngắm thẻ, `openCardViewer`).
 - `art.ts` (màu phe, bậc khung, `FRAME_LAYOUT`, URL ảnh), `upgrade-groups.ts` (gom thẻ, có test), `api.ts`, `pixi/stage.ts` (PixiJS, gọi từ trang) giữ dạng TypeScript thường.
 - Không dùng innerHTML cho dữ liệu: JSX tự escape. Class CSS/markup giữ như bản cũ nên `style.css`/`theme.css` không đổi.
 - Build cần `vite-plugin-solid`; tsconfig `jsx: preserve`, `jsxImportSource: solid-js`.
@@ -451,7 +452,7 @@ Do chủ dự án yêu cầu. Giftcode **chỉ tặng vé quay**, không tặng 
 
 ### 3.10. Nhiệm vụ hằng ngày và thành tựu
 
-Do chủ dự án yêu cầu. Chỉ thưởng vé. Cấu hình ở `packages/game-config/src/quests.ts`; logic server `apps/api/src/quests.ts`; UI tab **Nhiệm vụ** (`#quests`, `apps/web/src/pages/Quests.tsx`, có badge số phần thưởng chờ nhận).
+Do chủ dự án yêu cầu. Chỉ thưởng vé. Cấu hình ở `packages/game-config/src/quests.ts`; logic server `apps/api/src/managers/quest.manager.ts`; UI tab **Nhiệm vụ** (`#quests`, `apps/web/src/pages/Quests.tsx`, có badge số phần thưởng chờ nhận).
 
 Thời gian:
 
@@ -496,6 +497,17 @@ Thành tựu (không reset, mỗi mốc nhận 1 lần, **tính cả lịch sử
 Không có: thành tựu số lần nâng cấp, nhiệm vụ tuần, rương hoạt động, thành tựu reset hằng ngày, thưởng ngoài vé.
 
 Khoá phần thưởng / `reference_id` ledger: `reset:{ngày}`, `d:{ngày}:{id}`, `f:{ngày}:{phe}:{id}`, `login:{YYYY-MM-DD}`, `a:draws:{n}`, `a:collect:{n}`, `a:fcollect:{phe}:{n}`, `a:own:{lv}:{n}`, `a:cards:{n}`. Lịch sử hiển thị nhãn theo khoá.
+
+### 3.11. Hồ sơ người chơi
+
+Do chủ dự án yêu cầu. Tab **Hồ sơ** (`#profile`, `apps/web/src/pages/Profile.tsx`), chỉ dành cho người chơi (không hiện với admin). Gồm 3 phần: ảnh đại diện, tên hiển thị, đổi mật khẩu.
+
+- **Tên hiển thị** (`display_name`, migration v13): mặc định bằng tên đăng nhập (đặt lúc tạo tài khoản và backfill cho tài khoản cũ). Tối đa `DISPLAY_NAME_MAX` = 24 ký tự, cắt khoảng trắng hai đầu, không rỗng, không chứa ký tự điều khiển. `GET /api/me` trả kèm `displayName` + `avatar`; thanh trên hiển thị tên hiển thị (rơi về tên đăng nhập nếu rỗng).
+- **Ảnh đại diện** (`avatar`, migration v13): lưu dạng chuỗi trong `users.avatar` (không upload file): `null` = mặc định (chữ cái đầu của tên hiển thị).
+  - Chân dung tướng có sẵn: chọn từ roster, lưu `/generals/{artKey}.jpg`.
+  - Ảnh tự tải: giới hạn **1MB** ở client; client **nén + thu nhỏ** ảnh (cắt vuông giữa, resize 256×256, xuất JPEG) thành data URL rồi gửi lên; server chỉ nhận data URL `png/jpeg/webp` hoặc đường dẫn `/generals/*.jpg`, giới hạn độ dài `AVATAR_MAX_LENGTH` = 200.000 ký tự. Ảnh sai định dạng → `INVALID_AVATAR`, quá dài → `AVATAR_TOO_LARGE`.
+- **Đổi mật khẩu**: phải nhập đúng mật khẩu hiện tại (`INVALID_PASSWORD`), mật khẩu mới khác mật khẩu cũ (`SAME_PASSWORD`), dài 6–128. Phiên đăng nhập đang dùng vẫn giữ nguyên sau khi đổi.
+- Endpoint ở mục 8.4g.
 
 ## 4. Gacha
 
@@ -837,7 +849,7 @@ Do chủ dự án yêu cầu. Tab **Xếp hạng** (`#leaderboard`, `apps/web/sr
 - Đồng Lực chiến → đồng hạng (`RANK`); trong cùng hạng sắp theo level cao nhất giảm dần rồi tên A→Z.
 - Trả tối đa `LEADERBOARD_SIZE` (100) người; UI làm nổi bật top `LEADERBOARD_TOP` (10, huy chương vàng/bạc/đồng cho 1–3), khung danh sách cao vừa top 10, cuộn trong khung để xem tới top 100.
 - Luôn hiện **hạng của tôi** (kể cả ngoài top 100) kèm nút "Xem vị trí của tôi" khi nằm trong danh sách nhưng ngoài top 10. Admin thấy "Tài khoản quản trị không tham gia xếp hạng"; người chưa có thẻ thấy "chưa có thẻ".
-- Mỗi dòng: hạng, tên, level cao nhất (màu bậc khung), số thẻ, Lực chiến. Có nút Làm mới.
+- Mỗi dòng: hạng, ảnh đại diện + tên hiển thị (mục 3.11; mặc định là tên đăng nhập), level cao nhất (màu bậc khung), số thẻ, Lực chiến. Có nút Làm mới.
 
 ## 7. Database SQLite
 
@@ -852,12 +864,14 @@ Tên bảng có thể điều chỉnh, nhưng phải giữ nguyên các quy tắ
 - `status` (`pending` | `approved`, migration v6)
 - `is_admin` (0/1)
 - `approved_at`
+- `display_name` (migration v13; mặc định = `username`, mục 3.11)
+- `avatar` (migration v13; data URL ảnh đã thu nhỏ hoặc `/generals/{artKey}.jpg`; null = mặc định, mục 3.11)
 
 ### 7.1b. `sessions`
 
 - `token_hash` (PK, SHA-256 của token; token gốc không lưu), `user_id`, `created_at`, `expires_at`.
 - Phiên đăng nhập lưu trong SQLite nên khởi động lại server **không** phải đăng nhập lại.
-- **Không hết hạn** (chủ dự án yêu cầu; migration v11 cho `expires_at` = NULL và bỏ hạn các phiên cũ). Thời hạn cấu hình ở `SESSION_TTL_MS` (`apps/api/src/auth.ts`, `null` = không hạn).
+- **Không hết hạn** (chủ dự án yêu cầu; migration v11 cho `expires_at` = NULL và bỏ hạn các phiên cũ). Thời hạn cấu hình ở `SESSION_TTL_MS` (`apps/api/src/managers/auth.manager.ts`, `null` = không hạn).
 - Đăng xuất xoá đúng phiên đó khỏi bảng; token cũ dùng lại → 401. Từ chối tài khoản chờ duyệt cũng xoá mọi phiên của tài khoản đó.
 
 ### 7.2. `generals`
@@ -1022,6 +1036,10 @@ Lịch sử tặng thẻ (migration v5).
 - Index `gacha_history(user_id, created_at)`, `upgrade_history(user_id, created_at)`.
 - Ledger thêm reason `daily_reset`, `mission`, `achievement`; unique index (`user_id`, `reference_id`, `ticket_type`) cho 3 reason này.
 
+### 7.8f. Hồ sơ người chơi (migration v13)
+
+- Thêm cột `users.display_name` và `users.avatar`; `UPDATE users SET display_name = username` để tài khoản cũ có tên hiển thị mặc định (mục 3.11). `avatar` mặc định `NULL`.
+
 ### 7.9. Idempotency
 
 Có thể dùng bảng idempotency riêng hoặc các unique constraint phù hợp để bảo đảm:
@@ -1146,13 +1164,20 @@ Server phải:
 
 ### 8.4e. Bảng xếp hạng (mục 6.6)
 
-- `GET /api/leaderboard`: cần đăng nhập, có rate limit. Trả `{ metric: 'power', powerByLevel, top, items[] (≤ 100: rank, username, power, cardCount, maxLevel, isMe), me (null nếu là admin; rank null nếu chưa có thẻ), totalRanked, generatedAt }`. Không lộ thông tin khác của người chơi.
+- `GET /api/leaderboard`: cần đăng nhập, có rate limit. Trả `{ metric: 'power', powerByLevel, top, items[] (≤ 100: rank, username, displayName, avatar, power, cardCount, maxLevel, isMe), me (null nếu là admin; rank null nếu chưa có thẻ), totalRanked, generatedAt }`. `displayName`/`avatar` theo hồ sơ (mục 3.11), mặc định `displayName` = `username`, `avatar` = null. Không lộ thông tin khác của người chơi.
 
 ### 8.4f. Nhiệm vụ & thành tựu (mục 3.10)
 
 - `GET /api/quests`: `gameDay`, `nextResetAt`, `calendarDate`, `resetBonus { tickets, granted }`, `daily[]`, `faction{wei,shu,wu,qun}[]`, `login { month, days[] }`, `achievements[] (nhóm + mốc)`, `claimable`. Mỗi mục có `key`, `progress`, `target`, `reward {pool,count}`, `status` (`progress` | `claimable` | `claimed`).
 - `POST /api/quests/claim`: body `{ keys?: string[] }` (bỏ trống = nhận tất cả). Trả `{ claimed[], balances }`. Không có gì để nhận → 409 `NOTHING_TO_CLAIM`. Có rate limit.
 - `GET /api/me` và `POST /api/tickets/claim-recovery` trả thêm `dailyEvents { resetBonus, autoClaimed[] }` khi request đó vừa xử lý ngày mới.
+
+### 8.4g. Hồ sơ người chơi (mục 3.11)
+
+- `GET /api/me/profile`: trả `{ displayName, avatar }` (cần đăng nhập).
+- `POST /api/me/profile`: body `{ displayName?, avatar? }` (bỏ trống = giữ nguyên; `avatar: null` = xoá ảnh). Chỉ cập nhật field có mặt; không có field nào → 400 `NOTHING_TO_UPDATE`. Lỗi: `INVALID_DISPLAY_NAME`, `INVALID_AVATAR`, `AVATAR_TOO_LARGE`. Trả hồ sơ mới. Có rate limit.
+- `POST /api/me/password`: body `{ currentPassword, newPassword }` (mỗi trường 6–128). Lỗi: `INVALID_PASSWORD`, `SAME_PASSWORD`. Trả `{ ok: true }`. Có rate limit.
+- `GET /api/me` trả thêm `displayName` và `avatar` (mục 3.11).
 
 ### 8.5. Lịch sử
 
@@ -1301,6 +1326,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 
 - Lực chiến = tổng 2^(lv−1) của các cặp (tướng, cấp) khác nhau đang active (thẻ trùng tướng + cấp không cộng thêm); thẻ đã tiêu thụ không tính.
 - Đồng điểm đồng hạng; trong cùng hạng level cao nhất xếp trước.
+- Trả kèm `displayName`/`avatar` theo hồ sơ (mục 3.11): mặc định `displayName` = `username`, `avatar` = null; đổi tên/ảnh thì bảng xếp hạng phản ánh ngay.
 - Admin không xuất hiện, `me` = null; người chưa có thẻ có `rank` null.
 - Tối đa 100 người; hạng của mình ngoài top vẫn trả về đúng.
 - `/api/leaderboard` 401 khi chưa đăng nhập.

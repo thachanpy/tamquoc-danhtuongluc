@@ -2,6 +2,7 @@ import { For, Show, createSignal, onCleanup, onMount } from 'solid-js';
 import type { LeaderboardDto, LeaderboardEntryDto } from '@tq/shared';
 import { api } from '../api.ts';
 import { levelTier } from '../art.ts';
+import { Avatar } from '../components/Avatar.tsx';
 
 const num = (n: number) => n.toLocaleString('vi-VN');
 const time = (iso: string) => new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
@@ -34,7 +35,8 @@ function Row(props: { e: LeaderboardEntryDto }) {
     <div class={`lb-row ${props.e.isMe ? 'me' : ''} ${podium() ? `podium p${props.e.rank}` : ''}`} data-me={props.e.isMe ? '' : undefined}>
       <RankBadge rank={props.e.rank} />
       <span class="lb-name">
-        {props.e.username}
+        <Avatar avatar={props.e.avatar} name={props.e.displayName} class="lb-avatar" />
+        <span class="lb-name-text">{props.e.displayName}</span>
         <Show when={props.e.isMe}>
           {' '}
           <span class="lb-you">Bạn</span>
@@ -119,7 +121,10 @@ export function LeaderboardPage() {
                     <span class="muted small">Hạng của bạn</span>
                     <div class="lb-row me">
                       <RankBadge rank={me().rank} />
-                      <span class="lb-name">{me().username}</span>
+                      <span class="lb-name">
+                        <Avatar avatar={me().avatar} name={me().displayName} class="lb-avatar" />
+                        <span class="lb-name-text">{me().displayName}</span>
+                      </span>
                       <Meta maxLevel={me().maxLevel} cardCount={me().cardCount} />
                       <b class="lb-power">{num(me().power)}</b>
                     </div>

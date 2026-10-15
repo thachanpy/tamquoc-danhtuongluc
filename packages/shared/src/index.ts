@@ -76,7 +76,25 @@ export interface ClaimRecoveryDto extends TicketsDto {
   dailyEvents?: DailyEventsDto;
 }
 
-export interface MeDto {
+// ===== Hồ sơ người chơi (mục 3.11) =====
+
+export const DISPLAY_NAME_MAX = 36;
+
+/** Giới hạn độ dài chuỗi ảnh đại diện lưu ở server (data URL ảnh đã thu nhỏ, hoặc đường dẫn chân dung tướng). */
+export const AVATAR_MAX_LENGTH = 200_000;
+
+/** Hồ sơ người chơi: tên hiển thị + ảnh đại diện. */
+export interface ProfileDto {
+  /** Tên hiển thị; mặc định bằng tên đăng nhập. */
+  displayName: string;
+  /**
+   * Ảnh đại diện: data URL ảnh tự tải (client đã thu nhỏ) hoặc đường dẫn chân dung tướng
+   * `/generals/{artKey}.jpg`; null = dùng ảnh mặc định (chữ cái đầu của tên hiển thị).
+   */
+  avatar: string | null;
+}
+
+export interface MeDto extends ProfileDto {
   id: number;
   username: string;
   /** Quản trị viên: thấy tab Quản trị. */
@@ -558,6 +576,25 @@ export const schemas = {
       pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
     },
   },
+  profileBody: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      // Bỏ trống = giữ nguyên. Server kiểm tra tên sau khi cắt khoảng trắng và giới hạn ảnh đại diện.
+      displayName: { type: 'string', minLength: 1, maxLength: DISPLAY_NAME_MAX },
+      // Dùng mảng type thay vì anyOf: ajv của Fastify (coerceTypes) sẽ ép null thành '' nếu đi qua anyOf.
+      avatar: { type: ['string', 'null'], maxLength: AVATAR_MAX_LENGTH },
+    },
+  },
+  passwordBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['currentPassword', 'newPassword'],
+    properties: {
+      currentPassword: { type: 'string', minLength: 6, maxLength: 128 },
+      newPassword: { type: 'string', minLength: 6, maxLength: 128 },
+    },
+  },
 } as const;
 
 // ======================= Bảng xếp hạng (mục 6.6) =======================
@@ -565,7 +602,12 @@ export const schemas = {
 export interface LeaderboardEntryDto {
   /** Hạng theo Lực chiến (đồng điểm => đồng hạng). null = chưa có thẻ nên chưa xếp hạng. */
   rank: number | null;
+  /** Tên đăng nhập (dùng phân định nội bộ / sắp xếp). */
   username: string;
+  /** Tên hiển thị (mặc định = tên đăng nhập; xem mục 3.11). */
+  displayName: string;
+  /** Ảnh đại diện (xem mục 3.11); null = dùng ảnh mặc định. */
+  avatar: string | null;
   power: number;
   cardCount: number;
   maxLevel: number | null;

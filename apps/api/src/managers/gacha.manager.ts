@@ -6,10 +6,29 @@ import {
   type DrawResultDto,
   type DrawnCardDto,
 } from '@tq/shared';
-import { GACHA_LEVEL_RATES, BPS_SCALE, DRAW_COUNT_OPTIONS, DRAW_ALL_MAX, UPGRADE_INPUT_COUNT, QUICK_UPGRADE_MAX_LEVEL, GIFT_MAX_CARDS, GIFT_CODE_MAX_TICKETS, UPGRADE_SUCCESS_BPS, UPGRADE_FAILURE_DISTRIBUTION, GENERALS_BY_ID, poolForTicket, rollLevel } from '@tq/game-config';
-import { AppError, iso, sha256, findIdempotent, saveIdempotent, type GameContext } from './context.ts';
-import { tx } from './db.ts';
-import { applyTicketDelta, getTickets, readBalances, syncRecovery } from './tickets.ts';
+import {
+  GACHA_LEVEL_RATES,
+  BPS_SCALE,
+  DRAW_COUNT_OPTIONS,
+  DRAW_ALL_MAX,
+  UPGRADE_INPUT_COUNT,
+  QUICK_UPGRADE_MAX_LEVEL,
+  GIFT_MAX_CARDS,
+  GIFT_CODE_MAX_TICKETS,
+  UPGRADE_SUCCESS_BPS,
+  UPGRADE_FAILURE_DISTRIBUTION,
+  GENERALS_BY_ID,
+  poolForTicket,
+  rollLevel,
+} from '@tq/game-config';
+import { AppError, type GameContext } from '../context.ts';
+import { iso, sha256 } from '../utils.ts';
+import { tx } from '../db.ts';
+import { applyTicketDelta, readBalances } from '../repositories/ticket.repository.ts';
+import { insertCard } from '../repositories/card.repository.ts';
+import { insertGacha } from '../repositories/gacha.repository.ts';
+import { findIdempotent, saveIdempotent } from '../repositories/idempotency.repository.ts';
+import { syncRecovery, getTickets } from './ticket.manager.ts';
 
 export function getGachaConfig(): GachaConfigDto {
   return {
@@ -69,13 +88,6 @@ export function draw(
     const nowIso = iso(ctx.now());
     const pool = poolForTicket(ticketType);
     if (pool.length === 0) throw new AppError(500, 'POOL_EMPTY', 'Pool tướng rỗng.');
-    const insCard = ctx.db.prepare(
-      'INSERT INTO user_cards (user_id, general_id, level, created_at, updated_at) VALUES (?,?,?,?,?)',
-    );
-    const insHist = ctx.db.prepare(
-      `INSERT INTO gacha_history (user_id, ticket_type, general_id, card_id, card_level, ticket_transaction_id, idempotency_key, created_at)
-       VALUES (?,?,?,?,?,?,?,?)`,
-    );
 
     const results: DrawnCardDto[] = [];
     for (let i = 0; i < n; i++) {
@@ -87,10 +99,19 @@ export function draw(
       const general = pool[ctx.rand(pool.length)]!;
       const level = rollLevel(GACHA_LEVEL_RATES, ctx.rand);
       // Bước 8-9: tạo thẻ + lịch sử
-      const cardId = Number(insCard.run(userId, general.id, level, nowIso, nowIso).lastInsertRowid);
-      const hist = insHist.run(userId, ticketType, general.id, cardId, level, ttxId, rowKey, nowIso);
+      const cardId = insertCard(ctx.db, userId, general.id, level, nowIso);
+      const drawId = insertGacha(ctx.db, {
+        userId,
+        ticketType,
+        generalId: general.id,
+        cardId,
+        cardLevel: level,
+        ticketTransactionId: ttxId,
+        idempotencyKey: rowKey,
+        createdAt: nowIso,
+      });
       results.push({
-        drawId: Number(hist.lastInsertRowid),
+        drawId,
         card: { id: cardId, generalId: general.id, level, createdAt: nowIso },
         general: { ...general },
       });

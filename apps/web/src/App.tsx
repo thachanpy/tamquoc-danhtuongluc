@@ -2,11 +2,12 @@ import { For, Show, createEffect, createSignal, onCleanup, onMount, type JSX } f
 import { Dynamic, render } from 'solid-js/web';
 import { TICKET_LABELS, TICKET_TYPES, type DailyEventsDto, type GiftCodePublicDto, type TicketType } from '@tq/shared';
 import { api, hasToken, setToken, type ApiError } from './api.ts';
-import { pendingBadge, questBadge, setPendingBadge, setQuestBadge, setTickets, state, tickets } from './state.ts';
+import { pendingBadge, profile, questBadge, setPendingBadge, setProfile, setQuestBadge, setTickets, state, tickets } from './state.ts';
 import { refreshPendingBadge, refreshQuestBadge } from './badges.ts';
 import { toast } from './ui.ts';
 import { rewardText } from './giftcode-text.ts';
 import { MusicControl } from './components/MusicControl.tsx';
+import { Avatar } from './components/Avatar.tsx';
 import { CollectionPage } from './pages/Collection.tsx';
 import { DrawPage } from './pages/Draw.tsx';
 import { UpgradePage } from './pages/Upgrade.tsx';
@@ -14,6 +15,7 @@ import { QuestsPage } from './pages/Quests.tsx';
 import { LeaderboardPage } from './pages/Leaderboard.tsx';
 import { HistoryPage } from './pages/History.tsx';
 import { GiftCodePage } from './pages/GiftCode.tsx';
+import { ProfilePage } from './pages/Profile.tsx';
 import { AdminPage } from './pages/Admin.tsx';
 
 type PageDef = { label: string; component: () => JSX.Element; adminOnly?: boolean };
@@ -25,6 +27,7 @@ const PAGES = {
   leaderboard: { label: 'Xếp hạng', component: LeaderboardPage },
   history: { label: 'Lịch sử', component: HistoryPage },
   giftcode: { label: 'Giftcode', component: GiftCodePage },
+  profile: { label: 'Hồ sơ', component: ProfilePage },
   admin: { label: 'Quản trị', component: AdminPage, adminOnly: true },
 } satisfies Record<string, PageDef>;
 type PageId = keyof typeof PAGES;
@@ -66,6 +69,7 @@ export function App() {
       state.username = me.username;
       state.isAdmin = me.isAdmin;
       state.features = me.features;
+      setProfile({ displayName: me.displayName, avatar: me.avatar });
       state.generals = generals.items;
       state.generalsById = new Map(generals.items.map((g) => [g.id, g]));
       state.config = config;
@@ -267,7 +271,10 @@ function Shell(props: { onLogout: () => void }) {
           </Show>
           <div class="user">
             <MusicControl />
-            <span>{state.username}</span>
+            <span class="user-id">
+              <Avatar avatar={profile().avatar} name={profile().displayName} class="head-avatar" />
+              <span class="user-name">{profile().displayName || state.username}</span>
+            </span>
             <button class="btn ghost small" onClick={() => void logout()}>
               Đăng xuất
             </button>

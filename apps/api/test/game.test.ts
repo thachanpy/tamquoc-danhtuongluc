@@ -3,15 +3,16 @@ import assert from 'node:assert/strict';
 import { randomInt } from 'node:crypto';
 import { openDatabase } from '../src/db.ts';
 import { AppError, type GameContext } from '../src/context.ts';
-import { register as rawRegister } from '../src/auth.ts';
-import { approveUser } from '../src/admin.ts';
-import { applyTicketDelta, claimRecovery, devTopup, getTickets, readBalances, syncRecovery } from '../src/tickets.ts';
-import { draw } from '../src/gacha.ts';
-import { attemptUpgrade, previewUpgrade, quickUpgrade } from '../src/upgrade.ts';
-import { giftCards, listRecipients } from '../src/gift.ts';
-import { listCards, listHistory } from '../src/queries.ts';
+import { register as rawRegister } from '../src/managers/auth.manager.ts';
+import { approveUser } from '../src/managers/admin.manager.ts';
+import { applyTicketDelta, readBalances } from '../src/repositories/ticket.repository.ts';
+import { claimRecovery, devTopup, getTickets, syncRecovery } from '../src/managers/ticket.manager.ts';
+import { draw } from '../src/managers/gacha.manager.ts';
+import { attemptUpgrade, previewUpgrade, quickUpgrade } from '../src/managers/upgrade.manager.ts';
+import { giftCards, listRecipients } from '../src/managers/gift.manager.ts';
+import { listCards, listHistory } from '../src/managers/collection.manager.ts';
 import { seedGenerals } from '../src/seed.ts';
-import { getLeaderboard } from '../src/leaderboard.ts';
+import { getLeaderboard } from '../src/managers/leaderboard.manager.ts';
 import { runMigrations } from '../src/migrations.ts';
 import { DatabaseSync } from 'node:sqlite';
 import { RECOVERY_CAP_PER_TYPE, DRAW_ALL_MAX, ROSTER } from '@tq/game-config';
@@ -120,7 +121,7 @@ test('đăng ký: nhận đúng 100 vé, loại vé roll độc lập, ledger kh
 test('quà đăng ký chỉ 1 lần: đăng nhập lại không cấp thêm; unique index chặn cấp lần 2', async () => {
   const h = makeCtx();
   const { userId } = register(h.ctx, 'alice', 'secret123');
-  const { login } = await import('../src/auth.ts');
+  const { login } = await import('../src/managers/auth.manager.ts');
   login(h.ctx, 'alice', 'secret123');
   login(h.ctx, 'alice', 'secret123');
   assert.equal(getTickets(h.ctx, userId).total, BONUS);
@@ -293,8 +294,8 @@ test('migration v6: tài khoản cũ được coi là đã duyệt, id nhỏ nh�
 
 test('đăng ký: tài khoản đầu tiên là admin & được duyệt; tài khoản sau chờ duyệt, chưa có vé, chưa đăng nhập được', async () => {
   const h = makeCtx();
-  (await import('../src/settings.ts')).setRequireApproval(h.ctx, true);
-  const { login } = await import('../src/auth.ts');
+  (await import('../src/managers/settings.manager.ts')).setRequireApproval(h.ctx, true);
+  const { login } = await import('../src/managers/auth.manager.ts');
   const first = rawRegister(h.ctx, 'boss', 'secret123');
   assert.equal(first.status, 'approved');
   const second = rawRegister(h.ctx, 'newbie', 'secret123');
@@ -1009,7 +1010,7 @@ test('lịch sử gồm vé hồi, vé đã dùng, gacha', () => {
 test('giftcode: 4 code tân thủ là 200 VÉ mỗi loại, không hạn, featured', async () => {
   const h = makeCtx();
   const { userId } = register(h.ctx, 'alice', 'secret123');
-  const { listFeaturedGiftCodes } = await import('../src/giftcode.ts');
+  const { listFeaturedGiftCodes } = await import('../src/managers/giftcode.manager.ts');
   const list = listFeaturedGiftCodes(h.ctx, userId);
   assert.deepEqual(
     list.map((c) => [c.code, c.rewards, c.expiresAt, c.redeemed]),
@@ -1025,7 +1026,7 @@ test('giftcode: 4 code tân thủ là 200 VÉ mỗi loại, không hạn, featur
 test('giftcode: nhập THUCQUOC => +200 Vé Thục (ledger giftcode), không tạo thẻ; nhập lần 2 bị chặn', async () => {
   const h = makeCtx();
   const { userId } = register(h.ctx, 'alice', 'secret123');
-  const { redeemGiftCode, listFeaturedGiftCodes } = await import('../src/giftcode.ts');
+  const { redeemGiftCode, listFeaturedGiftCodes } = await import('../src/managers/giftcode.manager.ts');
   const before = readBalances(h.ctx.db, userId);
   const r = redeemGiftCode(h.ctx, userId, ' thucquoc ');
   assert.equal(r.code, 'THUCQUOC');
@@ -1056,7 +1057,7 @@ test('giftcode: nhập THUCQUOC => +200 Vé Thục (ledger giftcode), không t�
 test('giftcode chỉ tặng vé: tạo code có thẻ bị từ chối; code nhiều loại vé, hạn sử dụng, tắt code, code sai', async () => {
   const h = makeCtx();
   const { userId } = register(h.ctx, 'alice', 'secret123');
-  const { redeemGiftCode, adminCreateGiftCode, adminSetGiftCodeActive } = await import('../src/giftcode.ts');
+  const { redeemGiftCode, adminCreateGiftCode, adminSetGiftCodeActive } = await import('../src/managers/giftcode.manager.ts');
   assert.throws(() => adminCreateGiftCode(h.ctx, userId, { code: 'THE', rewards: [{ kind: 'card', pool: 'shu', count: 5 }] }), errCode('INVALID_REWARDS'));
   const c = adminCreateGiftCode(h.ctx, userId, {
     code: 'mix-01',
@@ -1098,7 +1099,7 @@ test('giftcode chỉ tặng vé: tạo code có thẻ bị từ chối; code nhi
 test('giftcode thẻ cũ: bị tắt, không nhập được, không bật lại được', async () => {
   const h = makeCtx();
   const { userId } = register(h.ctx, 'alice', 'secret123');
-  const { redeemGiftCode, adminSetGiftCodeActive } = await import('../src/giftcode.ts');
+  const { redeemGiftCode, adminSetGiftCodeActive } = await import('../src/managers/giftcode.manager.ts');
   // Code thẻ cũ (dữ liệu trước v9) — giả lập bằng cách ghi trực tiếp
   const id = Number(
     h.ctx.db
@@ -1114,7 +1115,7 @@ test('giftcode thẻ cũ: bị tắt, không nhập được, không bật lại
 test('giftcode nguyên tử: lỗi giữa chừng => không cộng vé nào, chưa tính là đã nhập', async () => {
   const h = makeCtx();
   const { userId } = register(h.ctx, 'alice', 'secret123');
-  const { redeemGiftCode, adminCreateGiftCode } = await import('../src/giftcode.ts');
+  const { redeemGiftCode, adminCreateGiftCode } = await import('../src/managers/giftcode.manager.ts');
   adminCreateGiftCode(h.ctx, userId, { code: 'ATOM', rewards: [{ pool: 'wu', count: 50 }, { pool: 'qun', count: 50 }] });
   const b0 = readBalances(h.ctx.db, userId);
   // Ép lỗi ở bước ghi lượt nhập (sau khi đã cộng vé) bằng trigger
@@ -1145,6 +1146,8 @@ test('leaderboard: Lực chiến = tổng 2^(lv-1) mỗi (tướng, cấp) tính
   const used = insertCard(ctx, b, 'zhao-yun', 1);
   ctx.db.prepare("UPDATE user_cards SET status = 'consumed', consumed_at = 'x' WHERE id = ?").run(used); // không tính
   for (let i = 0; i < 5; i++) insertCard(ctx, c, 'sun-quan', 10); // 5 thẻ Tôn Quyền Lv.10 => chỉ 512; max Lv10 => trên bob
+  // Hồ sơ (mục 3.11): bob đổi tên hiển thị + ảnh đại diện => bảng xếp hạng trả về cả hai
+  ctx.db.prepare("UPDATE users SET display_name = 'Lưu Bị', avatar = '/generals/liu-bei.jpg' WHERE id = ?").run(b);
 
   const lb = getLeaderboard(ctx, b);
   assert.equal(lb.totalRanked, 3);
@@ -1156,8 +1159,20 @@ test('leaderboard: Lực chiến = tổng 2^(lv-1) mỗi (tướng, cấp) tính
       [2, 'bob', 512, 9],
     ],
   );
+  // Tên hiển thị mặc định = tên đăng nhập, ảnh mặc định = null
+  assert.equal(lb.items.find((e) => e.username === 'alice')!.displayName, 'alice');
+  assert.equal(lb.items.find((e) => e.username === 'alice')!.avatar, null);
   assert.equal(lb.items.find((e) => e.isMe)?.username, 'bob');
-  assert.deepEqual(lb.me, { rank: 2, username: 'bob', power: 512, cardCount: 3, maxLevel: 9, isMe: true });
+  assert.deepEqual(lb.me, {
+    rank: 2,
+    username: 'bob',
+    displayName: 'Lưu Bị',
+    avatar: '/generals/liu-bei.jpg',
+    power: 512,
+    cardCount: 3,
+    maxLevel: 9,
+    isMe: true,
+  });
   assert.equal(lb.items.find((e) => e.username === 'carol')!.cardCount, 5); // số thẻ vẫn đếm đủ
   assert.equal(lb.powerByLevel[10], 512);
 
@@ -1168,7 +1183,16 @@ test('leaderboard: Lực chiến = tổng 2^(lv-1) mỗi (tướng, cấp) tính
 
   // Người chưa có thẻ: chưa xếp hạng
   const none = getLeaderboard(ctx, Number((ctx.db.prepare("SELECT id FROM users WHERE username='nocards'").get() as { id: number }).id));
-  assert.deepEqual(none.me, { rank: null, username: 'nocards', power: 0, cardCount: 0, maxLevel: null, isMe: true });
+  assert.deepEqual(none.me, {
+    rank: null,
+    username: 'nocards',
+    displayName: 'nocards',
+    avatar: null,
+    power: 0,
+    cardCount: 0,
+    maxLevel: null,
+    isMe: true,
+  });
 });
 
 test('leaderboard: tối đa 100 người, hạng của mình ngoài top vẫn trả về', () => {

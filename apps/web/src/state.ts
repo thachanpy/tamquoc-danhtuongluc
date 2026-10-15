@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import type { GachaConfigDto, GeneralDto, TicketsDto } from '@tq/shared';
+import type { GachaConfigDto, GeneralDto, ProfileDto, TicketsDto } from '@tq/shared';
 
 /**
  * Trạng thái client — chỉ là bản sao để hiển thị; server là nguồn sự thật.
@@ -29,6 +29,11 @@ export function setTickets(t: TicketsDto) {
 /** Badge tab Nhiệm vụ (số phần thưởng chờ nhận) và tab Quản trị (số tài khoản chờ duyệt). */
 export const [questBadge, setQuestBadge] = createSignal(0);
 export const [pendingBadge, setPendingBadge] = createSignal(0);
+
+const [profileSig, setProfileSig] = createSignal<ProfileDto>({ displayName: '', avatar: null });
+/** Hồ sơ hiển thị (tên hiển thị + ảnh đại diện) — reactive vì đổi được ở trang Hồ sơ. */
+export const profile = profileSig;
+export const setProfile = setProfileSig;
 
 export const gen = (id: string): GeneralDto =>
   state.generalsById.get(id) ?? { id, name: id, faction: 'qun', artKey: id };

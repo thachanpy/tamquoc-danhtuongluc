@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { randomInt } from 'node:crypto';
 import { openDatabase } from '../src/db.ts';
 import { AppError, type GameContext } from '../src/context.ts';
-import { register as rawRegister } from '../src/auth.ts';
-import { approveUser } from '../src/admin.ts';
-import { applyTicketDelta, readBalances } from '../src/tickets.ts';
-import { draw } from '../src/gacha.ts';
-import { touchDaily, getQuests, claimQuests, gameDayOf, calendarDateOf } from '../src/quests.ts';
+import { register as rawRegister } from '../src/managers/auth.manager.ts';
+import { approveUser } from '../src/managers/admin.manager.ts';
+import { applyTicketDelta, readBalances } from '../src/repositories/ticket.repository.ts';
+import { draw } from '../src/managers/gacha.manager.ts';
+import { touchDaily, getQuests, claimQuests, gameDayOf, calendarDateOf } from '../src/managers/quest.manager.ts';
 import { DAILY_MAX, DAILY_RESET_BONUS } from '@tq/game-config';
 
 /** 10:00 giờ Việt Nam ngày 14/10/2026 (= 03:00 UTC). */

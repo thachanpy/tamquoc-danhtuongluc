@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { openDatabase } from '../src/db.ts';
 import { createContext } from '../src/context.ts';
 import { buildServer } from '../src/server.ts';
-import { setRequireApproval } from '../src/settings.ts';
+import { setRequireApproval } from '../src/managers/settings.manager.ts';
 import { DAILY_RESET_BONUS } from '@tq/game-config';
 
 /** Thưởng reset 05:00 (mục 3.10) được cộng ở request đầu tiên trong ngày của mỗi người chơi. */
@@ -446,6 +446,8 @@ test('HTTP: /api/leaderboard cần đăng nhập; admin không có hạng', asyn
   const mine = (await app.inject({ method: 'GET', url: '/api/leaderboard', headers: pAuth })).json();
   assert.equal(mine.me.rank, 1);
   assert.equal(mine.me.username, 'player_lb');
+  assert.equal(mine.me.displayName, 'player_lb'); // tên hiển thị mặc định = tên đăng nhập (mục 3.11)
+  assert.equal(mine.me.avatar, null);
   assert.ok(mine.me.power >= 1);
 });
 
@@ -510,6 +512,62 @@ test('HTTP: admin không chơi game — chặn thao tác người chơi, không 
   const gift = await app.inject({ method: 'POST', url: '/api/gifts', headers: auth, payload: { toUsername: 'BOSS', cardIds: [d.results[0].card.id], idempotencyKey: 'gift-admin-01' } });
   assert.equal(gift.statusCode, 400);
   assert.equal(gift.json().error.code, 'RECIPIENT_IS_ADMIN');
+  await app.close();
+});
+
+test('HTTP: hồ sơ — đổi tên hiển thị (mặc định = tên đăng nhập), đặt/xoá ảnh đại diện, chặn dữ liệu sai', async () => {
+  const { app, auth } = await setup(false, false);
+  const me0 = (await app.inject({ method: 'GET', url: '/api/me', headers: auth })).json();
+  assert.equal(me0.displayName, 'tester');
+  assert.equal(me0.avatar, null);
+
+  // Đổi tên hiển thị: cắt khoảng trắng hai đầu
+  const r = await app.inject({ method: 'POST', url: '/api/me/profile', headers: auth, payload: { displayName: '  Quan Vũ  ' } });
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.json().displayName, 'Quan Vũ');
+  assert.equal((await app.inject({ method: 'GET', url: '/api/me', headers: auth })).json().displayName, 'Quan Vũ');
+
+  // Ảnh gợi ý (chân dung tướng) và ảnh tự tải (data URL đã thu nhỏ)
+  const portrait = await app.inject({ method: 'POST', url: '/api/me/profile', headers: auth, payload: { avatar: '/generals/cao-cao.jpg' } });
+  assert.equal(portrait.json().avatar, '/generals/cao-cao.jpg');
+  const dataUrl = 'data:image/png;base64,iVBORw0KGgo=';
+  const uploaded = await app.inject({ method: 'POST', url: '/api/me/profile', headers: auth, payload: { avatar: dataUrl } });
+  assert.equal(uploaded.json().avatar, dataUrl);
+  // Xoá ảnh
+  assert.equal((await app.inject({ method: 'POST', url: '/api/me/profile', headers: auth, payload: { avatar: null } })).json().avatar, null);
+
+  const bad = await app.inject({ method: 'POST', url: '/api/me/profile', headers: auth, payload: { avatar: 'https://example.com/x.png' } });
+  assert.equal(bad.statusCode, 400);
+  assert.equal(bad.json().error.code, 'INVALID_AVATAR');
+  assert.equal((await app.inject({ method: 'POST', url: '/api/me/profile', headers: auth, payload: { displayName: '   ' } })).json().error.code, 'INVALID_DISPLAY_NAME');
+  assert.equal((await app.inject({ method: 'POST', url: '/api/me/profile', headers: auth, payload: {} })).json().error.code, 'NOTHING_TO_UPDATE');
+  assert.equal((await app.inject({ method: 'POST', url: '/api/me/profile', payload: { displayName: 'ai_do' } })).statusCode, 401);
+  await app.close();
+});
+
+test('HTTP: đổi mật khẩu — sai mật khẩu hiện tại bị chặn; đổi xong chỉ mật khẩu mới đăng nhập được', async () => {
+  const { app, auth } = await setup(false, false);
+  const wrong = await app.inject({
+    method: 'POST',
+    url: '/api/me/password',
+    headers: auth,
+    payload: { currentPassword: 'wrongpass', newPassword: 'newsecret123' },
+  });
+  assert.equal(wrong.statusCode, 400);
+  assert.equal(wrong.json().error.code, 'INVALID_PASSWORD');
+
+  const ok = await app.inject({
+    method: 'POST',
+    url: '/api/me/password',
+    headers: auth,
+    payload: { currentPassword: 'secret123', newPassword: 'newsecret123' },
+  });
+  assert.equal(ok.statusCode, 200);
+  // Phiên đang dùng vẫn hoạt động, mật khẩu cũ không dùng được nữa
+  assert.equal((await app.inject({ method: 'GET', url: '/api/me', headers: auth })).statusCode, 200);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'tester', password: 'secret123' } })).statusCode, 401);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'tester', password: 'newsecret123' } })).statusCode, 200);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/me/password', payload: { currentPassword: 'newsecret123', newPassword: 'othersecret123' } })).statusCode, 401);
   await app.close();
 });
 
