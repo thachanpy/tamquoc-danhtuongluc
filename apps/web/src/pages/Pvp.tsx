@@ -912,6 +912,8 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   const analysis = createMemo(() => analyzeBattle(units, props.battle.events));
   let builder = createDetailBuilder(units);
   let timer: number | undefined;
+  /** Đang tua nhanh tới cuối trận: bỏ qua cập nhật sân đấu/diễn biến theo từng sự kiện (gộp một lần ở cuối). */
+  let fastForward = false;
   /** Ô chứa canvas sân đấu PixiJS (chỉ hiển thị lại dữ liệu server đã mô phỏng). */
   let field!: HTMLDivElement;
   let arena: ArenaHandle | undefined;
@@ -949,11 +951,15 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   }
 
   /** Số sát thương/hồi máu bay lên trên ô tướng (vẽ bằng PixiJS). */
-  const addFloat = (idx: number, text: string, crit: boolean, heal = false) => arena?.float(idx, text, crit, heal);
+  const addFloat = (idx: number, text: string, crit: boolean, heal = false) => {
+    // Tua nhanh: không tạo hiệu ứng bay để tránh dựng hàng nghìn đối tượng PixiJS trong một lúc.
+    if (fastForward) return;
+    arena?.float(idx, text, crit, heal);
+  };
 
   function apply(ev: PvpEventDto) {
     builder.add(ev);
-    setDetail(builder.rows.slice());
+    if (!fastForward) setDetail(builder.rows.slice());
     switch (ev.t) {
       case 'round':
         setRound(ev.round);
@@ -1111,7 +1117,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         setReport(true);
         break;
     }
-    pushArena();
+    if (!fastForward) pushArena();
   }
 
   function step() {
@@ -1166,9 +1172,18 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   function toEnd() {
     pause();
     const evs = props.battle.events;
-    for (let c = cursor(); c < evs.length; c++) apply(evs[c]!);
+    // Trận dài (nhất là trận HOÀ phải chạy hết PVP_MAX_ROUNDS) có thể tới hàng nghìn sự kiện.
+    // Tính trạng thái ở chế độ "tua nhanh" rồi cập nhật sân đấu + diễn biến MỘT LẦN để không bị đơ.
+    fastForward = true;
+    try {
+      for (let c = cursor(); c < evs.length; c++) apply(evs[c]!);
+    } finally {
+      fastForward = false;
+    }
     setCursor(evs.length);
+    setDetail(builder.rows.slice());
     setDone(true);
+    pushArena();
   }
   /** "Kết quả": nhảy tới cuối trận rồi mở bảng kết quả (diễn biến + tổng kết chỉ số). */
   function showResult() {

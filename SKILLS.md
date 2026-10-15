@@ -174,7 +174,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 |---|-------|-----------|-----|---------|------------------|
 | 1 | **Đổng Trác** | Phòng thủ | ⭐ | **Bạo chúa**: Giảm máu tối đa của toàn bộ đối thủ 10%, Hồi máu bản thân 20% HP tối đa và Phản kích toàn bộ địch (Nội tại: cấp×3%, max 30%, ST 30%). | Giảm HP max địch, Hồi máu, Phản kích diện rộng |
 | 2 | **Lữ Bố** | Tấn công | ⭐ | **Vô song**: Tấn công toàn bộ địch 127%, Tăng tỷ lệ chí mạng bản thân 20%, Tăng 20% ST chí mạng, Hút máu theo cấp (cấp×3%, max 30%) và Phản kích toàn bộ địch (Nội tại: cấp×3%, max 30%, ST 30%). | Tăng chí mạng, Tăng ST chí mạng, Hút máu, Phản kích diện rộng |
-| 3 | **Điêu Thuyền** | Hỗ trợ | ⭐ | **Bế nguyệt**: Tấn công đơn 110%, gây Choáng (tỷ lệ cấp×8%, max 80%) and Giảm sát thương mục tiêu 20%. | Choáng, Giảm ST địch |
+| 3 | **Điêu Thuyền** | Hỗ trợ | ⭐ | **Bế nguyệt**: Tấn công đơn 110%, gây Choáng (tỷ lệ cấp×8%, max 80%) và Giảm sát thương mục tiêu 20%. | Choáng, Giảm ST địch |
 | 4 | **Viên Thiệu** | Hỗ trợ | ⭐ | **Thế gia hào tộc**: Tăng máu tối đa toàn đội 15% và Buff sát thương toàn đội 10% (3 lượt). | Tăng HP max, Buff ST |
 | 5 | **Viên Thuật** | Hỗ trợ | | **Trọng thị đế nghiệp**: Giảm máu tối đa hàng trước của đối thủ 15% (3 lượt). | Giảm HP max địch |
 | 6 | **Công Tôn Toản** | Tấn công | ⭐ | **Bạch mã nghĩa tùng**: Tấn công hàng sau 220%, Tăng tỷ lệ chí mạng 20% và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Tăng chí mạng, Phản kích đơn |
