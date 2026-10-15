@@ -40,7 +40,7 @@ export const pvpLc = (style: PvpStyle, level: number) => PVP_LC_BY_STYLE[style] 
 /**
  * Buff tăng sức mạnh mà kỹ năng phát cho phạm vi `buffScope` MỖI LẦN tướng tới lượt.
  * Mỗi lần thi triển cộng thêm MỘT lớp; các lớp cộng dồn tối đa `maxLayers` lớp,
- * mỗi lớp hiệu lực `rounds` lượt (mặc định 2 lượt, 3 lớp — SKILLS.md mục 1).
+ * mỗi lớp hiệu lực `rounds` lượt (mặc định 3 lượt, 3 lớp — SKILLS.md mục 1).
  */
 export interface PvpBuff {
   /** % sát thương cộng mỗi lớp (theo sát thương nền của chính tướng nhận buff). */
@@ -59,8 +59,8 @@ export interface PvpBuff {
   maxLayers: number;
 }
 
-/** Số lượt mỗi lớp buff còn hiệu lực (kể cả lượt thi triển). */
-export const PVP_BUFF_ROUNDS = 2;
+/** Số lượt mỗi lớp buff còn hiệu lực (kể cả lượt thi triển). Mặc định khi không ghi rõ: 3 lượt. */
+export const PVP_BUFF_ROUNDS = 3;
 /** Số lớp buff cộng dồn tối đa (lớp mới nhất thay lớp cũ nhất khi vượt trần). */
 export const PVP_BUFF_MAX_LAYERS = 3;
 
@@ -79,7 +79,7 @@ export const PVP_NO_BUFF: PvpBuff = {
 
 /**
  * Hiệu ứng bất lợi mà kỹ năng áp lên mục tiêu địch. Mỗi lần thi triển cộng MỘT lớp; các lớp cộng dồn
- * tối đa `maxLayers`, mỗi lớp hiệu lực `rounds` lượt. Giá trị là MỨC GIẢM (dương).
+ * tối đa `maxLayers`, mỗi lớp hiệu lực `rounds` lượt (mặc định 3 lượt). Giá trị là MỨC GIẢM (dương).
  * Riêng thiêu đốt có vòng đời và trần lớp riêng (`burnRounds`, `burnMaxLayers`).
  */
 export interface PvpDebuff {
@@ -105,15 +105,15 @@ export interface PvpDebuff {
   dispel: boolean;
 }
 
-/** Số lượt mỗi lớp hiệu ứng bất lợi còn hiệu lực (kể cả lượt thi triển). */
-export const PVP_DEBUFF_ROUNDS = 2;
+/** Số lượt mỗi lớp hiệu ứng bất lợi còn hiệu lực (kể cả lượt thi triển). Mặc định khi không ghi rõ: 3 lượt. */
+export const PVP_DEBUFF_ROUNDS = 3;
 /** Số lớp hiệu ứng bất lợi cộng dồn tối đa. */
 export const PVP_DEBUFF_MAX_LAYERS = 3;
 
 /** Thiêu đốt: mỗi lớp gây thêm 50% sát thương cơ bản của người thi triển vào đầu mỗi lượt. */
 export const PVP_BURN_BPS = 5000;
-/** Thiêu đốt thường duy trì 3 lượt, cộng dồn tối đa 3 lớp. */
-export const PVP_BURN_ROUNDS = 3;
+/** Thiêu đốt thường duy trì 4 lượt, cộng dồn tối đa 3 lớp. */
+export const PVP_BURN_ROUNDS = 4;
 /** Chu Du / Lục Tốn / Hoàng Cái: duy trì 4 lượt, cộng dồn tối đa 3 lớp. */
 export const PVP_BURN_ROUNDS_LONG = 4;
 export const PVP_BURN_MAX_LAYERS_LONG = 3;
@@ -162,8 +162,8 @@ export const PVP_COUNTER_ALL_DAMAGE_BPS = 3000;
 export const PVP_COUNTER_BPS_PER_LEVEL = 300;
 /** Trần tỉ lệ phản kích (30%). */
 export const PVP_COUNTER_MAX_BPS = 3000;
-/** Số lượt hiệu lực của phản kích. */
-export const PVP_COUNTER_ROUNDS = 2;
+/** Số lượt hiệu lực của phản kích (mặc định khi không ghi rõ: 3 lượt). */
+export const PVP_COUNTER_ROUNDS = 3;
 
 /** Không phản kích. */
 export const PVP_NO_COUNTER: PvpCounter = { perLevelBps: 0, damageBps: 0, rounds: 0, scope: 'single' };
@@ -426,7 +426,7 @@ const WU_PVP: RosterPvpRow[] = [
 
 const QUN_PVP: RosterPvpRow[] = [
   { id: 'dong-zhuo', skillName: 'Bạo chúa', style: 'defense', skill: 'DEBUFF', targeting: 'all_enemies', debuff: { hpDownBps: 1000 }, selfHealBps: 2000, counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_ALL_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'all' } },
-  { id: 'lu-bu', skillName: 'Vô song', style: 'attack', skill: 'BUFF', targeting: 'all_enemies', damageBps: 11700, buff: { critBps: 2000, critDamageBps: 2000 }, buffScope: 'self', lifestealPerLevelBps: PVP_LIFESTEAL_HIGH_BPS_PER_LEVEL, counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_ALL_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'all' } },
+  { id: 'lu-bu', skillName: 'Vô song', style: 'attack', skill: 'BUFF', targeting: 'all_enemies', damageBps: 12700, buff: { critBps: 2000, critDamageBps: 2000 }, buffScope: 'self', lifestealPerLevelBps: PVP_LIFESTEAL_HIGH_BPS_PER_LEVEL, counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_ALL_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'all' } },
   { id: 'diao-chan', skillName: 'Bế nguyệt', style: 'support', skill: 'STUN', targeting: 'single', damageBps: 11000, stun: 'single', stunPerLevelBps: 800, debuff: { damageDownBps: 2000 } },
   { id: 'yuan-shao', skillName: 'Thế gia hào tộc', style: 'support', skill: 'BUFF', targeting: 'all_allies', buff: { hpBps: 1500, damageBps: 1000 }, buffScope: 'all_allies' },
   { id: 'yuan-shu', skillName: 'Trọng thị đế nghiệp', style: 'support', skill: 'DEBUFF', targeting: 'front_enemies', debuff: { hpDownBps: 1500 } },

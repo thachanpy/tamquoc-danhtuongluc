@@ -10,6 +10,7 @@ import {
   BPS_SCALE,
   PVP_BUFF_MAX_LAYERS,
   PVP_BUFF_ROUNDS,
+  PVP_DEBUFF_ROUNDS,
   PVP_CRIT_DAMAGE_BPS,
   PVP_MAX_ROUNDS,
   PVP_PASSIVE_EFFECT,
@@ -337,11 +338,12 @@ test('engine: buff chỉ số cộng dồn, giữ tối đa PVP_BUFF_MAX_LAYERS 
     never,
   );
   const dmg = res.events.filter((e): e is Extract<PvpEventDto, { t: 'damage' }> => e.t === 'damage' && e.from === 1).map((e) => e.amount);
-  assert.ok(dmg.length >= 4, 'đồng minh phải ra đòn ít nhất 4 lượt');
-  // Mỗi lượt thêm một lớp buff nên sát thương tăng ở vòng 2...
+  assert.ok(dmg.length >= 5, 'đồng minh phải ra đòn ít nhất 5 lượt');
+  // Mỗi lượt thêm một lớp buff nên sát thương tăng ở các vòng đầu...
   assert.ok(dmg[1]! > dmg[0]!, 'lớp buff thứ hai phải tăng sát thương');
-  // ...nhưng mỗi lớp chỉ sống PVP_BUFF_ROUNDS lượt nên từ vòng 3 sát thương ổn định (không chồng vô hạn).
-  assert.equal(dmg[2]!, dmg[1]!, 'số lớp hiệu lực ổn định nên sát thương không tăng mãi');
+  assert.ok(dmg[2]! > dmg[1]!, 'lớp buff thứ ba phải tăng sát thương');
+  // ...nhưng mỗi lớp chỉ sống PVP_BUFF_ROUNDS (3) lượt nên từ vòng 4 sát thương ổn định (không chồng vô hạn).
+  assert.equal(dmg[3]!, dmg[2]!, 'số lớp hiệu lực ổn định nên sát thương không tăng mãi');
   const buffOfAlly = res.events.filter((e) => e.t === 'buff' && e.idx === 1).length;
   assert.ok(buffOfAlly >= 3, 'đồng minh nhận lớp buff mới qua các lượt');
 });
@@ -547,14 +549,15 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(zl.def.damageBps, 22500);
   assert.equal(zl.def.targeting, 'lane');
   assert.equal(zl.def.debuff.damageDownBps, 1000);
-  assert.equal(zl.def.debuff.rounds, 2, 'debuff không ghi số lượt mặc định 2 lượt');
+  assert.equal(zl.def.debuff.rounds, PVP_DEBUFF_ROUNDS, 'debuff không ghi số lượt mặc định 3 lượt');
+  assert.equal(PVP_DEBUFF_ROUNDS, 3);
   assert.equal(zl.lifestealPerLevelBps, 300);
   assert.equal(zl.def.buffScope, 'none');
   assert.equal(zl.def.counter.scope, 'all');
   assert.equal(zl.def.counter.damageBps, 3000);
-  // Lữ Bố: AoE 117% (đã +30%), tự buff chí mạng 20% + 20% ST chí mạng, hút máu 3%/cấp, phản kích diện rộng — KHÔNG còn choáng.
+  // Lữ Bố: AoE 127%, tự buff chí mạng 20% + 20% ST chí mạng, hút máu 3%/cấp, phản kích diện rộng — KHÔNG còn choáng.
   const lb = pvpProfile('lu-bu');
-  assert.equal(lb.def.damageBps, 11700);
+  assert.equal(lb.def.damageBps, 12700);
   assert.equal(lb.def.targeting, 'all_enemies');
   assert.equal(lb.def.stun, 'none');
   assert.equal(lb.def.stunPerLevelBps, 0);
@@ -609,10 +612,10 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(lx.def.burnLifesteal, true);
   assert.equal(lx.def.debuff.hpDownBps, 1000);
   assert.ok(lx.lifestealPerLevelBps > 0, 'Lục Tốn phải có hút máu theo cấp');
-  // Thiêu đốt thường (Chu Hoàn): 3 lượt.
+  // Thiêu đốt thường (Chu Hoàn): 4 lượt.
   const zh = pvpProfile('zhu-huan');
   assert.equal(zh.def.debuff.burnBps, 5000);
-  assert.equal(zh.def.debuff.burnRounds, 3);
+  assert.equal(zh.def.debuff.burnRounds, 4);
   // Bảng AoE: nhóm gây sát thương đã +30%; nhóm thuần buff đồng đội (Quách Gia, Bàng Thống, Hoàng Nguyệt Anh) giữ nguyên.
   const aoes: [string, number][] = [
     ['cao-cao', 9750],
@@ -621,7 +624,7 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
     ['zhuge-liang', 10400],
     ['sun-ce', 12350],
     ['zhou-yu', 11700],
-    ['lu-bu', 11700],
+    ['lu-bu', 12700],
     ['zhang-jiao', 11050],
     ['meng-huo', 10400],
     ['guo-jia', 7000],

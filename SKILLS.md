@@ -57,7 +57,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 - **Tấn công đơn mục tiêu (Sát thương chính)**: **250% – 320%**
 - **Tấn công đơn mục tiêu (Khống chế 100% Choáng - Hỗ trợ)**: **110% – 130%**
 - **Tấn công theo hàng (Ngang / Dọc / Hàng sau)**: **180% – 220%**
-- **Tấn công toàn bộ địch (AoE sát thương chính)**: **100% – 125%** (đã **+30%** so với mốc 80% – 95% cũ, do AoE bị yếu đi sau các đợt giảm trước).
+- **Tấn công toàn bộ địch (AoE sát thương chính)**: **100% – 130%** (đã **+30%** so với mốc 80% – 95% cũ, do AoE bị yếu đi sau các đợt giảm trước).
 - **Tấn công toàn bộ địch (AoE thiên về Buff/Hồi máu/Khống chế)**: **55% – 90%** — riêng nhóm AoE **thuần buff đồng đội** (Quách Gia, Bàng Thống, Hoàng Nguyệt Anh) **giữ nguyên**, không cộng +30%.
 - **Hồi máu chủ động**: Toàn đội 80% – 110%, Hàng trước/sau 220%, Một đồng minh thấp HP nhất 330% (tính theo sát thương cơ bản của bản thân).
 - **Tướng hot (⭐)**: +10% hệ số sát thương/hồi máu kỹ năng (kể cả đánh thường).
