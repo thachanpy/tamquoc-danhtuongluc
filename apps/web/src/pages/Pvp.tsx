@@ -554,15 +554,18 @@ interface CV {
 const maxHpOf = (s: CV) =>
   Math.max(0, s.maxHpStatic - s.debuffs.reduce((sum, d) => sum + d.hpFlat, 0)) + s.buffs.reduce((sum, b) => sum + b.hpFlat, 0);
 
+/** Tỉ lệ máu hồi thêm khi trần HP tăng (1/4) — khớp `PVP_MAXHP_GAIN_HEAL_BPS` của server. */
+const MAXHP_GAIN_HEAL = 0.25;
+
 /**
- * Đồng bộ máu theo trần HP mới (khớp `syncMaxHp` của engine): trần TĂNG thì hồi đúng lượng tăng,
- * trần GIẢM thì kẹp máu hiện tại xuống trần mới.
+ * Đồng bộ máu theo trần HP mới (khớp `syncMaxHp` của engine): trần TĂNG thì chỉ hồi **1/4 lượng tăng**
+ * (buff tăng trần HP không phải đòn hồi máu), trần GIẢM thì kẹp máu hiện tại xuống trần mới.
  */
 const syncHp = (s: CV, patch?: Partial<CV>): CV => {
   const merged = patch ? { ...s, ...patch } : s;
   const maxHp = maxHpOf(merged);
   const delta = maxHp - s.maxHp;
-  const hp = delta > 0 ? Math.min(maxHp, merged.hp + delta) : Math.min(merged.hp, maxHp);
+  const hp = delta > 0 ? Math.min(maxHp, merged.hp + Math.round(delta * MAXHP_GAIN_HEAL)) : Math.min(merged.hp, maxHp);
   return { ...merged, maxHp, hp };
 };
 
@@ -921,7 +924,8 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   const skillNameAt = (idx: number, fallback: PvpSkill) => byIdx.get(idx)?.skillName ?? PVP_SKILL_LABELS[fallback];
   const initView = () => {
     const o: Record<number, CV> = {};
-    for (const u of units) o[u.idx] = { hp: u.maxHp, maxHp: u.maxHp, maxHpStatic: u.maxHp, alive: true, stunned: false, stunnedByIdx: null, buffed: false, buffs: [], debuffs: [] };
+    // Máu đầu trận lấy từ snapshot server (vào trận luôn đầy 100% theo trần đã gồm aura phong cách).
+    for (const u of units) o[u.idx] = { hp: u.hp, maxHp: u.maxHp, maxHpStatic: u.maxHp, alive: true, stunned: false, stunnedByIdx: null, buffed: false, buffs: [], debuffs: [] };
     return o;
   };
 

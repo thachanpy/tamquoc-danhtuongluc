@@ -14,6 +14,7 @@ import {
   PVP_BURN_CRIT_MUL_BPS,
   PVP_DEBUFF_ROUNDS,
   PVP_CRIT_DAMAGE_BPS,
+  PVP_MAXHP_GAIN_HEAL_BPS,
   PVP_MAX_ROUNDS,
   PVP_PASSIVE_EFFECT,
   PVP_SKILL_DEF,
@@ -309,6 +310,23 @@ test('engine: kỹ năng buff cộng HP tối đa + sát thương cho đồng mi
   assert.equal(buffEvs[0]!.crit, false, 'không chí mạng khi RNG luôn trả max-1');
   assert.equal(buffEvs[0]!.expiresRound, 1 + b.rounds - 1, 'lớp buff sống đúng PVP_BUFF_ROUNDS lượt');
   assert.equal(buffEvs[0]!.maxLayers, PVP_BUFF_MAX_LAYERS);
+});
+
+test('engine: buff %HP của kỹ năng chỉ hồi 1/4 lượng trần tăng, không hồi đầy (mục 1)', () => {
+  // Lưu Bị (Hỗ trợ, tổng LC cao hơn) đi trước → tự buff +10% HP tối đa ngay vòng 1 khi còn đầy máu;
+  // Lữ Mông đánh đơn ngay sau nên `hp` trong sự kiện sát thương phản ánh đúng lượng máu đã hồi thêm.
+  const res = simulatePvp(
+    [one('a', [{ slot: 1, generalId: 'liu-bei', level: 10 }]), one('b', [{ slot: 1, generalId: 'lu-meng', level: 10 }])],
+    never,
+  );
+  const u = res.units.find((x) => x.idx === 0)!;
+  const b = skillDef('liu-bei').buffs[0]!.buff;
+  const hpFlat = Math.round((u.maxHp * b.hpBps) / BPS_SCALE);
+  const gain = Math.round((hpFlat * PVP_MAXHP_GAIN_HEAL_BPS) / BPS_SCALE);
+  assert.ok(gain < hpFlat, 'máu hồi phải ít hơn phần trần HP tăng thêm');
+  const hit = res.events.find((e): e is Extract<PvpEventDto, { t: 'damage' }> => e.t === 'damage' && e.idx === 0)!;
+  assert.ok(hit, 'phải có đòn đánh vào tướng được buff');
+  assert.equal(hit.hp, u.maxHp + gain - hit.amount, 'máu = trần cũ + 1/4 lượng trần tăng − sát thương nhận vào');
 });
 
 test('engine: chí mạng nhân hệ số %HP và %sát thương của buff — một roll chung cho cả lớp (mục 11.2)', () => {

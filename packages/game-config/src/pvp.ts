@@ -53,6 +53,14 @@ export const PVP_STYLE_SUPPORT_DAMAGE_BPS = 1000;
 export const PVP_STYLE_SUPPORT_MAX_LAYERS = 3;
 
 /**
+ * Khi TRẦN HP tăng thêm giữa trận (buff %HP của kỹ năng, hoặc suy yếu hết hạn trả lại trần), máu hiện
+ * tại chỉ được hồi **1/4 lượng trần tăng** — không đổ đầy phần máu mới.
+ * Ví dụ tướng 1.000 máu, buff 10% → trần 1.100 (+100) nhưng chỉ hồi 25 máu (1.025/1.100).
+ * KHÔNG áp cho aura phong cách lúc vào trận: máu luôn đầy 100% theo trần ngay từ đầu.
+ */
+export const PVP_MAXHP_GAIN_HEAL_BPS = 2500;
+
+/**
  * Chỉ số cộng thêm theo phong cách của MỘT tướng khi vào trận:
  * - Tấn công (+25% ST) / Phòng thủ (+25% HP) chỉ áp cho bản thân.
  * - Hỗ trợ áp aura cho cả đội, số lớp = số tướng Hỗ trợ trong đội (trần `PVP_STYLE_SUPPORT_MAX_LAYERS`).
@@ -75,7 +83,7 @@ export function pvpStyleBonus(style: PvpStyle, supportLayers: number): { damageB
 export interface PvpBuff {
   /** % sát thương cộng mỗi lớp (theo sát thương nền của chính tướng nhận buff). */
   damageBps: number;
-  /** % HP tối đa cộng mỗi lớp: tăng trần HP và hồi đúng lượng tăng. */
+  /** % HP tối đa cộng mỗi lớp: tăng trần HP, chỉ hồi 1/4 lượng trần tăng (xem `PVP_MAXHP_GAIN_HEAL_BPS`). */
   hpBps: number;
   /** Điểm chí mạng cộng mỗi lớp (bps: 500 = +5 điểm phần trăm). */
   critBps: number;

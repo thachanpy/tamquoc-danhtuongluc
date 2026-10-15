@@ -11,6 +11,7 @@ import {
   PVP_CRIT_BPS_PER_LEVEL,
   PVP_CRIT_DAMAGE_BPS,
   PVP_FRONT_HP_BPS,
+  PVP_MAXHP_GAIN_HEAL_BPS,
   PVP_MAX_ROUNDS,
   PVP_PASSIVE_EFFECT,
   isAllyTargeting,
@@ -204,6 +205,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
       (u.row === 'front' ? PVP_FRONT_HP_BPS : 0) + (passiveEffect.stat === 'maxHp' ? passiveEffect.bps : 0) + style.hpBps;
     u.damage = Math.round(u.baseDamage * (1 + damageBps / BPS_SCALE));
     u.maxHpStatic = Math.round(u.baseHp * (1 + hpBps / BPS_SCALE));
+    // Vào trận máu LUÔN đầy 100% (kể cả phần trần tăng nhờ aura Hỗ trợ — mục 1).
     u.maxHp = u.maxHpStatic;
     u.hp = u.maxHp;
     u.critBps = u.level * PVP_CRIT_BPS_PER_LEVEL + (passiveEffect.stat === 'crit' ? passiveEffect.pointsBps : 0);
@@ -400,16 +402,21 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
   /**
    * Đồng bộ trần HP động theo các lớp buff/debuff đang hiệu lực:
    * trần = trần tĩnh + tổng HP cộng thêm − tổng HP bị giảm (không âm).
-   * Trần tăng thì HỒI đúng lượng tăng; trần giảm thì kẹp máu hiện tại xuống trần mới.
+   * Trần tăng thì CHỈ HỒI 1/4 lượng tăng (buff %HP của kỹ năng không phải đòn hồi máu đầy);
+   * trần giảm thì kẹp máu hiện tại xuống trần mới.
    * Trả về lượng máu hồi thêm (>0 khi trần tăng).
    */
   const syncMaxHp = (u: Unit): number => {
     const before = u.maxHp;
     u.maxHp = Math.max(0, u.maxHpStatic - debuffHpDown(u)) + buffHp(u);
     const delta = u.maxHp - before;
-    if (delta > 0) u.hp = Math.min(u.maxHp, u.hp + delta);
-    else if (delta < 0) u.hp = Math.min(u.hp, u.maxHp);
-    return Math.max(0, delta);
+    if (delta > 0) {
+      const gain = Math.round((delta * PVP_MAXHP_GAIN_HEAL_BPS) / BPS_SCALE);
+      u.hp = Math.min(u.maxHp, u.hp + gain);
+      return gain;
+    }
+    if (delta < 0) u.hp = Math.min(u.hp, u.maxHp);
+    return 0;
   };
 
   /**

@@ -11,7 +11,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 - **Phong cách**: Chỉ quyết định **lực chiến (LC)**, nhãn hiển thị và **chỉ số nội tại cộng thêm**:
   - **Tấn công** (LC cao nhất): Tăng **25% sát thương cơ bản** cho bản thân.
   - **Phòng thủ** (LC thấp nhất): Tăng **25% máu cơ bản** cho bản thân.
-  - **Hỗ trợ**: Tăng **10% máu cơ bản** và **10% sát thương cơ bản** cho **toàn đội** (Aura toàn đội, **cộng dồn tối đa 3 lớp = +30% Máu & +30% ST** nếu sử dụng nhiều tướng Hỗ trợ).
+  - **Hỗ trợ**: Tăng **10% máu cơ bản** và **10% sát thương cơ bản** cho **toàn đội** (Aura toàn đội, **cộng dồn tối đa 3 lớp = +30% Máu & +30% ST** nếu sử dụng nhiều tướng Hỗ trợ). Aura áp ngay khi vào trận và **máu vẫn đầy 100%** theo trần mới (không bị tính là hồi máu).
 - **Thứ tự hành động**: Hai đội **luân phiên nhau theo vị trí**. Vào trận, bên có **tổng LC cả đội cao hơn** ra đòn trước ở **vị trí 1**, rồi tới **vị trí 1 của bên kia**, **vị trí 2 của bên đi trước**, **vị trí 2 của bên kia**… cứ thế tới vị trí 6 (bằng tổng LC thì bên khiêu chiến A đi trước).
 
 ### Danh mục 15 Hiệu ứng được phép sử dụng
@@ -23,7 +23,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 1. **Buff sát thương**: Tăng % sát thương gây ra (thường 10% – 30%, hiệu lực 3 lượt). **Max cộng dồn: 3 lớp/nguồn**.
 2. **Giảm sát thương**: Giảm % sát thương gánh chịu hoặc gây ra (10% – 25%, hiệu lực 3 lượt). **Max cộng dồn: 3 lớp**.
 3. **Hồi máu**: Hồi HP ngay lập tức theo % HP tối đa hoặc hệ số sát thương cơ bản của người thi triển. *Tác dụng trực tiếp vào HP*.
-4. **Tăng máu tối đa**: Tăng trần HP tối đa và hồi ngay lượng trần HP tăng lên tương ứng (10% – 20%). **Max cộng dồn: 3 lớp**.
+4. **Tăng máu tối đa**: Tăng trần HP tối đa (10% – 20%), nhưng **chỉ hồi 1/4 lượng trần HP tăng lên** (ví dụ 1.000 máu, buff 10% → trần 1.100 nhưng chỉ hồi 25 máu). **Max cộng dồn: 3 lớp**.
 5. **Giảm máu tối đa**: Giảm trần HP tối đa của đối thủ (10% – 15%, hiệu lực 3 lượt). **Max cộng dồn: 3 lớp**.
 6. **Choáng**: Mục tiêu bị choáng không thể thực hiện hành động.
    - **Thời gian hiệu lực**: Duy trì cho đến khi **tướng gây ra hiệu ứng choáng đó ra skill ở lượt tiếp theo**.
