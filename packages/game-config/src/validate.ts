@@ -4,6 +4,7 @@ import {
   BPS_SCALE,
   SIGNUP_BONUS_TICKETS,
   DRAW_COUNT_OPTIONS,
+  DRAW_ALL_MAX,
   DEV_TOPUP_TICKETS,
   ADMIN_GRANT_MAX_TICKETS,
   GIFT_CODE_MAX_TICKETS,
@@ -104,6 +105,10 @@ export function validateGameConfig(): void {
   assert(
     DRAW_COUNT_OPTIONS.every((n) => Number.isInteger(n) && n >= 1 && n <= 100),
     'DRAW_COUNT_OPTIONS phải là số nguyên 1–100',
+  );
+  assert(
+    Number.isInteger(DRAW_ALL_MAX) && DRAW_ALL_MAX > Math.max(...DRAW_COUNT_OPTIONS) && DRAW_ALL_MAX <= 5000,
+    'DRAW_ALL_MAX phải lớn hơn mọi lựa chọn quay và ≤ 5000',
   );
 
   // Gacha level

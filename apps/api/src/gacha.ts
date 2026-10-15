@@ -6,7 +6,7 @@ import {
   type DrawResultDto,
   type DrawnCardDto,
 } from '@tq/shared';
-import { GACHA_LEVEL_RATES, BPS_SCALE, DRAW_COUNT_OPTIONS, UPGRADE_INPUT_COUNT, QUICK_UPGRADE_MAX_LEVEL, GIFT_MAX_CARDS, GIFT_CODE_MAX_TICKETS, UPGRADE_SUCCESS_BPS, UPGRADE_FAILURE_DISTRIBUTION, GENERALS_BY_ID, poolForTicket, rollLevel } from '@tq/game-config';
+import { GACHA_LEVEL_RATES, BPS_SCALE, DRAW_COUNT_OPTIONS, DRAW_ALL_MAX, UPGRADE_INPUT_COUNT, QUICK_UPGRADE_MAX_LEVEL, GIFT_MAX_CARDS, GIFT_CODE_MAX_TICKETS, UPGRADE_SUCCESS_BPS, UPGRADE_FAILURE_DISTRIBUTION, GENERALS_BY_ID, poolForTicket, rollLevel } from '@tq/game-config';
 import { AppError, iso, sha256, findIdempotent, saveIdempotent, type GameContext } from './context.ts';
 import { tx } from './db.ts';
 import { applyTicketDelta, getTickets, readBalances, syncRecovery } from './tickets.ts';
@@ -17,6 +17,7 @@ export function getGachaConfig(): GachaConfigDto {
     levelRates: GACHA_LEVEL_RATES.map((e) => ({ ...e })),
     bpsScale: BPS_SCALE,
     drawCountOptions: [...DRAW_COUNT_OPTIONS],
+    drawAllMax: DRAW_ALL_MAX,
     upgradeInputCount: UPGRADE_INPUT_COUNT,
     quickUpgradeMaxLevel: QUICK_UPGRADE_MAX_LEVEL,
     giftMaxCards: GIFT_MAX_CARDS,
@@ -34,6 +35,7 @@ type StoredDraw = Omit<DrawResultDto, 'tickets'>;
 /**
  * Quay `count` lần bằng loại vé đã chọn (mục 4.1, 4.4). Mọi kết quả do server quyết định.
  * - Số lần thực sự quay = min(count, số dư loại vé). Số dư 0 => NO_TICKETS.
+ * - count = DRAW_ALL_MAX ("Mở tất cả") quay hết vé loại đã chọn, tối đa DRAW_ALL_MAX lượt.
  * - Toàn bộ lượt quay nằm trong MỘT transaction: lỗi ở bất kỳ lượt nào => không mất vé, không tạo thẻ.
  * - Mỗi lượt có 1 dòng ledger (-1) và 1 dòng gacha_history riêng.
  * - Một idempotency key cho cả lần bấm; retry trả lại đúng kết quả đã lưu.
@@ -46,8 +48,9 @@ export function draw(
   count = 1,
 ): DrawResultDto {
   if (!TICKET_TYPES.includes(ticketType)) throw new AppError(400, 'INVALID_TICKET_TYPE', 'Loại vé không hợp lệ.');
-  if (!DRAW_COUNT_OPTIONS.includes(count)) {
-    throw new AppError(400, 'INVALID_DRAW_COUNT', `Số lần quay phải là một trong: ${DRAW_COUNT_OPTIONS.join(', ')}.`);
+  // count = DRAW_ALL_MAX là nút "Mở tất cả": quay hết vé loại này, tối đa DRAW_ALL_MAX lượt mỗi lần bấm
+  if (!DRAW_COUNT_OPTIONS.includes(count) && count !== DRAW_ALL_MAX) {
+    throw new AppError(400, 'INVALID_DRAW_COUNT', `Số lần quay phải là một trong: ${[...DRAW_COUNT_OPTIONS, DRAW_ALL_MAX].join(', ')}.`);
   }
 
   // Bước 2: đồng bộ mốc hồi vé trước khi kiểm tra số dư.

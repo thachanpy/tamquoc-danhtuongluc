@@ -40,6 +40,11 @@ export const GIFT_CODE_MAX_TICKETS = 10_000;
  * Nếu số vé loại đã chọn ít hơn số lần yêu cầu, server quay hết số vé còn lại.
  */
 export const DRAW_COUNT_OPTIONS: readonly number[] = [1, 10];
+/**
+ * Nút "Mở tất cả" (chủ dự án yêu cầu): quay hết vé của loại đang chọn, tối đa DRAW_ALL_MAX lượt mỗi lần bấm
+ * (an toàn cho server; còn vé thì bấm lại). Client gửi count = DRAW_ALL_MAX, server quay min(count, số dư).
+ */
+export const DRAW_ALL_MAX = 1000;
 
 /** Xác suất loại vé khi cấp (mục 3.5): 5 loại, mỗi loại 20%. */
 export const TICKET_GRANT_WEIGHTS: Record<TicketType, number> = {

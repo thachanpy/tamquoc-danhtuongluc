@@ -107,6 +107,8 @@ export interface GachaConfigDto {
   bpsScale: number;
   /** Các lựa chọn số lần quay mỗi request, VD [1, 10]. */
   drawCountOptions: number[];
+  /** Nút "Mở tất cả": số lượt tối đa mỗi lần bấm (gửi count = drawAllMax). */
+  drawAllMax: number;
   /** Số thẻ cùng tướng, cùng level cần cho mỗi lần ghép (hiện là 2). */
   upgradeInputCount: number;
   /** Số thẻ tối đa mỗi lần tặng. */
@@ -381,8 +383,8 @@ export const schemas = {
     required: ['ticketType', 'idempotencyKey'],
     properties: {
       ticketType: { type: 'string', enum: [...TICKET_TYPES] },
-      // Giá trị hợp lệ cụ thể (1 hoặc 10) do server kiểm tra theo game-config.
-      count: { type: 'integer', minimum: 1, maximum: 100, default: 1 },
+      // Giá trị hợp lệ cụ thể (1, 10 hoặc DRAW_ALL_MAX = "Mở tất cả") do server kiểm tra theo game-config.
+      count: { type: 'integer', minimum: 1, maximum: 5000, default: 1 },
       idempotencyKey,
     },
   },

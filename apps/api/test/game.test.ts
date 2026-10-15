@@ -14,7 +14,7 @@ import { seedGenerals } from '../src/seed.ts';
 import { getLeaderboard } from '../src/leaderboard.ts';
 import { runMigrations } from '../src/migrations.ts';
 import { DatabaseSync } from 'node:sqlite';
-import { RECOVERY_CAP_PER_TYPE } from '@tq/game-config';
+import { RECOVERY_CAP_PER_TYPE, DRAW_ALL_MAX } from '@tq/game-config';
 import { SIGNUP_BONUS_TICKETS as BONUS, DEV_TOPUP_TICKETS, UPGRADE_INPUT_COUNT, RECOVERY_INTERVAL_MS, GIFT_MAX_CARDS } from '@tq/game-config';
 
 /** Đăng ký + duyệt ngay (tài khoản đầu tiên tự được duyệt; các tài khoản sau được admin duyệt). */
@@ -678,10 +678,37 @@ test('quay ×10 nguyên tử: lỗi ở lượt thứ 4 => không mất vé, kh�
 test('số lần quay không hợp lệ (không thuộc [1, 10]) => 400', () => {
   const h = makeCtx();
   const { userId } = register(h.ctx, 'alice', 'secret123');
-  for (const n of [0, 2, 5, 11]) {
+  for (const n of [0, 2, 5, 11, 999, 1001]) {
     assert.throws(() => draw(h.ctx, userId, 'normal', `bad-count-${n}000`, n), errCode('INVALID_DRAW_COUNT'));
   }
   assert.equal(getTickets(h.ctx, userId).total, BONUS);
+});
+
+test('Mở tất cả (count = DRAW_ALL_MAX): quay hết vé loại đã chọn, tối đa 1000 lượt mỗi lần, nguyên tử, retry trả kết quả cũ', () => {
+  const h = makeCtx();
+  const { userId } = register(h.ctx, 'alice', 'secret123');
+  const nowIso = new Date(h.ctx.now()).toISOString();
+  // 1200 Vé Thục (vượt trần mỗi lần bấm)
+  const b0 = readBalances(h.ctx.db, userId);
+  applyTicketDelta(h.ctx.db, userId, 'shu', 1200 - b0.shu, 'admin_grant', 'admin:test:all', null, nowIso);
+  const before = readBalances(h.ctx.db, userId);
+  const r = draw(h.ctx, userId, 'shu', 'open-all-00001', DRAW_ALL_MAX);
+  assert.equal(r.requested, DRAW_ALL_MAX);
+  assert.equal(r.drawn, 1000);
+  assert.equal(r.results.length, 1000);
+  assert.ok(r.results.every((x) => x.general.faction === 'shu'));
+  const after = readBalances(h.ctx.db, userId);
+  assert.equal(after.shu, 200);
+  assert.equal(after.normal, before.normal); // không đụng loại vé khác
+  assert.equal(listHistory(h.ctx, userId, { kind: 'gacha' }).total, 1000);
+  // Retry cùng key: trả kết quả cũ, không tiêu thêm
+  const again = draw(h.ctx, userId, 'shu', 'open-all-00001', DRAW_ALL_MAX);
+  assert.equal(again.drawn, 1000);
+  assert.equal(readBalances(h.ctx.db, userId).shu, 200);
+  // Bấm lại: quay nốt 200 vé còn lại
+  assert.equal(draw(h.ctx, userId, 'shu', 'open-all-00002', DRAW_ALL_MAX).drawn, 200);
+  assert.equal(readBalances(h.ctx.db, userId).shu, 0);
+  assert.deepEqual(ledgerSum(h.ctx, userId), readBalances(h.ctx.db, userId));
 });
 
 // ================= Nâng cấp =================

@@ -22,17 +22,26 @@ export function DrawPage(): JSX.Element {
 
   const cfg = state.config!;
   const counts = [...cfg.drawCountOptions].sort((a, b) => a - b);
+  const maxCount = Math.max(...counts);
+  /** "Mở tất cả": quay hết vé loại đang chọn, tối đa drawAllMax lượt mỗi lần bấm (server kiểm tra). */
+  const allMax = cfg.drawAllMax;
+  /** Số thẻ xịn nhất hiện trong màn kết quả "Mở tất cả"; phần còn lại hiển thị "+N". */
+  const TOP_SHOWN = 10;
+  const openAllLabel = (balance: number) =>
+    balance > allMax ? `Mở ${allMax} vé (tối đa mỗi lần)` : `Mở tất cả ${balance} vé`;
 
   /** Nút "Quay tiếp" trong màn kết quả: cùng loại vé, cùng các lựa chọn số lần như ở trang. */
   function againActions(balance: number): StageAction[] {
     if (balance <= 0) return [{ label: `Hết ${TICKET_LABELS[selected()]}`, value: '', disabled: true }];
-    return counts
+    const list: StageAction[] = counts
       .filter((n) => n === 1 || balance !== 1)
       .map((n) => ({
         label: n === 1 ? 'Quay tiếp 1 vé' : balance < n ? `Quay hết ${balance} vé` : `Quay tiếp ${n} vé`,
         value: String(n),
         primary: n !== 1,
       }));
+    if (balance > maxCount) list.push({ label: openAllLabel(balance), value: String(allMax), primary: true });
+    return list;
   }
 
   /** Nhãn nút: "Quay ×10", hoặc "Quay hết 3 vé" khi số dư ít hơn số lần. Server vẫn là bên quyết định số lượt thật. */
@@ -70,10 +79,28 @@ export function DrawPage(): JSX.Element {
       pending = null;
       setTickets(r.tickets);
       const label = TICKET_LABELS[r.ticketType];
+      // "Mở tất cả" (nhiều hơn số thẻ hiện được): chỉ lật top 10 thẻ xịn nhất (level cao trước, giữ thứ tự quay), còn lại "+N"
+      const many = r.results.length > TOP_SHOWN;
+      const shown = many
+        ? r.results
+            .map((x, i) => ({ x, i }))
+            .sort((a, b) => b.x.card.level - a.x.card.level || a.i - b.i)
+            .slice(0, TOP_SHOWN)
+            .map((o) => o.x)
+        : r.results;
+      const rest = r.results.length - shown.length;
+      const byLevel = new Map<number, number>();
+      for (const x of r.results) byLevel.set(x.card.level, (byLevel.get(x.card.level) ?? 0) + 1);
+      const levelSummary = [...byLevel.entries()]
+        .sort((a, b) => b[0] - a[0])
+        .map(([lv, n]) => `Lv.${lv} ×${n}`)
+        .join(' · ');
       const caption =
         r.drawn === 1
           ? `Đã dùng 1 ${label} → ${r.results[0]!.general.name} Lv.${r.results[0]!.card.level}`
-          : `Đã dùng ${r.drawn} ${label}`;
+          : many
+            ? `Đã mở ${r.drawn} thẻ bằng ${label} · ${TOP_SHOWN} thẻ xịn nhất · +${rest} thẻ khác`
+            : `Đã dùng ${r.drawn} ${label}`;
       setLast('');
       setBusy(false);
       // Chỉ hiện kết quả trong màn mở thẻ (không lộ trước ở trang); sau khi đóng chỉ còn dòng tóm tắt.
@@ -81,8 +108,8 @@ export function DrawPage(): JSX.Element {
       const choice =
         r.results.length === 1
           ? await playReveal(r.results[0]!.general, r.results[0]!.card.level, caption, actions)
-          : await playRevealMany(r.results.map((x) => ({ general: x.general, level: x.card.level })), caption, actions);
-      setLast(caption);
+          : await playRevealMany(shown.map((x) => ({ general: x.general, level: x.card.level })), caption, actions);
+      setLast(many ? `Đã mở ${r.drawn} thẻ bằng ${label}: ${levelSummary}` : caption);
       // "Quay tiếp": quay ngay cùng loại vé, y như bấm nút quay ở trang
       if (choice && alive) void doDraw(Number(choice));
     } catch (e) {
@@ -145,6 +172,11 @@ export function DrawPage(): JSX.Element {
                 </button>
               )}
             </For>
+            <Show when={balance() > maxCount}>
+              <button class="btn primary big open-all" disabled={busy()} onClick={() => void doDraw(allMax)}>
+                {busy() ? 'Đang quay…' : openAllLabel(balance())}
+              </button>
+            </Show>
           </div>
           <div class="draw-msg" classList={{ error: msgError() }} aria-live="polite">
             {msg()}

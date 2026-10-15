@@ -575,6 +575,7 @@ Người chơi có thể chọn quay 1 lần hoặc quay 10 lần trong một th
 - Mỗi lượt có một dòng ledger `gacha_draw` và một dòng `gacha_history` riêng.
 - Một idempotency key cho cả thao tác. Retry trả lại toàn bộ kết quả đã lưu. Dùng cùng key với loại vé hoặc số lần khác thì bị từ chối.
 - Kết quả trả về số lần yêu cầu, số lượt đã quay và danh sách thẻ theo thứ tự quay.
+- **Mở tất cả** (chủ dự án yêu cầu): quay hết vé của loại đang chọn, tối đa `DRAW_ALL_MAX` (1000) lượt mỗi lần bấm; còn vé thì bấm lại. Client gửi `count = DRAW_ALL_MAX`; server vẫn quay min(count, số dư), cùng quy tắc nguyên tử/ledger/lịch sử/idempotency như ×10.
 
 ## 5. Nâng cấp thẻ bằng cách ghép 2 thẻ cùng level
 
@@ -763,6 +764,7 @@ Người chơi có thể tặng thẻ cho bất kỳ người chơi nào khác, 
 - Quay ×10 hiển thị animation lật lần lượt từng thẻ (2 hàng × 5 thẻ) theo đúng kết quả server, có thể bỏ qua.
 - Kết quả chỉ hiện trong màn mở thẻ; trang quay không hiện trước danh sách thẻ vừa quay (tránh lộ kết quả). Sau khi đóng chỉ còn dòng tóm tắt loại vé đã dùng.
 - Khi animation xong, chạm/bấm bất kỳ đâu (hoặc Esc) để đóng màn mở thẻ.
+- Nút **"Mở tất cả N vé"** hiện khi số dư loại vé đang chọn > 10 (quá 1000 thì "Mở 1000 vé (tối đa mỗi lần)"). Màn kết quả chỉ lật **10 thẻ xịn nhất** (level cao trước, cùng level giữ thứ tự quay) và ghi "Đã mở N thẻ … · 10 thẻ xịn nhất · +M thẻ khác"; sau khi đóng, dòng tóm tắt liệt kê số thẻ theo level. Màn kết quả có thêm nút "Mở tất cả" khi còn > 10 vé.
 - Màn kết quả có nút **"Quay tiếp 1 vé"** và **"Quay tiếp 10 vé"** (cùng loại vé vừa dùng; còn ít hơn 10 vé thì "Quay hết N vé"; còn 1 vé chỉ có nút 1 vé; hết vé thì nút bị khoá). Bấm là đóng màn và quay ngay, giống hệt bấm nút quay ở trang (cùng kiểm tra, idempotency key, chặn bấm lặp).
 - Hiển thị số dư từng loại vé và tổng số vé.
 - Không hiển thị giá Vàng, nút nạp tiền hoặc cửa hàng vé.
@@ -1076,7 +1078,7 @@ Không triển khai `POST /api/daily-claim`. Thưởng ngày đi qua nhiệm v�
 ### 8.3. Gacha
 
 - `GET /api/gacha/config`: các loại vé, pool phe và tỷ lệ level công khai.
-- `POST /api/gacha/draw`: quay bằng vé đã chọn, 1 hoặc 10 lượt.
+- `POST /api/gacha/draw`: quay bằng vé đã chọn, 1 hoặc 10 lượt, hoặc "Mở tất cả" (`count = DRAW_ALL_MAX` = 1000, quay min(1000, số dư)). `GET /api/gacha/config` trả `drawAllMax`.
 
 Request gồm loại vé, số lần quay `count` (mặc định 1, phải thuộc `DRAW_COUNT_OPTIONS`) và idempotency key. Không nhận tướng, level, xác suất hoặc kết quả do client chỉ định.
 
@@ -1229,7 +1231,8 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 - Quay ×10 khi đủ vé tiêu đúng 10 vé, tạo đúng 10 thẻ, 10 dòng ledger và 10 dòng lịch sử.
 - Quay ×10 khi còn ít hơn 10 vé thì quay hết số vé còn lại, không đụng loại vé khác.
 - Quay ×10 nguyên tử: lỗi giữa chừng không tiêu vé, không tạo thẻ.
-- Retry quay ×10 cùng key trả kết quả cũ; số lần quay ngoài cấu hình (kể cả 5) bị từ chối.
+- Retry quay ×10 cùng key trả kết quả cũ; số lần quay ngoài cấu hình (kể cả 5, 999, 1001) bị từ chối.
+- Mở tất cả: 1200 vé → lần 1 quay đúng 1000 (chỉ loại đã chọn), lần 2 quay 200; retry cùng key không tiêu thêm; ledger khớp.
 
 ### 10.5. Nâng cấp ghép 2 thẻ
 

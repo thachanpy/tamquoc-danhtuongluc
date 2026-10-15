@@ -548,3 +548,6 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .t-cap { font-size: 13px; font-weight: 500; color: var(--muted); }
 .t-count.full { color: var(--gold-2); }
 .t-count.full .t-cap { color: var(--gold-2); opacity: .8; }
+
+/* Nút "Mở tất cả" ở trang Quay thẻ: mobile chiếm cả hàng dưới 2 nút quay */
+@media (max-width: 640px) { .draw-btns .open-all { grid-column: 1 / -1; } }
