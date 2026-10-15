@@ -6,6 +6,9 @@ const W = 520;
 const H = 460;
 const CARD_W = 180;
 const CARD_H = 260;
+/** Ô chân dung: chữ nhật đúng tỉ lệ ảnh gốc 286×378, phủ hết bề ngang thẻ; tên/Lv nằm đè phần dưới. */
+const ART_W = CARD_W;
+const ART_H = Math.round((ART_W * 378) / 286);
 
 /**
  * Sân khấu PixiJS dạng overlay cho animation mở thẻ & nâng cấp.
@@ -222,41 +225,49 @@ function makeCard(general: GeneralDto, level: number): Container {
     .roundRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 14)
     .fill({ color: 0x14161c })
     .stroke({ width: frameTex.has(Math.min(Math.max(level, 1), 10)) ? 0 : 4, color: tier.color });
-  const art = new Graphics().roundRect(-CARD_W / 2 + 10, -CARD_H / 2 + 10, CARD_W - 20, 170, 8).fill({ color: f.color, alpha: 0.85 });
+  const art = new Graphics().roundRect(-CARD_W / 2, -CARD_H / 2, ART_W, ART_H, 10).fill({ color: f.color, alpha: 0.85 });
   const glyph = new Text({ text: f.glyph, style: { fontSize: 96, fill: 0xffffff, fontWeight: '700' } });
   glyph.anchor.set(0.5);
   glyph.alpha = 0.35;
-  glyph.y = -CARD_H / 2 + 95;
+  glyph.y = -CARD_H / 2 + ART_H / 2;
   const name = new Text({
     text: general.name,
-    style: { fontSize: 20, fill: 0xffffff, fontWeight: '700', fontFamily: 'system-ui, sans-serif' },
+    style: { fontSize: 17, fill: 0xffffff, fontWeight: '700', fontFamily: 'system-ui, sans-serif' },
   });
   name.anchor.set(0.5);
-  name.y = CARD_H / 2 - 56;
+  name.y = CARD_H / 2 - 40;
   const lv = new Text({
     text: `Lv.${level}`,
-    style: { fontSize: 22, fill: tier.color, fontWeight: '800', fontFamily: 'system-ui, sans-serif' },
+    style: { fontSize: 17, fill: tier.color, fontWeight: '800', fontFamily: 'system-ui, sans-serif' },
   });
   lv.anchor.set(0.5);
-  lv.y = CARD_H / 2 - 26;
+  lv.y = CARD_H / 2 - 16;
   c.addChild(body, art, glyph, name, lv);
   const pt = portraitTex.get(general.artKey);
   if (pt) {
     // Chân dung phủ kín ô art (cover), canh phía trên để giữ khuôn mặt; cắt theo góc bo bằng mask
-    const ax = -CARD_W / 2 + 10;
-    const ay = -CARD_H / 2 + 10;
-    const aw = CARD_W - 20;
-    const ah = 170;
+    const ax = -CARD_W / 2;
+    const ay = -CARD_H / 2;
+    const aw = ART_W;
+    const ah = ART_H;
     const sprite = new Sprite(new Texture({ source: pt.source }));
     const k = Math.max(aw / pt.width, ah / pt.height);
     sprite.width = pt.width * k;
     sprite.height = pt.height * k;
     sprite.x = ax + (aw - sprite.width) / 2;
-    sprite.y = ay - (sprite.height - ah) * 0.12;
-    const mask = new Graphics().roundRect(ax, ay, aw, ah, 8).fill({ color: 0xffffff });
+    sprite.y = ay;
+    const mask = new Graphics().roundRect(ax, ay, aw, ah, 10).fill({ color: 0xffffff });
     sprite.mask = mask;
     c.addChild(mask, sprite);
   }
+  // Nền tối dần ở đáy thẻ để tên/Lv đè lên chân dung vẫn dễ đọc (giống bảng tên trên ảnh gốc)
+  const shade = new Graphics();
+  const shadeTop = CARD_H / 2 - 72;
+  for (let i = 0; i < 12; i++) {
+    const h = 72 / 12;
+    shade.rect(-CARD_W / 2, shadeTop + i * h, CARD_W, h + 0.5).fill({ color: 0x0a0b0f, alpha: Math.min(0.94, 0.08 + i * 0.09) });
+  }
+  c.addChild(shade, name, lv);
   const lvl = Math.min(Math.max(level, 1), 10);
   const cached = frameTex.get(lvl);
   if (cached) {

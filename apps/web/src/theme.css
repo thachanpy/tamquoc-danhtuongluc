@@ -236,8 +236,8 @@ h1, h2, h3, .tabs a, .t-name, .quick-head b, .gen-head b {
   mix-blend-mode: screen;
 }
 .tq-card.viewer-card { --cw: min(340px, 78vw, calc((100vh - 190px) * 0.66)); }
-.tq-card.viewer-card .tq-name { font-size: 20px; }
-.tq-card.viewer-card .tq-sub { font-size: 15px; }
+.tq-card.viewer-card .tq-name { font-size: 17px; }
+.tq-card.viewer-card .tq-sub { font-size: 13px; }
 .viewer-info { text-align: center; display: grid; gap: 4px; }
 .viewer-name { font-family: var(--script); font-weight: 700; font-size: 30px; line-height: 1.2;
   background: linear-gradient(180deg, #fff6d6, #f3d58a 40%, #c98a2c); -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -391,9 +391,9 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 
   /* Lưới thẻ: 3 cột trên điện thoại */
   .grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px 8px; }
-  .tq-name { font-size: 12px; }
-  .tq-sub { font-size: 11px; }
-  .tq-meta { padding: 4px 6px 6px; }
+  .tq-name { font-size: 11px; }
+  .tq-sub { font-size: 9.5px; }
+  .tq-meta { padding: 14px 5px 4px; }
   .gen-group { padding: 8px; }
   .gen-runs { gap: 8px; }
   .run-cards { gap: 10px 8px; padding: 6px 4px 8px; }

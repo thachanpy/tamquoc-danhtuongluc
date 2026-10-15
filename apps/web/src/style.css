@@ -93,9 +93,9 @@ main { max-width: 1360px; margin: 0 auto; padding: 20px; display: grid; gap: 16p
 /* Kết quả quay: 10 thẻ trên 1 hàng (desktop), co giãn theo bề rộng; màn hẹp => 2 hàng × 5 */
 .result-cards { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 10px; margin-top: 8px; max-width: 1300px; }
 .result-cards .tq-card.small { --cw: 100%; }
-.result-cards .tq-name { font-size: clamp(11px, 1vw, 14px); white-space: normal; line-height: 1.2; min-height: 2.4em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.result-cards .tq-sub { font-size: clamp(10px, 0.85vw, 12px); }
-.result-cards .tq-meta { padding: 6px 6px 7px; }
+.result-cards .tq-name { font-size: clamp(10px, 0.9vw, 12px); white-space: normal; line-height: 1.2; min-height: 2.4em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.result-cards .tq-sub { font-size: clamp(9px, 0.75vw, 11px); }
+.result-cards .tq-meta { padding: 14px 5px 4px; }
 @media (max-width: 760px) { .result-cards { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .result-cards { gap: 6px; } .result-cards .tq-art .glyph { font-size: 40px; } .result-cards .tq-art .ini { font-size: 13px; } }
 .rates { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -116,7 +116,7 @@ button.chip { cursor: pointer; margin: 4px 4px 0 0; }
    Lv.6+ cần chừa rộng hơn (9%/12%) => thẻ được phóng to 1/0.76×0.89 ≈ 1.1711 lần và kéo lề âm để THÂN THẺ (avatar)
    luôn đúng bằng kích thước & vị trí thân thẻ Lv.1–5 trong cùng ô; khung Lv.6+ tràn ra ngoài ô. */
 .tq-card { position: relative; isolation: isolate; width: var(--cw, 100%); }
-.tq-body { border-radius: 6px; background: #14161c; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.tq-body { position: relative; border-radius: 6px; background: #14161c; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
 .tq-card.framed .tq-body { margin: 5.5%; }
 .tq-card.framed.tier-6, .tq-card.framed.tier-7, .tq-card.framed.tier-8, .tq-card.framed.tier-9, .tq-card.framed.tier-10 {
   width: calc(var(--cw, 100%) * 1.1711);
@@ -126,13 +126,18 @@ button.chip { cursor: pointer; margin: 4px 4px 0 0; }
 .tq-frame { position: absolute; z-index: 2; pointer-events: none; background-repeat: no-repeat; background-size: 100% 100%; }
 .tq-card.tier-6 .tq-frame, .tq-card.tier-7 .tq-frame, .tq-card.tier-8 .tq-frame, .tq-card.tier-9 .tq-frame, .tq-card.tier-10 .tq-frame { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--tc) 55%, transparent)); }
 .tq-card.unowned { filter: grayscale(1); opacity: .45; border: 2px dashed #444; border-radius: 12px; overflow: hidden; }
-.tq-art { aspect-ratio: 3/3.2; position: relative; background: linear-gradient(160deg, var(--fc), var(--fd)); display: grid; place-items: center; }
+.tq-art { aspect-ratio: 286/378; position: relative; background: linear-gradient(160deg, var(--fc), var(--fd)); display: grid; place-items: center; }
 .tq-art .glyph { position: absolute; font-size: 72px; font-weight: 800; color: rgba(255,255,255,.22); }
-.tq-art .portrait { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 12%; }
+.tq-art .portrait { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
 .tq-art .ini { position: relative; font-size: 22px; font-weight: 800; letter-spacing: 2px; text-shadow: 0 2px 6px rgba(0,0,0,.5); }
-.tq-meta { padding: 6px 8px 8px; }
-.tq-name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tq-sub { display: flex; justify-content: space-between; font-size: 12px; }
+/* Tên + phe/Lv nằm đè lên phần dưới chân dung (giống bảng tên trên ảnh gốc), nên thân thẻ giữ đúng tỉ lệ ảnh 286×378 và tỉ lệ khung */
+.tq-meta { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; padding: 18px 7px 5px; background: linear-gradient(to top, rgba(10,11,15,.94) 0%, rgba(10,11,15,.82) 55%, rgba(10,11,15,0) 100%); text-shadow: 0 1px 3px rgba(0,0,0,.9); }
+/* Chừa chỗ cho thanh khung đè lên mép dưới/hai bên thân thẻ (khung Lv.6+ dày hơn, có đá ở giữa đáy) */
+.tq-card.framed .tq-meta { padding-left: 8%; padding-right: 8%; padding-bottom: 7%; }
+.tq-card.framed.tier-6 .tq-meta, .tq-card.framed.tier-7 .tq-meta, .tq-card.framed.tier-8 .tq-meta, .tq-card.framed.tier-9 .tq-meta, .tq-card.framed.tier-10 .tq-meta { padding-left: 9%; padding-right: 9%; padding-bottom: 13%; }
+.tq-card.framed.tier-8 .tq-meta, .tq-card.framed.tier-9 .tq-meta, .tq-card.framed.tier-10 .tq-meta { padding-left: 11%; padding-right: 11%; padding-bottom: 17%; }
+.tq-name { font-weight: 700; font-size: 12px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tq-sub { display: flex; justify-content: space-between; font-size: 10.5px; }
 .tq-sub .fac { color: var(--fc); }
 .tq-sub .lv { color: var(--tc); font-weight: 800; }
 .tq-sub .lv.dim { color: var(--muted); font-weight: 400; }

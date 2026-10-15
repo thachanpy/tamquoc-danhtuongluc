@@ -51,7 +51,7 @@ export const frameUrl = (level: number) => `/frames/lv${Math.min(Math.max(level,
  * Thay artwork = thay file cùng tên. Thiếu ảnh thì thẻ tự rơi về placeholder (glyph phe + chữ viết tắt).
  */
 /** Tăng khi thay bộ chân dung để trình duyệt bỏ bản cũ (nginx cache /generals/ 7 ngày). */
-const PORTRAIT_VERSION = 2;
+const PORTRAIT_VERSION = 4;
 export const portraitUrl = (artKey: string) => `/generals/${encodeURIComponent(artKey)}.jpg?v=${PORTRAIT_VERSION}`;
 
 /** Chữ viết tắt cho placeholder artwork (VD: "Gia Cát Lượng" -> "GCL"). Thay bằng ảnh thật theo artKey sau. */
