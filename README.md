@@ -16,6 +16,8 @@ pnpm test         # unit + integration test (game-config, api)
 pnpm typecheck
 ```
 
+Frontend viết bằng **SolidJS** + Vite (`vite-plugin-solid`), hiệu ứng mở thẻ/ghép thẻ bằng PixiJS. Cấu trúc: xem CLAUDE.md mục 2.
+
 Database SQLite nằm ở `data/tamquoc.db` (đổi bằng biến `DB_PATH`). Khởi động không bao giờ reset dữ liệu.
 
 > **Duyệt tài khoản** bật/tắt ở trang Quản trị → Người chơi (mặc định tắt: đăng ký là vào game ngay). Khi bật, tài khoản mới

@@ -5,6 +5,8 @@
  * - Bật/tắt và âm lượng được nhớ theo trình duyệt (localStorage).
  * - Trình duyệt chặn tự phát nhạc, nên nhạc chỉ bắt đầu sau lần chạm/bấm đầu tiên của người chơi.
  */
+import { createSignal } from 'solid-js';
+
 const KEY = 'tq.music';
 type Prefs = { on: boolean; volume: number };
 
@@ -113,50 +115,26 @@ export function initMusic() {
   window.addEventListener('keydown', unlock);
 }
 
-/** Biểu tượng trống trận (chiến cổ) vẽ bằng SVG, màu theo currentColor; khi tắt có vạch son chéo. */
-const DRUM_SVG = `<svg viewBox="0 0 32 32" width="20" height="20" aria-hidden="true">
-  <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-    <ellipse cx="16" cy="12" rx="10" ry="4" fill="currentColor" fill-opacity=".18"/>
-    <path d="M6 12v9c0 2.2 4.5 4 10 4s10-1.8 10-4v-9"/>
-    <path d="M9 15.3v8M13 16.2v8.4M19 16.2v8.4M23 15.3v8" stroke-width="1.1" opacity=".7"/>
-    <path d="M7 4.5l7.5 6M25 4.5l-7.5 6" stroke-width="2"/>
-  </g>
-  <circle cx="6.5" cy="4" r="1.8" fill="currentColor"/><circle cx="25.5" cy="4" r="1.8" fill="currentColor"/>
-  <path class="mute-slash" d="M4 28L28 4" stroke="#d8432f" stroke-width="3" stroke-linecap="round"/>
-</svg>`;
+/** Trạng thái nhạc cho UI (reactive): bật/tắt + âm lượng 0–1. */
+const [prefsSig, setPrefsSig] = createSignal<Prefs>({ ...prefs });
+export const musicPrefs = prefsSig;
 
-/** Gắn nút bật/tắt + thanh âm lượng vào phần tử cho trước. */
-export function mountMusicControl(el: HTMLElement) {
-  el.className = 'music-ctl';
-  el.innerHTML = `
-    <button class="btn ghost small music-toggle" type="button"></button>
-    <input class="music-vol" type="range" min="0" max="100" step="1" aria-label="Âm lượng nhạc nền" />`;
-  const btn = el.querySelector<HTMLButtonElement>('.music-toggle')!;
-  const vol = el.querySelector<HTMLInputElement>('.music-vol')!;
-  const draw = () => {
-    const playing = prefs.on && prefs.volume > 0;
-    btn.innerHTML = DRUM_SVG;
-    btn.classList.toggle('muted', !playing);
-    btn.title = playing ? 'Tắt nhạc nền' : 'Bật nhạc nền';
-    btn.setAttribute('aria-pressed', String(playing));
-    vol.value = String(Math.round(prefs.volume * 100));
-    vol.style.setProperty('--p', `${vol.value}%`);
-    vol.disabled = !prefs.on;
-  };
-  btn.onclick = () => {
-    prefs.on = !prefs.on;
-    if (prefs.on && prefs.volume === 0) prefs.volume = 0.4;
-    unlocked = true;
-    savePrefs(prefs);
-    sync();
-    draw();
-  };
-  vol.oninput = () => {
-    prefs.volume = Number(vol.value) / 100;
-    unlocked = true;
-    savePrefs(prefs);
-    sync();
-    draw();
-  };
-  draw();
+function apply() {
+  unlocked = true;
+  savePrefs(prefs);
+  sync();
+  setPrefsSig({ ...prefs });
+}
+
+/** Bật/tắt nhạc nền (bật lại khi âm lượng đang 0 thì đặt về 40%). */
+export function toggleMusic() {
+  prefs.on = !prefs.on;
+  if (prefs.on && prefs.volume === 0) prefs.volume = 0.4;
+  apply();
+}
+
+/** Đặt âm lượng 0–1. */
+export function setMusicVolume(v: number) {
+  prefs.volume = Math.min(1, Math.max(0, v));
+  apply();
 }

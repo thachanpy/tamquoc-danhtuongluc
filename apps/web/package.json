@@ -12,9 +12,11 @@
   },
   "dependencies": {
     "@tq/shared": "workspace:*",
-    "pixi.js": "^8.6.6"
+    "pixi.js": "^8.6.6",
+    "solid-js": "^1.9.5"
   },
   "devDependencies": {
-    "vite": "^6.0.7"
+    "vite": "^6.0.7",
+    "vite-plugin-solid": "^2.11.6"
   }
 }

@@ -1,4 +1,4 @@
-import { FACTION_LABELS, type Faction, type GeneralDto } from '@tq/shared';
+import type { Faction } from '@tq/shared';
 
 /** Màu & biểu tượng phe — dùng thống nhất cho DOM và PixiJS. */
 export const FACTION_STYLE: Record<Faction, { color: number; css: string; dark: string; glyph: string }> = {
@@ -59,32 +59,6 @@ export const initials = (name: string) =>
     .map((w) => w[0])
     .join('')
     .toUpperCase();
-
-export const esc = (s: string) =>
-  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-
-function frameHtml(level: number): string {
-  const lv = Math.min(Math.max(level, 1), 10);
-  const l = FRAME_LAYOUT[lv]!;
-  return `<span class="tq-frame" aria-hidden="true" style="background-image:url(${frameUrl(lv)});left:${l.left}%;top:${l.top}%;width:${l.width}%;height:${l.height}%"></span>`;
-}
-
-/** HTML thẻ (lưới DOM): chân dung tướng, placeholder nằm dưới làm dự phòng. */
-export function cardHtml(g: GeneralDto, level: number | null, extra = ''): string {
-  const f = FACTION_STYLE[g.faction];
-  const tier = level ? levelTier(level) : null;
-  return `
-  <div class="tq-card ${level ? `framed tier-${Math.min(level, 10)}` : 'unowned'} ${extra}" style="--fc:${f.css};--fd:${f.dark};--tc:${tier?.css ?? '#444'}" data-art="${esc(g.artKey)}">
-    <div class="tq-body">
-      <div class="tq-art"><span class="glyph">${f.glyph}</span><span class="ini">${esc(initials(g.name))}</span><img class="portrait" src="${portraitUrl(g.artKey)}" alt="" loading="lazy" decoding="async" onerror="this.remove()" /></div>
-      <div class="tq-meta">
-        <div class="tq-name">${esc(g.name)}</div>
-        <div class="tq-sub"><span class="fac">${FACTION_LABELS[g.faction]}</span>${level ? `<span class="lv">Lv.${level}</span>` : '<span class="lv dim">Chưa có</span>'}</div>
-      </div>
-    </div>
-    ${level ? frameHtml(level) : ''}
-  </div>`;
-}
 
 export const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 

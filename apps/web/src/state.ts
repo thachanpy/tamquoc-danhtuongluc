@@ -1,6 +1,11 @@
+import { createSignal } from 'solid-js';
 import type { GachaConfigDto, GeneralDto, TicketsDto } from '@tq/shared';
 
-/** Trạng thái client — chỉ là bản sao để hiển thị; server là nguồn sự thật. */
+/**
+ * Trạng thái client — chỉ là bản sao để hiển thị; server là nguồn sự thật.
+ * Phần nạp 1 lần lúc vào game (tên, quyền, roster, cấu hình) để trong object thường;
+ * phần thay đổi trong phiên chơi (số dư vé, badge) là signal của Solid để UI tự cập nhật.
+ */
 export const state = {
   username: '',
   isAdmin: false,
@@ -8,22 +13,22 @@ export const state = {
   generals: [] as GeneralDto[],
   generalsById: new Map<string, GeneralDto>(),
   config: null as GachaConfigDto | null,
-  tickets: null as TicketsDto | null,
   /** Mốc local (performance.now) khi tới lượt hồi kế tiếp — tính từ msUntilNextRecovery của server. */
   nextRecoveryLocal: 0,
-  listeners: new Set<() => void>(),
 };
 
+const [ticketsSig, setTicketsSig] = createSignal<TicketsDto | null>(null);
+/** Số dư vé hiện tại (reactive). */
+export const tickets = ticketsSig;
+
 export function setTickets(t: TicketsDto) {
-  state.tickets = t;
   state.nextRecoveryLocal = performance.now() + t.msUntilNextRecovery;
-  state.listeners.forEach((fn) => fn());
+  setTicketsSig(t);
 }
 
-export function onTickets(fn: () => void): () => void {
-  state.listeners.add(fn);
-  return () => state.listeners.delete(fn);
-}
+/** Badge tab Nhiệm vụ (số phần thưởng chờ nhận) và tab Quản trị (số tài khoản chờ duyệt). */
+export const [questBadge, setQuestBadge] = createSignal(0);
+export const [pendingBadge, setPendingBadge] = createSignal(0);
 
 export const gen = (id: string): GeneralDto =>
   state.generalsById.get(id) ?? { id, name: id, faction: 'qun', artKey: id };

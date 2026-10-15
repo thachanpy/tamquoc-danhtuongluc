@@ -45,7 +45,7 @@ Các nguyên tắc bắt buộc:
 Công nghệ mục tiêu:
 
 - Monorepo TypeScript.
-- Frontend: PixiJS cho render thẻ, hiệu ứng quay và nâng cấp.
+- Frontend: **SolidJS** (chủ dự án yêu cầu viết lại từ TypeScript thuần + innerHTML) cho toàn bộ UI DOM; PixiJS cho hiệu ứng mở thẻ và nâng cấp.
 - Backend: Fastify REST API.
 - Database: SQLite.
 - Shared package: types, schema validation, DTO và enum dùng chung.
@@ -59,6 +59,16 @@ Cấu trúc gợi ý:
 - `packages/shared`: types, schemas, DTO và constants.
 - `packages/game-config`: roster 100 tướng và các cấu hình game.
 - Triển khai server (hướng dẫn ở `README.md`, mục "Triển khai lên server"): `nginx.conf` ở gốc repo (phục vụ `apps/web/dist`, proxy `/api/` sang `127.0.0.1:3000`), `pm2.config.json` ở gốc repo (chạy API `apps/api/src/index.ts` bằng `node`, fork 1 instance). API đặt `trustProxy` (biến `TRUST_PROXY`, mặc định tin 127.0.0.1) để rate limit theo IP thật sau nginx.
+
+Cấu trúc frontend (SolidJS, `apps/web/src`):
+
+- `main.tsx`: nạp CSS, tia lửa nền, nhạc, `render(<App/>)`. `App.tsx`: đăng nhập/đăng ký, khung game (thanh trên, thanh vé + đồng hồ hồi vé, tab, router theo hash `#id`), popup giftcode lần đầu, toast sự kiện ngày mới.
+- `pages/*.tsx`: mỗi tab một component (`CollectionPage`, `DrawPage`, `UpgradePage`, `QuestsPage`, `LeaderboardPage`, `HistoryPage`, `GiftCodePage`, `AdminPage`); router mount/unmount bằng `<Dynamic>`, rời trang thì component bị dispose (timer/listener dọn trong `onCleanup`).
+- `state.ts`: dữ liệu nạp lúc vào game (object `state`) + signal `tickets()` (số dư vé), `questBadge`/`pendingBadge`; `badges.ts` tải lại badge; `ui.ts` toast.
+- `components/Card.tsx` (thẻ tướng DOM, dùng chung mọi trang), `components/MusicControl.tsx`, `viewer.tsx` (popup ngắm thẻ, `openCardViewer`).
+- `art.ts` (màu phe, bậc khung, `FRAME_LAYOUT`, URL ảnh), `upgrade-groups.ts` (gom thẻ, có test), `api.ts`, `pixi/stage.ts` (PixiJS, gọi từ trang) giữ dạng TypeScript thường.
+- Không dùng innerHTML cho dữ liệu: JSX tự escape. Class CSS/markup giữ như bản cũ nên `style.css`/`theme.css` không đổi.
+- Build cần `vite-plugin-solid`; tsconfig `jsx: preserve`, `jsxImportSource: solid-js`.
 
 Nếu repository đã có cấu trúc hợp lý, hãy giữ cấu trúc hiện tại và điều chỉnh theo thực tế.
 
@@ -411,7 +421,7 @@ Quyền admin:
 - Cột `users.is_admin`. Mọi route `/api/admin/*` kiểm tra ở server (chưa đăng nhập 401, không phải admin 403 `FORBIDDEN`).
 - Admin cấp/thu quyền admin cho người chơi đã duyệt; không tự thu quyền của chính mình (`ADMIN_SELF`), nên luôn còn ít nhất 1 admin.
 
-Trang Quản trị (`apps/web/src/pages/admin.ts`, tab "Quản trị" chỉ hiện với admin, có badge số tài khoản chờ duyệt):
+Trang Quản trị (`apps/web/src/pages/Admin.tsx`, tab "Quản trị" chỉ hiện với admin, có badge số tài khoản chờ duyệt):
 
 - **Người chơi**: ô bật/tắt "Duyệt tài khoản đăng ký" ở đầu tab; tìm theo tên, lọc trạng thái; tài khoản chờ duyệt lên đầu. Mỗi dòng: tên, admin, ngày đăng ký/duyệt, trạng thái, số dư từng loại vé và tổng, số thẻ và level cao nhất. Thao tác: Duyệt, Từ chối (có bước xác nhận), Cộng vé (form chọn loại + số lượng), Xem thẻ, Cấp/Thu quyền admin. Khóa nút khi đang xử lý.
 - **Thẻ tướng**: mọi thẻ đang active của mọi người chơi, chỉ xem; lọc theo người chơi, tên tướng, phe, level; sắp xếp level cao nhất (mặc định) / mới nhất / tên tướng / theo người chơi; phân trang 60 thẻ; bấm thẻ mở popup ngắm thẻ.
@@ -431,14 +441,14 @@ Do chủ dự án yêu cầu. Giftcode **chỉ tặng vé quay**, không tặng 
 - Cộng vé và ghi lượt nhập trong một transaction; lỗi giữa chừng không cộng vé nào và chưa tính là đã nhập.
 - Admin tạo code (mã, số vé từng loại, hạn sử dụng tuỳ chọn, cờ "gợi ý"), bật/tắt code. Không sửa phần thưởng sau khi tạo; tắt code không thu hồi vé đã nhận.
 - **4 giftcode tân thủ mặc định**, không hạn, có cờ gợi ý — là **vé quay** (chủ dự án yêu cầu; migration v7 tạo nhầm là thẻ, migration v8 sửa thành vé): `THUCQUOC` 200 Vé Thục, `NGUYQUOC` 200 Vé Ngụy, `NGOQUOC` 200 Vé Ngô, `QUANQUOC` 200 Vé Quần. Người đã nhập trước v8 (nhận 200 thẻ) giữ nguyên thẻ và lượt nhập, không nhập lại được.
-- Trang **Giftcode** (tab `#giftcode`, `apps/web/src/pages/giftcode.ts`): ô nhập code, kết quả (số vé đã cộng theo loại — thanh vé cập nhật ngay), danh sách code gợi ý kèm trạng thái đã nhập, danh sách code đã nhập.
+- Trang **Giftcode** (tab `#giftcode`, `apps/web/src/pages/GiftCode.tsx`): ô nhập code, kết quả (số vé đã cộng theo loại — thanh vé cập nhật ngay), danh sách code gợi ý kèm trạng thái đã nhập, danh sách code đã nhập.
 - **Popup lần đầu đăng nhập**: nếu còn code gợi ý chưa nhập, hiện popup liệt kê các code đó; nút "Đến trang nhập Giftcode" chuyển sang tab Giftcode. Chỉ hiện 1 lần mỗi tài khoản trên mỗi trình duyệt (localStorage `tq.gcPopup.<username>`).
 - Lịch sử hiển thị "Nhập giftcode X: nhận Vé … ×N" (`GET /api/history?kind=giftcode`; lượt nhập code thẻ cũ vẫn hiện danh sách thẻ); dòng ledger vé hiển thị "Giftcode: nhận Vé X ×N".
 - Trang Quản trị có tab **Giftcode**: form tạo code (số vé từng loại), danh sách code (phần thưởng, hạn, số lượt nhập, trạng thái, nút Bật/Tắt; code thẻ cũ ghi "Code thẻ cũ", không có nút Bật).
 
 ### 3.10. Nhiệm vụ hằng ngày và thành tựu
 
-Do chủ dự án yêu cầu. Chỉ thưởng vé. Cấu hình ở `packages/game-config/src/quests.ts`; logic server `apps/api/src/quests.ts`; UI tab **Nhiệm vụ** (`#quests`, `apps/web/src/pages/quests.ts`, có badge số phần thưởng chờ nhận).
+Do chủ dự án yêu cầu. Chỉ thưởng vé. Cấu hình ở `packages/game-config/src/quests.ts`; logic server `apps/api/src/quests.ts`; UI tab **Nhiệm vụ** (`#quests`, `apps/web/src/pages/Quests.tsx`, có badge số phần thưởng chờ nhận).
 
 Thời gian:
 
@@ -737,7 +747,7 @@ Người chơi có thể tặng thẻ cho bất kỳ người chơi nào khác, 
 - Sắp xếp các khung tướng: level cao nhất (mặc định), tên A→Z, nhiều thẻ nhất.
 - Chế độ xem "Thẻ của tôi" (mặc định) và "Tướng chưa có" (các tướng chưa sở hữu hiển thị mờ).
 - Tích hợp tặng thẻ (mục 5.6).
-- Bấm một thẻ (khi không ở chế độ tặng) mở popup ngắm thẻ phóng to: tên, phe, Lv, `#id` (không hiện tên bậc khung Đồng/Bạc/…), thời điểm nhận; thẻ nghiêng nhẹ theo chuột (tắt khi reduced motion); bấm bất kỳ đâu hoặc Esc để đóng. Popup chỉ hiển thị, không gọi API (`apps/web/src/viewer.ts`).
+- Bấm một thẻ (khi không ở chế độ tặng) mở popup ngắm thẻ phóng to: tên, phe, Lv, `#id` (không hiện tên bậc khung Đồng/Bạc/…), thời điểm nhận; thẻ nghiêng nhẹ theo chuột (tắt khi reduced motion); bấm bất kỳ đâu hoặc Esc để đóng. Popup chỉ hiển thị, không gọi API (`apps/web/src/viewer.tsx`).
 - Hiển thị lưới thẻ.
 - Tìm kiếm theo tên.
 - Lọc theo phe và level.
@@ -792,7 +802,7 @@ Hiển thị lịch sử phân trang:
 ### 6.5. Hướng hình ảnh
 
 - Chủ đề sưu tầm tướng Tam Quốc, tạo cảm giác thẻ có giá trị.
-- Giao diện chủ đề Tam Quốc nằm ở `apps/web/src/theme.css` (ghi đè thẩm mỹ của `style.css`): nền chiến trường 4 phe theo mẫu chủ dự án cung cấp (núi, thành lũy, cờ Ngụy/Ngô trong `public/theme/landscape.svg`; vầng sáng 4 màu phe và vignette bằng CSS gradient; 40 tia lửa màu phe bay lên do `main.ts` tạo, tắt khi `prefers-reduced-motion`), panel sơn mài đỏ–đen viền vàng với góc hồi văn (`public/theme/corner-*.svg`), dải hồi văn dưới thanh trên (`public/theme/fret.svg`), tab đang chọn và nút chính màu son; logo game là icon Gia Cát Lượng. Font từ Google Fonts (đều có đủ dấu tiếng Việt trừ font chữ Hán): Playfair Display SC cho tiêu đề và tab (chữ hoa nhỏ kiểu khắc bia); Oswald cho nút, số vé, nhãn Lv. và số liệu; Charm (nét bút lông) cho tên game mạ vàng gradient và dòng kết quả mở thẻ; Noto Serif cho nội dung; Ma Shan Zheng (bút lông) cho chữ Hán biểu tượng phe, có font dự phòng khi offline.
+- Giao diện chủ đề Tam Quốc nằm ở `apps/web/src/theme.css` (ghi đè thẩm mỹ của `style.css`): nền chiến trường 4 phe theo mẫu chủ dự án cung cấp (núi, thành lũy, cờ Ngụy/Ngô trong `public/theme/landscape.svg`; vầng sáng 4 màu phe và vignette bằng CSS gradient; 40 tia lửa màu phe bay lên do `main.tsx` tạo, tắt khi `prefers-reduced-motion`), panel sơn mài đỏ–đen viền vàng với góc hồi văn (`public/theme/corner-*.svg`), dải hồi văn dưới thanh trên (`public/theme/fret.svg`), tab đang chọn và nút chính màu son; logo game là icon Gia Cát Lượng. Font từ Google Fonts (đều có đủ dấu tiếng Việt trừ font chữ Hán): Playfair Display SC cho tiêu đề và tab (chữ hoa nhỏ kiểu khắc bia); Oswald cho nút, số vé, nhãn Lv. và số liệu; Charm (nét bút lông) cho tên game mạ vàng gradient và dòng kết quả mở thẻ; Noto Serif cho nội dung; Ma Shan Zheng (bút lông) cho chữ Hán biểu tượng phe, có font dự phòng khi offline.
 - UI hiện đại, tương phản tốt, responsive cho desktop và mobile.
 - Thanh trên (tên game, vé, nhạc, tài khoản) và thanh tab luôn dính trên cùng khi cuộn (`.app-head`, sticky); chiều cao đo bằng JS vào biến CSS `--head-h` để khung "Đã chọn" ở trang Nâng cấp dính ngay bên dưới.
 - **Mobile web (≤ 640px)** — khối CSS cuối `theme.css` (chủ dự án yêu cầu tối ưu mobile): thanh trên chỉ còn logo + "Tam Quốc", nút nhạc (ẩn thanh âm lượng) và Đăng xuất; thanh vé là một hàng cuộn ngang; tab cuộn ngang và tự cuộn tới tab đang chọn; ô nhập cỡ chữ ≥ 16px (iOS không tự phóng to), lọc/form full-width, nút cao ≥ 40px; lưới thẻ ~3 cột; nút quay 1/×10 chia đôi bề ngang. Trang Nâng cấp: khi đang chọn thẻ, khung "Đã chọn" thành bottom sheet dính đáy màn hình (class `.side.has-sel`, tối đa 62dvh, cuộn trong). Bộ sưu tập: khung tặng thẻ dính dưới thanh trên khi bật chế độ tặng. Popup mở thẻ/ngắm thẻ dùng `dvh` và safe-area; các nút "Quay tiếp"/"Đóng" tự xuống dòng.
@@ -803,7 +813,7 @@ Hiển thị lịch sử phân trang:
 - Chân dung tướng nằm ở `apps/web/public/generals/{artKey}.jpg` (cắt từ 4 bảng ảnh độ phân giải cao chủ dự án cung cấp, mỗi phe một bảng 5×5, bỏ khung và bảng tên; mỗi ảnh 286×378). Dùng chung cho thẻ DOM và thẻ PixiJS; hiển thị kiểu cover, canh phía trên. Thay artwork = thay file cùng tên.
 - Tướng thiếu ảnh chân dung tự rơi về placeholder (biểu tượng phe + chữ viết tắt).
 - Mặt sau thẻ trong animation quay thẻ là ảnh `apps/web/public/theme/card-back.jpg` (chủ dự án cung cấp: khung đồng, rồng, bát quái; 360×568, ~40 KB). Thay mặt sau = thay file cùng tên; thiếu ảnh thì dùng mặt sau vẽ dự phòng.
-- Nhạc nền (chủ dự án cung cấp): 4 bài `apps/web/public/audio/b1.mp3`, `b2.mp3`, `b3.mp3`, `b4.mp3` (MP3 64 kbps, ~1,4 MB/bài), khai báo trong `TRACKS` ở `apps/web/src/music.ts`; phát kiểu xào bài: trộn ngẫu nhiên cả danh sách, nghe hết các bài rồi mới trộn lại; bài vừa nghe được nhớ trong localStorage (`tq.music.last`) nên lần mở game sau không bắt đầu bằng bài đó. Thanh trên có nút bật/tắt hình trống trận (SVG; khi tắt có vạch son chéo) và thanh âm lượng; lựa chọn lưu trong localStorage của trình duyệt (mặc định bật, 40%). Do trình duyệt chặn tự phát, nhạc chỉ bắt đầu sau lần chạm/bấm đầu tiên.
+- Nhạc nền (chủ dự án cung cấp): 4 bài `apps/web/public/audio/b1.mp3`, `b2.mp3`, `b3.mp3`, `b4.mp3` (MP3 64 kbps, ~1,4 MB/bài), khai báo trong `TRACKS` ở `apps/web/src/music.ts`; phát kiểu xào bài: trộn ngẫu nhiên cả danh sách, nghe hết các bài rồi mới trộn lại; bài vừa nghe được nhớ trong localStorage (`tq.music.last`) nên lần mở game sau không bắt đầu bằng bài đó. Thanh trên có nút bật/tắt hình trống trận (SVG; khi tắt có vạch son chéo) và thanh âm lượng (`components/MusicControl.tsx`); lựa chọn lưu trong localStorage của trình duyệt (mặc định bật, 40%). Do trình duyệt chặn tự phát, nhạc chỉ bắt đầu sau lần chạm/bấm đầu tiên.
 - PixiJS quản lý stage, texture, animation và hiệu ứng.
 - Giải phóng texture/tài nguyên khi đổi màn hình để tránh rò rỉ bộ nhớ.
 - Hiệu ứng không được cản trở thao tác.
@@ -811,7 +821,7 @@ Hiển thị lịch sử phân trang:
 
 ### 6.6. Bảng xếp hạng
 
-Do chủ dự án yêu cầu. Tab **Xếp hạng** (`#leaderboard`, `apps/web/src/pages/leaderboard.ts`), chỉ đọc, không ảnh hưởng vé/thẻ.
+Do chủ dự án yêu cầu. Tab **Xếp hạng** (`#leaderboard`, `apps/web/src/pages/Leaderboard.tsx`), chỉ đọc, không ảnh hưởng vé/thẻ.
 
 - Chỉ số duy nhất: **Lực chiến** = tổng điểm các thẻ **đang active** của người chơi; điểm mỗi thẻ theo level ở `LEADERBOARD_POWER_BY_LEVEL` (game-config): Lv.n = 2^(n−1) (Lv.1 = 1, Lv.2 = 2, Lv.3 = 4, …, Lv.10 = 512). Validate khi khởi động: đủ Lv.1–10, nguyên dương, không giảm theo level.
 - Server tính trực tiếp từ `user_cards` mỗi lần gọi (không lưu bảng riêng). Thẻ đã tiêu thụ không tính; thẻ tặng đi tính cho người nhận.
