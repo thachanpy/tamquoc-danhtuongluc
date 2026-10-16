@@ -23,6 +23,7 @@ import { CombatDetailModal } from '../components/CombatDetailModal.tsx';
 import { StyleIcon } from '../components/StyleIcon.tsx';
 import { StatIcon } from '../components/StatIcon.tsx';
 import { FACTION_STYLE, initials, levelTier, pct, portraitUrl } from '../art.ts';
+import { preBattleNote } from '../combat-notes.ts';
 import type { IconId } from '../icons.ts';
 import { createArena, type ArenaHandle, type ArenaUnit, type ArenaView, type FloatPart } from '../pixi/arena.ts';
 import type { FxKind } from '../pixi/skillsfx.ts';
@@ -81,7 +82,7 @@ function sfxOf(ev: PvpEventDto): SfxName | null {
 /** Chỉ số cơ bản của một tướng để hiển thị ở bước chuẩn bị (server tính, client chỉ hiện). */
 interface UnitStat {
   style: PvpStyle;
-  /** Sát thương cơ bản của tướng (đã gồm hiệu ứng nền + nội tại của chính tướng). */
+  /** Sát thương cơ bản của tướng (đã gồm hiệu ứng nền + nội tại của chính tướng + Chỉ số Nền Ra Trận). */
   damage: number;
   maxHp: number;
   /** Tỉ lệ chí mạng khi vào trận (bps, 10000 = 100%). */
@@ -92,17 +93,43 @@ interface UnitStat {
   hitBps: number;
   /** Né tránh khi vào trận (bps). */
   dodgeBps: number;
+  /** Phòng thủ khi vào trận (bps): % giảm sát thương nhận vào. */
+  defBps: number;
+  /**
+   * Chỉ số Nền Ra Trận (màn chuẩn bị): phần cộng thêm so với chỉ số gốc + nhãn chi tiết % để hiện badge.
+   * null = xem tự do (không có ngữ cảnh đội) nên không có badge.
+   */
+  pre?: { hpPlus: number; damagePlus: number; hpNote: string; damageNote: string } | null;
 }
-const statOf = (c: PvpCombatDto): UnitStat => ({
-  style: c.style,
-  damage: c.self.damage,
-  maxHp: c.self.maxHp,
-  critBps: c.self.critBps,
-  critDamageBps: c.self.critDamageBps,
-  hitBps: c.self.hitBps,
-  dodgeBps: c.self.dodgeBps,
-});
-const statKey = (u: PvpUnitDto) => `${u.generalId}|${u.level}`;
+const statOf = (c: PvpCombatDto): UnitStat => {
+  const pb = c.preBattle;
+  return {
+    style: c.style,
+    damage: pb ? pb.damage : c.self.damage,
+    maxHp: pb ? pb.maxHp : c.self.maxHp,
+    critBps: c.self.critBps,
+    critDamageBps: c.self.critDamageBps,
+    hitBps: c.self.hitBps,
+    dodgeBps: c.self.dodgeBps,
+    defBps: c.self.defBps,
+    pre: pb
+      ? {
+          hpPlus: pb.maxHp - c.self.maxHp,
+          damagePlus: pb.damage - c.self.damage,
+          hpNote: preBattleNote(c, 'hp'),
+          damageNote: preBattleNote(c, 'damage'),
+        }
+      : null,
+  };
+};
+/** Khóa tra chỉ số: gồm cả chữ ký đội (kèm vị trí) để hai đội khác nhau không dùng nhầm chỉ số nền của nhau. */
+const squadKey = (units: PvpUnitDto[]) =>
+  units
+    .slice()
+    .sort((a, b) => a.slot - b.slot)
+    .map((u) => `${u.generalId}@${u.slot}`)
+    .join(',');
+const statKey = (u: PvpUnitDto, squad: PvpUnitDto[]) => `${u.generalId}|${u.level}|${squadKey(squad)}`;
 
 /**
  * Mô tả buff tăng sức mạnh của một kỹ năng (nhóm TEAM_ và BUFF_ALLIES) kèm LƯỢNG tăng mỗi lớp:
@@ -170,9 +197,17 @@ function StatLine(props: { stat?: UnitStat }) {
             <StyleIcon style={s().style} size={11} />
           </span>
           <span class="pvp-cell-num">
-            <StatIcon id="attack" size={11} /> {num(s().damage)} · <StatIcon id="heart" size={11} /> {num(s().maxHp)}
+            <StatIcon id="attack" size={11} /> {num(s().damage)}
+            <Show when={s().pre && s().pre!.damagePlus > 0}>
+              <em class="pvp-pre" title={s().pre!.damageNote}>{`(+${num(s().pre!.damagePlus)})`}</em>
+            </Show>
+            {' · '}
+            <StatIcon id="heart" size={11} /> {num(s().maxHp)}
+            <Show when={s().pre && s().pre!.hpPlus > 0}>
+              <em class="pvp-pre" title={s().pre!.hpNote}>{`(+${num(s().pre!.hpPlus)})`}</em>
+            </Show>
           </span>
-          {/* Hàng 2: chí mạng · ST chí mạng · chính xác · né tránh (giống dòng chỉ số trên sân đấu).
+          {/* Hàng 2: chí mạng · ST chí mạng · chính xác · né tránh · phòng thủ (giống dòng chỉ số trên sân đấu).
               Mỗi chỉ số là một khối riêng nên tự xuống dòng khi ô hẹp, không tràn ra ngoài ô tướng. */}
           <span class="pvp-cell-num row2">
             <span class="pvp-stat">
@@ -186,6 +221,9 @@ function StatLine(props: { stat?: UnitStat }) {
             </span>
             <span class="pvp-stat">
               <StatIcon id="dodge" size={11} /> {pct(s().dodgeBps)}
+            </span>
+            <span class="pvp-stat">
+              <StatIcon id="armor" size={11} /> {pct(s().defBps)}
             </span>
           </span>
         </span>
@@ -259,7 +297,13 @@ function UnitCell(props: {
               <img src={portraitUrl(g()!.artKey)} alt="" loading="lazy" decoding="async" onError={(e) => (e.currentTarget.style.display = 'none')} />
             </span>
             <span class="pvp-cell-name">{g()!.name}</span>
-            <span class="pvp-cell-lv" style={{ 'border-color': levelTier(u().level).css, color: levelTier(u().level).css }}>{`Lv.${u().level}`}</span>
+            <span class="pvp-cell-tags">
+              <span class="pvp-cell-lv" style={{ 'border-color': levelTier(u().level).css, color: levelTier(u().level).css }}>{`Lv.${u().level}`}</span>
+              {/* Phe của tướng — hiện ngay trên ô đội hình để biết đội đang có những phe nào */}
+              <span class="pvp-cell-faction" style={{ color: FACTION_STYLE[g()!.faction].css }} title={FACTION_LABELS[g()!.faction]}>
+                {FACTION_LABELS[g()!.faction]}
+              </span>
+            </span>
             <StatLine stat={props.stat} />
           </>
         )}
@@ -361,10 +405,10 @@ function TeamBoard(props: {
       </For>
     </div>
   );
-  // Chi tiết chiến đấu của tướng ở slot — tra theo (tướng, cấp); chưa tải xong thì undefined (hiện "…").
+  // Chi tiết chiến đấu của tướng ở slot — tra theo (tướng, cấp, đội); chưa tải xong thì undefined (hiện "…").
   const unitCombat = (slot: number) => {
     const u = bySlot().get(slot);
-    return u ? props.combat?.[statKey(u)] : undefined;
+    return u ? props.combat?.[statKey(u, props.units)] : undefined;
   };
   const unitStat = (slot: number): UnitStat | undefined => {
     const c = unitCombat(slot);
@@ -556,11 +600,12 @@ function Picker(props: {
                                 <span class="pvp-pick-stat-num">
                                   <StatIcon id="attack" size={11} /> {num(x().self.damage)} · <StatIcon id="heart" size={11} /> {num(x().self.maxHp)}
                                 </span>
-                                {/* Chính xác / Né tránh / ST chí mạng cũng scale theo cấp nên hiện luôn ở đây. */}
+                                {/* Chính xác / Né tránh / Phòng thủ / ST chí mạng cũng scale theo cấp nên hiện luôn ở đây. */}
                                 <span class="pvp-pick-stat-num">
                                   <StatIcon id="crit-rate" size={11} /> {pct(x().self.critBps)} · <StatIcon id="crit-dmg" size={11} />{' '}
                                   {pct(x().self.critDamageBps)} · <StatIcon id="eye" size={11} /> {pct(x().self.hitBps)} ·{' '}
-                                  <StatIcon id="dodge" size={11} /> {pct(x().self.dodgeBps)}
+                                  <StatIcon id="dodge" size={11} /> {pct(x().self.dodgeBps)} · <StatIcon id="armor" size={11} />{' '}
+                                  {pct(x().self.defBps)}
                                 </span>
                               </>
                             )}
@@ -1017,6 +1062,11 @@ function BattleReport(props: { units: PvpUnitStateDto[]; mySide: PvpSide; analys
     const u = unitByIdx().get(idx);
     return u ? gen(u.generalId).name : `#${idx}`;
   };
+  /** Phe của tướng ở ô `idx` (null nếu ô không có tướng). */
+  const factionOf = (idx: number): Faction | null => {
+    const u = unitByIdx().get(idx);
+    return u ? gen(u.generalId).faction : null;
+  };
   const artOf = (idx: number) => {
     const u = unitByIdx().get(idx);
     return <MiniArt unit={u} mine={u?.side === props.mySide} />;
@@ -1026,6 +1076,14 @@ function BattleReport(props: { units: PvpUnitStateDto[]; mySide: PvpSide; analys
       <td class="rp-t-name">
         {artOf(idx)}
         <span>{nameOf(idx)}</span>
+        {/* Phe của tướng — hiện kèm tên để đọc bảng tổng kết là biết ngay phe nào */}
+        <Show when={factionOf(idx)}>
+          {(f) => (
+            <span class="rp-t-faction" style={{ color: FACTION_STYLE[f()].css }} title={FACTION_LABELS[f()]}>
+              {FACTION_LABELS[f()]}
+            </span>
+          )}
+        </Show>
       </td>
       <td class="rp-t-num dmg">{num(t.dealt)}</td>
       <td class="rp-t-num taken">{num(t.taken)}</td>
@@ -1144,14 +1202,18 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         alive: s.alive,
         stunned: s.stunned,
         buffed: s.buffed,
-        // Đang bị debuff (giảm sát thương/HP/chí mạng/ST chí mạng) → dòng chỉ số đổi màu tím.
-        debuffed: s.debuffs.some((d) => d.damageFlat > 0 || d.hpFlat > 0 || d.critBps > 0 || d.critDamageBps > 0),
+        // Đang bị debuff (giảm sát thương/HP/chí mạng/ST chí mạng/phòng thủ) → dòng chỉ số đổi màu đỏ.
+        debuffed: s.debuffs.some(
+          (d) => d.damageFlat > 0 || d.hpFlat > 0 || d.critBps > 0 || d.critDamageBps > 0 || d.defDownBps > 0,
+        ),
         // Sát thương hiện tại = sát thương nền + lớp buff đang hiệu lực − lớp debuff giảm sát thương,
         // nhân hệ số Hồi sinh (giảm 50% vĩnh viễn sau khi sống lại — mục 1.14)
         damage: Math.round(
           Math.max(0, u.damage + s.buffs.reduce((acc, b) => acc + b.flat, 0) - s.debuffs.reduce((acc, d) => acc + d.damageFlat, 0)) *
             (s.damageMulBps / BPS_SCALE),
         ),
+        // Phòng thủ hiện tại = phòng thủ nền + lớp buff − lớp debuff giảm phòng thủ (khớp engine)
+        defBps: Math.max(0, u.defBps + s.buffs.reduce((acc, b) => acc + b.defBps, 0) - s.debuffs.reduce((acc, d) => acc + d.defDownBps, 0)),
         // Chí mạng / ST chí mạng hiện tại = chỉ số nền + lớp buff − lớp debuff (khớp engine)
         critBps: Math.max(0, u.critBps + s.buffs.reduce((acc, b) => acc + b.critBps, 0) - s.debuffs.reduce((acc, d) => acc + d.critBps, 0)),
         critDamageBps: Math.max(
@@ -1679,14 +1741,17 @@ export function PvpPage() {
   const teamPower = () => team().reduce((s, u) => s + powerOf(u.level), 0);
 
   /**
-   * Chi tiết chiến đấu của từng tướng theo (tướng|cấp) — tải một lần, dùng chung cho cả 2 đội:
+   * Chi tiết chiến đấu của từng tướng theo (tướng|cấp|đội) — dùng chung cho cả 2 đội:
    * dòng chỉ số dưới ô tướng lấy từ đây, và hộp chi tiết khi bấm ảnh đại diện cũng dùng luôn.
+   * Gửi kèm danh sách tướng trong đội để server tính Chỉ số Nền Ra Trận (vị trí + aura Hỗ trợ + Cổng Đồng Phe).
    */
   const [combat, setCombat] = createSignal<Record<string, PvpCombatDto>>({});
   const pendingStats = new Set<string>();
   async function ensureStats(units: PvpUnitDto[]) {
+    // Gửi theo ĐÚNG thứ tự vị trí (slot 1→6) để server suy ra hàng (trước/sau) cho Chỉ số Nền Ra Trận.
+    const squad = units.slice().sort((a, b) => a.slot - b.slot).map((u) => u.generalId);
     const jobs = units.filter((u) => {
-      const k = statKey(u);
+      const k = statKey(u, units);
       if (untrack(combat)[k] || pendingStats.has(k)) return false;
       pendingStats.add(k);
       return true;
@@ -1694,13 +1759,13 @@ export function PvpPage() {
     await Promise.all(
       jobs.map(async (u) => {
         try {
-          const dto = await api.generalCombat(u.generalId, u.level);
+          const dto = await api.generalCombat(u.generalId, u.level, squad);
           if (!alive) return;
-          setCombat((s) => ({ ...s, [statKey(u)]: dto }));
+          setCombat((s) => ({ ...s, [statKey(u, units)]: dto }));
         } catch {
           /* lỗi tải chỉ số thì bỏ qua — ô tướng hiện dấu "…" */
         } finally {
-          pendingStats.delete(statKey(u));
+          pendingStats.delete(statKey(u, units));
         }
       }),
     );
@@ -1949,7 +2014,7 @@ export function PvpPage() {
           </Show>
         </div>
         <p class="muted small pvp-rule">
-          Xếp tối đa 6 tướng (3 hàng trước + 3 hàng sau), mỗi tướng đứng 1 vị trí. Hàng trước +10% HP, hàng sau +10% sát thương.
+          Xếp tối đa 6 tướng (3 hàng trước + 3 hàng sau), mỗi tướng đứng 1 vị trí. Hàng trước +5% HP, hàng sau +5% sát thương.
         </p>
 
         <Show when={error()}>
@@ -2064,7 +2129,7 @@ export function PvpPage() {
                   <TeamBoard units={o().team.units} combat={combat()} foe />
                 </div>
               </div>
-              <p class="muted small pvp-challenge-hint">Bấm vào ô tướng để đổi, hoặc kéo-thả để thay đổi vị trí. Hàng trước +10% HP, hàng sau +10% sát thương.</p>
+              <p class="muted small pvp-challenge-hint">Bấm vào ô tướng để đổi, hoặc kéo-thả để thay đổi vị trí. Hàng trước +5% HP, hàng sau +5% sát thương.</p>
               <div class="pvp-team-actions">
                 <span class="muted small">{saveHint()}</span>
                 <button class="btn primary" disabled={busy() || team().length === 0} onClick={() => void challenge()}>

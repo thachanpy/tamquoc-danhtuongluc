@@ -630,7 +630,12 @@ export const schemas = {
   generalCombatQuery: {
     type: 'object',
     additionalProperties: false,
-    properties: { level: { type: 'integer', minimum: MIN_LEVEL, maximum: MAX_LEVEL, default: MIN_LEVEL } },
+    properties: {
+      level: { type: 'integer', minimum: MIN_LEVEL, maximum: MAX_LEVEL, default: MIN_LEVEL },
+      // Danh sách generalId trong đội (phân tách bằng dấu phẩy) — để tính Chỉ số Nền Ra Trận
+      // (aura Hỗ trợ + Cổng Đồng Phe). Bỏ trống = xem tự do, không cộng chỉ số nền đội.
+      squad: { type: 'string', maxLength: 512 },
+    },
   },
   profileBody: {
     type: 'object',
@@ -1170,6 +1175,37 @@ export interface PvpSkillDefDto {
 }
 
 /**
+ * Chỉ số Nền Ra Trận của MỘT tướng trong ngữ cảnh một đội (màn chuẩn bị khiêu chiến) — SKILLS.md mục 1.
+ * Là chỉ số bổ trợ cộng thẳng vào cọc Máu/Sát thương gốc, KHÔNG phải buff trong trận.
+ */
+export interface PvpPreBattleBonusDto {
+  /** Số tướng CÙNG PHE trong đội (2–6 tướng mới có hiệu lực cổng đồng phe). */
+  factionCount: number;
+  /** Số lớp aura Hỗ trợ trong đội. */
+  supportLayers: number;
+  /** Vị trí đội hình: hàng trước (1-2-3) +% máu cơ bản bản thân (bps). */
+  rowHpBps: number;
+  /** Vị trí đội hình: hàng sau (4-5-6) +% sát thương cơ bản bản thân (bps). */
+  rowDamageBps: number;
+  /** Tấn công: +% sát thương cơ bản bản thân (bps). */
+  attackDamageBps: number;
+  /** Phòng thủ: +% máu cơ bản bản thân (bps). */
+  defenseHpBps: number;
+  /** Hỗ trợ: +% máu cơ bản toàn đội (bps). */
+  supportHpBps: number;
+  /** Hỗ trợ: +% sát thương cơ bản toàn đội (bps). */
+  supportDamageBps: number;
+  /** Cổng Đồng Phe: +% máu theo số tướng cùng phe (bps). */
+  factionHpBps: number;
+  /** Cổng Đồng Phe: +% sát thương theo số tướng cùng phe (bps). */
+  factionDamageBps: number;
+  /** Tổng % cộng vào Máu (vị trí + phong cách + cổng đồng phe). */
+  hpBps: number;
+  /** Tổng % cộng vào Sát thương (vị trí + phong cách + cổng đồng phe). */
+  damageBps: number;
+}
+
+/**
  * Chi tiết chiến đấu của một tướng ở một cấp — modal xem thẻ ở Bộ sưu tập.
  * Chỉ số là CỦA RIÊNG tướng (đã gồm nội tại của tướng);
  * khi vào trận còn cộng buff theo vị trí (hàng trước/sau) và buff đồng minh phát mỗi lượt.
@@ -1195,5 +1231,10 @@ export interface PvpCombatDto {
   /** Buff theo vị trí khi vào trận. */
   rowBonus: { frontHpBps: number; backDamageBps: number };
   bpsScale: number;
+  /**
+   * Chỉ số Nền Ra Trận khi tướng nằm trong ngữ cảnh một đội (màn chuẩn bị khiêu chiến): HP/ST đã
+   * cộng toàn bộ % nền (nội tại + phong cách + cổng đồng phe). `null`/thiếu = xem tự do (Bộ sưu tập/Lobby).
+   */
+  preBattle?: { maxHp: number; damage: number; bonus: PvpPreBattleBonusDto } | null;
 }
 

@@ -1,7 +1,7 @@
 import { For, Show } from 'solid-js';
 import { PVP_PASSIVE_LABELS, PVP_STYLE_LABELS, type PvpCombatDto } from '@tq/shared';
 import { STYLE_COLOR, pct } from '../art.ts';
-import { skillNote } from '../combat-notes.ts';
+import { preBattleNote, skillNote } from '../combat-notes.ts';
 import { StyleIcon } from './StyleIcon.tsx';
 
 /**
@@ -12,14 +12,26 @@ import { StyleIcon } from './StyleIcon.tsx';
 
 /** Các dòng chỉ số chi tiết: giá trị thực tế, kèm ghi chú chỉ số nền + phần % được cộng. */
 export function statRows(c: PvpCombatDto): { label: string; value: string; note?: string }[] {
-  // Phần % cộng thêm vào chỉ số của riêng tướng gồm nội tại (mục 10.1) + chỉ số theo phong cách (mục 1);
-  // buff theo hàng và buff đồng minh phát mỗi lượt do engine áp khi vào trận, không cộng sẵn ở đây.
-  const hpPct = (c.passiveEffect.stat === 'maxHp' ? c.passiveEffect.bps : 0) + c.styleBonus.hpBps;
-  const dmgPct = (c.passiveEffect.stat === 'damage' ? c.passiveEffect.bps : 0) + c.styleBonus.damageBps;
-  const note = (p: number, base: number) => (p > 0 ? `nền ${base} · +${pct(p)}` : undefined);
+  // Phần % cộng thêm vào chỉ số của riêng tướng gồm nội tại (mục 10.1) + Chỉ số Nền Ra Trận (mục 1):
+  // phong cách + cổng đồng phe khi có ngữ cảnh đội (`preBattle`), hoặc phong cách 1 lớp khi xem tự do.
+  // Buff theo hàng và buff đồng minh phát mỗi lượt do engine áp khi vào trận, không cộng sẵn ở đây.
+  const styleHpBps = c.preBattle ? c.preBattle.bonus.hpBps : c.styleBonus.hpBps;
+  const styleDmgBps = c.preBattle ? c.preBattle.bonus.damageBps : c.styleBonus.damageBps;
+  const hpPct = (c.passiveEffect.stat === 'maxHp' ? c.passiveEffect.bps : 0) + styleHpBps;
+  const dmgPct = (c.passiveEffect.stat === 'damage' ? c.passiveEffect.bps : 0) + styleDmgBps;
+  const note = (p: number, base: number, detail: string) =>
+    p > 0 ? `nền ${base} · +${pct(p)}${detail ? ` (${detail})` : ''}` : undefined;
   const rows: { label: string; value: string; note?: string }[] = [
-    { label: 'HP tối đa', value: `${Math.round(c.base.maxHp * (1 + hpPct / c.bpsScale))}`, note: note(hpPct, c.base.maxHp) },
-    { label: 'Sát thương', value: `${Math.round(c.base.damage * (1 + dmgPct / c.bpsScale))}`, note: note(dmgPct, c.base.damage) },
+    {
+      label: 'HP tối đa',
+      value: `${Math.round(c.base.maxHp * (1 + hpPct / c.bpsScale))}`,
+      note: note(hpPct, c.base.maxHp, preBattleNote(c, 'hp')),
+    },
+    {
+      label: 'Sát thương',
+      value: `${Math.round(c.base.damage * (1 + dmgPct / c.bpsScale))}`,
+      note: note(dmgPct, c.base.damage, preBattleNote(c, 'damage')),
+    },
     { label: 'Lực chiến (LC)', value: `${c.self.lc}` },
     { label: 'Chí mạng', value: pct(c.self.critBps) },
     { label: 'ST chí mạng', value: pct(c.self.critDamageBps) },

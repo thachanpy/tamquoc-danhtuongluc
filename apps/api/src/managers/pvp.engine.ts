@@ -1,6 +1,7 @@
 import type { PvpBuffScope, PvpEventDto, PvpSide, PvpUnitStateDto, PvpWinner } from '@tq/shared';
 import {
   BPS_SCALE,
+  GENERALS_BY_ID,
   PVP_BACK_DAMAGE_BPS,
   PVP_BURN_BPS,
   PVP_BURN_LIFESTEAL_BPS,
@@ -33,6 +34,7 @@ import {
   pvpCritDamageBps,
   pvpDodgeBps,
   pvpEffectBps,
+  pvpFactionBonus,
   pvpHitBps,
   pvpLc,
   pvpLevelSpanBps,
@@ -267,20 +269,30 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
   }
 
   // 2) Chỉ số cố định khi vào trận: hàng trước +HP, hàng sau +damage (mục 2.3); nội tại tướng (mục 10.1);
-  //    nội tại theo phong cách (mục 1): Tấn công +25% ST bản thân, Phòng thủ +25% HP bản thân,
-  //    Hỗ trợ phát aura +10% HP & +10% ST cho TOÀN ĐỘI mỗi tướng Hỗ trợ (trần 3 lớp).
+  //    Chỉ số Nền Ra Trận (mục 1): Tấn công +8% ST bản thân, Phòng thủ +8% HP bản thân,
+  //    Hỗ trợ phát aura +3% HP & +3% ST cho TOÀN ĐỘI mỗi tướng Hỗ trợ (trần 6 lớp),
+  //    Cổng Đồng Phe cộng %Máu/%ST theo số tướng CÙNG PHE trong đội (2–6 tướng).
   //    Buff tăng sức mạnh theo kỹ năng KHÔNG áp trước trận mà phát dần mỗi lượt trong act().
   const supportLayersOf = (side: PvpSide) =>
     units.reduce((n, x) => n + (x.side === side && x.profile.style === 'support' ? 1 : 0), 0);
+  /** Số tướng CÙNG PHE trong mỗi đội (theo faction của tướng) — dùng cho Cổng Đồng Phe. */
+  const factionCountOf = (side: PvpSide, faction: string) =>
+    units.reduce((n, x) => n + (x.side === side && (GENERALS_BY_ID.get(x.generalId)?.faction ?? '') === faction ? 1 : 0), 0);
   for (const u of units) {
     const passiveEffect = PVP_PASSIVE_EFFECT[u.profile.passive];
     const style = pvpStyleBonus(u.profile.style, supportLayersOf(u.side));
+    // Cổng Đồng Phe: mỗi tướng nhận mốc theo số tướng CÙNG PHE của chính mình (không dùng mốc phe đông nhất).
+    const faction = pvpFactionBonus(factionCountOf(u.side, GENERALS_BY_ID.get(u.generalId)?.faction ?? ''));
     const damageBps =
       (u.row === 'back' ? PVP_BACK_DAMAGE_BPS : 0) +
       (passiveEffect.stat === 'damage' ? passiveEffect.bps : 0) +
-      style.damageBps;
+      style.damageBps +
+      faction.damageBps;
     const hpBps =
-      (u.row === 'front' ? PVP_FRONT_HP_BPS : 0) + (passiveEffect.stat === 'maxHp' ? passiveEffect.bps : 0) + style.hpBps;
+      (u.row === 'front' ? PVP_FRONT_HP_BPS : 0) +
+      (passiveEffect.stat === 'maxHp' ? passiveEffect.bps : 0) +
+      style.hpBps +
+      faction.hpBps;
     u.damage = Math.round(u.baseDamage * (1 + damageBps / BPS_SCALE));
     u.maxHpStatic = Math.round(u.baseHp * (1 + hpBps / BPS_SCALE));
     // Vào trận máu LUÔN đầy 100% (kể cả phần trần tăng nhờ aura Hỗ trợ — mục 1).

@@ -18,6 +18,9 @@ export const PVP_LANES = 3;
 export const PVP_ROWS = 2;
 export { PVP_TEAM_SIZE };
 
+/** Hàng của ô tướng trong đội hình: 3 vị trí đầu (1-2-3) là hàng trước, 3 vị trí sau (4-5-6) là hàng sau. */
+export type PvpRow = 'front' | 'back';
+
 /** Giới hạn số vòng để tránh trận bất tử. Quá số vòng mà chưa phân thắng bại thì hai đội hoà. */
 export const PVP_MAX_ROUNDS = 50;
 
@@ -121,18 +124,20 @@ export function pvpSkillDefAtLevel(def: PvpSkillDef, level: number): PvpSkillDef
 export const PVP_LC_BY_STYLE: Record<PvpStyle, number> = { attack: 130, support: 120, defense: 110 };
 export const pvpLc = (style: PvpStyle, level: number) => PVP_LC_BY_STYLE[style] + (level - 1) * 2;
 
-// ===== Chỉ số nội tại theo phong cách (SKILLS.md mục 1) =====
+// ===== Chỉ số Nền Ra Trận: phong cách + cổng đồng phe (SKILLS.md mục 1) =====
+// Chỉ số bổ trợ mặc định lúc ra trận, cộng TRỰC TIẾP vào cọc Máu/Sát thương gốc của tướng.
+// KHÔNG phải buff trong trận: không chiếm trần cộng dồn `maxLayers` và không thể bị Xóa Buff.
 
-/** Tấn công: +25% sát thương cơ bản cho BẢN THÂN. */
-export const PVP_STYLE_ATTACK_DAMAGE_BPS = 2500;
-/** Phòng thủ: +25% máu cơ bản cho BẢN THÂN. */
-export const PVP_STYLE_DEFENSE_HP_BPS = 2500;
-/** Hỗ trợ: aura +10% máu cơ bản cho TOÀN ĐỘI (kể cả bản thân). */
-export const PVP_STYLE_SUPPORT_HP_BPS = 1000;
-/** Hỗ trợ: aura +10% sát thương cơ bản cho TOÀN ĐỘI (kể cả bản thân). */
-export const PVP_STYLE_SUPPORT_DAMAGE_BPS = 1000;
-/** Aura Hỗ trợ cộng dồn tối đa 3 lớp (= +30% máu & +30% ST nếu có từ 3 tướng Hỗ trợ trở lên). */
-export const PVP_STYLE_SUPPORT_MAX_LAYERS = 3;
+/** Tấn công: +8% sát thương cơ bản cho BẢN THÂN. */
+export const PVP_STYLE_ATTACK_DAMAGE_BPS = 800;
+/** Phòng thủ: +8% máu cơ bản cho BẢN THÂN. */
+export const PVP_STYLE_DEFENSE_HP_BPS = 800;
+/** Hỗ trợ: aura +3% máu cơ bản cho TOÀN ĐỘI (kể cả bản thân). */
+export const PVP_STYLE_SUPPORT_HP_BPS = 300;
+/** Hỗ trợ: aura +3% sát thương cơ bản cho TOÀN ĐỘI (kể cả bản thân). */
+export const PVP_STYLE_SUPPORT_DAMAGE_BPS = 300;
+/** Aura Hỗ trợ cộng dồn tối đa 6 lớp (= +18% máu & +18% ST nếu có 6 tướng Hỗ trợ). */
+export const PVP_STYLE_SUPPORT_MAX_LAYERS = 6;
 
 /**
  * Khi TRẦN HP tăng thêm giữa trận (buff %HP của kỹ năng, hoặc suy yếu hết hạn trả lại trần), máu hiện
@@ -144,7 +149,7 @@ export const PVP_MAXHP_GAIN_HEAL_BPS = 2500;
 
 /**
  * Chỉ số cộng thêm theo phong cách của MỘT tướng khi vào trận:
- * - Tấn công (+25% ST) / Phòng thủ (+25% HP) chỉ áp cho bản thân.
+ * - Tấn công (+8% ST) / Phòng thủ (+8% HP) chỉ áp cho bản thân.
  * - Hỗ trợ áp aura cho cả đội, số lớp = số tướng Hỗ trợ trong đội (trần `PVP_STYLE_SUPPORT_MAX_LAYERS`).
  */
 export function pvpStyleBonus(style: PvpStyle, supportLayers: number): { damageBps: number; hpBps: number } {
@@ -152,6 +157,65 @@ export function pvpStyleBonus(style: PvpStyle, supportLayers: number): { damageB
   return {
     damageBps: (style === 'attack' ? PVP_STYLE_ATTACK_DAMAGE_BPS : 0) + layers * PVP_STYLE_SUPPORT_DAMAGE_BPS,
     hpBps: (style === 'defense' ? PVP_STYLE_DEFENSE_HP_BPS : 0) + layers * PVP_STYLE_SUPPORT_HP_BPS,
+  };
+}
+
+// ===== Cổng Đồng Phe (Faction Synergy — SKILLS.md mục 1) =====
+// Đếm số tướng CÙNG PHE trong đội (2–6 tướng) để cộng % Máu/Sát thương cho chính các tướng cùng phe đó.
+// Tướng phe khác nhận mốc riêng theo số tướng cùng phe của mình (không dùng chung mốc phe đông nhất).
+
+/** % Máu cộng thêm theo số tướng cùng phe (index = số tướng: 2 tướng +2%, 3 tướng +4%, …, 6 tướng +10%). */
+export const PVP_FACTION_HP_BPS = [0, 0, 200, 400, 600, 800, 1000] as const;
+/** % Sát thương cộng thêm theo số tướng cùng phe (2 tướng +0%, 3 tướng +2%, …, 6 tướng +8%). */
+export const PVP_FACTION_DAMAGE_BPS = [0, 0, 0, 200, 400, 600, 800] as const;
+
+/** Chỉ số Cổng Đồng Phe cho MỘT tướng theo số tướng CÙNG PHE trong đội. */
+export function pvpFactionBonus(count: number): { damageBps: number; hpBps: number } {
+  const n = Math.max(0, Math.min(PVP_TEAM_SIZE, Math.floor(count)));
+  return { hpBps: PVP_FACTION_HP_BPS[n] ?? 0, damageBps: PVP_FACTION_DAMAGE_BPS[n] ?? 0 };
+}
+
+/**
+ * Chỉ số Nền Ra Trận của MỘT tướng = vị trí đội hình + phong cách + cổng đồng phe, tách riêng từng phần
+ * để hiển thị badge. Chỉ số này cộng thẳng vào cọc nền (không phải buff trong trận).
+ */
+export function pvpPreBattleBonus(
+  style: PvpStyle,
+  supportLayers: number,
+  factionCount: number,
+  row: PvpRow,
+): {
+  rowHpBps: number;
+  rowDamageBps: number;
+  attackDamageBps: number;
+  defenseHpBps: number;
+  supportHpBps: number;
+  supportDamageBps: number;
+  factionHpBps: number;
+  factionDamageBps: number;
+  hpBps: number;
+  damageBps: number;
+} {
+  const layers = Math.min(PVP_STYLE_SUPPORT_MAX_LAYERS, Math.max(0, supportLayers));
+  const faction = pvpFactionBonus(factionCount);
+  // Vị trí đội hình: hàng trước +5% Máu, hàng sau +5% Sát thương (mục 1).
+  const rowHpBps = row === 'front' ? PVP_FRONT_HP_BPS : 0;
+  const rowDamageBps = row === 'back' ? PVP_BACK_DAMAGE_BPS : 0;
+  const attackDamageBps = style === 'attack' ? PVP_STYLE_ATTACK_DAMAGE_BPS : 0;
+  const defenseHpBps = style === 'defense' ? PVP_STYLE_DEFENSE_HP_BPS : 0;
+  const supportHpBps = layers * PVP_STYLE_SUPPORT_HP_BPS;
+  const supportDamageBps = layers * PVP_STYLE_SUPPORT_DAMAGE_BPS;
+  return {
+    rowHpBps,
+    rowDamageBps,
+    attackDamageBps,
+    defenseHpBps,
+    supportHpBps,
+    supportDamageBps,
+    factionHpBps: faction.hpBps,
+    factionDamageBps: faction.damageBps,
+    hpBps: rowHpBps + defenseHpBps + supportHpBps + faction.hpBps,
+    damageBps: rowDamageBps + attackDamageBps + supportDamageBps + faction.damageBps,
   };
 }
 
@@ -409,11 +473,11 @@ export const PVP_VS_DEBUFF_MIN_LAYERS = 2;
  */
 export const PVP_MAXHP_DOWN_CAP_BPS = 3000;
 
-// ===== Buff theo vị trí =====
+// ===== Buff theo vị trí (Chỉ số Nền Ra Trận — mục 1) =====
 
-/** Hàng trước: +10% HP tối đa. Hàng sau: +10% damage. */
-export const PVP_FRONT_HP_BPS = 1000;
-export const PVP_BACK_DAMAGE_BPS = 1000;
+/** Hàng trước (vị trí 1-2-3): +5% Máu cơ bản. Hàng sau (vị trí 4-5-6): +5% Sát thương cơ bản. */
+export const PVP_FRONT_HP_BPS = 500;
+export const PVP_BACK_DAMAGE_BPS = 500;
 
 // ===== Chính xác / Né tránh / Phòng thủ / Xuyên giáp (SKILLS.md mục 18) =====
 //

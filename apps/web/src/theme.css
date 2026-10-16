@@ -652,11 +652,16 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .pvp-cell-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 700; }
 /* Cấp độ trên ô tướng: cùng kiểu chip với các chỗ khác (bảng chọn tướng, danh sách) */
 .pvp-cell-lv { padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255, 255, 255, .04); font: 600 11px/1.6 var(--num, sans-serif); }
+/* Hàng chip cấp độ + phe trên ô tướng (ô hẹp thì tự xuống dòng, không tràn ra ngoài) */
+.pvp-cell-tags { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px; max-width: 100%; }
+.pvp-cell-faction { padding: 1px 7px; border: 1px solid currentColor; border-radius: 999px; font: 600 10.5px/1.6 var(--num, sans-serif); opacity: .9; }
 
 /* Chỉ số cơ bản của tướng hiện dưới mỗi ô (bước chuẩn bị khiêu chiến) */
 .pvp-cell-stat { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 6px; max-width: 100%; font: 600 10.5px/1.35 var(--num, sans-serif); color: var(--muted); }
 .pvp-cell-stat.loading { opacity: .55; }
 .pvp-cell-num { color: var(--text); white-space: nowrap; }
+/* Huy hiệu Chỉ số Nền Ra Trận: phần (+X) cộng thêm so với chỉ số gốc, tooltip hiện chi tiết % nguồn cộng. */
+.pvp-cell-num .pvp-pre { margin-left: 2px; font-style: normal; font-weight: 700; color: #7fd6a6; cursor: help; }
 /* Hàng chỉ số thứ hai (chí mạng · ST chí mạng · chính xác · né tránh) chiếm trọn một dòng riêng.
    Mỗi chỉ số là một khối riêng nên ô hẹp thì tự xuống dòng thay vì tràn ra ngoài ô tướng. */
 .pvp-cell-stat .row2 { flex: 1 1 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 1px 7px; font-size: 10px; white-space: normal; }
@@ -810,6 +815,8 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-table th:first-child { text-align: left; }
 .rp-table td { padding: 5px 8px; border-bottom: 1px solid rgba(255, 255, 255, .06); }
 .rp-t-name { display: flex; align-items: center; gap: 7px; font-weight: 700; }
+/* Chip phe cạnh tên tướng trong bảng tổng kết trận */
+.rp-t-faction { padding: 0 6px; border: 1px solid currentColor; border-radius: 999px; font: 600 10px/1.7 var(--num, sans-serif); opacity: .9; }
 .rp-t-num { text-align: right; white-space: nowrap; }
 .rp-t-num.dmg { color: #ff9d8f; }
 .rp-t-num.taken { color: #ffc9b0; }

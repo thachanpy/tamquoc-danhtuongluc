@@ -6,6 +6,31 @@ import { pct } from './art.ts';
  * Dùng chung cho popup ngắm thẻ (Bộ sưu tập) và bảng chọn tướng (Đấu trường) để hai nơi luôn khớp nhau.
  */
 
+/**
+ * Nhãn chi tiết Chỉ số Nền Ra Trận (màn chuẩn bị khiêu chiến) cho HP hoặc Sát thương.
+ * Ví dụ: "+5% Trước, +6% Phe, +8% Thủ, +6% Hỗ trợ". Rỗng khi xem tự do (không có đội).
+ */
+export function preBattleNote(c: PvpCombatDto, kind: 'hp' | 'damage'): string {
+  const b = c.preBattle?.bonus;
+  if (!b) return '';
+  const passive = c.passiveEffect;
+  const parts: string[] = [];
+  if (kind === 'hp') {
+    if (b.rowHpBps) parts.push(`+${pct(b.rowHpBps)} Trước`);
+    if (b.factionHpBps) parts.push(`+${pct(b.factionHpBps)} Phe`);
+    if (b.defenseHpBps) parts.push(`+${pct(b.defenseHpBps)} Thủ`);
+    if (b.supportHpBps) parts.push(`+${pct(b.supportHpBps)} Hỗ trợ`);
+    if (passive.stat === 'maxHp' && passive.bps) parts.push(`+${pct(passive.bps)} Nội tại`);
+  } else {
+    if (b.rowDamageBps) parts.push(`+${pct(b.rowDamageBps)} Sau`);
+    if (b.factionDamageBps) parts.push(`+${pct(b.factionDamageBps)} Phe`);
+    if (b.attackDamageBps) parts.push(`+${pct(b.attackDamageBps)} Công`);
+    if (b.supportDamageBps) parts.push(`+${pct(b.supportDamageBps)} Hỗ trợ`);
+    if (passive.stat === 'damage' && passive.bps) parts.push(`+${pct(passive.bps)} Nội tại`);
+  }
+  return parts.join(', ');
+}
+
 /** Mô tả các KÊNH buff tăng sức mạnh theo kỹ năng: mỗi kênh phát cho phạm vi `scope` mỗi lượt, cộng dồn lớp. */
 export function teamBuffNote(c: PvpCombatDto): string {
   return c.buffs

@@ -1,5 +1,6 @@
 import {
   BPS_SCALE,
+  GENERALS_BY_ID,
   LEADERBOARD_POWER_BY_LEVEL,
   PVP_BACK_DAMAGE_BPS,
   PVP_CLEANSE_CHAMP_BPS,
@@ -7,6 +8,7 @@ import {
   PVP_DEF_BPS,
   PVP_DEF_PEN_BPS,
   PVP_FRONT_HP_BPS,
+  PVP_LANES,
   PVP_MAX_ROUNDS,
   PVP_PASSIVE_EFFECT,
   PVP_TEAM_SIZE,
@@ -18,10 +20,12 @@ import {
   pvpHitBps,
   pvpLc,
   pvpPerLevelEffectBps,
+  pvpPreBattleBonus,
   pvpProfile,
   pvpSkillDefAtLevel,
   pvpStyleBonus,
   ROSTER,
+  type PvpRow,
 } from '@tq/game-config';
 import type {
   Page,
@@ -192,8 +196,12 @@ export const rosterSkills = (): Record<string, PvpSkill> => ROSTER_SKILLS;
 const ROSTER_SKILL_NAMES: Record<string, string> = Object.fromEntries(ROSTER.map((g) => [g.id, pvpProfile(g.id).skillName]));
 export const rosterSkillNames = (): Record<string, string> => ROSTER_SKILL_NAMES;
 
-/** Chi tiết chiến đấu của một tướng ở một cấp (mục 6.7) — modal xem thẻ ở Bộ sưu tập. */
-export function getCombatStats(generalId: string, level: number): PvpCombatDto {
+/**
+ * Chi tiết chiến đấu của một tướng ở một cấp (mục 6.7) — modal xem thẻ ở Bộ sưu tập.
+ * Khi truyền `squad` (danh sách generalId trong đội, theo ĐÚNG thứ tự vị trí), trả thêm Chỉ số Nền Ra Trận
+ * (mục 1): vị trí đội hình + aura Hỗ trợ + Cổng Đồng Phe cộng vào cọc Máu/Sát thương — màn chuẩn bị khiêu chiến.
+ */
+export function getCombatStats(generalId: string, level: number, squad?: string[]): PvpCombatDto {
   if (!ROSTER_IDS.has(generalId)) throw new AppError(404, 'GENERAL_NOT_FOUND', 'Không tìm thấy tướng.');
   const profile = pvpProfile(generalId);
   // Hệ số kỹ năng TẠI CẤP hiện tại: mọi hiệu ứng (buff/hồi/debuff/…) đã quy theo cấp — khớp engine.
@@ -212,9 +220,11 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
   const heal =
     (def.healBps > 0 ? Math.round((damage * def.healBps) / BPS_SCALE) : 0) +
     (def.selfHealBps > 0 ? Math.round((maxHp * def.selfHealBps) / BPS_SCALE) : 0);
-  // Chỉ số cộng thêm theo phong cách của CHÍNH tướng (mục 1): Tấn công +25% ST, Phòng thủ +25% HP,
-  // Hỗ trợ là aura +10% HP & +10% ST — ở đây tính 1 lớp của chính tướng; khi vào trận cộng dồn theo đội.
+  // Chỉ số cộng thêm theo phong cách của CHÍNH tướng (mục 1): Tấn công +8% ST, Phòng thủ +8% HP,
+  // Hỗ trợ là aura +3% HP & +3% ST — ở đây tính 1 lớp của chính tướng; khi vào trận cộng dồn theo đội.
   const styleBonus = pvpStyleBonus(profile.style, profile.style === 'support' ? 1 : 0);
+  // Chỉ số Nền Ra Trận (mục 1): chỉ tính khi biết đội — đếm số lớp aura Hỗ trợ và số tướng CÙNG PHE.
+  const preBattle = squad?.length ? buildPreBattle(generalId, squad, profile.style, baseHp, baseDamage, hpBps, damageBps) : null;
   return {
     generalId,
     level,
@@ -272,6 +282,39 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
     styleBonus,
     rowBonus: { frontHpBps: PVP_FRONT_HP_BPS, backDamageBps: PVP_BACK_DAMAGE_BPS },
     bpsScale: BPS_SCALE,
+    preBattle,
+  };
+}
+
+/**
+ * Chỉ số Nền Ra Trận của một tướng trong ngữ cảnh đội (mục 1): HP/ST đã cộng toàn bộ % nền
+ * (nội tại + vị trí đội hình + phong cách + cổng đồng phe). `hpBps`/`damageBps` truyền vào là phần nội tại.
+ * `squad` là danh sách generalId theo ĐÚNG thứ tự vị trí (index + 1 = slot) nên suy ra được hàng của tướng.
+ */
+function buildPreBattle(
+  generalId: string,
+  squad: string[],
+  style: PvpStyle,
+  baseHp: number,
+  baseDamage: number,
+  passiveHpBps: number,
+  passiveDamageBps: number,
+): NonNullable<PvpCombatDto['preBattle']> {
+  const faction = GENERALS_BY_ID.get(generalId)?.faction ?? '';
+  // Cổng Đồng Phe chỉ buff tướng CÙNG PHE: đếm số tướng trong đội có cùng faction với tướng này.
+  const factionCount = squad.reduce((n, id) => n + ((GENERALS_BY_ID.get(id)?.faction ?? '') === faction ? 1 : 0), 0);
+  // Aura Hỗ trợ: mỗi tướng Hỗ trợ trong đội là một lớp (trần 6 lớp).
+  const supportLayers = squad.reduce((n, id) => n + (ROSTER_STYLES[id] === 'support' ? 1 : 0), 0);
+  // Vị trí đội hình: slot 1-3 hàng trước (+5% Máu), slot 4-6 hàng sau (+5% Sát thương).
+  const slot = squad.indexOf(generalId);
+  const row: PvpRow = slot >= PVP_LANES ? 'back' : 'front';
+  const bonus = pvpPreBattleBonus(style, supportLayers, factionCount, row);
+  const hpBps = passiveHpBps + bonus.hpBps;
+  const damageBps = passiveDamageBps + bonus.damageBps;
+  return {
+    maxHp: Math.round(baseHp * (1 + hpBps / BPS_SCALE)),
+    damage: Math.round(baseDamage * (1 + damageBps / BPS_SCALE)),
+    bonus: { factionCount, supportLayers, ...bonus },
   };
 }
 

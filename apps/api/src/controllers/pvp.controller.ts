@@ -24,8 +24,10 @@ export function registerPvpRoutes(app: FastifyInstance, ctx: GameContext): void 
     { preHandler: auth, schema: { params: schemas.generalCombatParams, querystring: schemas.generalCombatQuery }, config: LIMIT_120 },
     async (req) => {
       const { id } = req.params as { id: string };
-      const { level } = req.query as { level: number };
-      return getCombatStats(id, level);
+      const { level, squad } = req.query as { level: number; squad?: string };
+      // `squad` (nếu có) = danh sách generalId trong đội để tính Chỉ số Nền Ra Trận (aura Hỗ trợ + Cổng Đồng Phe).
+      const squadIds = squad ? squad.split(',').filter(Boolean) : undefined;
+      return getCombatStats(id, level, squadIds);
     },
   );
 

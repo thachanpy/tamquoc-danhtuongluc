@@ -24,10 +24,29 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 
 ### Phong cách & Thứ tự hành động
 
-- **Phong cách**: Chỉ quyết định **lực chiến (LC)**, nhãn hiển thị và **chỉ số nội tại cộng thêm**:
-  - **Tấn công** (LC cao nhất): Tăng **25% sát thương cơ bản** cho bản thân.
-  - **Phòng thủ** (LC thấp nhất): Tăng **25% máu cơ bản** cho bản thân.
-  - **Hỗ trợ**: Tăng **10% máu cơ bản** và **10% sát thương cơ bản** cho **toàn đội** (Aura toàn đội, **cộng dồn tối đa 3 lớp = +30% Máu & +30% ST** nếu sử dụng nhiều tướng Hỗ trợ). Aura áp ngay khi vào trận và **máu vẫn đầy 100%** theo trần mới (không bị tính là hồi máu).
+- **Phong cách**: Chỉ quyết định **lực chiến (LC)**, nhãn hiển thị và **Chỉ số Nền Ra Trận cộng thêm** (xem mục **Chỉ số Nền Ra Trận** bên dưới):
+  - **Tấn công** (LC cao nhất): Tăng **8% sát thương cơ bản** cho bản thân.
+  - **Phòng thủ** (LC thấp nhất): Tăng **8% máu cơ bản** cho bản thân.
+  - **Hỗ trợ**: Tăng **3% máu cơ bản** và **3% sát thương cơ bản** cho **toàn đội** (Aura toàn đội, **cộng dồn tối đa 6 lớp = +18% Máu & +18% ST** nếu sử dụng nhiều tướng Hỗ trợ). Aura áp ngay khi vào trận và **máu vẫn đầy 100%** theo trần mới (không bị tính là hồi máu).
+
+### Chỉ số Nền Ra Trận (Pre-Battle Base Stats)
+
+> Chỉ số cộng từ **Vị trí đội hình**, **Phong cách** và **Cổng Đồng Phe** là **chỉ số bổ trợ mặc định lúc ra trận**, cộng **TRỰC TIẾP** vào cọc Máu/Sát thương gốc của tướng. Đây **KHÔNG PHẢI buff trong trận**: **không chiếm trần cộng dồn `maxLayers`** và **không thể bị Xóa Buff**. Chỉ số gốc trong **Bộ Sưu Tập/Lobby** vẫn giữ nguyên; chỉ khi xếp vào **Màn hình Chuẩn bị Chiến đấu** mới nhảy lên cọc mới (VD: HP 1.000 → 1.080).
+
+- **Theo Vị trí đội hình (Formation Row)**: **Hàng trước** (vị trí 1-2-3) `+5% Máu cơ bản`; **Hàng sau** (vị trí 4-5-6) `+5% Sát thương cơ bản`.
+- **Theo Phong cách (bản thân)**: Tấn công `+8% ST cơ bản`; Phòng thủ `+8% Máu cơ bản` (xem bảng Phong cách ở trên).
+- **Aura Hỗ trợ (toàn đội)**: `+3% Máu & +3% ST cơ bản` cho toàn đội, **cộng dồn tối đa 6 lớp** (số lớp = số tướng Hỗ trợ trong đội) — trần `+18% Máu & +18% ST`.
+- **Cổng Đồng Phe (Faction Synergy)**: đếm số tướng **CÙNG PHE** trong đội; **mỗi tướng nhận mốc theo đúng số tướng cùng phe của chính nó** (tướng phe khác có mốc riêng, KHÔNG dùng mốc phe đông nhất):
+
+| Số tướng cùng phe | % Máu | % Sát thương |
+| :---: | :---: | :---: |
+| 1 (không đủ mốc) | +0% | +0% |
+| 2 | +2% | +0% |
+| 3 | +4% | +2% |
+| 4 | +6% | +4% |
+| 5 | +8% | +6% |
+| 6 | +10% | +8% |
+
 - **Thứ tự hành động**: Hai đội **luân phiên nhau theo vị trí**. Vào trận, bên có **tổng LC cả đội cao hơn** ra đòn trước ở **vị trí 1**, rồi tới **vị trí 1 của bên kia**, **vị trí 2 của bên đi trước**, **vị trí 2 của bên kia**… cứ thế tới vị trí 6 (bằng tổng LC thì bên khiêu chiến A đi trước).
 - **Phạm vi nhắm mục tiêu (Targeting)**: 6 ô gồm **2 hàng dọc** (hàng dọc trước `1-2-3` và hàng dọc sau `4-5-6`) × **3 hàng ngang** (cặp `1-4`, `2-5`, `3-6`).
   - `front_row` (Hàng dọc trước): Đánh cả 3 tướng ô `1-2-3` của địch. Nếu hàng dọc trước đã ngã hết thì tự động chuyển sang đánh hàng dọc sau `4-5-6`.

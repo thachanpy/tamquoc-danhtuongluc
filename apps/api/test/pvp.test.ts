@@ -15,6 +15,9 @@ import {
   PVP_DEBUFF_ROUNDS,
   PVP_DEF_BPS,
   PVP_DEF_MAX_BPS,
+  PVP_FACTION_HP_BPS,
+  PVP_FRONT_HP_BPS,
+  PVP_BACK_DAMAGE_BPS,
   PVP_MAXHP_GAIN_HEAL_BPS,
   PVP_MAX_ROUNDS,
   PVP_PASSIVE_EFFECT,
@@ -25,10 +28,13 @@ import {
   PVP_SKILL_DEF,
   PVP_VS_DEBUFF_BONUS_BPS,
   ROSTER,
+  pvpBaseDamage,
   pvpBaseHp,
   pvpCritDamageBps,
   pvpEffectBps,
+  pvpFactionBonus,
   pvpPerLevelEffectBps,
+  pvpPreBattleBonus,
   pvpProfile,
   pvpRealHitBps,
   pvpSkillDefAtLevel,
@@ -113,10 +119,10 @@ test('engine: cùng seed cho ra cùng trận (tất định — mục 15)', () =
   assert.equal(a.events[a.events.length - 1]!.t, 'end');
 });
 
-test('engine: idx theo slot (A=0–5, B=6–11) và hàng trước +10% HP (mục 2.2, 2.3)', () => {
+test('engine: idx theo slot (A=0–5, B=6–11) và hàng trước +5% HP (mục 2.2, 2.3)', () => {
   const g = ROSTER[0]!.id;
   const res = simulatePvp([one('a', [{ slot: 1, generalId: g, level: 5 }]), one('b', [{ slot: 4, generalId: g, level: 5 }])], never);
-  // Cùng tướng, cùng cấp: slot 1 (hàng trước) +10% HP; slot 4 (hàng sau) không có buff HP.
+  // Cùng tướng, cùng cấp: slot 1 (hàng trước) +5% HP; slot 4 (hàng sau) không có buff HP.
   const front = res.units.find((u) => u.idx === 0)!;
   const back = res.units.find((u) => u.idx === 9)!;
   assert.equal(front.slot, 1);
@@ -124,7 +130,7 @@ test('engine: idx theo slot (A=0–5, B=6–11) và hàng trước +10% HP (mụ
   assert.ok(front.maxHp > back.maxHp, 'hàng trước phải nhiều HP hơn hàng sau');
 });
 
-test('engine: hàng sau +10% damage so với hàng trước (mục 2.3)', () => {
+test('engine: hàng sau +5% damage so với hàng trước (mục 2.3)', () => {
   // Tào Phi: đánh đơn, không tự buff sát thương → so sánh sát thương thuần theo vị trí.
   const attacker = 'cao-pi';
   const target = 'da-qiao';
@@ -134,6 +140,110 @@ test('engine: hàng sau +10% damage so với hàng trước (mục 2.3)', () => 
     return hit?.amount ?? 0;
   };
   assert.ok(dmgOf(run(5)) > dmgOf(run(2)), 'tướng hàng sau gây nhiều sát thương hơn tướng hàng trước');
+});
+
+test('config: bảng Cổng Đồng Phe đúng mốc 2–6 tướng và kẹp trần (mục 1)', () => {
+  assert.deepEqual(pvpFactionBonus(0), { hpBps: 0, damageBps: 0 });
+  assert.deepEqual(pvpFactionBonus(1), { hpBps: 0, damageBps: 0 }, '1 tướng chưa đủ mốc cộng hưởng');
+  assert.deepEqual(pvpFactionBonus(2), { hpBps: 200, damageBps: 0 });
+  assert.deepEqual(pvpFactionBonus(3), { hpBps: 400, damageBps: 200 });
+  assert.deepEqual(pvpFactionBonus(4), { hpBps: 600, damageBps: 400 });
+  assert.deepEqual(pvpFactionBonus(5), { hpBps: 800, damageBps: 600 });
+  assert.deepEqual(pvpFactionBonus(6), { hpBps: 1000, damageBps: 800 });
+  assert.deepEqual(pvpFactionBonus(9), pvpFactionBonus(6), 'vượt 6 tướng kẹp về mốc 6');
+});
+
+test('config: pvpPreBattleBonus tổng hợp Vị trí + Phong cách + Cổng Đồng Phe (mục 1)', () => {
+  // Tấn công hàng trước đơn độc (1 tướng, không Hỗ trợ): +5% Máu (vị trí) + 8% ST bản thân.
+  assert.deepEqual(pvpPreBattleBonus('attack', 0, 1, 'front'), {
+    rowHpBps: 500,
+    rowDamageBps: 0,
+    attackDamageBps: 800,
+    defenseHpBps: 0,
+    supportHpBps: 0,
+    supportDamageBps: 0,
+    factionHpBps: 0,
+    factionDamageBps: 0,
+    hpBps: 500,
+    damageBps: 800,
+  });
+  // Phòng thủ hàng sau đơn độc: +5% ST (vị trí) + 8% Máu bản thân.
+  assert.deepEqual(pvpPreBattleBonus('defense', 0, 1, 'back'), {
+    rowHpBps: 0,
+    rowDamageBps: 500,
+    attackDamageBps: 0,
+    defenseHpBps: 800,
+    supportHpBps: 0,
+    supportDamageBps: 0,
+    factionHpBps: 0,
+    factionDamageBps: 0,
+    hpBps: 800,
+    damageBps: 500,
+  });
+  // Hỗ trợ 2 lớp + 4 tướng cùng phe, hàng trước: 5% vị trí + 3%×2 Hỗ trợ (600) + mốc 4 (600 HP / 400 ST).
+  const b = pvpPreBattleBonus('support', 2, 4, 'front');
+  assert.equal(b.rowHpBps, 500);
+  assert.equal(b.supportHpBps, 600);
+  assert.equal(b.supportDamageBps, 600);
+  assert.equal(b.factionHpBps, 600);
+  assert.equal(b.factionDamageBps, 400);
+  assert.equal(b.hpBps, 1700);
+  assert.equal(b.damageBps, 1000);
+  // Trần aura Hỗ trợ 6 lớp = +18% (1800 bps).
+  assert.equal(pvpPreBattleBonus('support', 9, 0, 'back').supportHpBps, 1800);
+  assert.equal(pvpPreBattleBonus('support', 9, 0, 'back').supportDamageBps, 1800);
+});
+
+test('engine: Vị trí đội hình +5% Máu (hàng trước) / +5% Sát thương (hàng sau) (mục 1)', () => {
+  const level = 5;
+  const base = pvpBaseHp(level);
+  const baseDmg = pvpBaseDamage(level);
+  // Tướng Tấn công, không nội tại tăng HP/ST → chỉ số nền chỉ gồm phong cách + vị trí.
+  const atk = findGeneral((id) => {
+    const p = pvpProfile(id);
+    const eff = PVP_PASSIVE_EFFECT[p.passive];
+    return p.style === 'attack' && eff.stat !== 'damage' && eff.stat !== 'maxHp';
+  });
+  // Solo để không có aura Hỗ trợ / cổng đồng phe; so hàng trước (slot 2) với hàng sau (slot 5).
+  const run = (slot: number) => simulatePvp([one('a', [{ slot, generalId: atk, level }])], never).units[0]!;
+  // Tướng Tấn công vẫn nhận +8% ST theo phong cách, nên phần ST nền = phong cách + vị trí; HP chỉ có vị trí.
+  const styleDmgBps = pvpStyleBonus('attack', 0).damageBps;
+  const front = run(2);
+  const back = run(5);
+  assert.equal(front.slot, 2);
+  assert.equal(back.slot, 5);
+  assert.equal(front.maxHp, Math.round(base * (1 + PVP_FRONT_HP_BPS / BPS_SCALE)), 'hàng trước +5% Máu');
+  assert.equal(back.maxHp, base, 'hàng sau không cộng Máu');
+  assert.equal(back.damage, Math.round(baseDmg * (1 + (styleDmgBps + PVP_BACK_DAMAGE_BPS) / BPS_SCALE)), 'hàng sau +5% Sát thương');
+  assert.equal(front.damage, Math.round(baseDmg * (1 + styleDmgBps / BPS_SCALE)), 'hàng trước không cộng Sát thương vị trí');
+});
+
+test('engine: Cổng Đồng Phe chỉ cộng cho tướng CÙNG PHE trong đội (mục 1)', () => {
+  const level = 5;
+  const base = pvpBaseHp(level);
+  // Tướng khảo sát: Thục, không Hỗ trợ, nội tại không tăng HP tối đa → cọc Máu chỉ gồm phong cách + cổng đồng phe.
+  const neutral = (id: string) =>
+    pvpProfile(id).style !== 'support' && PVP_PASSIVE_EFFECT[pvpProfile(id).passive].stat !== 'maxHp';
+  const shu = ROSTER.filter((g) => g.faction === 'shu' && neutral(g.id)).map((g) => g.id);
+  const wei = ROSTER.filter((g) => g.faction === 'wei' && neutral(g.id)).map((g) => g.id);
+  assert.ok(shu.length >= 4, 'roster phải có đủ 4 tướng Thục không Hỗ trợ để test');
+  assert.ok(wei.length >= 4, 'roster phải có đủ 4 tướng Ngụy không Hỗ trợ để test');
+  const x = shu[0]!;
+  const styleHp = pvpStyleBonus(pvpProfile(x).style, 0).hpBps; // không có tướng Hỗ trợ → 0 lớp aura
+  const hpWith = (factionHpBps: number) => Math.round(base * (1 + (styleHp + factionHpBps) / BPS_SCALE));
+  // Tướng khảo sát ở slot 4 (hàng sau → không buff HP theo hàng); đồng đội xếp slot 1–3.
+  const run = (mates: string[]) =>
+    simulatePvp(
+      [
+        one('a', [{ slot: 4, generalId: x, level }, ...mates.map((g, i) => ({ slot: i + 1, generalId: g, level }))]),
+        one('b', [{ slot: 1, generalId: wei[0]!, level }]),
+      ],
+      never,
+    ).units.find((u) => u.side === 'a' && u.slot === 4)!.maxHp;
+
+  assert.equal(run([]), hpWith(0), 'đội 1 tướng: chưa kích hoạt cộng hưởng phe');
+  assert.equal(run(wei.slice(1, 4)), hpWith(0), 'đồng đội KHÁC PHE không kích hoạt cộng hưởng cho tướng Thục');
+  assert.equal(run(shu.slice(1, 4)), hpWith(PVP_FACTION_HP_BPS[4]!), 'tổng 4 tướng Thục → mốc cộng hưởng 4');
 });
 
 test('engine: hai đội ra đòn luân phiên theo vị trí, bên tổng LC cao hơn đi trước (mục 5.1)', () => {
@@ -1137,6 +1247,28 @@ test('HTTP: chi tiết chiến đấu của một tướng — chỉ số, kỹ 
   // ST chí mạng scale theo cấp (mục 7) — buff/debuff kỹ năng điều chỉnh quanh mốc này khi vào trận.
   assert.equal(c.self.critDamageBps, pvpCritDamageBps(5));
   assert.equal(c.bpsScale, BPS_SCALE);
+  // Không truyền đội → không có Chỉ số Nền Ra Trận (Bộ Sưu Tập/Lobby giữ chỉ số gốc).
+  assert.equal(c.preBattle, null);
+  await app.close();
+});
+
+test('HTTP: chi tiết chiến đấu theo ĐỘI trả Chỉ số Nền Ra Trận preBattle (mục 1)', async () => {
+  const { app, auth } = await setup();
+  const g = ROSTER.find((x) => x.faction === 'shu' && pvpProfile(x.id).style !== 'support')!;
+  const mates = ROSTER.filter((x) => x.id !== g.id && x.faction === 'shu').slice(0, 3).map((x) => x.id);
+  const squad = [g.id, ...mates];
+  const r = await app.inject({
+    method: 'GET',
+    url: `/api/pvp/generals/${g.id}/combat?level=5&squad=${squad.join(',')}`,
+    headers: auth,
+  });
+  assert.equal(r.statusCode, 200);
+  const c = r.json();
+  assert.ok(c.preBattle, 'có đội thì phải trả Chỉ số Nền Ra Trận');
+  assert.equal(c.preBattle.bonus.factionCount, 4, 'đếm đúng số tướng cùng phe');
+  assert.equal(c.preBattle.bonus.factionHpBps, PVP_FACTION_HP_BPS[4]!);
+  assert.equal(c.preBattle.bonus.rowHpBps, PVP_FRONT_HP_BPS, 'tướng ở vị trí đầu → hàng trước +5% Máu');
+  assert.ok(c.preBattle.maxHp > c.base.maxHp, 'cọc Máu ra trận cao hơn chỉ số gốc');
   await app.close();
 });
 

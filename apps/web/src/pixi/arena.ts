@@ -29,15 +29,27 @@ const ART_R = 28;
 const ART_CY = 16 + ART_R;
 /** Thanh máu + số máu + dòng chỉ số trong ô. */
 const HP_W = COL_W - 16;
-const HP_Y = 96;
+const HP_Y = 87;
 const HP_H = 6;
-const NUM_Y = 108;
-const INFO_Y = 120;
-/** Dòng chỉ số trong ô: cỡ chữ và bộ icon theo thứ tự hiển thị (sát thương · chí mạng · ST chí mạng · chính xác · né tránh). */
+const NUM_Y = 99;
+/** Bán kính icon cạnh số máu (trái tim) và khoảng cách tới con số. */
+const HP_ICO = 11;
+const HP_ICO_GAP = 3;
+/**
+ * Hai hàng chỉ số trong ô: hàng 1 = sát thương · phòng thủ, hàng 2 = chí mạng · ST chí mạng ·
+ * chính xác · né tránh. Mỗi hàng tự canh giữa và tự thu nhỏ nếu tràn bề rộng ô.
+ */
 const INFO_FONT = 10.5;
-const INFO_ITEMS: readonly IconId[] = ['attack', 'crit-rate', 'crit-dmg', 'eye', 'dodge'];
+const INFO_ROWS: readonly (readonly IconId[])[] = [
+  ['attack', 'armor'],
+  ['crit-rate', 'crit-dmg', 'eye', 'dodge'],
+];
+/** Danh sách icon theo thứ tự phẳng (khớp `infoIcons`/`infoVals`). */
+const INFO_ITEMS: readonly IconId[] = INFO_ROWS.flat();
+/** Toạ độ y của từng hàng chỉ số (dưới số máu). */
+const INFO_ROW_Y: readonly number[] = [110, 123];
 /** Tên tướng nằm ngay dưới chân dung (khớp font/màu ô tướng ở trang chuẩn bị chiến). */
-const NAME_Y = 82;
+const NAME_Y = 80;
 /** Chip hiệu ứng trên ô: cỡ chữ tối đa/tối thiểu, khoảng cách, số hàng tối đa khi phải xuống dòng. */
 const CHIP_FONT = 10;
 const CHIP_FONT_MIN = 8;
@@ -162,6 +174,8 @@ export interface ArenaView {
   debuffed: boolean;
   /** Sát thương hiện tại = nền + buff − debuff (chỉ để hiển thị). */
   damage: number;
+  /** Phòng thủ hiện tại (bps) = nền + buff − debuff (chỉ để hiển thị). */
+  defBps: number;
   /** Tỉ lệ chí mạng hiện tại (bps) = nền + buff − debuff. */
   critBps: number;
   /** Sát thương chí mạng hiện tại (bps) = nền + buff − debuff. */
@@ -318,11 +332,15 @@ class Tile {
   /** Thanh khiên (trắng nhạt) neo ở mép phải của thanh máu ĐANG CÓ rồi mọc dài về bên trái. */
   private readonly shieldFill = new Graphics();
   private readonly hpT: Text;
-  /** Dòng chỉ số kèm icon: [kiếm] sát thương · [tia sét] chí mạng · [vụ nổ] ST chí mạng. */
+  /** Icon trái tim đứng ngay trước số máu. */
+  private readonly hpIco = new Graphics();
+  /** Màu đang dùng cho icon máu (đổi theo phe/trạng thái máu thấp) — chỉ vẽ lại khi màu đổi. */
+  private hpTone = -1;
+  /** Hai hàng chỉ số kèm icon: hàng 1 [kiếm] sát thương · [giáp] phòng thủ; hàng 2 [tia sét] chí mạng… */
   private readonly infoC = new Container();
+  private readonly infoRows: { c: Container; icons: Graphics[]; vals: Text[]; seps: Text[] }[] = [];
+  /** Icon theo thứ tự phẳng khớp `INFO_ITEMS` — dùng khi vẽ lại theo màu buff/debuff. */
   private readonly infoIcons: Graphics[] = [];
-  private readonly infoVals: Text[] = [];
-  private readonly infoSeps: Text[] = [];
   /** Màu đang dùng cho dòng chỉ số (đổi theo buff/debuff) — chỉ vẽ lại icon khi màu đổi. */
   private infoTone = -1;
   private readonly buffFx: Graphics;
@@ -402,25 +420,35 @@ class Tile {
       text: '',
       style: { fontFamily: NUM_FONT, fontSize: 11, fontWeight: '700', fill: C.numHp },
     });
-    this.hpT.anchor.set(0.5);
-    this.hpT.position.set(COL_W / 2, NUM_Y);
+    // Canh trái để icon trái tim + con số luôn được canh giữa cùng nhau (đặt vị trí trong `apply`).
+    this.hpT.anchor.set(0, 0.5);
 
-    // Dòng chỉ số (cùng font/cỡ với .pvp-cell-stat: 600 10.5px) có ICON thay ký hiệu chữ:
-    // [kiếm] sát thương · [tia sét] tỉ lệ chí mạng · [vụ nổ] sát thương chí mạng.
-    this.infoC.position.set(0, INFO_Y);
-    for (let i = 0; i < INFO_ITEMS.length; i++) {
-      if (i) {
-        const sep = new Text({ text: '·', style: { fontFamily: NUM_FONT, fontSize: INFO_FONT, fontWeight: '600', fill: C.text } });
-        sep.anchor.set(0.5);
-        this.infoSeps.push(sep);
-        this.infoC.addChild(sep);
+    // Hai hàng chỉ số (cùng font/cỡ với .pvp-cell-stat: 600 10.5px) có ICON thay ký hiệu chữ:
+    // hàng 1 = [kiếm] sát thương · [giáp] phòng thủ; hàng 2 = [tia sét] chí mạng · [vụ nổ] ST chí mạng ·
+    // [mắt] chính xác · [gió] né tránh. Mỗi hàng là một container riêng để tự canh giữa/thu nhỏ.
+    for (let r = 0; r < INFO_ROWS.length; r++) {
+      const items = INFO_ROWS[r]!;
+      const c = new Container();
+      const icons: Graphics[] = [];
+      const vals: Text[] = [];
+      const seps: Text[] = [];
+      for (let i = 0; i < items.length; i++) {
+        if (i) {
+          const sep = new Text({ text: '·', style: { fontFamily: NUM_FONT, fontSize: INFO_FONT, fontWeight: '600', fill: C.text } });
+          sep.anchor.set(0.5);
+          seps.push(sep);
+          c.addChild(sep);
+        }
+        const ico = new Graphics();
+        const val = new Text({ text: '', style: { fontFamily: NUM_FONT, fontSize: INFO_FONT, fontWeight: '600', fill: C.text } });
+        val.anchor.set(0, 0.5);
+        icons.push(ico);
+        vals.push(val);
+        this.infoIcons.push(ico);
+        c.addChild(ico, val);
       }
-      const ico = new Graphics();
-      const val = new Text({ text: '', style: { fontFamily: NUM_FONT, fontSize: INFO_FONT, fontWeight: '600', fill: C.text } });
-      val.anchor.set(0, 0.5);
-      this.infoIcons.push(ico);
-      this.infoVals.push(val);
-      this.infoC.addChild(ico, val);
+      this.infoRows.push({ c, icons, vals, seps });
+      this.infoC.addChild(c);
     }
     this.root.addChild(this.infoC);
 
@@ -469,6 +497,7 @@ class Tile {
       hpBg,
       this.hpFill,
       this.shieldFill,
+      this.hpIco,
       this.hpT,
       this.infoC,
       this.stunFx,
@@ -509,13 +538,25 @@ class Tile {
     const pctv = Math.round(this.hpTarget * 100);
     const low = v.alive && this.hpTarget <= 0.25;
     this.hpT.text = v.alive ? `${num(v.hp)} · ${pctv}%` : 'Đã hạ';
-    this.hpT.style.fill = v.alive ? (low ? C.numLow : this.mine ? C.numHp : C.numHpEnemy) : C.muted;
+    const hpTone = v.alive ? (low ? C.numLow : this.mine ? C.numHp : C.numHpEnemy) : C.muted;
+    this.hpT.style.fill = hpTone;
     this.hpT.visible = true;
+    // Icon trái tim đứng trước số máu, cùng màu với con số; tướng đã gục thì ẩn icon cho gọn.
+    if (this.hpTone !== hpTone) {
+      this.hpTone = hpTone;
+      drawIcon(this.hpIco, 'heart', HP_ICO, hpTone);
+    }
+    const hpW = HP_ICO + HP_ICO_GAP + this.hpT.width;
+    const hpX = (COL_W - hpW) / 2;
+    this.hpIco.position.set(hpX, NUM_Y - HP_ICO / 2);
+    this.hpIco.visible = v.alive;
+    this.hpT.position.set(hpX + HP_ICO + HP_ICO_GAP, NUM_Y);
 
-    // Dòng chỉ số sống theo buff/debuff: [kiếm] sát thương · [tia sét] chí mạng · [vụ nổ] ST chí mạng
-    // · [mắt] chính xác · [gió] né tránh. Đang được buff thì sáng xanh, đang bị debuff thì đỏ.
+    // Dòng chỉ số sống theo buff/debuff: [kiếm] sát thương · [giáp] phòng thủ
+    // · [tia sét] chí mạng · [vụ nổ] ST chí mạng · [mắt] chính xác · [gió] né tránh.
+    // Đang được buff thì sáng xanh, đang bị debuff thì đỏ.
     const tone = v.buffed ? C.infoUp : v.debuffed ? C.debuff : C.text;
-    this.setInfoLine(v.damage, v.critBps, v.critDamageBps, v.hitBps, v.dodgeBps, tone, v.alive);
+    this.setInfoLine(v.damage, v.defBps, v.critBps, v.critDamageBps, v.hitBps, v.dodgeBps, tone, v.alive);
 
     this.buffFx.visible = v.buffed;
     // Chip hiệu ứng: mỗi chip là MỘT icon chỉ số kèm giá trị tăng/giảm cụ thể
@@ -536,41 +577,56 @@ class Tile {
   }
 
   /**
-   * Dòng chỉ số có ICON: [kiếm] sát thương · [tia sét] tỉ lệ chí mạng · [vụ nổ] ST chí mạng ·
-   * [mắt] chính xác · [gió] né tránh.
+   * Hai hàng chỉ số có ICON: hàng 1 = [kiếm] sát thương · [giáp] phòng thủ; hàng 2 = [tia sét] chí mạng ·
+   * [vụ nổ] ST chí mạng · [mắt] chính xác · [gió] né tránh. Mỗi hàng tự canh giữa và tự thu nhỏ khi tràn ô.
    * Icon chỉ vẽ lại khi MÀU đổi (theo buff/debuff) để không phải nạp lại SVG mỗi sự kiện.
    */
-  private setInfoLine(damage: number, critBps: number, critDamageBps: number, hitBps: number, dodgeBps: number, tone: number, alive: boolean): void {
-    this.infoVals[0]!.text = num(damage);
-    this.infoVals[1]!.text = `${(critBps / 100).toFixed(0)}%`;
-    this.infoVals[2]!.text = `${(critDamageBps / 100).toFixed(0)}%`;
-    this.infoVals[3]!.text = `${(hitBps / 100).toFixed(0)}%`;
-    this.infoVals[4]!.text = `${(dodgeBps / 100).toFixed(0)}%`;
-    for (const t of this.infoVals) t.style.fill = tone;
+  private setInfoLine(
+    damage: number,
+    defBps: number,
+    critBps: number,
+    critDamageBps: number,
+    hitBps: number,
+    dodgeBps: number,
+    tone: number,
+    alive: boolean,
+  ): void {
+    const texts = [num(damage), `${(defBps / 100).toFixed(0)}%`, `${(critBps / 100).toFixed(0)}%`, `${(critDamageBps / 100).toFixed(0)}%`, `${(hitBps / 100).toFixed(0)}%`, `${(dodgeBps / 100).toFixed(0)}%`];
+    let k = 0;
+    for (const row of this.infoRows) {
+      for (const t of row.vals) {
+        t.text = texts[k]!;
+        t.style.fill = tone;
+        k += 1;
+      }
+    }
     if (this.infoTone !== tone) {
       this.infoTone = tone;
       for (let i = 0; i < INFO_ITEMS.length; i++) drawIcon(this.infoIcons[i]!, INFO_ITEMS[i]!, INFO_FONT + 2, tone);
     }
     const size = INFO_FONT + 2;
     const gap = 2;
-    const sepW = this.infoSeps[0]!.width;
-    let total = INFO_ITEMS.length * (size + gap) + this.infoSeps.length * (sepW + gap * 2);
-    for (const t of this.infoVals) total += t.width;
-    // Chỉ số dài (số lớn / nhiều chữ số) thu nhỏ vừa bề rộng ô thay vì tràn ra ngoài.
-    const scale = total > COL_W - 8 ? (COL_W - 8) / total : 1;
-    this.infoC.scale.set(scale);
-    this.infoC.x = (COL_W - total * scale) / 2;
-    let x = 0;
-    for (let i = 0; i < INFO_ITEMS.length; i++) {
-      if (i) {
-        const sep = this.infoSeps[i - 1]!;
-        sep.position.set(x + gap + sepW / 2, 0);
-        x += gap + sepW + gap;
+    for (let r = 0; r < this.infoRows.length; r++) {
+      const row = this.infoRows[r]!;
+      const sepW = row.seps.length ? row.seps[0]!.width : 0;
+      let total = row.vals.length * (size + gap) + row.seps.length * (sepW + gap * 2);
+      for (const t of row.vals) total += t.width;
+      // Chỉ số dài (số lớn / nhiều chữ số) thu nhỏ vừa bề rộng ô thay vì tràn ra ngoài.
+      const scale = total > COL_W - 8 ? (COL_W - 8) / total : 1;
+      row.c.scale.set(scale);
+      row.c.position.set((COL_W - total * scale) / 2, INFO_ROW_Y[r]!);
+      let x = 0;
+      for (let i = 0; i < row.vals.length; i++) {
+        if (i) {
+          const sep = row.seps[i - 1]!;
+          sep.position.set(x + gap + sepW / 2, 0);
+          x += gap + sepW + gap;
+        }
+        row.icons[i]!.position.set(x, -size / 2);
+        x += size + gap;
+        row.vals[i]!.position.set(x, 0);
+        x += row.vals[i]!.width;
       }
-      this.infoIcons[i]!.position.set(x, -size / 2);
-      x += size + gap;
-      this.infoVals[i]!.position.set(x, 0);
-      x += this.infoVals[i]!.width;
     }
     this.infoC.visible = alive;
   }

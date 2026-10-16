@@ -165,9 +165,16 @@ export const api = {
   pvpChallenge: (opponentId: number) => call<PvpBattleDto>('POST', '/api/pvp/challenge', { opponentId }),
   pvpBattles: (q: { page?: number; pageSize?: number }) => call<Page<PvpBattleSummaryDto>>('GET', '/api/pvp/battles?' + qs(q)),
   pvpBattle: (id: number) => call<PvpBattleDto>('GET', `/api/pvp/battles/${id}`),
-  /** Kỹ năng + chỉ số chi tiết của một tướng ở một cấp (mục 6.7) — modal xem thẻ. */
-  generalCombat: (generalId: string, level: number) =>
-    call<PvpCombatDto>('GET', `/api/pvp/generals/${encodeURIComponent(generalId)}/combat?` + qs({ level })),
+  /**
+   * Kỹ năng + chỉ số chi tiết của một tướng ở một cấp (mục 6.7) — modal xem thẻ.
+   * `squad` (nếu có) = danh sách generalId trong đội để server tính Chỉ số Nền Ra Trận
+   * (aura Hỗ trợ + Cổng Đồng Phe) — dùng cho màn chuẩn bị khiêu chiến.
+   */
+  generalCombat: (generalId: string, level: number, squad?: string[]) =>
+    call<PvpCombatDto>(
+      'GET',
+      `/api/pvp/generals/${encodeURIComponent(generalId)}/combat?` + qs({ level, squad: squad?.length ? squad.join(',') : undefined }),
+    ),
   history: (q: { kind?: string; page?: number; pageSize?: number }) => call<Page<HistoryEntryDto>>('GET', '/api/history?' + qs(q)),
 };
 
