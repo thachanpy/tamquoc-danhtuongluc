@@ -17,9 +17,10 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 - Buff sát thương bản thân `20%` → cấp 1 = **10%** → cấp 10 = **20%**.
 - Giảm máu tối đa `15%` → cấp 1 = **5%** → cấp 10 = **15%** (mỗi cấp +1.11%).
 - **Áp dụng cho**: buff có lợi (ST, HP tối đa, chí mạng, ST chí mạng, giảm ST nhận, ban hút máu, tạo khiên), hồi máu/tự hồi máu, debuff lên địch (giảm ST, giảm HP tối đa, giảm chí mạng, giảm ST chí mạng, thiêu đốt, xóa khiên), phản kích, "đao phủ" (+30% ST lên mục tiêu debuff), và mọi tỉ lệ khai báo dạng "mỗi cấp".
-- **Tỉ lệ khai báo dạng "mỗi cấp"** (Choáng `cấp×X%`, Hút máu `cấp×X%`, Phản kích `cấp×3%`, Chí mạng `cấp×3%`, Xóa khiên `cấp×5%`) dùng CÙNG công thức trên: giá trị chốt = `X × 10` (đạt ở cấp 10), cấp 1 = giá trị chốt − 10 điểm %.
+- **Tỉ lệ khai báo dạng "mỗi cấp"** (Choáng `cấp×X%`, Hút máu `cấp×X%`, Phản kích `cấp×5%` trần 50%, Chí mạng `cấp×3%`) dùng CÙNG công thức trên: giá trị chốt = `X × 10` (đạt ở cấp 10), cấp 1 = giá trị chốt − 10 điểm %.
+- **Ngoại lệ — Xóa Khiên**: dùng **nội suy `pvpLevelSpanBps(20%, 80%, cấp)`** (cấp 1 = 20%, cấp 10 = 80%), không theo công thức "chốt − 10 điểm %".
 - **KHÔNG quy theo cấp**: hệ số SÁT THƯƠNG kỹ năng (`250%–320%`…) vì đã tự lớn theo cấp qua chỉ số nền (Damage/HP nền tăng 25%/cấp); số lượt hiệu lực (`rounds`) và trần cộng dồn (`maxLayers`); Aura/Chỉ số nội tại theo Phong cách.
-- **Chỉ số NỀN scale theo cấp** (KHÁC công thức "chốt − 10 điểm %" ở trên — dùng nội suy `pvpLevelSpanBps(min, max, level)`): **Chính xác** 80% (cấp 1) → 100% (cấp 10), **Né tránh** 1% → 10%, **ST chí mạng nền** +30% (hệ số ×1,30) → +60% (hệ số ×1,60). Buff/debuff kỹ năng vẫn cộng/trừ quanh mốc theo cấp này.
+- **Chỉ số NỀN scale theo cấp** (KHÁC công thức "chốt − 10 điểm %" ở trên — dùng nội suy `pvpLevelSpanBps(min, max, level)`): **Chính xác** 80% (cấp 1) → 100% (cấp 10), **Né tránh** 2% → 20%, **ST chí mạng nền** +30% (hệ số ×1,30) → +60% (hệ số ×1,60). Buff/debuff kỹ năng vẫn cộng/trừ quanh mốc theo cấp này.
 
 ### Phong cách & Thứ tự hành động
 
@@ -31,7 +32,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 - **Phạm vi nhắm mục tiêu (Targeting)**: 6 ô gồm **2 hàng dọc** (hàng dọc trước `1-2-3` và hàng dọc sau `4-5-6`) × **3 hàng ngang** (cặp `1-4`, `2-5`, `3-6`).
   - `front_row` (Hàng dọc trước): Đánh cả 3 tướng ô `1-2-3` của địch. Nếu hàng dọc trước đã ngã hết thì tự động chuyển sang đánh hàng dọc sau `4-5-6`.
   - `back_row` (Hàng dọc sau): Đánh cả 3 tướng ô `4-5-6` của địch. Nếu hàng dọc sau đã ngã hết thì chuyển sang đánh hàng dọc trước.
-  - `lane` (Hàng ngang): Đánh đúng hàng ngang (`1-4` / `2-5` / `3-6`) mà người thi triển đang đứng.
+  - `lane` (Hàng ngang): Đánh đúng hàng ngang (`1-4` / `2-5` / `3-6`) mà người thi triển đang đứng. Nếu hàng ngang đối diện đã ngã hết thì tự động chuyển sang nhắm **hàng ngang có đông quân địch còn sống nhất** (hòa thì chọn hàng ngang gần nhất về phía trước).
 
 ### Danh mục 19 Hiệu ứng được phép sử dụng
 
@@ -39,18 +40,18 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 > **Quy tắc số lượt mặc định**: Hiệu ứng nào **không ghi rõ số lượt** thì mặc định **3 lượt** (buff/debuff/phản kích/khiên). Riêng Thiêu đốt duy trì `4 lượt`.
 
 1. **Buff sát thương**: Tăng % sát thương gây ra (10% – 30%, 3 lượt). **Max cộng dồn: 3 lớp/nguồn**.
-2. **Giảm sát thương**: Giảm % sát thương gánh chịu hoặc gây ra (10% – 25%, 3 lượt). **Max cộng dồn: 3 lớp**.
-3. **Hồi máu**: Hồi HP ngay lập tức (hoặc hồi mỗi lượt - HoT) theo % HP tối đa hoặc % ST cơ bản của người thi triển.
+2. **Giảm sát thương**: Giảm % sát thương gánh chịu (10% – 25%) hoặc giảm % sát thương đối thủ gây ra (**20% – 30%**, 3 lượt). **Max cộng dồn: 3 lớp**. Hệ số debuff giảm ST được đẩy cao để bù cho rủi ro đánh trượt / bị giải hiệu ứng.
+3. **Hồi máu**: Hồi HP ngay lập tức (hoặc hồi mỗi lượt - HoT) theo % HP tối đa hoặc % ST cơ bản của người thi triển. Hồi máu toàn đội của **Tướng Hỗ trợ** dùng hệ số **120% – 140% ST cơ bản** (tùy tướng).
 4. **Tăng máu tối đa**: Tăng trần HP tối đa (10% – 20%), chỉ hồi 1/4 lượng trần HP tăng lên. **Max cộng dồn: 3 lớp**.
-5. **Giảm máu tối đa**: Giảm trần HP tối đa của đối thủ (5% – 15%, 3 lượt, cố định 100% trúng). **Max cộng dồn: 3 lớp**.
+5. **Giảm máu tối đa**: Giảm trần HP tối đa của đối thủ (5% – 15%, 3 lượt). Chạy qua **bước rollHit tiêu chuẩn** như mọi chiêu khác (vẫn tính Né/Trượt 1% – 15%); trượt thì bỏ qua toàn bộ hiệu ứng. **Max cộng dồn: 3 lớp**, đồng thời chịu **trần toàn hệ thống: tổng giảm Max HP trên một mục tiêu tối đa 30%** (`PVP_MAXHP_DOWN_CAP_BPS`).
 6. **Choáng**: Mục tiêu bị choáng không thể thực hiện hành động.
    - **Thời gian hiệu lực**: Duy trì cho đến khi **tướng gây ra hiệu ứng choáng đó ra skill ở lượt tiếp theo**.
    - **Tỷ lệ & Cân bằng Sát thương**:
      - *Tướng Hỗ trợ Choáng đơn mục tiêu*: Sát thương **120% – 180%**, Tỷ lệ choáng **80% – 100%** (`cấp × 8%` đến `cấp × 10%`). *Điêu Thuyền* & *Quan Vũ* nhắm thẳng `highest_damage_enemy`.
      - *Tướng Tấn công Choáng đơn mục tiêu*: Sát thương **250% – 285%**, tỷ lệ choáng **30% – 40%** (`cấp × 3%` đến `cấp × 4%`).
-     - *Tướng Choáng diện rộng (Ngang/Hàng trước/AoE)*: Tỷ lệ choáng `cấp × 2%` đến `cấp × 3%` (max 20% – 30%).
-7. **Giải choáng & Thiêu đốt**: Giải hiệu ứng Choáng hoặc Thiêu đốt cho đồng minh (tỷ lệ 30% – 75%). *Tác dụng tức thì*.
-8. **Thiêu đốt**: Gây thêm sát thương vào đầu mỗi lượt thi triển (mỗi lớp gây **50% sát thương cơ bản**). Có thể ăn Chí mạng. Duy trì **4 lượt**. Mục tiêu đang chịu Thiêu đốt bị **giảm 30% khả năng hồi máu** (áp cho MỌI nguồn hồi máu nhận vào).
+     - *Tướng Choáng diện rộng (Ngang/Hàng trước/AoE)*: Tỷ lệ choáng `cấp × 1.5%` đến `cấp × 2%` (max **15% – 20%** ở Cấp 10).
+7. **Giải choáng & Thiêu đốt**: Giải hiệu ứng Choáng hoặc Thiêu đốt cho đồng minh (tỷ lệ 30% – 75%). *Tác dụng tức thì*. Khi Thiêu đốt bị **Xóa/Giải**, toàn bộ sát thương còn lại của các lớp thiêu đốt bị gỡ **nổ ngay lập tức với 50% sát thương còn lại** (`PVP_BURN_CLEANSE_EXPLODE_BPS`).
+8. **Thiêu đốt**: Gây thêm sát thương vào đầu mỗi lượt thi triển (mỗi lớp gây **50% sát thương cơ bản**). Có thể ăn Chí mạng. Duy trì **4 lượt**. Mục tiêu đang chịu Thiêu đốt bị **giảm 50% khả năng hồi máu** (áp cho MỌI nguồn hồi máu nhận vào).
    - *Chu Du, Lục Tốn, Hoàng Cái*: Duy trì **4 lượt**, cộng dồn max 3 lớp từ chính tướng đó.
    - *Chu Du*: Đòn Thiêu đốt được tăng thêm **+30% Tỷ lệ chí mạng & +30% ST chí mạng**.
    - *Lục Tốn*: Hút máu áp dụng cho cả Thiêu đốt với hiệu suất **50%**.
@@ -58,7 +59,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 10. **Giảm tỷ lệ chí mạng**: Giảm % chí mạng đối thủ (15% – 20%, 3 lượt). **Max cộng dồn: 3 lớp**.
 11. **Tăng/Giảm sát thương chí mạng**: Buff/Debuff tăng hoặc giảm ST chí mạng (15% – 30%, 3 lượt). **Max cộng dồn: 3 lớp**.
 12. **Phản kích (Nội tại Bị động)**: Tự động đánh trả khi chịu sát thương trực tiếp.
-   - *Phản kích đơn*: Đánh trả kẻ tấn công, sát thương **50% ST cơ bản** (tối đa 30%).
+   - *Phản kích đơn*: Đánh trả kẻ tấn công, sát thương **80% – 100% ST cơ bản**. Tỷ lệ kích hoạt `cấp × 5%` (tối đa **50%** ở Cấp 10).
    - *Phản kích diện rộng (Tào Nhân, Trương Phi, Cao Thuận, Đổng Trác, Mãn Sủng, La Hiến, Toàn Tông)*: Đánh trả toàn bộ đội hình địch, sát thương **30% ST cơ bản** (tối đa 30%).
 13. **Hút máu**: Hồi HP theo % sát thương thực tế gây ra.
    - *Mức tiêu chuẩn*: `cấp × 2%` (Max **20%**).
@@ -66,11 +67,11 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
    - *Signature Hero*: **Mã Siêu** (Max **100%**), **Cam Ninh** (Max **95%**), **Hoa Hùng** (Max **90%**), **Nhạc Tiến** (Max **85%**).
    - *Ban hút máu cho đồng đội*: Buff **+15%** Hút máu cho toàn đội (2 lượt, cố định 1 lớp) từ **Lưu Bị**, **Tuân Úc**, **Lỗ Túc**, **Viên Thiệu**.
 14. **Xóa hiệu ứng có lợi của đối thủ**: Loại bỏ lớp buff có lợi của đối thủ (75% – 100%).
-15. **Xóa hiệu ứng bất lợi của bản thân/đồng minh**: Loại bỏ các hiệu ứng xấu (bao gồm Thiêu đốt).
-16. **Tạo Khiên (Shield)**: Hấp thụ sát thương nhận vào trong **3 lượt** (tính theo % HP tối đa hoặc % ST cơ bản). Khiên chịu sát thương trước HP thực tế. **Max cộng dồn: 3 lớp/nguồn**.
-17. **Xóa Khiên (Shield Break)**: Có tỷ lệ **5% ở Cấp 1 → 50% ở Cấp 10** (`cấp × 5%`) bẻ gãy và loại bỏ hoàn toàn lớp Khiên bảo hộ hiện có của mục tiêu bị trúng đòn.
+15. **Xóa hiệu ứng bất lợi của bản thân/đồng minh**: Loại bỏ các hiệu ứng xấu (bao gồm **Thiêu đốt** và **Giảm Máu Tối Đa**); gỡ lớp debuff theo tỉ lệ `purifyBps`, gỡ xong thì đồng bộ lại trần HP. Nếu gỡ Thiêu đốt thì kích hoạt hiệu ứng nổ 50% sát thương còn lại (mục 7).
+16. **Tạo Khiên (Shield)**: Hấp thụ sát thương nhận vào trong **3 lượt** (tính theo % HP tối đa hoặc % ST cơ bản). Khiên chịu sát thương trước HP thực tế. **Max cộng dồn: 2 lớp/nguồn** (`PVP_SHIELD_MAX_LAYERS`).
+17. **Xóa Khiên (Shield Break)**: Có tỷ lệ **20% ở Cấp 1 → 80% ở Cấp 10** (nội suy `pvpLevelSpanBps`) kích hoạt. Khi kích hoạt, **bẻ gãy 70% lượng Khiên hiện có** của mục tiêu bị trúng đòn (`PVP_SHIELD_BREAK_REMOVE_BPS`), giữ lại 30% — KHÔNG xóa sạch 100%.
 18. **Hồi sinh (Nội tại Bị động)**: Hồi lại `cấp × 5%` HP tối đa khi tử trận lần đầu và giảm 50% ST vĩnh viễn (**Triệu Vân**, **Tào Nhân**, **Hoàng Cái**, **Văn Sú**).
-19. **Gia tăng sát thương lên mục tiêu Debuff (Đao phủ)**: Gây thêm **+30% sát thương** nếu mục tiêu đang chịu bất kỳ hiệu ứng bất lợi nào (**Tào Phi**, **Tào Chân**, **Từ Hoảng**, **Đặng Ngãi**, **Mã Đại**, **Đinh Phụng**, **Tôn Phấn**, **Trương Bảo**).
+19. **Gia tăng sát thương lên mục tiêu Debuff (Đao phủ)**: Gây thêm **+30% sát thương** nếu mục tiêu đang chịu **từ 2 lớp hiệu ứng bất lợi trở lên** HOẶC **đang bị Choáng/Thiêu đốt** (`PVP_VS_DEBUFF_MIN_LAYERS = 2`) (**Tào Phi**, **Tào Chân**, **Từ Hoảng**, **Đặng Ngãi**, **Mã Đại**, **Đinh Phụng**, **Tôn Phấn**, **Trương Bảo**).
 
 ### Hệ thống Combat: Chính xác / Né tránh / Phòng thủ / Xuyên giáp
 
@@ -84,13 +85,13 @@ Toàn bộ chỉ số dùng đơn vị **bps** (`10000 = 100%`). Mọi tính to�
 | Máu (HP) | — | — | Sinh mệnh chính. |
 | Khiên (Shield) | — | — | Máu ảo/lá chắn tạm thời đè lên Máu thật (mục 16). |
 | Chính xác (Hit Rate) | **80% → 100%** theo cấp (`pvpHitBps`) | **150%** (`PVP_HIT_MAX_BPS`) | Cấp 1 = 80%, cấp 10 = 100% (nội suy `pvpLevelSpanBps`). |
-| Né tránh (Dodge Rate) | **1% → 10%** theo cấp (`pvpDodgeBps`) | **50%** (`PVP_DODGE_MAX_BPS`) | Cấp 1 = 1%, cấp 10 = 10%. |
+| Né tránh (Dodge Rate) | **2% → 20%** theo cấp (`pvpDodgeBps`) | **50%** (`PVP_DODGE_MAX_BPS`) | Cấp 1 = 2%, cấp 10 = 20%. |
 | Trần Trúng Tối Đa (Max Hit Cap) | — | **99%** (`PVP_HIT_REAL_MAX_BPS`) | Luôn chừa lại **1% Né/Trượt tối thiểu** làm yếu tố may mắn. |
 | Trọng số Chính xác (Attack Weight) | **K = 3** (`PVP_HIT_WEIGHT`) | — | Chính xác nặng gấp 3 lần Né tránh trong công thức chia trọng số. |
 | Phòng thủ (Def) | **10%** (`PVP_DEF_BPS`) | **50%** (`PVP_DEF_MAX_BPS`) | Tỷ lệ % giảm sát thương nhận vào. |
 | Xuyên giáp (Def Pen) | **0%** (`PVP_DEF_PEN_BPS`) | **50%** (`PVP_DEF_PEN_MAX_BPS`) | Tỷ lệ % bỏ qua Phòng thủ của đối phương. |
 
-**Triết lý thiết kế**: Chính xác cao phối hợp với RNG có kiểm soát — Né tránh là yếu tố may rủi nhỏ (thực tế 1%–15%), **không** là chiến thuật vô hiệu hoá toàn bộ sát thương. Đòn đánh luôn có xác suất trúng ≥ 84% trong mọi cặp chỉ số.
+**Triết lý thiết kế**: Chính xác cao phối hợp với RNG có kiểm soát — Né tránh là yếu tố may rủi nhỏ (thực tế 2%–15%), **không** là chiến thuật vô hiệu hoá toàn bộ sát thương. Đòn đánh luôn có xác suất trúng ≥ 84% trong mọi cặp chỉ số.
 
 **Thứ tự xử lý một đòn đánh (Combat Flow)**
 
@@ -98,10 +99,11 @@ Toàn bộ chỉ số dùng đơn vị **bps** (`10000 = 100%`). Mọi tính to�
   - `Hit_Real = (Chính xác × K) / (Chính xác × K + Né tránh) × 99%` với `K = 3`.
   - `Né_Real = 100% − Hit_Real` (**luôn >= 1%** nhờ hệ số ×99%).
   - Random: rơi vùng Né → **MISS** (0 sát thương, **giữ nguyên Khiên & Máu**, không phản kích, không hút máu); rơi vùng Hit_Real → **HIT**, sang BƯỚC 2.
-- **BƯỚC 2 — Xuyên giáp & Phòng thủ**:
-  - `Def_Effective = MAX(0%, Defender_Def − Attacker_Def_Pen)`
-  - `Def_Final = MIN(50%, Def_Effective)`
+- **BƯỚC 2 — Xuyên giáp & Phòng thủ** (Xuyên giáp tính theo **% của Giáp đối phương**, KHÔNG trừ thẳng điểm %):
+  - `Def_Effective = Defender_Def × (1 − Attacker_Def_Pen)` (làm tròn)
+  - `Def_Final = MIN(50%, MAX(0%, Def_Effective))`
   - `Damage_Final = Raw_Damage × (1 − Def_Final)`
+  - Ví dụ: Def 50% bị Pen 20% → `Def_Effective = 50% × 0.8 = 40%`; Def 50% bị Pen 50% → `25%`.
 - **BƯỚC 3 — Trừ vào Khiên & Máu**:
   - Khiên `>=` Damage_Final: `Khiên mới = Khiên cũ − Damage_Final`, Máu giữ nguyên.
   - Khiên `<` Damage_Final: `Khiên = 0`, `Máu mới = MAX(0, Máu cũ − (Damage_Final − Khiên cũ))`.
@@ -112,17 +114,17 @@ Thứ tự trong engine: `rollHit` (bước 1) → `mitigate` (bước 2, sinh r
 
 | Tình huống | Chính xác (tấn công) | Né tránh (phòng thủ) | Tỷ lệ Trúng | Tỷ lệ Né (Miss) |
 | --- | --- | --- | --- | --- |
-| Cấp 1 cơ bản | 80% | 1% | **98.59%** | 1.41% |
-| Cấp 10 bình thường | 100% | 10% | **95.81%** | 4.19% |
-| DPS Max Chính xác vs Né thường | 150% | 10% | **96.85%** | 3.15% |
+| Cấp 1 cơ bản | 80% | 2% | **98.18%** | 1.82% |
+| Cấp 10 bình thường | 100% | 20% | **92.81%** | 7.19% |
+| DPS Max Chính xác vs Né thường | 150% | 20% | **94.79%** | 5.21% |
 | Đối đầu cực hạn (Max vs Max) | 150% | 50% | **89.10%** | 10.90% |
 | Max Né trừng phạt kẻ không build Chính xác | 100% | 50% | **84.86%** | 15.14% |
 
-- **Case P1** (mặc định cấp 10 vs mặc định cấp 10): Hit 100% vs Dodge 10% → `Hit_Real = 95.81%`; Def 10% vs Def Pen 0% → `Damage_Final = 90% Raw`.
+- **Case P1** (mặc định cấp 10 vs mặc định cấp 10): Hit 100% vs Dodge 20% → `Hit_Real = 92.81%`; Def 10% vs Def Pen 0% → `Damage_Final = 90% Raw`.
 - **Case P2** (Hit 150% vs Dodge 50%): `Hit_Real = 89.10%` (Chính xác tối đa ghìm Né tối đa xuống ≈10.9% Né thực tế).
-- **Case 3** (Def 10% vs Def Pen 10%): giáp thực tế `0%` → nhận `100% Raw`.
-- **Case 4** (Def 50% vs Def Pen 50%): giáp thực tế `0%` → nhận `100% Raw`.
-- **Case 5** (toàn diện): Attacker Raw 10.000, Hit 120%, Def Pen 20% vs Defender HP 20.000, Shield 3.000, Dodge 15%, Def 50% → `Hit_Real = 95.04%`; `Def_Effective = 30%` → `Damage_Final = 7.000`; phá 3.000 Khiên, dư 4.000 trừ vào Máu → **HP còn 16.000**.
+- **Case 3** (Def 10% vs Def Pen 10%): giáp thực tế `10% × 0.9 = 9%` → nhận `91% Raw`.
+- **Case 4** (Def 50% vs Def Pen 50%): giáp thực tế `50% × 0.5 = 25%` → nhận `75% Raw`.
+- **Case 5** (toàn diện): Attacker Raw 10.000, Hit 120%, Def Pen 20% vs Defender HP 20.000, Shield 3.000, Dodge 15%, Def 50% → `Hit_Real = 98.59%`; `Def_Effective = 50% × 0.8 = 40%` → `Damage_Final = 6.000`; phá 3.000 Khiên, dư 3.000 trừ vào Máu → **HP còn 17.000**.
 
 **Tướng mang hiệu ứng chỉ số mới (bổ sung qua kỹ năng)**
 

@@ -20,7 +20,7 @@ import {
   PVP_PASSIVE_EFFECT,
   PVP_REVIVE_DAMAGE_DOWN_BPS,
   PVP_REVIVE_HP_BPS_PER_LEVEL,
-  PVP_SHIELD_BREAK_BPS_PER_LEVEL,
+  PVP_SHIELD_BREAK,
   PVP_SKILL_BUFF_LIFESTEAL_BPS,
   PVP_SKILL_DEF,
   PVP_VS_DEBUFF_BONUS_BPS,
@@ -89,13 +89,14 @@ const one = (side: 'a' | 'b', units: Input[]): PvpSideInput => ({ side, units })
 
 /**
  * Phòng thủ hiệu dụng của mục tiêu sau khi trừ Xuyên giáp của người tấn công, kẹp trần 50%
- * (SKILLS.md mục 18 — BƯỚC 2). Đọc chỉ số từ ảnh chụp đầu trận: đúng cho các tình huống test
- * không làm thay đổi Phòng thủ/Xuyên giáp giữa trận.
+ * (SKILLS.md mục 18 — BƯỚC 2: Xuyên giáp ăn theo % của Giáp địch). Đọc chỉ số từ ảnh chụp đầu
+ * trận: đúng cho các tình huống test không làm thay đổi Phòng thủ/Xuyên giáp giữa trận.
  */
 const defFinalBps = (res: ReturnType<typeof simulatePvp>, attackerIdx: number, defenderIdx: number) => {
   const atk = res.units.find((u) => u.idx === attackerIdx)!;
   const dfn = res.units.find((u) => u.idx === defenderIdx)!;
-  return Math.min(PVP_DEF_MAX_BPS, Math.max(0, dfn.defBps - atk.defPenBps));
+  const effDef = Math.round((dfn.defBps * (BPS_SCALE - atk.defPenBps)) / BPS_SCALE);
+  return Math.min(PVP_DEF_MAX_BPS, Math.max(0, effDef));
 };
 
 /** Sát thương sau khi áp Phòng thủ (SKILLS.md mục 18 — BƯỚC 2): Raw × (1 − Def_Final). */
@@ -413,7 +414,8 @@ test('engine: tướng cộng thêm 30% sát thương khi đánh mục tiêu đa
   assert.equal(skillDef('guan-yu').vsDebuffBonusBps, 0, 'tướng ngoài danh sách không có cơ chế này');
 
   // Cao Chân (Ngụy) vừa gây suy yếu vừa có cơ chế: vòng 1 đánh mục tiêu SẠCH (hiệu ứng bất lợi được áp
-  // SAU đòn đánh trong cùng lượt), từ vòng 2 mục tiêu đã dính suy yếu nên đòn đánh được cộng thêm 30%.
+  // SAU đòn đánh trong cùng lượt), vòng 2 mục tiêu mới dính 1 lớp suy yếu (CHƯA đủ ngưỡng ≥2 lớp "đao phủ"),
+  // từ vòng 3 mục tiêu đã dính 2 lớp suy yếu nên đòn đánh được cộng thêm 30%.
   // Mục tiêu phải là tướng ôn hoà KHÔNG thanh tẩy/suy yếu/giảm ST nhận (nếu không debuff bị gỡ hoặc
   // sát thương nhận vào bị lệch giữa các vòng), cấp 10 để sống qua nhiều vòng.
   const victim = findGeneral((id) => {
@@ -427,10 +429,11 @@ test('engine: tướng cộng thêm 30% sát thương khi đánh mục tiêu đa
   const hits = res.events
     .filter((e): e is Extract<PvpEventDto, { t: 'damage' }> => e.t === 'damage' && e.from === 0)
     .map((e) => e.amount);
-  assert.ok(hits.length >= 2, 'phải có ít nhất hai đòn đánh để so sánh');
+  assert.ok(hits.length >= 3, 'phải có ít nhất ba đòn đánh để so sánh');
   // Cao Chân ở cấp 1 nên hệ số "đao phủ" đã quy theo cấp (cấp 1 = giá trị chốt − 10 điểm %).
   const mul = (BPS_SCALE + pvpEffectBps(PVP_VS_DEBUFF_BONUS_BPS, 1)) / BPS_SCALE;
-  assert.equal(hits[1], Math.round(hits[0]! * mul), 'mục tiêu đang suy yếu → đòn đánh được cộng thêm 30%');
+  assert.equal(hits[1], hits[0], '1 lớp suy yếu chưa đủ ngưỡng → chưa cộng thêm sát thương');
+  assert.equal(hits[2], Math.round(hits[1]! * mul), 'mục tiêu đang chịu ≥2 lớp suy yếu → đòn đánh được cộng thêm 30%');
 });
 
 test('engine: choáng làm mục tiêu bỏ lượt (mục 5.3, 8)', () => {
@@ -757,7 +760,7 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(sc.def.targeting, 'all_enemies');
   assert.equal(sc.lifestealPerLevelBps, 250);
   assert.equal(sc.def.selfHealBps, 0);
-  assert.equal(sc.def.counter.damageBps, 5000);
+  assert.equal(sc.def.counter.damageBps, 10000, 'phản kích đơn: 100% ST cơ bản');
   // Mã Siêu: đánh đơn 280%, hút máu 10%/cấp (max 100%), tự tăng 10% HP tối đa.
   const mc = pvpProfile('ma-chao');
   assert.equal(mc.def.damageBps, 28000);
@@ -775,18 +778,18 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(cc.def.damageBps, 7500);
   assert.equal(cc.def.dispelChanceBps, BPS_SCALE);
   assert.equal(cc.def.buffs[0]!.buff.damageBps, 2000);
-  assert.equal(cc.def.debuff.shieldBreakPerLevelBps, PVP_SHIELD_BREAK_BPS_PER_LEVEL);
-  // Trương Liêu: hàng ngang 225%, giảm ST địch 10%, hút máu 3%/cấp (max 30%), phản kích đơn (50% ST, không tự buff ST).
+  assert.equal(cc.def.debuff.shieldBreakPerLevelBps, PVP_SHIELD_BREAK);
+  // Trương Liêu: hàng ngang 225%, giảm ST địch 20%, hút máu 3%/cấp (max 30%), phản kích đơn (100% ST, không tự buff ST).
   const zl = pvpProfile('zhang-liao');
   assert.equal(zl.def.damageBps, 22500);
   assert.equal(zl.def.targeting, 'lane');
-  assert.equal(zl.def.debuff.damageDownBps, 1000);
+  assert.equal(zl.def.debuff.damageDownBps, 2000);
   assert.equal(zl.def.debuff.rounds, PVP_DEBUFF_ROUNDS, 'debuff không ghi số lượt mặc định 3 lượt');
   assert.equal(PVP_DEBUFF_ROUNDS, 3);
   assert.equal(zl.lifestealPerLevelBps, 300);
   assert.equal(zl.def.buffs.length, 0);
   assert.equal(zl.def.counter.scope, 'single');
-  assert.equal(zl.def.counter.damageBps, 5000);
+  assert.equal(zl.def.counter.damageBps, 10000);
   // Lữ Bố: AoE 127%, tự buff chí mạng 20% + 20% ST chí mạng, hút máu 3%/cấp, phản kích đơn — KHÔNG còn choáng.
   const lb = pvpProfile('lu-bu');
   assert.equal(lb.def.damageBps, 12700);
@@ -830,22 +833,22 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(cg.def.buffs[0]!.buff.critBps, 1500);
   assert.ok(cg.def.cleanse);
   assert.equal(cg.def.dispel, false);
-  // Điêu Thuyền: đánh đơn 120%, choáng 8%/cấp, kèm giảm sát thương địch 20%; nhắm tướng địch có sát thương cao nhất.
+  // Điêu Thuyền: đánh đơn 120%, choáng 8%/cấp, kèm giảm sát thương địch 30%; nhắm tướng địch có sát thương cao nhất.
   const dc = pvpProfile('diao-chan');
   assert.equal(dc.def.damageBps, 12000);
   assert.equal(dc.def.targeting, 'highest_damage_enemy');
   assert.equal(dc.def.stunPerLevelBps, 800);
-  assert.equal(dc.def.debuff.damageDownBps, 2000);
+  assert.equal(dc.def.debuff.damageDownBps, 3000);
   // Quách Gia: AoE 85% + giảm ST địch 10% + tăng 15% HP tối đa toàn đội.
   const gj = pvpProfile('guo-jia');
   assert.equal(gj.def.damageBps, 8500);
   assert.equal(gj.def.dispel, false);
   assert.equal(gj.def.buffs[0]!.buff.hpBps, 1500);
   assert.equal(gj.def.buffs[0]!.scope, 'all_allies');
-  // Phản kích: Điển Vi đánh trả đơn 50% ST cơ bản, tỉ lệ 3%/cấp.
+  // Phản kích: Điển Vi đánh trả đơn 100% ST cơ bản, tỉ lệ 5%/cấp (trần 50% ở cấp 10).
   const dw = pvpProfile('dian-wei');
-  assert.equal(dw.def.counter.damageBps, 5000);
-  assert.equal(dw.def.counter.perLevelBps, 300);
+  assert.equal(dw.def.counter.damageBps, 10000);
+  assert.equal(dw.def.counter.perLevelBps, 500);
   assert.equal(dw.def.counter.scope, 'single');
   // Hoả công: Chu Du thiêu đốt 50% ST, 4 lượt, cộng dồn 3 lớp; AoE 117% (đã +30%).
   const zyu = pvpProfile('zhou-yu');
@@ -924,7 +927,7 @@ test('engine: Khiên hấp thụ sát thương trước khi trừ HP (mục 16)'
   assert.ok(absorbed.every((e) => e.absorbed! <= e.amount), 'phần hấp thụ không vượt quá sát thương');
 });
 
-test('engine: Xóa Khiên bẻ gãy toàn bộ lớp Khiên của mục tiêu trúng đòn (mục 17)', () => {
+test('engine: Xóa Khiên bẻ gãy Khiên của mục tiêu trúng đòn (mục 17)', () => {
   const res = simulatePvp(
     [one('a', [{ slot: 1, generalId: 'sun-quan', level: 10 }]), one('b', [{ slot: 1, generalId: 'xu-you', level: 10 }])],
     always0,
@@ -936,20 +939,20 @@ test('engine: Xóa Khiên bẻ gãy toàn bộ lớp Khiên của mục tiêu tr
   assert.ok(broke.every((e) => e.from === bIdx && e.idx === aIdx));
 });
 
-test('engine: mục tiêu đang Thiêu đốt chỉ hồi được 70% máu (mục 8)', () => {
+test('engine: mục tiêu đang Thiêu đốt chỉ hồi được 50% máu (mục 8)', () => {
   const res = simulatePvp(
     [one('a', [{ slot: 1, generalId: 'cheng-pu', level: 10 }]), one('b', [{ slot: 1, generalId: 'zhou-yu', level: 10 }])],
     never,
   );
   const aIdx = res.units.find((u) => u.side === 'a')!.idx;
   const maxHp = res.units.find((u) => u.idx === aIdx)!.maxHp;
-  // Trình Phổ tự hồi 15% HP tối đa mỗi lượt (hệ số chốt ở cấp 10) → bị Thiêu đốt cắt còn 70%.
+  // Trình Phổ tự hồi 15% HP tối đa mỗi lượt (hệ số chốt ở cấp 10) → bị Thiêu đốt cắt còn 50%.
   const raw = Math.round((maxHp * 1500) / BPS_SCALE);
   const cap = Math.round((raw * (BPS_SCALE - PVP_BURN_HEAL_DOWN_BPS)) / BPS_SCALE);
   const heals = res.events.filter((e): e is Extract<PvpEventDto, { t: 'heal' }> => e.t === 'heal' && e.from === aIdx);
   assert.ok(heals.length > 0, 'Trình Phổ phải tự hồi máu trong trận');
-  assert.ok(heals.every((e) => e.amount <= cap), 'máu hồi khi bị Thiêu đốt không vượt 70% lượng hồi gốc');
-  assert.ok(heals.some((e) => e.amount === cap), 'phải có lượt hồi chạm đúng mức 70%');
+  assert.ok(heals.every((e) => e.amount <= cap), 'máu hồi khi bị Thiêu đốt không vượt 50% lượng hồi gốc');
+  assert.ok(heals.some((e) => e.amount === cap), 'phải có lượt hồi chạm đúng mức 50%');
 });
 
 // ===================== Hệ thống Combat: Chính xác / Né tránh / Phòng thủ / Xuyên giáp (mục 18) =====================
@@ -962,8 +965,8 @@ const dealtDamage = (res: ReturnType<typeof simulatePvp>, idx: number) =>
   res.events.some((e) => (e.t === 'damage' || e.t === 'counter') && e.from === idx);
 
 test('engine: BƯỚC 1 — Né thành công thì TRƯỢT: 0 sát thương, giữ nguyên Khiên & Máu (mục 18)', () => {
-  // Lữ Mông đánh đơn, Tôn Quyền tạo Khiên cho toàn đội. RNG 9600 > 95.81% Trúng
-  // (Chính xác 100% vs Né 10%, K = 3) nên mọi đòn TRƯỢT → không sát thương, Khiên lẫn Máu nguyên vẹn.
+  // Lữ Mông đánh đơn, Tôn Quyền tạo Khiên cho toàn đội. RNG 9600 > 92.81% Trúng
+  // (Chính xác 100% vs Né 20%, K = 3) nên mọi đòn TRƯỢT → không sát thương, Khiên lẫn Máu nguyên vẹn.
   const res = simulatePvp(
     [one('a', [{ slot: 1, generalId: 'lu-meng', level: 10 }]), one('b', [{ slot: 1, generalId: 'sun-quan', level: 10 }])],
     fixedBelow(9600),
@@ -991,10 +994,12 @@ test('engine: BƯỚC 2 — Xuyên giáp triệt tiêu Phòng thủ; Phòng th�
     const dmg = u.damage + Math.round((u.damage * selfDamageBps) / BPS_SCALE);
     return { hit, raw: Math.round((dmg * skillDef(attacker).damageBps) / BPS_SCALE) };
   };
-  // Hứa Chử: tự buff +20% sát thương và +20% Xuyên giáp (cấp 10) → Phòng thủ 10% − 20% = 0% → nhận 100% sát thương gốc.
+  // Hứa Chử: tự buff +20% sát thương và +20% Xuyên giáp (cấp 10) → Xuyên giáp ăn theo % của Giáp địch:
+  // Phòng thủ 10% còn 10% × (1 − 20%) = 8% → nhận 92% sát thương gốc.
   const xu = firstHit('xu-chu', 2000);
-  assert.equal(xu.hit.amount, xu.raw, 'Xuyên giáp 20% phá hết Phòng thủ nền 10% → nhận đủ sát thương gốc');
-  assert.equal(xu.hit.mitigated ?? 0, 0, 'không có phần sát thương bị Phòng thủ cản lại');
+  const xuDefFinal = Math.round((PVP_DEF_BPS * (BPS_SCALE - 2000)) / BPS_SCALE);
+  assert.equal(xu.hit.amount, mitigated(xu.raw, xuDefFinal), 'Xuyên giáp 20% ăn theo % Giáp: Phòng thủ 10% còn 8%');
+  assert.equal(xu.hit.mitigated, xu.raw - xu.hit.amount, 'hiệu số ghi vào sự kiện đúng bằng phần bị Phòng thủ cản lại');
   // Lữ Mông: Xuyên giáp 0% → giữ nguyên Phòng thủ 10% → chỉ nhận 90% sát thương gốc.
   const lu = firstHit('lu-meng');
   assert.ok(lu.hit.amount < lu.raw, 'Phòng thủ mặc định phải cản lại một phần sát thương');
@@ -1004,14 +1009,14 @@ test('engine: BƯỚC 2 — Xuyên giáp triệt tiêu Phòng thủ; Phòng th�
 
 test('engine: BƯỚC 1 — Trúng/Né theo công thức chia trọng số K = 3, luôn chừa ≥1% Né (mục 18)', () => {
   // Bảng tham chiếu: Hit_Real = (Chính xác × 3) / (Chính xác × 3 + Né tránh) × 99%.
-  assert.equal(pvpRealHitBps(8000, 100), 9859, 'cấp 1 cơ bản: 80% vs 1% → Trúng 98.59%');
-  assert.equal(pvpRealHitBps(10000, 1000), 9581, 'cấp 10 bình thường: 100% vs 10% → Trúng 95.81%');
-  assert.equal(pvpRealHitBps(15000, 1000), 9685, 'DPS max Chính xác vs Né thường → Trúng 96.85%');
+  assert.equal(pvpRealHitBps(8000, 200), 9818, 'cấp 1 cơ bản: 80% vs 2% → Trúng 98.18%');
+  assert.equal(pvpRealHitBps(10000, 2000), 9281, 'cấp 10 bình thường: 100% vs 20% → Trúng 92.81%');
+  assert.equal(pvpRealHitBps(15000, 2000), 9479, 'DPS max Chính xác vs Né thường → Trúng 94.79%');
   assert.equal(pvpRealHitBps(15000, 5000), 8910, 'đối đầu cực hạn max vs max → Trúng 89.10%');
   assert.equal(pvpRealHitBps(10000, 5000), 8486, 'max Né trừng phạt kẻ không build Chính xác → Trúng 84.86%');
   assert.equal(pvpRealHitBps(10000, 0), 9900, 'Né 0 → trần Trúng 99%, vẫn luôn chừa 1% Né may mắn');
 
-  // Engine thật: Lữ Mông (Chính xác 100%) vs Đại Kiều (Né 10%) ở cấp 10 → ngưỡng 9581 bps.
+  // Engine thật: Lữ Mông (Chính xác 100%) vs Đại Kiều (Né 20%) ở cấp 10 → ngưỡng 9281 bps.
   const run = (r: number) =>
     dealtDamage(
       simulatePvp(
@@ -1020,8 +1025,8 @@ test('engine: BƯỚC 1 — Trúng/Né theo công thức chia trọng số K = 3
       ),
       0,
     );
-  assert.equal(run(9580), true, '9580 < 9581 → TRÚNG');
-  assert.equal(run(9581), false, '9581 ≥ 9581 → TRƯỢT (rơi vào vùng Né)');
+  assert.equal(run(9280), true, '9280 < 9281 → TRÚNG');
+  assert.equal(run(9281), false, '9281 ≥ 9281 → TRƯỢT (rơi vào vùng Né)');
 });
 
 // ===================== HTTP =====================

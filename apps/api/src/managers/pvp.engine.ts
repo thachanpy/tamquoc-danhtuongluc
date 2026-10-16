@@ -5,6 +5,7 @@ import {
   PVP_BURN_BPS,
   PVP_BURN_LIFESTEAL_BPS,
   PVP_BURN_HEAL_DOWN_BPS,
+  PVP_BURN_CLEANSE_EXPLODE_BPS,
   PVP_BURN_MAX_LAYERS_LONG,
   PVP_CLEANSE_CHAMP_BPS,
   PVP_COUNTER_MAX_BPS,
@@ -16,11 +17,16 @@ import {
   PVP_DODGE_MAX_BPS,
   PVP_FRONT_HP_BPS,
   PVP_HIT_MAX_BPS,
+  PVP_MAXHP_DOWN_CAP_BPS,
   PVP_MAXHP_GAIN_HEAL_BPS,
   PVP_MAX_ROUNDS,
   PVP_PASSIVE_EFFECT,
   PVP_REVIVE_DAMAGE_DOWN_BPS,
   PVP_REVIVE_HP_BPS_PER_LEVEL,
+  PVP_SHIELD_BREAK_BPS,
+  PVP_SHIELD_BREAK_BPS_MIN,
+  PVP_SHIELD_BREAK_REMOVE_BPS,
+  PVP_VS_DEBUFF_MIN_LAYERS,
   isAllyTargeting,
   pvpBaseDamage,
   pvpBaseHp,
@@ -29,6 +35,7 @@ import {
   pvpEffectBps,
   pvpHitBps,
   pvpLc,
+  pvpLevelSpanBps,
   pvpPerLevelEffectBps,
   pvpProfile,
   pvpRealHitBps,
@@ -371,9 +378,21 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         return sameLane.length ? [sameLane[0]!] : enemies.length ? [enemies[0]!] : [];
       }
       case 'lane': {
-        // Hàng ngang: nếu cả cặp trước/sau ở lane này đã chết hết thì quay sang toàn bộ địch còn lại.
+        // Hàng ngang: đánh đúng hàng ngang (cặp 1-4 / 2-5 / 3-6) người thi triển đang đứng.
+        // Nếu hàng ngang đối diện đã ngã hết thì tự động chuyển sang hàng ngang có ĐÔNG quân địch
+        // còn sống nhất (hoà thì chọn lane nhỏ hơn cho tất định).
         const sameLane = enemies.filter((e) => e.lane === u.lane);
-        return sameLane.length ? sameLane : enemies;
+        if (sameLane.length) return sameLane;
+        let bestLane = -1;
+        let bestCount = 0;
+        for (const e of enemies) {
+          const count = enemies.filter((x) => x.lane === e.lane).length;
+          if (count > bestCount || (count === bestCount && bestLane >= 0 && e.lane < bestLane)) {
+            bestLane = e.lane;
+            bestCount = count;
+          }
+        }
+        return bestLane >= 0 ? enemies.filter((e) => e.lane === bestLane) : [];
       }
       case 'back_row':
         // Đánh hàng sau: nếu hàng sau chết hết thì quay ra đánh hàng trước.
@@ -532,31 +551,39 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
 
   /**
    * BƯỚC 2 — Áp Phòng thủ sau khi trừ Xuyên giáp (mục 18): Damage_Final = Raw × (1 − Def_Final),
-   * với Def_Effective = MAX(0, Def_địch − Xuyên giáp_ta) và Def_Final = MIN(50%, Def_Effective).
+   * với Xuyên giáp ăn theo **% của Giáp địch**: Def_Effective = Def_địch × (1 − Xuyên giáp_ta%)
+   * (thay vì trừ thẳng điểm phần trăm), rồi Def_Final = MIN(50%, Def_Effective).
    * Trả về sát thương sau giáp và phần bị Phòng thủ cản lại (`mitigated`) để client hiển thị.
    */
   function mitigate(attacker: Unit, defender: Unit, raw: number): { amount: number; mitigated: number } {
-    const defFinal = Math.min(PVP_DEF_MAX_BPS, Math.max(0, defBpsOf(defender) - defPenBpsOf(attacker)));
+    const penBps = defPenBpsOf(attacker);
+    const effDef = Math.round((defBpsOf(defender) * (BPS_SCALE - penBps)) / BPS_SCALE);
+    const defFinal = Math.min(PVP_DEF_MAX_BPS, Math.max(0, effDef));
     const amount = Math.round((raw * (BPS_SCALE - defFinal)) / BPS_SCALE);
     return { amount, mitigated: raw - amount };
   }
 
   /**
-   * Mục tiêu có đang chịu hiệu ứng bất lợi hay không (mục 1.17): có lớp SUY YẾU, đang bị THIÊU ĐỐT,
-   * hoặc đang bị CHOÁNG. Dùng cho cơ chế cộng thêm sát thương của một số tướng (đao phủ).
+   * Mục tiêu có đang chịu hiệu ứng bất lợi hay không (mục 1.17): có TỪ `PVP_VS_DEBUFF_MIN_LAYERS`
+   * lớp SUY YẾU trở lên, HOẶC đang bị THIÊU ĐỐT, HOẶC đang bị CHOÁNG.
+   * Dùng cho cơ chế cộng thêm sát thương của một số tướng (đao phủ).
    */
-  const hasDebuff = (u: Unit) => u.debuffs.length > 0 || u.burns.length > 0 || u.stunnedByIdx !== null;
+  const hasDebuff = (u: Unit) =>
+    u.debuffs.length >= PVP_VS_DEBUFF_MIN_LAYERS || u.burns.length > 0 || u.stunnedByIdx !== null;
 
   /**
    * Đồng bộ trần HP động theo các lớp buff/debuff đang hiệu lực:
    * trần = trần tĩnh + tổng HP cộng thêm − tổng HP bị giảm (không âm).
+   * Phần GIẢM HP tối đa bị kẹp theo trần cộng dồn toàn hệ thống `PVP_MAXHP_DOWN_CAP_BPS` (30% HP nền).
    * Trần tăng thì CHỈ HỒI 1/4 lượng tăng (buff %HP của kỹ năng không phải đòn hồi máu đầy);
    * trần giảm thì kẹp máu hiện tại xuống trần mới.
    * Trả về lượng máu hồi thêm (>0 khi trần tăng).
    */
   const syncMaxHp = (u: Unit): number => {
     const before = u.maxHp;
-    u.maxHp = Math.max(0, u.maxHpStatic - debuffHpDown(u)) + buffHp(u);
+    const hpDownCap = Math.round((u.maxHpStatic * PVP_MAXHP_DOWN_CAP_BPS) / BPS_SCALE);
+    const hpDown = Math.min(debuffHpDown(u), hpDownCap);
+    u.maxHp = Math.max(0, u.maxHpStatic - hpDown) + buffHp(u);
     const delta = u.maxHp - before;
     if (delta > 0) {
       const gain = Math.round((delta * PVP_MAXHP_GAIN_HEAL_BPS) / BPS_SCALE);
@@ -652,7 +679,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
 
   /**
    * Hồi máu (không vượt trần); đẩy sự kiện khi có hồi thực tế.
-   * Mục tiêu đang bị THIÊU ĐỐT chỉ hồi được 70% (mục 8 — thiêu đốt giảm 30% khả năng hồi máu).
+   * Mục tiêu đang bị THIÊU ĐỐT chỉ hồi được 50% (mục 8 — thiêu đốt giảm 50% khả năng hồi máu).
    */
   function healUnit(from: Unit, to: Unit, amount: number, crit: boolean, lifesteal = false): void {
     const heal = to.burns.length > 0 ? Math.round((amount * (BPS_SCALE - PVP_BURN_HEAL_DOWN_BPS)) / BPS_SCALE) : amount;
@@ -856,7 +883,8 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     }
 
     // Giải choáng & Thiêu đốt (mục 7): kiểm tra riêng từng đồng minh đang bị choáng HOẶC thiêu đốt.
-    // Giải thành công thì gỡ cả choáng lẫn mọi lớp thiêu đốt đang chịu.
+    // Giải thành công thì gỡ cả choáng lẫn mọi lớp thiêu đốt đang chịu. Khi gỡ Thiêu đốt, phần
+    // sát thương CÒN LẠI nổ ngay 50% lập tức (mục 8) trừ thẳng vào Khiên/Máu.
     if (def.cleanse) {
       for (const a of alliesOf(u)) {
         const hasStun = a.stunnedByIdx !== null;
@@ -864,7 +892,17 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         if (!hasStun && !hasBurn) continue;
         if (rand(BPS_SCALE) < u.cleanseBps) {
           a.stunnedByIdx = null;
-          a.burns = [];
+          if (hasBurn) {
+            const remaining = a.burns.reduce((s, b) => s + b.amount * Math.max(1, b.expiresRound - currentRound + 1), 0);
+            a.burns = [];
+            const explode = Math.round((remaining * PVP_BURN_CLEANSE_EXPLODE_BPS) / BPS_SCALE);
+            if (explode > 0) {
+              const { absorbed, rest } = absorbShield(a, explode);
+              a.hp = Math.max(0, a.hp - rest);
+              events.push({ t: 'burn', idx: a.idx, amount: explode, crit: false, hp: a.hp, ...(absorbed > 0 ? { absorbed } : {}) });
+              if (a.hp === 0 && a.alive) fell(a);
+            }
+          }
           events.push({ t: 'cleanse', idx: a.idx });
         }
       }
@@ -883,17 +921,22 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
       }
     }
 
-    // Xóa Khiên (mục 17): bẻ gãy và loại bỏ TOÀN BỘ lớp Khiên hiện có của mục tiêu bị trúng đòn.
-    // Tỉ lệ hiệu dụng = cấp × hệ số mỗi cấp (mặc định 5%/cấp; Lữ Bố 3%/cấp, Trương Xuân Hoa 8%/cấp).
-    // Tướng vừa buff đồng minh vừa xóa khiên (Gia Cát Chiêm, Chu Phường, Gia Cát Cẩn) nhắm vào toàn bộ ĐỊCH.
-    const sbPerLevel = def.debuff.shieldBreakPerLevelBps;
-    if (sbPerLevel > 0) {
-      const chance = Math.min(BPS_SCALE, u.level * sbPerLevel);
+    // Xóa Khiên (mục 17): bẻ gãy Khiên của mục tiêu bị trúng đòn. Tỉ lệ ăn theo span chung
+    // 20% (cấp 1) → 80% (cấp 10) cho MỌI tướng có cờ Xóa Khiên; khi kích hoạt chỉ PHÁ VỠ 70%
+    // lượng Khiên hiện có của từng lớp (không xóa sạch 100%). Tướng vừa buff đồng minh vừa xóa
+    // khiên (Gia Cát Chiêm, Chu Phường, Gia Cát Cẩn) nhắm vào toàn bộ ĐỊCH.
+    if (def.debuff.shieldBreakPerLevelBps > 0) {
+      const chance = pvpLevelSpanBps(PVP_SHIELD_BREAK_BPS_MIN, PVP_SHIELD_BREAK_BPS, u.level);
       const sbTargets = isAllyTargeting(def.targeting) ? enemiesOf(u) : targets;
       for (const t of sbTargets) {
         if (!t.alive || !t.shields.length) continue;
         if (rand(BPS_SCALE) >= chance) continue;
-        t.shields = [];
+        const kept: typeof t.shields = [];
+        for (const s of t.shields) {
+          const left = Math.round((s.amount * (BPS_SCALE - PVP_SHIELD_BREAK_REMOVE_BPS)) / BPS_SCALE);
+          if (left > 0) kept.push({ ...s, amount: left });
+        }
+        t.shields = kept;
         events.push({ t: 'shieldBreak', from: u.idx, idx: t.idx });
       }
     }
@@ -913,6 +956,12 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
       const expiresRound = round + db.rounds - 1;
       for (const t of targets) {
         if (!t.alive) continue;
+        // Chiêu Giảm Máu Tối Đa chạy qua bước rollHit tiêu chuẩn (mục 18): Né thành công thì mục
+        // tiêu không dính bất kỳ lớp suy yếu/thiêu đốt nào của chiêu — giống mọi đòn tấn công khác.
+        if (db.hpDownBps > 0 && !rollHit(u, t)) {
+          events.push({ t: 'miss', from: u.idx, idx: t.idx });
+          continue;
+        }
         let damageDownFlat = 0;
         let hpDownFlat = 0;
         if (weaken) {
@@ -954,8 +1003,9 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
       events.push({ t: 'debuff', from: u.idx, idx: u.idx, damageFlat: 0, hpFlat: 0, critBps: 0, critDamageBps: 0, hitDownBps: 0, dodgeDownBps: 0, defDownBps: 0, defPenDownBps: 0, burnFlat, expiresRound: round + def.selfBurnRounds - 1, maxLayers: PVP_BURN_MAX_LAYERS_LONG });
     }
 
-    // Thanh tẩy hiệu ứng bất lợi cho đồng minh (mục 15): gỡ toàn bộ lớp suy yếu nhưng GIỮ LẠI
-    // choáng và thiêu đốt (hai hiệu ứng này không bị thanh tẩy).
+    // Thanh tẩy hiệu ứng bất lợi cho đồng minh (mục 15): gỡ toàn bộ lớp suy yếu — bao gồm cả
+    // GIẢM MÁU TỐI ĐA (trần HP hồi lại qua `syncMaxHp`) — nhưng GIỮ LẠI choáng và thiêu đốt
+    // (hai hiệu ứng này không bị thanh tẩy).
     if (def.purify) {
       for (const a of alliesOf(u)) {
         if (!a.debuffs.length) continue;

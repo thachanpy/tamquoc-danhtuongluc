@@ -891,7 +891,7 @@ export interface PvpUnitStateDto {
   lifestealBps: number;
   /** Chính xác khi vào trận theo cấp (bps; cấp 1 = 8000 = 80% → cấp 10 = 10000 = 100%, trần 15000 — SKILLS.md mục 18). */
   hitBps: number;
-  /** Né tránh khi vào trận theo cấp (bps; cấp 1 = 100 = 1% → cấp 10 = 1000 = 10%, trần 5000 — SKILLS.md mục 18). */
+  /** Né tránh khi vào trận theo cấp (bps; cấp 1 = 200 = 2% → cấp 10 = 2000 = 20%, trần 5000 — SKILLS.md mục 18). */
   dodgeBps: number;
   /** Phòng thủ khi vào trận: % giảm sát thương nhận vào (mặc định 1000 = 10%, trần 5000 — mục 18). */
   defBps: number;
@@ -1100,15 +1100,15 @@ export interface PvpDebuffDto {
   maxLayers: number;
   /** Xóa toàn bộ hiệu ứng có lợi (lớp buff) của mục tiêu. */
   dispel: boolean;
-  /** Tỉ lệ Xóa Khiên MỖI CẤP (bps; cấp × 5% → 50% ở cấp 10). 0 = không xóa khiên (SKILLS.md mục 17). */
+  /** Cờ Xóa Khiên: `> 0` = kỹ năng bẻ gãy Khiên địch. Tỉ lệ dùng chung span theo cấp 20% → 80% và chỉ phá vỡ 70% Khiên hiện có (SKILLS.md mục 17). */
   shieldBreakPerLevelBps: number;
 }
 
 /** Phản kích (SKILLS.md #12). Tất cả bằng 0 = kỹ năng không phản kích. */
 export interface PvpCounterDto {
-  /** Tỉ lệ phản kích mỗi cấp (bps). */
+  /** Tỉ lệ phản kích mỗi cấp (bps; cấp × 5%, trần 50% ở cấp 10). */
   perLevelBps: number;
-  /** % sát thương cơ bản đánh trả (bps: 5000 = 50%). */
+  /** % sát thương cơ bản đánh trả (bps: 10000 = 100% đòn đánh thường). */
   damageBps: number;
   /** Số lượt hiệu lực. */
   rounds: number;
