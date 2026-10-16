@@ -24,6 +24,7 @@ import {
 } from './rates.ts';
 import { validateQuestConfig } from './quests.ts';
 import { validatePvpConfig } from './pvp.ts';
+import { validateGemConfig } from './gems.ts';
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`[game-config] ${msg}`);
@@ -136,5 +137,6 @@ export function validateGameConfig(): void {
   }
   validateQuestConfig(assert);
   validatePvpConfig(assert);
+  validateGemConfig(assert);
   assert(Number.isInteger(LEADERBOARD_TOP) && LEADERBOARD_TOP >= 1 && LEADERBOARD_TOP <= LEADERBOARD_SIZE, 'LEADERBOARD_TOP không hợp lệ');
 }

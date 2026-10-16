@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { schemas, type PvpUnitDto } from '@tq/shared';
+import { schemas, type GemElement, type PvpUnitDto } from '@tq/shared';
 import type { GameContext } from '../context.ts';
 import {
   challenge,
@@ -8,6 +8,7 @@ import {
   getOpponent,
   getOverview,
   listBattleHistory,
+  ownedGemStats,
   saveTeam,
 } from '../managers/pvp.manager.ts';
 import { LIMIT_20, LIMIT_60, LIMIT_120, authGuard, playerGuard } from '../middleware/guards.ts';
@@ -24,18 +25,22 @@ export function registerPvpRoutes(app: FastifyInstance, ctx: GameContext): void 
     { preHandler: auth, schema: { params: schemas.generalCombatParams, querystring: schemas.generalCombatQuery }, config: LIMIT_120 },
     async (req) => {
       const { id } = req.params as { id: string };
-      const { level, squad } = req.query as { level: number; squad?: string };
+      const { level, squad, gems } = req.query as { level: number; squad?: string; gems?: string };
       // `squad` (nếu có) = danh sách generalId trong đội để tính Chỉ số Nền Ra Trận (aura Hỗ trợ + Cổng Đồng Phe).
       const squadIds = squad ? squad.split(',').filter(Boolean) : undefined;
-      return getCombatStats(id, level, squadIds);
+      // `gems` (nếu có) = danh sách LOẠI Ngọc đã gắn cho đội — quy ra chỉ số cộng toàn đội để hiển thị khớp khi vào trận.
+      const gemElements = gems ? (gems.split(',').filter(Boolean) as GemElement[]) : [];
+      const gem = gemElements.length ? ownedGemStats(ctx, req.userId, gemElements) : undefined;
+      return getCombatStats(id, level, squadIds, gem);
     },
   );
 
   app.get('/api/pvp', { preHandler: player, config: LIMIT_60 }, async (req) => getOverview(ctx, req.userId));
 
-  app.post('/api/pvp/team', { preHandler: player, schema: { body: schemas.pvpTeamBody }, config: LIMIT_20 }, async (req) =>
-    saveTeam(ctx, req.userId, (req.body as { units: PvpUnitDto[] }).units),
-  );
+  app.post('/api/pvp/team', { preHandler: player, schema: { body: schemas.pvpTeamBody }, config: LIMIT_20 }, async (req) => {
+    const { units, gems } = req.body as { units: PvpUnitDto[]; gems?: GemElement[] };
+    return saveTeam(ctx, req.userId, units, gems ?? []);
+  });
 
   app.get('/api/pvp/opponent/:id', { preHandler: player, schema: { params: schemas.idParams }, config: LIMIT_60 }, async (req) =>
     getOpponent(ctx, req.userId, (req.params as { id: number }).id),

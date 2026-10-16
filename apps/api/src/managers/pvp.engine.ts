@@ -1,4 +1,4 @@
-import type { PvpBuffScope, PvpEventDto, PvpSide, PvpUnitStateDto, PvpWinner } from '@tq/shared';
+import type { GemElement, PvpBuffScope, PvpEventDto, PvpSide, PvpUnitStateDto, PvpWinner } from '@tq/shared';
 import {
   BPS_SCALE,
   GENERALS_BY_ID,
@@ -34,6 +34,7 @@ import {
   pvpDefBps,
   pvpDodgeBps,
   pvpFactionBonus,
+  pvpGemTeamStats,
   pvpHitBps,
   pvpLc,
   pvpLevelSpanBps,
@@ -42,6 +43,7 @@ import {
   pvpRealHitBps,
   pvpSkillDefAtLevel,
   pvpStyleBonus,
+  type PvpGemStats,
   type PvpProfile,
   type PvpSkillDef,
   type PvpTargeting,
@@ -65,6 +67,11 @@ export interface PvpUnitInput {
 export interface PvpSideInput {
   side: PvpSide;
   units: PvpUnitInput[];
+  /**
+   * Ngọc Ngũ Hành gắn cho đội (tối đa 3 loại khác nhau, mỗi loại lấy viên cấp cao nhất đang sở hữu).
+   * Cộng Chỉ số Nền Ra Trận cho TOÀN ĐỘI (aura gốc, không thể bị Xóa Buff) — xem `pvpGemTeamStats`.
+   */
+  gems?: { element: GemElement; level: number }[];
 }
 
 export interface PvpSimResult {
@@ -109,6 +116,11 @@ interface Unit {
   dodgeBps: number;
   defBps: number;
   defPenBps: number;
+  /**
+   * % giảm sát thương gánh chịu do Ngọc Ngũ Hành (Kim) — aura đầu trận cố định,
+   * KHÔNG thể bị Xóa Buff (khác `buffs[].takenDownBps` của kỹ năng).
+   */
+  gemTakenDownBps: number;
   /** Hút máu: hồi bản thân theo % sát thương gây ra ở cấp hiện tại (bps; 0 = không hút máu). */
   lifestealBps: number;
   /**
@@ -241,17 +253,33 @@ interface ShieldInstance {
 const idxOf = (side: PvpSide, slot: number) => (side === 'a' ? slot - 1 : 6 + slot - 1);
 const rowOf = (slot: number): 'front' | 'back' => (slot <= 3 ? 'front' : 'back');
 const laneOf = (slot: number) => ((slot - 1) % 3) + 1;
-/** Số hàng ngang của sân đấu (cặp ô trước-sau: 1-4 / 2-5 / 3-6). */
-const LANE_COUNT = 3;
 /**
- * Thứ tự quét hàng ngang khi nhắm "hàng ngang": **hàng của mình trước**, rồi loang dần ra hai bên;
- * cùng khoảng cách thì chọn hàng nhỏ hơn. Vì vậy: ô 1 → `1 2 3`, ô 2 → `2 1 3`, ô 3 → `3 2 1`.
+ * Thứ tự ưu tiên slot địch theo CỘT của người đánh (SKILLS.md mục 2.5):
+ * **cột của mình trước**, rồi loang dần ra hai bên (cùng khoảng cách thì chọn cột nhỏ hơn).
+ * - Hàng trước: ô 1/4 → `1 2 3` · ô 2/5 → `2 1 3` · ô 3/6 → `3 2 1`
+ * - Hàng sau:   ô 1/4 → `4 5 6` · ô 2/5 → `5 4 6` · ô 3/6 → `6 5 4`
  */
-const laneScanOrder = (lane: number): number[] =>
-  Array.from({ length: LANE_COUNT }, (_, i) => i + 1).sort((a, b) => Math.abs(a - lane) - Math.abs(b - lane) || a - b);
+const FRONT_PRIORITY = [[1, 2, 3], [2, 1, 3], [3, 2, 1]];
+const BACK_PRIORITY = [[4, 5, 6], [5, 4, 6], [6, 5, 4]];
+const frontPrio = (lane: number) => FRONT_PRIORITY[lane - 1]!;
+const backPrio = (lane: number) => BACK_PRIORITY[lane - 1]!;
+/** Tướng còn sống đầu tiên theo danh sách slot ưu tiên; rỗng nghĩa là cả danh sách đã gục. */
+const firstAliveBySlot = (list: Unit[], order: number[]): Unit[] => {
+  for (const s of order) {
+    const t = list.find((e) => e.slot === s);
+    if (t) return [t];
+  }
+  return [];
+};
 
 export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResult {
   const units: Unit[] = [];
+
+  // 0) Aura Ngọc Ngũ Hành theo đội (mục DESIGN): cộng Chỉ số Nền Ra Trận cho TOÀN ĐỘI, không thể bị Xóa Buff.
+  const gemStats: Record<PvpSide, PvpGemStats> = {
+    a: pvpGemTeamStats(sides.find((s) => s.side === 'a')?.gems ?? []),
+    b: pvpGemTeamStats(sides.find((s) => s.side === 'b')?.gems ?? []),
+  };
 
   // 1) Khởi tạo chỉ số nền
   for (const s of sides) {
@@ -283,11 +311,12 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         dodgeBps: pvpDodgeBps(u.level),
         defBps: pvpDefBps(u.level),
         defPenBps: PVP_DEF_PEN_BPS,
+        gemTakenDownBps: 0,
         lifestealBps: 0,
         teamLifestealBps: 0,
         reviveUsed: false,
         damageMulBps: BPS_SCALE,
-        lc: pvpLc(profile.style, u.level, profile.passive),
+        lc: pvpLc(profile.style, u.level, profile.passive, gemStats[s.side]),
         alive: true,
         stunnedByIdx: null,
         buffs: [],
@@ -314,33 +343,46 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     const style = pvpStyleBonus(u.profile.style, supportLayersOf(u.side));
     // Cổng Đồng Phe: mỗi tướng nhận mốc theo số tướng CÙNG PHE của chính mình (không dùng mốc phe đông nhất).
     const faction = pvpFactionBonus(factionCountOf(u.side, GENERALS_BY_ID.get(u.generalId)?.faction ?? ''));
+    // Aura Ngọc Ngũ Hành: cộng thẳng vào chỉ số nền của MỌI tướng trong đội (không thể bị Xóa Buff).
+    const gem = gemStats[u.side];
     const damageBps =
       (u.row === 'back' ? PVP_BACK_DAMAGE_BPS : 0) +
       (passiveEffect.stat === 'damage' ? passiveEffect.bps : 0) +
       style.damageBps +
-      faction.damageBps;
+      faction.damageBps +
+      gem.damageBps;
     const hpBps =
       (u.row === 'front' ? PVP_FRONT_HP_BPS : 0) +
       (passiveEffect.stat === 'maxHp' ? passiveEffect.bps : 0) +
       style.hpBps +
-      faction.hpBps;
+      faction.hpBps +
+      gem.hpBps;
     u.damage = Math.round(u.baseDamage * (1 + damageBps / BPS_SCALE));
     u.maxHpStatic = Math.round(u.baseHp * (1 + hpBps / BPS_SCALE));
     // Vào trận máu LUÔN đầy 100% (kể cả phần trần tăng nhờ aura Hỗ trợ — mục 1).
     u.maxHp = u.maxHpStatic;
     u.hp = u.maxHp;
-    // Chí mạng: giá trị chốt 30% ở cấp 10, quy theo cấp (cấp 1 = 20%) + nội tại.
-    u.critBps = pvpPerLevelEffectBps(PVP_CRIT_BPS_PER_LEVEL, u.level) + (passiveEffect.stat === 'crit' ? passiveEffect.pointsBps : 0);
+    // Chí mạng: giá trị chốt 30% ở cấp 10, quy theo cấp (cấp 1 = 20%) + nội tại + Ngọc.
+    u.critBps =
+      pvpPerLevelEffectBps(PVP_CRIT_BPS_PER_LEVEL, u.level) +
+      (passiveEffect.stat === 'crit' ? passiveEffect.pointsBps : 0) +
+      gem.critBps;
     // Choáng: tỉ lệ chốt ở cấp 10, quy theo cấp (không còn nội tại cộng thêm điểm choáng).
     u.stunBps = pvpPerLevelEffectBps(u.def.stunPerLevelBps, u.level);
-    // Hút máu: chốt ở cấp 10 (mục 13), quy theo cấp.
-    u.lifestealBps = pvpPerLevelEffectBps(u.profile.lifestealPerLevelBps, u.level);
+    // Hút máu: chốt ở cấp 10 (mục 13), quy theo cấp + Ngọc Mộc.
+    u.lifestealBps = pvpPerLevelEffectBps(u.profile.lifestealPerLevelBps, u.level) + gem.lifestealBps;
     // Hút máu ĐỘI: cũng chốt ở cấp 10, quy theo cấp (hồi cho cả bản thân lẫn đồng minh).
     u.teamLifestealBps = pvpPerLevelEffectBps(u.profile.teamLifestealPerLevelBps, u.level);
     // Giải choáng: chốt ở cấp 10 = 75% (Hoa Đà ghi đè 55% → 100%) — xem `pvpCleanseBps`.
     u.cleanseBps = pvpCleanseBps(u.def, u.level);
-    // Phòng thủ: chỉ số nền theo cấp (12% → 30%) + nội tại (+5% Phòng thủ) — buff/debuff cộng thêm khi vào trận.
-    u.defBps += passiveEffect.stat === 'def' ? passiveEffect.pointsBps : 0;
+    // Bộ chỉ số Trao đổi đòn + ST chí mạng: cộng thêm từ Ngọc Ngũ Hành.
+    u.hitBps += gem.hitBps;
+    u.dodgeBps += gem.dodgeBps;
+    u.defPenBps += gem.defPenBps;
+    u.critDamageBps += gem.critDamageBps;
+    u.gemTakenDownBps = gem.takenDownBps;
+    // Phòng thủ: chỉ số nền theo cấp (12% → 30%) + nội tại (+5% Phòng thủ) + Ngọc Thổ.
+    u.defBps += (passiveEffect.stat === 'def' ? passiveEffect.pointsBps : 0) + gem.defBps;
   }
 
   // Ảnh chụp đầu trận để client dựng giao diện.
@@ -414,53 +456,29 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
   const alliesOf = (u: Unit) => units.filter((x) => x.side === u.side && x.alive).sort((a, b) => a.slot - b.slot);
   const lowestOf = (list: Unit[]) => (list.length ? [list.reduce((lo, m) => (m.hp / m.maxHp < lo.hp / lo.maxHp ? m : lo))] : []);
 
-  /** Chọn mục tiêu theo hệ tọa độ đội hình (mục 2.4, 13.1) — chỉ tướng còn sống. */
+  /** Chọn mục tiêu theo hệ tọa độ đội hình (SKILLS.md mục 2.5) — chỉ tướng còn sống. */
   function pickTargets(u: Unit, targeting: PvpTargeting): Unit[] {
     const enemies = enemiesOf(u);
     const front = enemies.filter((e) => e.row === 'front');
     const back = enemies.filter((e) => e.row === 'back');
     switch (targeting) {
-      case 'single': {
-        // Ưu tiên cùng lane (hàng ngang), sau đó tới các lane khác theo slot.
-        const sameLane = enemies.filter((e) => e.lane === u.lane);
-        return sameLane.length ? [sameLane[0]!] : enemies.length ? [enemies[0]!] : [];
-      }
+      case 'single':
+        // Đơn mục tiêu HÀNG TRƯỚC (mục 2.5): ưu tiên tuyệt đối hàng trước (cột mình → loang ra),
+        // chỉ khi cả hàng trước đã gục mới đánh hàng sau.
+        return firstAliveBySlot(enemies, [...frontPrio(u.lane), ...backPrio(u.lane)]);
       case 'lane': {
-        // Hàng ngang: đánh cặp ô (trước, sau) cùng hàng nhìn — 1-4 / 2-5 / 3-6.
-        // LUÔN ưu tiên đánh hàng TRƯỚC: quét theo thứ tự gần hàng của mình nhất (ô 1 → 1 2 3,
-        // ô 2 → 2 1 3, ô 3 → 3 2 1) và chọn hàng ngang ĐẦU TIÊN còn tướng ở hàng trước. Vì vậy
-        // tướng ô 1 mà ô 1 địch trống/đã chết sẽ đánh ô 2 + ô 5 chứ KHÔNG đánh trơ ô 4.
-        if (front.length) {
-          for (const lane of laneScanOrder(u.lane)) {
-            const pair = enemies.filter((e) => e.lane === lane);
-            if (pair.some((e) => e.row === 'front')) return pair;
-          }
-        }
-        // Hàng trước đã sạch: đánh hàng ngang của mình, nếu hàng đó cũng trống thì chuyển sang
-        // hàng ngang có ĐÔNG quân địch còn sống nhất (hoà thì chọn lane nhỏ hơn cho tất định).
-        const sameLane = enemies.filter((e) => e.lane === u.lane);
-        if (sameLane.length) return sameLane;
-        let bestLane = -1;
-        let bestCount = 0;
-        for (const e of enemies) {
-          const count = enemies.filter((x) => x.lane === e.lane).length;
-          if (count > bestCount || (count === bestCount && bestLane >= 0 && e.lane < bestLane)) {
-            bestLane = e.lane;
-            bestCount = count;
-          }
-        }
-        return bestLane >= 0 ? enemies.filter((e) => e.lane === bestLane) : [];
+        // Hàng ngang (mục 2.5): chọn tướng HÀNG TRƯỚC đầu tiên còn sống (X) rồi trả về cặp [X, X+3];
+        // cả hàng trước đã gục thì đánh tướng HÀNG SAU đầu tiên còn sống.
+        const x = firstAliveBySlot(enemies, frontPrio(u.lane))[0];
+        if (x) return [x, ...enemies.filter((e) => e.slot === x.slot + 3)];
+        return firstAliveBySlot(enemies, backPrio(u.lane));
       }
       case 'back_row':
-        // Đánh hàng sau: nếu hàng sau chết hết thì quay ra đánh hàng trước.
+        // Hàng dọc sau: cả hàng sau; hàng sau sạch thì quay ra đánh hàng trước.
         return back.length ? back : front;
-      case 'back_single': {
-        // Một tướng hàng sau: ưu tiên cùng lane, rồi tới hàng sau; nếu hàng sau sạch thì đánh hàng trước.
-        const sameLane = back.filter((e) => e.lane === u.lane);
-        if (sameLane.length) return [sameLane[0]!];
-        if (back.length) return [back[0]!];
-        return front.length ? [front[0]!] : [];
-      }
+      case 'back_single':
+        // Đơn mục tiêu HÀNG SAU (mục 2.5): hàng sau trước (cột mình → loang ra), hết mới đánh hàng trước.
+        return firstAliveBySlot(enemies, [...backPrio(u.lane), ...frontPrio(u.lane)]);
       case 'highest_damage_enemy': {
         // Nhắm tướng địch có sát thương hiệu dụng cao nhất (đã tính buff/debuff đang hiệu lực).
         // Bằng nhau thì chọn tướng slot nhỏ hơn (reduce giữ phần tử đầu) cho tất định.
@@ -561,8 +579,11 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
   const critBpsOf = (u: Unit) => Math.max(0, u.critBps + buffCrit(u) - debuffCritDown(u));
   /** ST chí mạng hiệu dụng = nền + buff − giảm (không âm). */
   const critDamageBpsOf = (u: Unit) => Math.max(0, u.critDamageBps + buffCritDamage(u) - debuffCritDamageDown(u));
-  /** Hệ số nhân sát thương gánh chịu sau khi trừ lớp buff giảm ST nhận (không âm, tối đa 0). */
-  const takenMulBps = (u: Unit) => Math.max(0, BPS_SCALE - buffTakenDown(u));
+  /**
+   * Hệ số nhân sát thương gánh chịu sau khi trừ lớp buff giảm ST nhận và aura Ngọc Ngũ Hành (Kim).
+   * Aura Ngọc là chỉ số nền đầu trận nên KHÔNG thể bị Xóa Buff.
+   */
+  const takenMulBps = (u: Unit) => Math.max(0, BPS_SCALE - buffTakenDown(u) - u.gemTakenDownBps);
   /**
    * Hút máu hiệu dụng = hút máu theo cấp của bản thân + hút máu do kỹ năng hỗ trợ đồng minh ban
    * (kênh buff `lifestealBps`, trần 20% nên `maxLayers: 1`). Tướng hỗ trợ không tự hút máu.

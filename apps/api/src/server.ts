@@ -5,6 +5,7 @@ import { registerAdminRoutes } from './controllers/admin.controller.ts';
 import { registerAuthRoutes } from './controllers/auth.controller.ts';
 import { registerCollectionRoutes } from './controllers/collection.controller.ts';
 import { registerGachaRoutes } from './controllers/gacha.controller.ts';
+import { registerGemRoutes } from './controllers/gem.controller.ts';
 import { registerGiftRoutes } from './controllers/gift.controller.ts';
 import { registerGiftCodeRoutes } from './controllers/giftcode.controller.ts';
 import { registerLeaderboardRoutes } from './controllers/leaderboard.controller.ts';
@@ -55,6 +56,7 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
   registerTicketRoutes(app, ctx);
   registerGachaRoutes(app, ctx);
   registerUpgradeRoutes(app, ctx);
+  registerGemRoutes(app, ctx);
   registerGiftRoutes(app, ctx);
   registerGiftCodeRoutes(app, ctx);
   registerQuestRoutes(app, ctx);

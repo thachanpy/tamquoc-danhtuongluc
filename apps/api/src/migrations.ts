@@ -527,6 +527,54 @@ ALTER TABLE pvp_battles RENAME COLUMN attacker_power TO attacker_lc;
 ALTER TABLE pvp_battles RENAME COLUMN defender_power TO defender_lc;
 `,
   },
+  {
+    // Ngọc Ngũ Hành (DESIGN PROMPT): vật phẩm rời theo (loại, cấp) ghép 2→1, cộng Chỉ số Nền Ra Trận toàn đội.
+    // - user_gems: mỗi viên Ngọc là 1 dòng; 'consumed' = đã dùng làm nguyên liệu ghép (giống user_cards).
+    // - gem_merge_history: lịch sử từng lần ghép (dùng chung công thức/tỷ lệ với thẻ Tướng).
+    // - pvp_team_gems: Ngọc gắn cho đội hình; tối đa 3 dòng khác loại mỗi người chơi.
+    version: 16,
+    name: 'gems',
+    sql: `
+CREATE TABLE user_gems (
+  id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id               INTEGER NOT NULL REFERENCES users(id),
+  element               TEXT NOT NULL CHECK (element IN ('kim','moc','thuy','hoa','tho')),
+  level                 INTEGER NOT NULL CHECK (level BETWEEN 1 AND 10),
+  status                TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','consumed')),
+  consumed_at           TEXT,
+  consumed_by_merge_id  INTEGER,
+  created_at            TEXT NOT NULL,
+  updated_at            TEXT NOT NULL,
+  CHECK ((status = 'active' AND consumed_at IS NULL) OR (status = 'consumed' AND consumed_at IS NOT NULL))
+);
+CREATE INDEX idx_gems_user_status ON user_gems(user_id, status);
+CREATE INDEX idx_gems_user_element_level ON user_gems(user_id, element, level);
+
+CREATE TABLE gem_merge_history (
+  id                            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id                       INTEGER NOT NULL REFERENCES users(id),
+  input_gem_ids_snapshot        TEXT NOT NULL,
+  element                       TEXT NOT NULL CHECK (element IN ('kim','moc','thuy','hoa','tho')),
+  input_level                   INTEGER NOT NULL CHECK (input_level BETWEEN 1 AND 9),
+  result_gem_id                 INTEGER NOT NULL REFERENCES user_gems(id),
+  result_level                  INTEGER NOT NULL CHECK (result_level BETWEEN 1 AND 10),
+  success_chance                INTEGER NOT NULL,
+  failure_chance                INTEGER NOT NULL,
+  outcome                       TEXT NOT NULL CHECK (outcome IN ('success','failure')),
+  failure_distribution_snapshot TEXT NOT NULL,
+  idempotency_key               TEXT NOT NULL,
+  created_at                    TEXT NOT NULL,
+  UNIQUE (user_id, idempotency_key)
+);
+
+CREATE TABLE pvp_team_gems (
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  element    TEXT NOT NULL CHECK (element IN ('kim','moc','thuy','hoa','tho')),
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, element)
+);
+`,
+  },
 ];
 
 /** target: chỉ chạy tới version này (dùng khi test migration). */

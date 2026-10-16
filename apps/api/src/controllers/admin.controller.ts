@@ -4,11 +4,13 @@ import type { GameContext } from '../context.ts';
 import {
   adminGrantTickets,
   adminListCards,
+  adminListGems,
   adminListUsers,
   approveUser,
   rejectUser,
   setAdmin,
   type AdminCardsQuery,
+  type AdminGemsQuery,
   type AdminUsersQuery,
 } from '../managers/admin.manager.ts';
 import { getSettings, setRequireApproval } from '../managers/settings.manager.ts';
@@ -44,6 +46,9 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: GameContext): voi
   });
   app.get('/api/admin/cards', { preHandler: admin, schema: { querystring: schemas.adminCardsQuery } }, async (req) =>
     adminListCards(ctx, req.query as AdminCardsQuery),
+  );
+  app.get('/api/admin/gems', { preHandler: admin, schema: { querystring: schemas.adminGemsQuery } }, async (req) =>
+    adminListGems(ctx, req.query as AdminGemsQuery),
   );
 
   app.get('/api/admin/settings', { preHandler: admin }, async () => getSettings(ctx));

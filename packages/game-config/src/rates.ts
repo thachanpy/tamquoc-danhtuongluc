@@ -146,3 +146,15 @@ export const UPGRADE_FAILURE_DISTRIBUTION: Record<number, WeightEntry[]> = {
     ]),
   ),
 };
+
+/** Bảng tỷ lệ ghép công khai theo level đầu vào — dùng chung cho thẻ Tướng và Ngọc Ngũ Hành. */
+export function upgradeRateTable(): { level: number; successBps: number; failureDistribution: WeightEntry[] }[] {
+  return Object.keys(UPGRADE_SUCCESS_BPS)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map((level) => ({
+      level,
+      successBps: UPGRADE_SUCCESS_BPS[level]!,
+      failureDistribution: (UPGRADE_FAILURE_DISTRIBUTION[level] ?? []).map((e) => ({ ...e })),
+    }));
+}

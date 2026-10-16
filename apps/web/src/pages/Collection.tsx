@@ -1,10 +1,24 @@
 import { For, Match, Show, Switch, createMemo, createSignal, onCleanup, type JSX } from 'solid-js';
-import { FACTIONS, FACTION_LABELS, PVP_STYLES, PVP_STYLE_LABELS, type CardDto, type RecipientDto } from '@tq/shared';
+import {
+  FACTIONS,
+  FACTION_LABELS,
+  GEM_ELEMENTS,
+  GEM_ELEMENT_LABELS,
+  PVP_STYLES,
+  PVP_STYLE_LABELS,
+  type CardDto,
+  type GemConfigDto,
+  type GemDto,
+  type GemElement,
+  type RecipientDto,
+} from '@tq/shared';
 import { api, fetchAllCards, newKey, type ApiError } from '../api.ts';
 import { gen, genStyle, state } from '../state.ts';
+import { pct } from '../art.ts';
 import { Card } from '../components/Card.tsx';
+import { GemCard } from '../components/GemCard.tsx';
 import { groupCardsByGeneral, type UpgradeSort } from '../upgrade-groups.ts';
-import { openCardViewer } from '../viewer.tsx';
+import { openCardViewer, openGemViewer } from '../viewer.tsx';
 
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
 
@@ -28,6 +42,8 @@ type Confirm = { username: string; picked: CardDto[]; hi: number };
  *   người giao dịch gần nhất lên đầu). Server kiểm tra lại toàn bộ và chuyển thẻ nguyên tử.
  */
 export function CollectionPage(): JSX.Element {
+  /** Sub-tab: bộ sưu tập Tướng (mặc định) hoặc bộ sưu tập Ngọc Ngũ Hành (DESIGN PROMPT — mục 1.2). */
+  const [sub, setSub] = createSignal<'tuong' | 'ngoc'>('tuong');
   const MAX = state.config!.giftMaxCards;
   let alive = true;
   let blurTimer: ReturnType<typeof setTimeout> | undefined;
@@ -244,6 +260,18 @@ export function CollectionPage(): JSX.Element {
 
   return (
     <>
+      <div class="sub-tabs" role="tablist">
+        <button class="btn small" classList={{ on: sub() === 'tuong' }} role="tab" onClick={() => setSub('tuong')}>
+          Tướng
+        </button>
+        <button class="btn small" classList={{ on: sub() === 'ngoc' }} role="tab" onClick={() => setSub('ngoc')}>
+          Ngọc
+        </button>
+      </div>
+      <Show when={sub() === 'ngoc'}>
+        <GemCollectionTab />
+      </Show>
+      <Show when={sub() === 'tuong'}>
       <section class="panel">
         <div class="coll-head">
           <div class="summary muted">
@@ -504,6 +532,119 @@ export function CollectionPage(): JSX.Element {
           </Match>
         </Switch>
       </div>
+      </Show>
     </>
+  );
+}
+
+/**
+ * Tab "Ngọc" ở Bộ sưu tập (mục 6.8): UI y hệt tab Tướng — lưới nhóm (`gen-group`), trong mỗi nhóm
+ * chia theo cấp (`lv-run`), mỗi viên Ngọc là một thẻ bấm được. Bấm một viên (hoặc nút "Chi tiết")
+ * để mở popup chi tiết dùng chung khung modal với tướng.
+ */
+function GemCollectionTab(): JSX.Element {
+  let alive = true;
+  onCleanup(() => (alive = false));
+
+  const [gems, setGems] = createSignal<GemDto[]>([]);
+  const [config, setConfig] = createSignal<GemConfigDto | null>(null);
+  const [loaded, setLoaded] = createSignal(false);
+  const [loadError, setLoadError] = createSignal<string | null>(null);
+
+  /** Nhóm theo loại Ngọc (đủ 5 loại): mỗi loại là một khung, trong khung chia theo cấp (cao → thấp). */
+  const groups = createMemo(() => {
+    const byEl = new Map<GemElement, Map<number, GemDto[]>>();
+    for (const g of gems()) {
+      const lvls = byEl.get(g.element) ?? new Map<number, GemDto[]>();
+      lvls.set(g.level, [...(lvls.get(g.level) ?? []), g]);
+      byEl.set(g.element, lvls);
+    }
+    return GEM_ELEMENTS.map((element) => {
+      const lvls = byEl.get(element);
+      const runs = lvls ? [...lvls.entries()].sort((a, b) => b[0] - a[0]).map(([level, list]) => ({ level, gems: list })) : [];
+      return { element, total: runs.reduce((s, r) => s + r.gems.length, 0), best: runs[0]?.level ?? 0, runs };
+    });
+  });
+
+  async function load() {
+    try {
+      const dto = await api.gems();
+      if (!alive) return;
+      setGems(dto.gems);
+      setConfig(dto.config);
+      setLoaded(true);
+      setLoadError(null);
+    } catch (e) {
+      if (alive) setLoadError((e as Error).message);
+    }
+  }
+  void load();
+
+  /** Mở popup chi tiết một loại Ngọc (dùng chung khung modal với tướng). */
+  function view(element: GemElement, level: number, owned: number, best: number) {
+    const c = config();
+    if (c) openGemViewer({ element, config: c, owned, best, level });
+  }
+
+  return (
+    <section class="panel">
+      <div class="coll-head">
+        <div class="summary muted">
+          <Show when={loaded()}>{`Đã sở hữu ${gems().length} viên Ngọc`}</Show>
+        </div>
+      </div>
+      <Show when={config()}>
+        {(c) => (
+          <p class="muted small">
+            Ngọc cộng Chỉ số Nền cho toàn đội khi vào trận (không thể bị Xóa Buff). Mỗi đội hình gắn tối đa{' '}
+            <b>{c().teamGemCount} Ngọc khác loại</b>; hệ thống tự dùng viên cấp cao nhất đang sở hữu. Quay thẻ có {pct(c().dropBps, c().bpsScale)} cơ hội rớt
+            kèm 1 viên Ngọc cùng cấp (mỗi loại {pct(c().typeWeightBps, c().bpsScale)}).
+          </p>
+        )}
+      </Show>
+      <div class="pick-grid">
+        <Switch>
+          <Match when={loadError()}>{(err) => <div class="state-msg error">Không tải được Ngọc: {err()}</div>}</Match>
+          <Match when={!loaded()}>
+            <div class="state-msg">Đang tải Ngọc…</div>
+          </Match>
+          <Match when={true}>
+            <For each={groups()}>
+              {(grp) => (
+                <div class={`gen-group e-${grp.element}`}>
+                  <div class="gen-head">
+                    <b>{`Ngọc ${GEM_ELEMENT_LABELS[grp.element]}`}</b>
+                    <span class="muted small">{grp.total > 0 ? `Ngũ Hành · ${grp.total} viên` : 'Ngũ Hành · chưa sở hữu'}</span>
+                    <button class="btn ghost small" disabled={!config()} onClick={() => view(grp.element, grp.best || 1, grp.total, grp.best)}>
+                      Chi tiết
+                    </button>
+                  </div>
+                  <Show when={grp.total > 0} fallback={<div class="muted small">Chưa sở hữu viên nào.</div>}>
+                    <div class="gen-runs">
+                      <For each={grp.runs}>
+                        {(r) => (
+                          <div class="lv-run">
+                            <div class="run-label">{`Cấp ${r.level} ×${r.gems.length}`}</div>
+                            <div class="run-cards">
+                              <For each={r.gems}>
+                                {(g) => (
+                                  <button class="pick view" title="Xem Ngọc" onClick={() => view(g.element, g.level, grp.total, grp.best)}>
+                                    <GemCard element={g.element} level={g.level} />
+                                  </button>
+                                )}
+                              </For>
+                            </div>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
+                </div>
+              )}
+            </For>
+          </Match>
+        </Switch>
+      </div>
+    </section>
   );
 }

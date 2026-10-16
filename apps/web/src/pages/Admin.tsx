@@ -2,19 +2,25 @@ import { For, Match, Show, Switch, createSignal, onCleanup, type JSX } from 'sol
 import {
   FACTIONS,
   FACTION_LABELS,
+  GEM_ELEMENTS,
+  GEM_ELEMENT_LABELS,
   TICKET_LABELS,
   TICKET_TYPES,
   type AdminCardDto,
+  type AdminGemDto,
   type AdminGiftCodeDto,
   type AdminUserDto,
+  type GemConfigDto,
+  type GemElement,
   type TicketType,
 } from '@tq/shared';
 import { api, newKey, type ApiError } from '../api.ts';
 import { gen, state } from '../state.ts';
 import { refreshPendingBadge } from '../badges.ts';
-import { openCardViewer } from '../viewer.tsx';
+import { openCardViewer, openGemViewer } from '../viewer.tsx';
 import { rewardText } from '../giftcode-text.ts';
 import { Card } from '../components/Card.tsx';
+import { GemCard } from '../components/GemCard.tsx';
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('vi-VN');
 
@@ -57,7 +63,7 @@ function Pager(props: { info: PagerInfo; onPrev: () => void; onNext: () => void 
   );
 }
 
-type Sub = 'users' | 'cards' | 'giftcode';
+type Sub = 'users' | 'cards' | 'gems' | 'giftcode';
 type PaneCtl = { ensureLoaded: () => void };
 type CardsCtl = PaneCtl & { showUser: (userId: number) => void };
 
@@ -65,6 +71,7 @@ type CardsCtl = PaneCtl & { showUser: (userId: number) => void };
  * Trang Quản trị (mục 3.8) — chỉ admin thấy tab này; server kiểm tra quyền ở mọi route /api/admin/*.
  * - Người chơi: duyệt/từ chối đăng ký, xem số vé & số thẻ, cộng vé (chọn loại + số lượng), cấp/thu quyền admin.
  * - Thẻ tướng: mọi thẻ của mọi người chơi, lọc theo người chơi/phe/level/tên.
+ * - Ngọc Ngũ Hành (mục 6.8): mọi viên Ngọc của mọi người chơi, lọc theo người chơi/loại/cấp.
  * - Giftcode (mục 3.9): tạo code (vé quay nhiều loại + số lượng, hạn sử dụng tuỳ chọn), bật/tắt code.
  */
 export function AdminPage(): JSX.Element {
@@ -73,16 +80,19 @@ export function AdminPage(): JSX.Element {
   const isAlive = () => alive;
   const [sub, setSub] = createSignal<Sub>('users');
   let cards: CardsCtl | undefined;
+  let gems: PaneCtl | undefined;
   let giftcodes: PaneCtl | undefined;
 
   function switchTo(id: Sub) {
     setSub(id);
     if (id === 'cards') cards?.ensureLoaded();
+    if (id === 'gems') gems?.ensureLoaded();
     if (id === 'giftcode') giftcodes?.ensureLoaded();
   }
   const tabs: [Sub, string][] = [
     ['users', 'Người chơi'],
     ['cards', 'Thẻ tướng'],
+    ['gems', 'Ngọc'],
     ['giftcode', 'Giftcode'],
   ];
 
@@ -108,6 +118,9 @@ export function AdminPage(): JSX.Element {
       </div>
       <div data-pane="cards" hidden={sub() !== 'cards'}>
         <CardsPane alive={isAlive} ctl={(c) => (cards = c)} />
+      </div>
+      <div data-pane="gems" hidden={sub() !== 'gems'}>
+        <GemsPane alive={isAlive} ctl={(c) => (gems = c)} />
       </div>
       <div data-pane="giftcode" hidden={sub() !== 'giftcode'}>
         <GiftCodePane alive={isAlive} ctl={(c) => (giftcodes = c)} />
@@ -654,6 +667,175 @@ function CardsPane(props: { alive: () => boolean; ctl: (c: CardsCtl) => void }) 
           </Match>
           <Match when={true}>
             <div class="state-msg">Không có thẻ phù hợp.</div>
+          </Match>
+        </Switch>
+      </div>
+      <Pager
+        info={pager()}
+        onPrev={() => {
+          f.page--;
+          void load();
+        }}
+        onNext={() => {
+          f.page++;
+          void load();
+        }}
+      />
+    </>
+  );
+}
+
+// ======================= Ngọc Ngũ Hành =======================
+
+/**
+ * Tab Ngọc (mục 6.8): mọi viên Ngọc đang sở hữu của mọi người chơi, lọc theo người chơi/loại/cấp.
+ * Bấm một viên để mở popup chi tiết — cùng khung modal với popup ngắm thẻ tướng, ruột là chỉ số
+ * của đúng cấp đang xem (cấu hình Ngọc lấy từ `/api/gems`, route này chỉ cần đăng nhập).
+ */
+function GemsPane(props: { alive: () => boolean; ctl: (c: PaneCtl) => void }) {
+  const pageSize = 60;
+  const f = { userId: '', element: '', level: '', sort: 'level_desc', page: 1 };
+  let loaded = false;
+  let usersReq: Promise<void> | null = null;
+  let configReq: Promise<void> | null = null;
+  let seq = 0; // bỏ kết quả của request cũ nếu bộ lọc đã đổi
+  let userSel!: HTMLSelectElement;
+  const [userOpts, setUserOpts] = createSignal<AdminUserDto[]>([]);
+  const [config, setConfig] = createSignal<GemConfigDto | null>(null);
+  const [grid, setGrid] = createSignal<Load>({ kind: 'loading' });
+  const [shown, setShown] = createSignal<AdminGemDto[]>([]);
+  const [summary, setSummary] = createSignal('');
+  const [pager, setPager] = createSignal<PagerInfo>(null);
+
+  function loadUsers(): Promise<void> {
+    usersReq ??= fetchUsers();
+    return usersReq;
+  }
+  async function fetchUsers() {
+    try {
+      const p = await api.admin.users({ status: 'approved', pageSize: 500 });
+      if (!props.alive()) return;
+      const cur = userSel.value || f.userId;
+      setUserOpts(p.items.slice().sort((a, c) => a.username.localeCompare(c.username)));
+      userSel.value = cur;
+    } catch {
+      usersReq = null;
+    }
+  }
+
+  /** Cấu hình Ngọc (bảng chỉ số theo cấp) — chỉ cần tải 1 lần để mở được popup chi tiết. */
+  function loadConfig(): Promise<void> {
+    configReq ??= fetchConfig();
+    return configReq;
+  }
+  async function fetchConfig() {
+    try {
+      const dto = await api.gems();
+      if (props.alive()) setConfig(dto.config);
+    } catch {
+      configReq = null;
+    }
+  }
+
+  async function load() {
+    loaded = true;
+    const my = ++seq;
+    setGrid({ kind: 'loading' });
+    try {
+      const p = await api.admin.gems({
+        userId: f.userId ? Number(f.userId) : undefined,
+        element: (f.element || undefined) as GemElement | undefined,
+        level: f.level ? Number(f.level) : undefined,
+        sort: f.sort,
+        page: f.page,
+        pageSize,
+      });
+      if (!props.alive() || my !== seq) return;
+      setShown(p.items);
+      const pages = Math.max(1, Math.ceil(p.total / pageSize));
+      setSummary(`${p.total.toLocaleString('vi-VN')} viên Ngọc`);
+      setPager({ page: f.page, pages });
+      setGrid({ kind: 'ready' });
+    } catch (e) {
+      if (props.alive() && my === seq) setGrid({ kind: 'error', text: (e as Error).message });
+    }
+  }
+
+  onCleanup(() => (seq = 0));
+  const onFilter = (key: 'userId' | 'element' | 'level' | 'sort', value: string) => {
+    f[key] = value;
+    f.page = 1;
+    void load();
+  };
+
+  props.ctl({
+    ensureLoaded() {
+      void loadUsers();
+      void loadConfig();
+      if (!loaded) void load();
+    },
+  });
+
+  return (
+    <>
+      <div class="filters">
+        <select data-f="userId" aria-label="Người chơi" ref={userSel} onInput={(e) => onFilter('userId', e.currentTarget.value)}>
+          <option value="">Mọi người chơi</option>
+          <For each={userOpts()}>
+            {(u) => (
+              <option value={u.id}>
+                {u.username} ({u.cardCount})
+              </option>
+            )}
+          </For>
+        </select>
+        <select data-f="element" aria-label="Loại Ngọc" onInput={(e) => onFilter('element', e.currentTarget.value)}>
+          <option value="">Mọi loại</option>
+          <For each={GEM_ELEMENTS}>{(x) => <option value={x}>{GEM_ELEMENT_LABELS[x]}</option>}</For>
+        </select>
+        <select data-f="level" aria-label="Cấp Ngọc" onInput={(e) => onFilter('level', e.currentTarget.value)}>
+          <option value="">Mọi cấp</option>
+          <For each={Array.from({ length: 10 }, (_, i) => i + 1)}>{(lv) => <option value={lv}>Cấp {lv}</option>}</For>
+        </select>
+        <select data-f="sort" aria-label="Sắp xếp" onInput={(e) => onFilter('sort', e.currentTarget.value)}>
+          <option value="level_desc" selected>
+            Cấp cao nhất
+          </option>
+          <option value="newest">Mới nhất</option>
+          <option value="owner">Theo người chơi</option>
+        </select>
+      </div>
+      <div class="adm-summary muted small">{summary()}</div>
+      <div class="adm-cards-grid">
+        <Switch>
+          <Match when={grid().kind === 'loading'}>
+            <div class="state-msg">Đang tải…</div>
+          </Match>
+          <Match when={grid().kind === 'error'}>
+            <div class="state-msg error">{(grid() as { text: string }).text}</div>
+          </Match>
+          <Match when={shown().length > 0}>
+            <div class="grid adm-grid">
+              <For each={shown()}>
+                {(g) => (
+                  <div class="grid-item">
+                    <button
+                      class="pick view"
+                      data-view={g.id}
+                      title="Xem Ngọc"
+                      disabled={!config()}
+                      onClick={() => openGemViewer({ element: g.element, config: config()!, owner: g.username, level: g.level })}
+                    >
+                      <GemCard element={g.element} level={g.level} extra="small" />
+                    </button>
+                    <div class="owner small">👤 {g.username}</div>
+                  </div>
+                )}
+              </For>
+            </div>
+          </Match>
+          <Match when={true}>
+            <div class="state-msg">Không có Ngọc phù hợp.</div>
           </Match>
         </Switch>
       </div>

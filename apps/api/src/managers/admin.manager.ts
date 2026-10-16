@@ -2,10 +2,12 @@ import {
   TICKET_TYPES,
   type AdminApproveDto,
   type AdminCardDto,
+  type AdminGemDto,
   type AdminGrantDto,
   type AdminUserDto,
   type AdminUsersPage,
   type Faction,
+  type GemElement,
   type Page,
   type TicketType,
   type UserStatus,
@@ -25,6 +27,7 @@ import {
 } from '../repositories/user.repository.ts';
 import { applyTicketDelta, readBalances } from '../repositories/ticket.repository.ts';
 import { listAllCards, type AdminCardsFilter } from '../repositories/card.repository.ts';
+import { listAllGems } from '../repositories/gem.repository.ts';
 import { findIdempotent, saveIdempotent } from '../repositories/idempotency.repository.ts';
 import { activateAccount } from './auth.manager.ts';
 
@@ -184,6 +187,42 @@ export function adminListCards(ctx: GameContext, query: AdminCardsQuery): Page<A
       userId: r.user_id,
       username: r.username,
       generalId: r.general_id,
+      level: r.level,
+      createdAt: r.created_at,
+    })),
+    page,
+    pageSize,
+    total,
+  };
+}
+
+export interface AdminGemsQuery {
+  userId?: number;
+  element?: GemElement;
+  level?: number;
+  sort?: 'newest' | 'level_desc' | 'level_asc' | 'owner';
+  page?: number;
+  pageSize?: number;
+}
+
+/** Mọi viên Ngọc đang active của mọi người chơi (chỉ đọc), có lọc và phân trang. */
+export function adminListGems(ctx: GameContext, query: AdminGemsQuery): Page<AdminGemDto> {
+  const page = query.page ?? 1;
+  const pageSize = query.pageSize ?? 60;
+  const { rows, total } = listAllGems(ctx.db, {
+    userId: query.userId,
+    element: query.element,
+    level: query.level,
+    sort: query.sort,
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+  });
+  return {
+    items: rows.map((r) => ({
+      id: r.id,
+      userId: r.user_id,
+      username: r.username,
+      element: r.element,
       level: r.level,
       createdAt: r.created_at,
     })),

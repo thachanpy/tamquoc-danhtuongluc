@@ -7,8 +7,11 @@ import {
   PVP_FRONT_HP_BPS,
   PVP_LANES,
   PVP_MAX_ROUNDS,
+  PVP_NO_GEM_STATS,
   PVP_PASSIVE_EFFECT,
+  PVP_TEAM_GEM_COUNT,
   PVP_TEAM_SIZE,
+  autoTeamGemElements,
   pvpBaseDamage,
   pvpBaseHp,
   pvpCleanseBps,
@@ -16,6 +19,7 @@ import {
   pvpDefBps,
   pvpDodgeBps,
   pvpHitBps,
+  pvpGemTeamStats,
   pvpLc,
   pvpPerLevelEffectBps,
   pvpPreBattleBonus,
@@ -27,23 +31,27 @@ import {
   ROSTER,
   type PvpRow,
 } from '@tq/game-config';
-import type {
-  Page,
-  PvpBattleDto,
-  PvpBattleSummaryDto,
-  PvpCombatDto,
-  PvpEventDto,
-  PvpFighterDto,
-  PvpOpponentDto,
-  PvpOutcome,
-  PvpOverviewDto,
-  PvpSide,
-  PvpSkill,
-  PvpStyle,
-  PvpTeamDto,
-  PvpUnitDto,
-  PvpUnitStateDto,
-  PvpWinner,
+import {
+  GEM_ELEMENTS,
+  type GemElement,
+  type Page,
+  type PvpBattleDto,
+  type PvpBattleSummaryDto,
+  type PvpCombatDto,
+  type PvpEventDto,
+  type PvpFighterDto,
+  type PvpGemStats,
+  type PvpOpponentDto,
+  type PvpOutcome,
+  type PvpOverviewDto,
+  type PvpSide,
+  type PvpSkill,
+  type PvpStyle,
+  type PvpTeamDto,
+  type PvpTeamGemDto,
+  type PvpUnitDto,
+  type PvpUnitStateDto,
+  type PvpWinner,
 } from '@tq/shared';
 import { AppError, type GameContext } from '../context.ts';
 import { iso } from '../utils.ts';
@@ -59,6 +67,7 @@ import {
   type PvpBattleRow,
   type PvpTeamRow,
 } from '../repositories/pvp.repository.ts';
+import { listActiveGems, listTeamGemElements, replaceTeamGems } from '../repositories/gem.repository.ts';
 import { tx } from '../db.ts';
 import { simulatePvp, type PvpSideInput } from './pvp.engine.ts';
 
@@ -70,32 +79,52 @@ import { simulatePvp, type PvpSideInput } from './pvp.engine.ts';
  */
 
 /** Tổng Lực chiến (LC) của một đội hình: cộng LC từng tướng ở cấp đang xét (mục 6.6/6.7). */
-const teamLc = (units: PvpUnitDto[]) => pvpTeamLc(units);
+const teamLc = (units: PvpUnitDto[], gem: PvpGemStats) => pvpTeamLc(units, gem);
 
 const ROSTER_IDS = new Set(ROSTER.map((g) => g.id));
 
-/** Đội hình đang lưu của người chơi (chưa xác thực lại quyền sở hữu). */
-function readSaved(db: GameContext['db'], userId: number): PvpUnitDto[] {
-  return (listTeam(db, userId) as PvpTeamRow[]).map((r) => ({
-    slot: r.slot,
-    generalId: r.general_id,
-    level: r.level,
-    lc: pvpUnitLc(r.general_id, r.level),
-  }));
+/** Ngọc đang sở hữu của người chơi dạng (loại, cấp) — để giải cấp cao nhất cho mỗi loại gắn vào đội. */
+const ownedGemPairs = (ctx: GameContext, userId: number) =>
+  listActiveGems(ctx.db, userId).map((g) => ({ element: g.element, level: g.level }));
+
+/**
+ * Giải danh sách LOẠI Ngọc đã gắn thành các viên cụ thể: mỗi loại lấy viên CẤP CAO NHẤT đang sở hữu
+ * (loại không còn viên nào thì bỏ). Thứ tự hiển thị theo bảng Ngũ Hành (Kim → Mộc → Thủy → Hỏa → Thổ).
+ */
+export function resolveTeamGems(elements: GemElement[], owned: { element: GemElement; level: number }[]): PvpTeamGemDto[] {
+  const best = new Map<GemElement, number>();
+  for (const g of owned) best.set(g.element, Math.max(best.get(g.element) ?? 0, g.level));
+  return GEM_ELEMENTS.filter((e) => elements.includes(e)).flatMap((e) => {
+    const level = best.get(e);
+    return level ? [{ element: e, level }] : [];
+  });
+}
+
+/** Đội hình + LOẠI Ngọc đang lưu của người chơi (chưa xác thực lại quyền sở hữu). */
+function readSaved(ctx: GameContext, userId: number): { units: PvpUnitDto[]; gemElements: GemElement[] } {
+  return {
+    units: (listTeam(ctx.db, userId) as PvpTeamRow[]).map((r) => ({
+      slot: r.slot,
+      generalId: r.general_id,
+      level: r.level,
+      lc: pvpUnitLc(r.general_id, r.level),
+    })),
+    gemElements: listTeamGemElements(ctx.db, userId),
+  };
 }
 
 /**
  * Đội hình tự động: lấy tướng mạnh nhất của mỗi tướng (level cao nhất đang sở hữu),
  * sắp theo Lực chiến (LC) giảm dần rồi xếp vào slot 1–6. Mỗi tướng chỉ xuất hiện một lần.
  */
-function autoTeam(ctx: GameContext, userId: number): PvpUnitDto[] {
+function autoTeam(ctx: GameContext, userId: number, gem: PvpGemStats): PvpUnitDto[] {
   const best = new Map<string, number>();
   for (const p of listOwnedPairs(ctx.db, userId)) {
     const cur = best.get(p.general_id);
     if (cur === undefined || p.level > cur) best.set(p.general_id, p.level);
   }
   return [...best.entries()]
-    .map(([generalId, level]) => ({ generalId, level, lc: pvpUnitLc(generalId, level) }))
+    .map(([generalId, level]) => ({ generalId, level, lc: pvpUnitLc(generalId, level, gem) }))
     .sort((a, b) => b.lc - a.lc || b.level - a.level || a.generalId.localeCompare(b.generalId))
     .slice(0, PVP_TEAM_SIZE)
     .map((u, i) => ({ slot: i + 1, generalId: u.generalId, level: u.level, lc: u.lc }));
@@ -103,16 +132,27 @@ function autoTeam(ctx: GameContext, userId: number): PvpUnitDto[] {
 
 /**
  * Đội hình dùng khi ra trận: đội đã lưu (đã lọc slot không còn sở hữu) hoặc đội tự động.
- * saved = true khi đội đã lưu còn hiệu lực.
+ * Ngọc gắn kèm: đội đã lưu dùng LOẠI đã chọn, đội tự động tự chọn loại có viên cấp cao nhất;
+ * cấp mỗi loại luôn lấy viên cao nhất đang sở hữu. saved = true khi đội đã lưu còn hiệu lực.
  */
-function effectiveTeam(ctx: GameContext, userId: number): { units: PvpUnitDto[]; saved: boolean } {
-  const saved = readSaved(ctx.db, userId);
-  if (saved.length) {
-    const owned = new Set(listOwnedPairs(ctx.db, userId).map((p) => `${p.general_id}|${p.level}`));
-    const valid = saved.filter((u) => owned.has(`${u.generalId}|${u.level}`));
-    if (valid.length) return { units: valid, saved: true };
+function effectiveTeam(
+  ctx: GameContext,
+  userId: number,
+): { units: PvpUnitDto[]; gems: PvpTeamGemDto[]; gem: PvpGemStats; saved: boolean } {
+  const owned = ownedGemPairs(ctx, userId);
+  const saved = readSaved(ctx, userId);
+  if (saved.units.length) {
+    const has = new Set(listOwnedPairs(ctx.db, userId).map((p) => `${p.general_id}|${p.level}`));
+    const valid = saved.units.filter((u) => has.has(`${u.generalId}|${u.level}`));
+    if (valid.length) {
+      const gems = resolveTeamGems(saved.gemElements, owned);
+      const gem = pvpGemTeamStats(gems);
+      return { units: valid.map((u) => ({ ...u, lc: pvpUnitLc(u.generalId, u.level, gem) })), gems, gem, saved: true };
+    }
   }
-  return { units: autoTeam(ctx, userId), saved: false };
+  const gems = resolveTeamGems(autoTeamGemElements(owned), owned);
+  const gem = pvpGemTeamStats(gems);
+  return { units: autoTeam(ctx, userId, gem), gems, gem, saved: false };
 }
 
 const toFighter = (u: UserRow): PvpFighterDto => ({
@@ -174,11 +214,11 @@ function ownedCombatOf(ctx: GameContext, userId: number): Record<string, PvpComb
 export function getOverview(ctx: GameContext, userId: number): PvpOverviewDto {
   const user = findUserRow(ctx.db, userId);
   if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'Không tìm thấy người chơi.');
-  const { units, saved } = effectiveTeam(ctx, userId);
+  const { units, gems, gem, saved } = effectiveTeam(ctx, userId);
   const record = getRecord(ctx.db, userId);
   return {
     me: toFighter(user),
-    team: { units, lc: teamLc(units) },
+    team: { units, gems, lc: teamLc(units, gem) },
     saved,
     wins: record.wins,
     losses: record.losses,
@@ -186,6 +226,14 @@ export function getOverview(ctx: GameContext, userId: number): PvpOverviewDto {
     maxRounds: PVP_MAX_ROUNDS,
     ownedCombat: ownedCombatOf(ctx, userId),
   };
+}
+
+/**
+ * Chỉ số Ngọc cộng toàn đội của người chơi theo danh sách LOẠI đã gắn — dùng cho màn chuẩn bị khiêu chiến
+ * (`/api/pvp/generals/:id/combat?gems=...`) để Chỉ số Nền Ra Trận hiển thị khớp khi vào trận.
+ */
+export function ownedGemStats(ctx: GameContext, userId: number, elements: GemElement[]): PvpGemStats {
+  return pvpGemTeamStats(resolveTeamGems(elements, ownedGemPairs(ctx, userId)));
 }
 
 /** Phong cách chiến đấu của mọi tướng trong roster (ổn định theo id) — client hiện nhãn trên mọi thẻ tướng. */
@@ -205,7 +253,7 @@ export const rosterSkillNames = (): Record<string, string> => ROSTER_SKILL_NAMES
  * Khi truyền `squad` (danh sách generalId trong đội, theo ĐÚNG thứ tự vị trí), trả thêm Chỉ số Nền Ra Trận
  * (mục 1): vị trí đội hình + aura Hỗ trợ + Cổng Đồng Phe cộng vào cọc Máu/Sát thương — màn chuẩn bị khiêu chiến.
  */
-export function getCombatStats(generalId: string, level: number, squad?: string[]): PvpCombatDto {
+export function getCombatStats(generalId: string, level: number, squad?: string[], gem: PvpGemStats = PVP_NO_GEM_STATS): PvpCombatDto {
   if (!ROSTER_IDS.has(generalId)) throw new AppError(404, 'GENERAL_NOT_FOUND', 'Không tìm thấy tướng.');
   const profile = pvpProfile(generalId);
   // Hệ số kỹ năng TẠI CẤP hiện tại: mọi hiệu ứng (buff/hồi/debuff/…) đã quy theo cấp — khớp engine.
@@ -228,7 +276,7 @@ export function getCombatStats(generalId: string, level: number, squad?: string[
   // Hỗ trợ là aura +2% HP & +2% ST — ở đây tính 1 lớp của chính tướng; khi vào trận cộng dồn theo đội.
   const styleBonus = pvpStyleBonus(profile.style, profile.style === 'support' ? 1 : 0);
   // Chỉ số Nền Ra Trận (mục 1): chỉ tính khi biết đội — đếm số lớp aura Hỗ trợ và số tướng CÙNG PHE.
-  const preBattle = squad?.length ? buildPreBattle(generalId, squad, profile.style, baseHp, baseDamage, hpBps, damageBps) : null;
+  const preBattle = squad?.length ? buildPreBattle(generalId, squad, profile.style, baseHp, baseDamage, hpBps, damageBps, gem) : null;
   return {
     generalId,
     level,
@@ -305,6 +353,7 @@ function buildPreBattle(
   baseDamage: number,
   passiveHpBps: number,
   passiveDamageBps: number,
+  gem: PvpGemStats,
 ): NonNullable<PvpCombatDto['preBattle']> {
   const faction = GENERALS_BY_ID.get(generalId)?.faction ?? '';
   // Cổng Đồng Phe chỉ buff tướng CÙNG PHE: đếm số tướng trong đội có cùng faction với tướng này.
@@ -315,17 +364,32 @@ function buildPreBattle(
   const slot = squad.indexOf(generalId);
   const row: PvpRow = slot >= PVP_LANES ? 'back' : 'front';
   const bonus = pvpPreBattleBonus(style, supportLayers, factionCount, row);
-  const hpBps = passiveHpBps + bonus.hpBps;
-  const damageBps = passiveDamageBps + bonus.damageBps;
+  const hpBps = passiveHpBps + bonus.hpBps + gem.hpBps;
+  const damageBps = passiveDamageBps + bonus.damageBps + gem.damageBps;
   return {
     maxHp: Math.round(baseHp * (1 + hpBps / BPS_SCALE)),
     damage: Math.round(baseDamage * (1 + damageBps / BPS_SCALE)),
-    bonus: { factionCount, supportLayers, ...bonus },
+    // `hpBps`/`damageBps` trong bonus là TỔNG (vị trí + phong cách + cổng đồng phe + Ngọc) — khớp mô tả DTO.
+    bonus: { factionCount, supportLayers, ...bonus, gem, hpBps: bonus.hpBps + gem.hpBps, damageBps: bonus.damageBps + gem.damageBps },
   };
 }
 
+/**
+ * Chuẩn hoá danh sách LOẠI Ngọc gắn vào đội: bỏ trùng, giữ thứ tự Ngũ Hành, tối đa `PVP_TEAM_GEM_COUNT` loại.
+ * Loại không còn viên nào đang sở hữu (do đã ghép tiêu hao) bị bỏ qua — đội vẫn lưu bình thường.
+ */
+function normalizeGemElements(elements: GemElement[], owned: { element: GemElement; level: number }[]): GemElement[] {
+  for (const e of elements) if (!GEM_ELEMENTS.includes(e)) throw new AppError(400, 'INVALID_GEM', 'Ngọc không hợp lệ.');
+  const has = new Set(owned.map((g) => g.element));
+  const unique = GEM_ELEMENTS.filter((e) => elements.includes(e) && has.has(e));
+  if (unique.length > PVP_TEAM_GEM_COUNT) {
+    throw new AppError(400, 'TOO_MANY_GEMS', `Đội hình chỉ được gắn tối đa ${PVP_TEAM_GEM_COUNT} Ngọc khác loại.`);
+  }
+  return unique;
+}
+
 /** Lưu đội hình: mỗi slot một tướng, không trùng tướng, và phải đang sở hữu đúng cấp đó. */
-export function saveTeam(ctx: GameContext, userId: number, units: PvpUnitDto[]): PvpTeamDto {
+export function saveTeam(ctx: GameContext, userId: number, units: PvpUnitDto[], gemElements: GemElement[] = []): PvpTeamDto {
   if (units.length > PVP_TEAM_SIZE) {
     throw new AppError(400, 'TEAM_TOO_LARGE', `Đội hình tối đa ${PVP_TEAM_SIZE} tướng.`);
   }
@@ -345,24 +409,30 @@ export function saveTeam(ctx: GameContext, userId: number, units: PvpUnitDto[]):
       throw new AppError(400, 'CARD_NOT_OWNED', 'Bạn không sở hữu thẻ tướng ở cấp này.');
     }
   }
-  tx(ctx.db, () =>
+  const pairs = ownedGemPairs(ctx, userId);
+  const elements = normalizeGemElements(gemElements, pairs);
+  const now = iso(ctx.now());
+  tx(ctx.db, () => {
     replaceTeam(
       ctx.db,
       userId,
       units.map((u) => ({ slot: u.slot, general_id: u.generalId, level: u.level })),
-      iso(ctx.now()),
-    ),
-  );
+      now,
+    );
+    replaceTeamGems(ctx.db, userId, elements, now);
+  });
+  const gems = resolveTeamGems(elements, pairs);
+  const gem = pvpGemTeamStats(gems);
   const sorted = [...units]
     .sort((a, b) => a.slot - b.slot)
-    .map((u) => ({ ...u, lc: pvpUnitLc(u.generalId, u.level) }));
-  return { units: sorted, lc: teamLc(sorted) };
+    .map((u) => ({ ...u, lc: pvpUnitLc(u.generalId, u.level, gem) }));
+  return { units: sorted, gems, lc: teamLc(sorted, gem) };
 }
 
 export function getOpponent(ctx: GameContext, userId: number, opponentId: number): PvpOpponentDto {
   const opponent = requireOpponent(ctx, userId, opponentId);
-  const { units, saved } = effectiveTeam(ctx, opponentId);
-  return { opponent: toFighter(opponent), team: { units, lc: teamLc(units) }, saved };
+  const { units, gems, gem, saved } = effectiveTeam(ctx, opponentId);
+  return { opponent: toFighter(opponent), team: { units, gems, lc: teamLc(units, gem) }, saved };
 }
 
 /** Kiểm tra đối thủ hợp lệ: tồn tại, đã duyệt, không phải admin, không phải chính mình. */
@@ -387,13 +457,13 @@ export function challenge(ctx: GameContext, userId: number, opponentId: number):
   if (!theirs.units.length) throw new AppError(400, 'OPPONENT_NO_TEAM', 'Đối thủ chưa có tướng nào.');
 
   const sides: PvpSideInput[] = [
-    { side: 'a', units: mine.units },
-    { side: 'b', units: theirs.units },
+    { side: 'a', units: mine.units, gems: mine.gems },
+    { side: 'b', units: theirs.units, gems: theirs.gems },
   ];
   const sim = simulatePvp(sides, ctx.rand);
 
-  const myLc = teamLc(mine.units);
-  const oppLc = teamLc(theirs.units);
+  const myLc = teamLc(mine.units, mine.gem);
+  const oppLc = teamLc(theirs.units, theirs.gem);
   const stored: StoredBattle = { units: sim.units, events: sim.events };
   const now = iso(ctx.now());
   const id = tx(ctx.db, () =>

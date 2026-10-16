@@ -37,6 +37,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
   - **Phòng thủ** = `ST × %Phòng thủ`.
   - `LC = round((Sinh tồn + Sát thương + Phòng thủ) × hệ số phong cách)`.
 - **KHÔNG tính Chỉ số Nền Ra Trận** (vị trí · cổng đồng phe · aura Hỗ trợ): LC của tướng **không đổi** dù xếp ở ô nào, nên con số hiện ở **bảng chọn tướng / ô đội hình / bảng Tổng kết / sân đấu** luôn khớp nhau và khớp với con số dùng trong trận.
+- **CÓ tính Ngọc Ngũ Hành** đã gắn cho đội (aura toàn đội, xem mục *Ngọc Ngũ Hành*): LC đội đã lưu / đội tự động / bảng xếp hạng đều cộng chỉ số Ngọc, nên gắn Ngọc làm LC tăng.
 - **LC tăng mạnh theo cấp** (cấp 10 ≈ 8,7 lần cấp 1): tướng cấp cao thường đi trước; cùng cấp thì thứ tự LC là **Tấn công > Hỗ trợ > Phòng thủ**, và khác nhau theo nội tại (`+10% ST` > `+10% HP` > `+5% Phòng thủ` > `+5% Chí mạng`).
 - **Tổng LC của đội** = tổng LC 6 tướng. **Hiển thị**: chip `LC` nằm chung hàng chip định danh **cấp độ → phe → phong cách → LC** ở ô đội hình, dòng chọn tướng và bảng Tổng kết; trên sân đấu là chip thứ 4 trong cột chip góc trên-trái; trong **modal chi tiết tướng**, LC nằm **cùng hàng với cấp độ** (`Phe · Lv.n · LC`).
 
@@ -59,10 +60,15 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 | 6 | +10% | +8% |
 
 - **Thứ tự hành động**: Hai đội **luân phiên nhau theo vị trí**. Vào trận, bên có **tổng LC cả đội cao hơn** ra đòn trước ở **vị trí 1**, rồi tới **vị trí 1 của bên kia**, **vị trí 2 của bên đi trước**, **vị trí 2 của bên kia**… cứ thế tới vị trí 6 (bằng tổng LC thì bên khiêu chiến A đi trước).
-- **Phạm vi nhắm mục tiêu (Targeting)**: 6 ô gồm **2 hàng dọc** (hàng dọc trước `1-2-3` và hàng dọc sau `4-5-6`) × **3 hàng ngang** (cặp `1-4`, `2-5`, `3-6`).
-  - `front_row` (Hàng dọc trước): Đánh cả 3 tướng ô `1-2-3` của địch. Nếu hàng dọc trước đã ngã hết thì tự động chuyển sang đánh hàng dọc sau `4-5-6`.
-  - `back_row` (Hàng dọc sau): Đánh cả 3 tướng ô `4-5-6` của địch. Nếu hàng dọc sau đã ngã hết thì chuyển sang đánh hàng dọc trước.
-  - `lane` (Hàng ngang): Đánh **cặp ô trước-sau cùng hàng nhìn** (`1-4` / `2-5` / `3-6`). **Luôn ưu tiên đánh hàng trước**: quét các hàng ngang theo **thứ tự gần hàng của mình nhất** — ô `1` → `1 2 3`, ô `2` → `2 1 3`, ô `3` → `3 2 1` (cùng khoảng cách thì chọn hàng nhỏ hơn) — và chọn **hàng ngang đầu tiên còn tướng ở hàng trước**. Vì vậy tướng ô `1` khi ô `1` địch đã chết/trống sẽ đánh **ô `2` + ô `5`**, **không** đánh trơ trọi cột sau (ô `4`). Khi **hàng trước địch đã sạch** mới đánh hàng sau: hàng ngang của mình, nếu hàng đó cũng trống thì chuyển sang **hàng ngang có đông quân địch còn sống nhất** (hòa thì chọn hàng ngang nhỏ hơn cho tất định).
+- **Phạm vi nhắm mục tiêu (Targeting)**: 6 ô gồm **Hàng Trước** `1-2-3` và **Hàng Sau** `4-5-6`; cặp ô **Hàng Ngang** là `1-4`, `2-5`, `3-6` (tức `X` và `X+3`).
+  - **Nguyên tắc chung**: mọi đòn đánh địch **luôn ưu tiên tuyệt đối Hàng Trước** `1-2-3` trước Hàng Sau `4-5-6` (trừ kỹ năng ghi rõ đánh Hàng Sau); và **luôn trả về ít nhất 1 mục tiêu còn sống** chừng nào địch còn tướng.
+  - `single` (**Đơn mục tiêu Hàng Trước**): lấy tướng còn sống **đầu tiên** trong danh sách ưu tiên theo ô của người đánh — ô `1`/`4` → `1 2 3 4 5 6`; ô `2`/`5` → `2 1 3 5 4 6`; ô `3`/`6` → `3 2 1 6 5 4` (cột của mình trước, rồi loang dần ra hai bên; cùng khoảng cách thì chọn cột nhỏ hơn).
+  - `back_single` (**Đơn mục tiêu Hàng Sau**): như trên nhưng Hàng Sau xét trước — ô `1`/`4` → `4 5 6 1 2 3`; ô `2`/`5` → `5 4 6 2 1 3`; ô `3`/`6` → `6 5 4 3 2 1`.
+  - `lane` (**Hàng Ngang** — cặp 2 tướng theo đường ngang): tìm tướng **Hàng Trước đầu tiên còn sống** `X` theo ưu tiên ô `1`/`4` → `1 2 3`, ô `2`/`5` → `2 1 3`, ô `3`/`6` → `3 2 1`; trả về **cặp `[X, X+3]`** (chỉ các ô còn sống). Nếu cả `1-2-3` đã gục thì đánh **tướng Hàng Sau đầu tiên còn sống** theo ưu tiên `4 5 6` (ô `1`/`4`), `5 4 6` (ô `2`/`5`), `6 5 4` (ô `3`/`6`).
+  - `front_enemies` (**Hàng Dọc Trước**): lấy cả `1-2-3`; nếu `1-2-3` đã sạch thì lấy cả `4-5-6`.
+  - `back_row` (**Hàng Dọc Sau**): lấy cả `4-5-6`; nếu `4-5-6` đã sạch thì lấy cả `1-2-3`.
+  - `all_enemies` (**Đánh tất cả**): lấy toàn bộ tướng còn sống `1-6`.
+  - Riêng `highest_damage_enemy`: nhắm tướng địch có **Sát thương hiệu dụng cao nhất** (không theo thứ tự hàng); bằng nhau thì chọn ô nhỏ hơn cho tất định.
 
 ### Nội tại tướng
 
@@ -81,6 +87,22 @@ Tướng được gán theo **hướng kỹ năng** (thiên phòng thủ/hồi s
 - **+10% sát thương (`DAMAGE_10`)** — *Ngụy*: Tào Tháo, Tào Phi, Trương Cáp, Từ Hoảng, Quách Gia, Tuân Úc, Tuân Du, Giả Hủ, Tào Hoa, Tào Tiết, Tào Thực, Đặng Ngãi, Trần Quần · *Thục*: Lưu Bị, Gia Cát Lượng, Bàng Thống, Pháp Chính, Từ Thứ, Hoàng Nguyệt Anh, Mã Đại, Quan Ngân Bình, Đặng Chi, Mã Lương · *Ngô*: Tôn Quyền, Đinh Phụng, Trương Hoành, Lỗ Túc, Tiểu Kiều, Gia Cát Cẩn, Tôn Phấn · *Quần hùng*: Điêu Thuyền, Viên Thiệu, Trương Giác, Trương Bảo, Mã Đằng.
 - **+10% HP tối đa (`HP_10`)** — *Ngụy*: Chân Cơ, Biện Ngọc Nhi, Tân Hiến Anh · *Thục*: Giản Ung, Mi Trúc, Mi Trinh, Gia Cát Quả, Phí Y, Gia Cát Chiêm · *Ngô*: Trương Chiêu, Đại Kiều, Bộ Luyện Sư, Tôn Lỗ Dục, Cố Ung, Lục Kháng · *Quần hùng*: Trần Cung, Mạnh Hoạch, Hàn Toại, Đào Khiêm, Trương Lỗ, Thái Văn Cơ, Trâu Ngọc, Chúc Dung, Đổng Bạch, Trương Xuân Hoa, Lý Thôi, Quách Dĩ, Cát Huyền, Thẩm Phối, Hứa Du, Tả Từ, Thủy Kính, Hoa Đà, Kỷ Linh, Nghiêm Bạch Hổ.
 - **+5% phòng thủ (`DEF_5`)** — *Ngụy*: Tào Nhân, Tào Hồng, Tào Chân, Hạ Hầu Đôn, Vu Cấm, Điển Vi, Hứa Chử, Bàng Đức, Tào Chương, Mãn Sủng, Vương Tường, Quách Hoài · *Thục*: Trương Phi, Triệu Vân, Vương Bình, Liêu Hóa, Ngô Ý, Trương Tinh Thái, Tưởng Uyển, La Hiến, Trương Dực · *Ngô*: Tôn Kiên, Tôn Sách, Lữ Mông, Hoàng Cái, Trình Phổ, Chu Thái, Từ Thịnh, Chu Hoàn, Toàn Tông, Lữ Đại, Đặng Đương · *Quần hùng*: Đổng Trác, Cao Thuận, Nhan Lương.
+
+### Ngọc Ngũ Hành (Gem)
+
+> Ngọc là **vật phẩm rời** theo (loại, cấp 1→10), **rớt kèm khi quay Tướng**. Một đội hình gắn tối đa **5 loại KHÁC NHAU** (không trùng loại — cả 5 loại Ngũ Hành); hệ thống tự lấy viên **cấp cao nhất đang sở hữu** của mỗi loại. Chỉ số Ngọc là **Aura gốc cho TOÀN ĐỘI** khi vào trận — giống Chỉ số Nền Ra Trận: **không chiếm trần `maxLayers`, không thể bị Xóa Buff**. Ngọc **được tính vào LC** (ô đội hình, đội đã lưu, bảng xếp hạng).
+
+| Loại | Chỉ số 1 (cấp 1 → cấp 10) | Chỉ số 2 (cấp 1 → cấp 10) |
+| :--- | :--- | :--- |
+| **Kim** | +5% → +25% Sát thương | −5% → −25% Sát thương gánh chịu |
+| **Mộc** | +5% → +25% HP tối đa | +2% → +12% Hút máu |
+| **Thủy** | +10% → +30% Chính xác | +5% → +25% Né tránh |
+| **Hỏa** | +5% → +25% Chí mạng | +10% → +40% ST chí mạng |
+| **Thổ** | +5% → +25% Phòng thủ | +5% → +25% Xuyên giáp |
+
+- **Tăng theo cấp**: mỗi cấp +2 điểm % cho hầu hết chỉ số, riêng cấp 10 nhảy +4 điểm % (bảng đầy đủ ở `GEM_TABLE`, `packages/game-config/src/gems.ts`).
+- **Ghép 2→1**: 2 viên **cùng loại & cùng cấp** ghép thành 1 viên **cấp +1**, dùng **chung công thức / tỷ lệ / tài nguyên** với ghép thẻ Tướng (mục 5 — CLAUDE.md). Cấp 10 là trần, không ghép được nữa.
+- **Rớt kèm khi quay**: mỗi Tướng quay ra có **5%** (`PVP_GEM_DROP_BPS`) rớt kèm 1 Ngọc **cùng cấp** với thẻ đó; khi trúng chọn đều **20%/loại** (`PVP_GEM_TYPE_WEIGHT_BPS`).
 
 ### Danh mục 19 Hiệu ứng được phép sử dụng
 

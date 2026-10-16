@@ -2,6 +2,7 @@ import type { Faction, PvpBuffScope, PvpPassive, PvpSkill, PvpStyle, PvpTargetin
 import { FACTIONS, PVP_PASSIVES, PVP_SKILLS, PVP_STYLES, PVP_TEAM_SIZE, MAX_LEVEL } from '@tq/shared';
 import { BPS_SCALE } from './rates.ts';
 import { ROSTER } from './roster.ts';
+import type { PvpGemStats } from './gems.ts';
 
 /**
  * Cấu hình chiến đấu PvP theo SKILLS.md. Toàn bộ hệ số ở đây là dữ liệu cân bằng:
@@ -504,14 +505,14 @@ export const PVP_BACK_DAMAGE_BPS = 500;
 export const PVP_HIT_BPS_MIN = 8000;
 /** Chính xác tại cấp MAX_LEVEL (chốt): 100%. Xem `pvpHitBps`. */
 export const PVP_HIT_BPS = 10000;
-/** Trần Chính xác: 150%. */
-export const PVP_HIT_MAX_BPS = 15000;
+/** Trần Chính xác: 200%. */
+export const PVP_HIT_MAX_BPS = 20000;
 /** Né tránh tại cấp 1: 2%. */
 export const PVP_DODGE_BPS_MIN = 200;
 /** Né tránh tại cấp MAX_LEVEL (chốt): 20%. Xem `pvpDodgeBps`. */
 export const PVP_DODGE_BPS = 2000;
-/** Trần Né tránh: 50%. */
-export const PVP_DODGE_MAX_BPS = 5000;
+/** Trần Né tránh: 75%. */
+export const PVP_DODGE_MAX_BPS = 7500;
 /**
  * Trần tỉ lệ TRÚNG thực tế: 99% — luôn chừa lại tối thiểu 1% Né/Trượt làm yếu tố may mắn.
  * Công thức chia trọng số nhân sẵn hệ số này nên kết quả không bao giờ vượt 99%.
@@ -682,29 +683,33 @@ export const PVP_LC_STYLE_MUL_BPS: Record<PvpStyle, number> = { attack: 10000, s
  * KHÔNG tính Chỉ số Nền Ra Trận (vị trí · cổng đồng phe · aura Hỗ trợ) để con số hiện ở bảng chọn
  * tướng / ô đội hình luôn khớp con số dùng trong trận (LC không phụ thuộc tướng xếp ở ô nào).
  */
-export function pvpLc(style: PvpStyle, level: number, passive: PvpPassive): number {
+export function pvpLc(style: PvpStyle, level: number, passive: PvpPassive, gem?: PvpGemStats): number {
   const e = PVP_PASSIVE_EFFECT[passive];
-  const hp = pvpBaseHp(level) * (1 + (e.stat === 'maxHp' ? e.bps : 0) / BPS_SCALE);
-  const damage = pvpBaseDamage(level) * (1 + (e.stat === 'damage' ? e.bps : 0) / BPS_SCALE);
-  const critBps = pvpPerLevelEffectBps(PVP_CRIT_BPS_PER_LEVEL, level) + (e.stat === 'crit' ? e.pointsBps : 0);
-  const defBps = pvpDefBps(level) + (e.stat === 'def' ? e.pointsBps : 0);
-  const expectedDamage = damage * (1 + (critBps / BPS_SCALE) * (pvpCritDamageBps(level) / BPS_SCALE));
+  const hp = pvpBaseHp(level) * (1 + ((e.stat === 'maxHp' ? e.bps : 0) + (gem?.hpBps ?? 0)) / BPS_SCALE);
+  const damage = pvpBaseDamage(level) * (1 + ((e.stat === 'damage' ? e.bps : 0) + (gem?.damageBps ?? 0)) / BPS_SCALE);
+  const critBps =
+    pvpPerLevelEffectBps(PVP_CRIT_BPS_PER_LEVEL, level) + (e.stat === 'crit' ? e.pointsBps : 0) + (gem?.critBps ?? 0);
+  const critDamageBps = pvpCritDamageBps(level) + (gem?.critDamageBps ?? 0);
+  const defBps = pvpDefBps(level) + (e.stat === 'def' ? e.pointsBps : 0) + (gem?.defBps ?? 0);
+  const expectedDamage = damage * (1 + (critBps / BPS_SCALE) * (critDamageBps / BPS_SCALE));
   const defense = damage * (defBps / BPS_SCALE);
   return Math.round(((hp / 10 + expectedDamage + defense) * PVP_LC_STYLE_MUL_BPS[style]) / BPS_SCALE);
 }
 
 /** LC của MỘT tướng theo (id, cấp) — tiện cho nơi chỉ có cặp dữ liệu này (đội hình, bảng xếp hạng). */
-export function pvpUnitLc(generalId: string, level: number): number {
+export function pvpUnitLc(generalId: string, level: number, gem?: PvpGemStats): number {
   const p = pvpProfile(generalId);
-  return pvpLc(p.style, level, p.passive);
+  return pvpLc(p.style, level, p.passive, gem);
 }
 
 /**
  * Tổng Lực chiến (LC) của một ĐỘI HÌNH = cộng LC từng tướng ở cấp đang xét (mục 6.6, 6.7).
- * Dùng chung cho Bảng xếp hạng và mọi chỗ hiển thị "Lực chiến" của đội; KHÔNG tính Chỉ số Nền Ra Trận.
+ * Dùng chung cho Bảng xếp hạng và mọi chỗ hiển thị "Lực chiến" của đội.
+ * `gem` (nếu có) = chỉ số Ngọc Ngũ Hành cộng cho toàn đội — tính vào LC để con số khớp khi vào trận.
+ * KHÔNG tính Chỉ số Nền Ra Trận theo vị trí/aura Hỗ trợ/Cổng Đồng Phe (không phụ thuộc tướng xếp ô nào).
  */
-export function pvpTeamLc(units: readonly { generalId: string; level: number }[]): number {
-  return units.reduce((sum, u) => sum + pvpUnitLc(u.generalId, u.level), 0);
+export function pvpTeamLc(units: readonly { generalId: string; level: number }[], gem?: PvpGemStats): number {
+  return units.reduce((sum, u) => sum + pvpUnitLc(u.generalId, u.level, gem), 0);
 }
 
 // ===== Hút máu (SKILLS.md mục 1.13) =====

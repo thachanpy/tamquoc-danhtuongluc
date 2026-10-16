@@ -7,6 +7,7 @@ export * from './roster.ts';
 export * from './rates.ts';
 export * from './quests.ts';
 export * from './pvp.ts';
+export * from './gems.ts';
 export { validateGameConfig } from './validate.ts';
 
 /** Nguồn số ngẫu nhiên: trả về số nguyên trong [0, max). Backend dùng crypto.randomInt. */

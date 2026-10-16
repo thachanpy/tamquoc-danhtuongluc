@@ -4,6 +4,7 @@ import { openDatabase } from '../src/db.ts';
 import { createContext } from '../src/context.ts';
 import { buildServer } from '../src/server.ts';
 import { setRequireApproval } from '../src/managers/settings.manager.ts';
+import { insertGem } from '../src/repositories/gem.repository.ts';
 import { DAILY_RESET_BONUS } from '@tq/game-config';
 
 /** Thưởng reset 05:00 (mục 3.10) được cộng ở request đầu tiên trong ngày của mỗi người chơi. */
@@ -22,7 +23,7 @@ async function setup(devTopup: boolean, requireApproval = true, gift = true) {
   setRequireApproval(ctx, requireApproval);
   const adminAuth = { authorization: `Bearer ${boss.json().token as string}` };
   const auth = { authorization: `Bearer ${reg.json().token as string}` };
-  return { app, auth, adminAuth };
+  return { app, auth, adminAuth, ctx };
 }
 
 type App = Awaited<ReturnType<typeof setup>>['app'];
@@ -321,6 +322,39 @@ test('HTTP: admin xem thẻ của mọi người chơi, lọc theo người chơ
   const pc = (users.items as { username: string; cardCount: number; ticketTotal: number }[]).find((u) => u.username === 'player_c')!;
   assert.equal(pc.cardCount, 10);
   assert.equal(pc.ticketTotal, 90 + RESET);
+  await app.close();
+});
+
+test('HTTP: admin xem Ngọc của mọi người chơi, lọc theo người chơi/loại/cấp; chặn người thường', async () => {
+  const { app, ctx, auth, adminAuth } = await setup(false);
+  const pAuth = await regApproved(app, adminAuth, 'player_gm');
+  const tId = (await app.inject({ method: 'GET', url: '/api/me', headers: auth })).json().id as number;
+  const pId = (await app.inject({ method: 'GET', url: '/api/me', headers: pAuth })).json().id as number;
+  const at = new Date().toISOString();
+  // Chèn Ngọc trực tiếp để kiểm thử tất định (không phụ thuộc tỉ lệ rớt khi quay).
+  insertGem(ctx.db, tId, 'kim', 3, at);
+  insertGem(ctx.db, tId, 'kim', 5, at);
+  insertGem(ctx.db, tId, 'moc', 2, at);
+  insertGem(ctx.db, pId, 'hoa', 7, at);
+  insertGem(ctx.db, pId, 'tho', 1, at);
+
+  const all = (await app.inject({ method: 'GET', url: '/api/admin/gems?pageSize=500', headers: adminAuth })).json();
+  assert.equal(all.total, 5);
+  assert.deepEqual([...new Set((all.items as { username: string }[]).map((g) => g.username))].sort(), ['player_gm', 'tester']);
+
+  const mine = (await app.inject({ method: 'GET', url: `/api/admin/gems?userId=${pId}&sort=level_desc`, headers: adminAuth })).json();
+  assert.equal(mine.total, 2);
+  assert.ok((mine.items as { username: string }[]).every((g) => g.username === 'player_gm'));
+  assert.deepEqual((mine.items as { level: number }[]).map((g) => g.level), [7, 1]);
+
+  const kim = (await app.inject({ method: 'GET', url: '/api/admin/gems?element=kim', headers: adminAuth })).json();
+  assert.equal(kim.total, 2);
+  const lv3 = (await app.inject({ method: 'GET', url: '/api/admin/gems?level=3', headers: adminAuth })).json();
+  assert.equal(lv3.total, 1);
+  assert.equal((lv3.items as { element: string }[])[0]!.element, 'kim');
+
+  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/gems', headers: pAuth })).statusCode, 403);
+  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/gems' })).statusCode, 401);
   await app.close();
 });
 

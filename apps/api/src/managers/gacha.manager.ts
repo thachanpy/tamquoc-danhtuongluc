@@ -2,6 +2,7 @@ import {
   TICKET_TYPES,
   TICKET_LABELS,
   type TicketType,
+  type GemDto,
   type GachaConfigDto,
   type DrawResultDto,
   type DrawnCardDto,
@@ -15,10 +16,10 @@ import {
   QUICK_UPGRADE_MAX_LEVEL,
   GIFT_MAX_CARDS,
   GIFT_CODE_MAX_TICKETS,
-  UPGRADE_SUCCESS_BPS,
-  UPGRADE_FAILURE_DISTRIBUTION,
+  upgradeRateTable,
   GENERALS_BY_ID,
   poolForTicket,
+  rollGemDrop,
   rollLevel,
 } from '@tq/game-config';
 import { AppError, type GameContext } from '../context.ts';
@@ -26,6 +27,7 @@ import { iso, sha256 } from '../utils.ts';
 import { tx } from '../db.ts';
 import { applyTicketDelta, readBalances } from '../repositories/ticket.repository.ts';
 import { insertCard } from '../repositories/card.repository.ts';
+import { insertGem } from '../repositories/gem.repository.ts';
 import { insertGacha } from '../repositories/gacha.repository.ts';
 import { findIdempotent, saveIdempotent } from '../repositories/idempotency.repository.ts';
 import { syncRecovery, getTickets } from './ticket.manager.ts';
@@ -41,11 +43,7 @@ export function getGachaConfig(): GachaConfigDto {
     quickUpgradeMaxLevel: QUICK_UPGRADE_MAX_LEVEL,
     giftMaxCards: GIFT_MAX_CARDS,
     giftCodeMaxTickets: GIFT_CODE_MAX_TICKETS,
-    upgradeRates: Object.keys(UPGRADE_SUCCESS_BPS).map(Number).sort((a, b) => a - b).map((level) => ({
-      level,
-      successBps: UPGRADE_SUCCESS_BPS[level]!,
-      failureDistribution: (UPGRADE_FAILURE_DISTRIBUTION[level] ?? []).map((e) => ({ ...e })),
-    })),
+    upgradeRates: upgradeRateTable(),
   };
 }
 
@@ -100,6 +98,11 @@ export function draw(
       const level = rollLevel(GACHA_LEVEL_RATES, ctx.rand);
       // Bước 8-9: tạo thẻ + lịch sử
       const cardId = insertCard(ctx.db, userId, general.id, level, nowIso);
+      // Ngọc Ngũ Hành đính kèm: 5% mỗi lượt quay, cùng cấp với Tướng; khi trúng random đều 1 trong 5 loại.
+      const gemElement = rollGemDrop(ctx.rand);
+      const gem: GemDto | null = gemElement
+        ? { id: insertGem(ctx.db, userId, gemElement, level, nowIso), element: gemElement, level, createdAt: nowIso }
+        : null;
       const drawId = insertGacha(ctx.db, {
         userId,
         ticketType,
@@ -114,6 +117,7 @@ export function draw(
         drawId,
         card: { id: cardId, generalId: general.id, level, createdAt: nowIso },
         general: { ...general },
+        gem,
       });
     }
 

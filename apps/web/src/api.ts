@@ -9,6 +9,7 @@ import type {
   GiftCodeReward,
   AdminApproveDto,
   AdminCardDto,
+  AdminGemDto,
   AdminGrantDto,
   AdminUserDto,
   AdminUsersPage,
@@ -18,8 +19,12 @@ import type {
   DevTopupDto,
   DrawResultDto,
   GachaConfigDto,
+  GemElement,
+  GemMergeResultDto,
+  GemsDto,
   GeneralDto,
   GiftResultDto,
+  QuickGemMergeResultDto,
   HistoryEntryDto,
   MeDto,
   Page,
@@ -154,13 +159,21 @@ export const api = {
       call<AdminGrantDto>('POST', '/api/admin/tickets/grant', { userId, ticketType, amount, idempotencyKey }),
     cards: (q: { userId?: number; faction?: Faction; level?: number; q?: string; sort?: string; page?: number; pageSize?: number }) =>
       call<Page<AdminCardDto>>('GET', '/api/admin/cards?' + qs(q)),
+    gems: (q: { userId?: number; element?: GemElement; level?: number; sort?: string; page?: number; pageSize?: number }) =>
+      call<Page<AdminGemDto>>('GET', '/api/admin/gems?' + qs(q)),
   },
   quests: () => call<QuestsDto>('GET', '/api/quests'),
   claimQuests: (keys?: string[]) => call<QuestClaimResultDto>('POST', '/api/quests/claim', keys ? { keys } : {}),
   leaderboard: () => call<LeaderboardDto>('GET', '/api/leaderboard'),
+  // Ngọc Ngũ Hành — bộ sưu tập + ghép 2→1 + ghép nhanh (tab Ngọc ở Bộ sưu tập/Nâng cấp).
+  gems: () => call<GemsDto>('GET', '/api/gems'),
+  gemMerge: (gemIds: number[], idempotencyKey: string) =>
+    call<GemMergeResultDto>('POST', '/api/gems/merge', { gemIds, idempotencyKey }),
+  gemMergeQuick: (idempotencyKey: string, levels?: number[]) =>
+    call<QuickGemMergeResultDto>('POST', '/api/gems/merge/quick', levels ? { idempotencyKey, levels } : { idempotencyKey }),
   // Đấu trường PvP (mục 6.7) — server mô phỏng trận, client chỉ phát lại.
   pvp: () => call<PvpOverviewDto>('GET', '/api/pvp'),
-  pvpSaveTeam: (units: PvpUnitDto[]) => call<PvpTeamDto>('POST', '/api/pvp/team', { units }),
+  pvpSaveTeam: (units: PvpUnitDto[], gems: GemElement[] = []) => call<PvpTeamDto>('POST', '/api/pvp/team', { units, gems }),
   pvpOpponent: (id: number) => call<PvpOpponentDto>('GET', `/api/pvp/opponent/${id}`),
   pvpChallenge: (opponentId: number) => call<PvpBattleDto>('POST', '/api/pvp/challenge', { opponentId }),
   pvpBattles: (q: { page?: number; pageSize?: number }) => call<Page<PvpBattleSummaryDto>>('GET', '/api/pvp/battles?' + qs(q)),
@@ -169,11 +182,13 @@ export const api = {
    * Kỹ năng + chỉ số chi tiết của một tướng ở một cấp (mục 6.7) — modal xem thẻ.
    * `squad` (nếu có) = danh sách generalId trong đội để server tính Chỉ số Nền Ra Trận
    * (aura Hỗ trợ + Cổng Đồng Phe) — dùng cho màn chuẩn bị khiêu chiến.
+   * `gems` (nếu có) = danh sách LOẠI Ngọc đã gắn cho đội (tối đa PVP_TEAM_GEM_COUNT) để chỉ số khớp khi vào trận.
    */
-  generalCombat: (generalId: string, level: number, squad?: string[]) =>
+  generalCombat: (generalId: string, level: number, squad?: string[], gems?: GemElement[]) =>
     call<PvpCombatDto>(
       'GET',
-      `/api/pvp/generals/${encodeURIComponent(generalId)}/combat?` + qs({ level, squad: squad?.length ? squad.join(',') : undefined }),
+      `/api/pvp/generals/${encodeURIComponent(generalId)}/combat?` +
+        qs({ level, squad: squad?.length ? squad.join(',') : undefined, gems: gems?.length ? gems.join(',') : undefined }),
     ),
   history: (q: { kind?: string; page?: number; pageSize?: number }) => call<Page<HistoryEntryDto>>('GET', '/api/history?' + qs(q)),
 };

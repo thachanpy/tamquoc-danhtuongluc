@@ -27,6 +27,10 @@ export function CombatDetailModal(props: {
   card?: JSX.Element;
   /** Ghi chú thêm dưới bảng (ví dụ "Nhận lúc …"). */
   extra?: JSX.Element;
+  /** Khối nội dung thay bảng chỉ số tướng — dùng cho Ngọc (bảng chỉ số theo từng cấp). */
+  detail?: JSX.Element;
+  /** Nhãn cấp thay cho "Lv.n" (VD "Cấp 5" của Ngọc). */
+  levelLabel?: string;
   /** Mở trên một modal khác (Đấu trường) — cần nổi lên trên lớp phủ của modal đó. */
   above?: boolean;
   onClose: () => void;
@@ -59,7 +63,7 @@ export function CombatDetailModal(props: {
         classList={{ above: props.above }}
         role="dialog"
         aria-modal="true"
-        aria-label={`${props.name} Lv.${props.level}`}
+        aria-label={`${props.name} ${props.levelLabel ?? `Lv.${props.level}`}`}
         tabIndex={-1}
         onClick={() => props.onClose()}
         onPointerMove={onMove}
@@ -82,7 +86,7 @@ export function CombatDetailModal(props: {
                       </>
                     )}
                   </Show>
-                  <span style={{ color: levelTier(props.level).css }}>{`Lv.${props.level}`}</span>
+                  <span style={{ color: levelTier(props.level).css }}>{props.levelLabel ?? `Lv.${props.level}`}</span>
                   {/* Lực chiến (LC) đứng NGANG HÀNG với cấp độ — cùng chuỗi chip định danh tướng */}
                   <Show when={props.combat}>
                     {(c) => (
@@ -95,16 +99,23 @@ export function CombatDetailModal(props: {
                 </div>
               </div>
             </div>
-            {/* Kỹ năng + chỉ số chi tiết do server tính (mục 6.7) */}
+            {/* Kỹ năng + chỉ số chi tiết do server tính (mục 6.7); Ngọc truyền `detail` riêng */}
             <Show
-              when={props.combat}
+              when={props.detail}
               fallback={
-                <div class="viewer-combat muted small">
-                  {props.error ? `Không tải được chỉ số: ${props.error}` : 'Đang tải chỉ số…'}
-                </div>
+                <Show
+                  when={props.combat}
+                  fallback={
+                    <div class="viewer-combat muted small">
+                      {props.error ? `Không tải được chỉ số: ${props.error}` : 'Đang tải chỉ số…'}
+                    </div>
+                  }
+                >
+                  {(c) => <CombatDetail c={c()} />}
+                </Show>
               }
             >
-              {(c) => <CombatDetail c={c()} />}
+              {props.detail}
             </Show>
             {props.extra}
             <div class="muted small viewer-hint">Chạm bất kỳ đâu để đóng</div>

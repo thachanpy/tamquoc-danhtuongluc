@@ -907,6 +907,26 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-drows { display: grid; gap: 3px; align-content: start; }
 .rp-drows.scroll { height: 156px; overflow-y: auto; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(10, 6, 4, .4); }
 
+/* ===== Ngọc Ngũ Hành (tab Ngọc ở Nâng cấp & Bộ sưu tập) ===== */
+/* Ngọc là vật phẩm rời (loại + cấp). Màu viên Ngọc theo Ngũ Hành: Kim/Mộc/Thủy/Hỏa/Thổ. */
+/* Thẻ Ngọc dùng CHUNG khung .tq-card với thẻ tướng (mục 6.8) — chỉ đổi ruột: ảnh viên Ngọc thay chân dung. */
+.gem-face .tq-art { background: radial-gradient(circle at 50% 38%, #1a1410, #0a0705); }
+.gem-face .gem-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Khung nhóm Ngọc: viền trái lấy màu Ngũ Hành (giống viền phe của nhóm tướng). */
+.gen-group.e-kim { --gc: #cbb26a; } .gen-group.e-moc { --gc: #63b95e; }
+.gen-group.e-thuy { --gc: #4f9de0; } .gen-group.e-hoa { --gc: #ef6b3a; } .gen-group.e-tho { --gc: #c9963f; }
+/* Nút "Chi tiết" ở đầu khung nhóm Ngọc (Bộ sưu tập) đẩy về cuối hàng. */
+.gen-head .btn { margin-left: auto; }
+.gem-cards { display: flex; flex-wrap: wrap; gap: 10px; }
+/* Chip nhỏ hiển thị một loại Ngọc đã gắn (đội hình) — ảnh viên Ngọc bo tròn. */
+.gem-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px 2px 4px; border: 1px solid var(--line); border-radius: 999px; background: rgba(10, 6, 4, .55); font: 700 12px/1.5 var(--num, sans-serif); color: var(--text); }
+.gem-dot { width: 18px; height: 18px; border-radius: 50%; flex: none; object-fit: cover; border: 1px solid rgba(255, 255, 255, .28); }
+/* Chip Ngọc bấm được (gắn/bỏ gắn cho đội hình ở Đấu trường). */
+.gem-pill.on { border-color: var(--gold); box-shadow: 0 0 10px rgba(212, 168, 74, .5); }
+.gem-pill:disabled { opacity: .35; cursor: not-allowed; }
+.gem-pill b { color: var(--gold-2); }
+.pvp-gems { display: flex; flex-direction: column; gap: 6px; }
+
 @media (max-width: 640px) {
   .pvp-modal { padding: 10px; }
   .pvp-board { gap: 6px; }

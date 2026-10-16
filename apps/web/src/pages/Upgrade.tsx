@@ -1,11 +1,24 @@
 import { For, Show, createMemo, createSignal, onCleanup, type JSX } from 'solid-js';
-import { FACTIONS, FACTION_LABELS, PVP_STYLES, PVP_STYLE_LABELS, type CardDto, type UpgradePreviewDto } from '@tq/shared';
+import {
+  FACTIONS,
+  FACTION_LABELS,
+  GEM_ELEMENT_LABELS,
+  MAX_LEVEL,
+  PVP_STYLES,
+  PVP_STYLE_LABELS,
+  type CardDto,
+  type GemConfigDto,
+  type GemDto,
+  type GemElement,
+  type UpgradePreviewDto,
+} from '@tq/shared';
 import { api, fetchAllCards, newKey, type ApiError } from '../api.ts';
 import { gen, genStyle, state } from '../state.ts';
 import { pct } from '../art.ts';
 import { playUpgrade } from '../pixi/stage.ts';
 import { groupCardsByGeneral, type UpgradeSort } from '../upgrade-groups.ts';
 import { Card } from '../components/Card.tsx';
+import { GemCard } from '../components/GemCard.tsx';
 
 /** Tổng kết sau khi Nâng cấp nhanh (hoặc lỗi). */
 type QuickSummary =
@@ -21,6 +34,8 @@ type QuickSummary =
   | { kind: 'error'; message: string };
 
 export function UpgradePage(): JSX.Element {
+  /** Sub-tab: nâng cấp Tướng (mặc định) hoặc nâng cấp Ngọc Ngũ Hành (DESIGN PROMPT — mục 1.1). */
+  const [sub, setSub] = createSignal<'tuong' | 'ngoc'>('tuong');
   /** Số thẻ mỗi lần ghép — lấy từ cấu hình server. */
   const N = state.config!.upgradeInputCount;
   /** Mức level mặc định được chọn sẵn cho Nâng cấp nhanh (cấu hình server, mặc định 5). */
@@ -255,6 +270,15 @@ export function UpgradePage(): JSX.Element {
 
   return (
     <>
+      <div class="sub-tabs" role="tablist">
+        <button class="btn small" classList={{ on: sub() === 'tuong' }} role="tab" onClick={() => setSub('tuong')}>
+          Tướng
+        </button>
+        <button class="btn small" classList={{ on: sub() === 'ngoc' }} role="tab" onClick={() => setSub('ngoc')}>
+          Ngọc
+        </button>
+      </div>
+      <Show when={sub() === 'tuong'}>
       <section class="panel">
         <h2>Ghép {N} thẻ</h2>
         <p class="muted">
@@ -535,6 +559,458 @@ export function UpgradePage(): JSX.Element {
                     )}
                   </Show>
                 </Show>
+              </Show>
+            </Show>
+          </div>
+        </section>
+      </div>
+      </Show>
+      <Show when={sub() === 'ngoc'}>
+        <GemUpgradeTab />
+      </Show>
+    </>
+  );
+}
+
+/** Tổng kết sau khi Ghép nhanh Ngọc (hoặc lỗi). */
+type GemQuickSummary =
+  | { kind: 'ok'; merges: number; successes: number; failures: number; best: number; byLevel: [number, { n: number; ok: number }][]; hasMore: boolean }
+  | { kind: 'error'; message: string };
+
+/**
+ * Tab "Ngọc" (DESIGN PROMPT — mục 1.1): ghép 2 viên Ngọc CÙNG loại & CÙNG cấp thành 1 viên cấp +1.
+ * Dùng chung công thức, tỷ lệ và tài nguyên với thẻ Tướng (`api.gems` trả bảng tỷ lệ `rates`).
+ */
+function GemUpgradeTab(): JSX.Element {
+  /** Ngọc luôn ghép 2 → 1 (khác với Tướng dùng `upgradeInputCount`). */
+  const GN = 2;
+  let alive = true;
+  onCleanup(() => (alive = false));
+
+  const [gems, setGems] = createSignal<GemDto[]>([]);
+  const [config, setConfig] = createSignal<GemConfigDto | null>(null);
+  const [loaded, setLoaded] = createSignal(false);
+  const [loadError, setLoadError] = createSignal<string | null>(null);
+  const [selected, setSelected] = createSignal<number[]>([]);
+  const [busy, setBusy] = createSignal(false);
+  const [confirming, setConfirming] = createSignal(false);
+  const [msg, setMsg] = createSignal('');
+  const [quickConfirming, setQuickConfirming] = createSignal(false);
+  const [quickSummary, setQuickSummary] = createSignal<GemQuickSummary | null>(null);
+  const [quickLevels, setQuickLevels] = createSignal<number[]>([]);
+  let pendingKey: string | null = null;
+  let quickKey: string | null = null;
+
+  const byId = createMemo(() => new Map(gems().map((g) => [g.id, g])));
+  /** Mọi cấp có thể chọn ghép nhanh (Cấp 1–9; Cấp 10 không ghép tiếp được). */
+  const allLevels = () => (config()?.rates ?? []).map((r) => r.level);
+  const pickedGem = (i: number) => byId().get(selected()[i] ?? -1);
+  /** Tỷ lệ ghép của cấp đầu vào đang chọn (null khi chưa chọn đủ / cấp tối đa). */
+  const previewRate = () => (config()?.rates ?? []).find((r) => r.level === pickedGem(0)?.level) ?? null;
+
+  /** Nhóm theo loại Ngọc, trong mỗi loại chia nhỏ theo cấp (cao trước) — giống nhóm tướng (mục 6.8). */
+  const groups = createMemo(() => {
+    const byEl = new Map<GemElement, Map<number, GemDto[]>>();
+    for (const g of gems()) {
+      const lvls = byEl.get(g.element) ?? new Map<number, GemDto[]>();
+      lvls.set(g.level, [...(lvls.get(g.level) ?? []), g]);
+      byEl.set(g.element, lvls);
+    }
+    const els = config()?.elements ?? [];
+    return els
+      .map((element) => {
+        const lvls = byEl.get(element);
+        const runs = lvls ? [...lvls.entries()].sort((a, b) => b[0] - a[0]).map(([level, list]) => ({ level, gems: list })) : [];
+        return { element, total: runs.reduce((s, r) => s + r.gems.length, 0), runs };
+      })
+      .filter((g) => g.total > 0);
+  });
+
+  /** Số cặp ghép được ngay trong các cấp đã chọn (chỉ hiển thị; server tự tính lại). */
+  const quickPairs = createMemo(() => {
+    const sel = new Set(quickLevels());
+    return groups()
+      .flatMap((g) => g.runs)
+      .filter((r) => sel.has(r.level))
+      .reduce((s, r) => s + Math.floor(r.gems.length / GN), 0);
+  });
+  const quickRates = createMemo(() => {
+    const sel = new Set(quickLevels());
+    return (config()?.rates ?? []).filter((r) => sel.has(r.level));
+  });
+
+  function toggleQuickLevel(lv: number) {
+    if (busy()) return;
+    const cur = quickLevels();
+    setQuickLevels(cur.includes(lv) ? cur.filter((x) => x !== lv) : [...cur, lv].sort((a, b) => a - b));
+  }
+
+  function selectable(g: GemDto): boolean {
+    if (g.level >= MAX_LEVEL) return false;
+    const first = pickedGem(0);
+    if (!first) return true;
+    return g.element === first.element && g.level === first.level;
+  }
+
+  function togglePick(g: GemDto) {
+    if (busy()) return;
+    setMsg('');
+    setConfirming(false);
+    pendingKey = null;
+    const sel = selected();
+    if (sel.includes(g.id)) setSelected(sel.filter((x) => x !== g.id));
+    else if (sel.length < GN) setSelected([...sel, g.id]);
+  }
+
+  function clearSel() {
+    if (busy()) return;
+    setSelected([]);
+    setConfirming(false);
+    setMsg('');
+    pendingKey = null;
+  }
+
+  async function load() {
+    try {
+      const dto = await api.gems();
+      if (!alive) return;
+      setGems(dto.gems);
+      setConfig(dto.config);
+      setLoaded(true);
+      setLoadError(null);
+      setSelected((s) => s.filter((id) => dto.gems.some((g) => g.id === id)));
+      // Mặc định chọn sẵn Cấp 1 → mức ghép nhanh của Tướng (mặc định 5)
+      if (!quickLevels().length) setQuickLevels(dto.config.rates.map((r) => r.level).filter((lv) => lv <= state.config!.quickUpgradeMaxLevel));
+    } catch (e) {
+      if (alive) setLoadError((e as Error).message);
+    }
+  }
+  void load();
+
+  async function attempt() {
+    if (busy() || selected().length !== GN) return;
+    setBusy(true);
+    pendingKey ??= newKey();
+    const ids = [...selected()];
+    try {
+      const r = await api.gemMerge(ids, pendingKey);
+      pendingKey = null;
+      setSelected([]);
+      setConfirming(false);
+      setMsg(
+        r.outcome === 'success'
+          ? `Thành công! ${GEM_ELEMENT_LABELS[r.element]} Cấp ${r.inputLevel} ×2 → Cấp ${r.resultGem.level}`
+          : `Thất bại. 2 viên ${GEM_ELEMENT_LABELS[r.element]} Cấp ${r.inputLevel} → nhận Cấp ${r.resultGem.level}`,
+      );
+      setBusy(false);
+      await load();
+    } catch (e) {
+      const err = e as ApiError;
+      if (err.code !== 'NETWORK') pendingKey = null;
+      setBusy(false);
+      setConfirming(false);
+      setMsg(err.message);
+      if (err.code === 'GEM_CONSUMED' || err.code === 'GEM_NOT_FOUND') {
+        setSelected([]);
+        await load();
+      }
+    }
+  }
+
+  async function runQuick() {
+    if (busy()) return;
+    setBusy(true);
+    quickKey ??= newKey();
+    try {
+      const r = await api.gemMergeQuick(quickKey, quickLevels());
+      quickKey = null;
+      const byLevel = new Map<number, { n: number; ok: number }>();
+      for (const x of r.results) {
+        const b = byLevel.get(x.inputLevel) ?? { n: 0, ok: 0 };
+        b.n++;
+        if (x.outcome === 'success') b.ok++;
+        byLevel.set(x.inputLevel, b);
+      }
+      setQuickSummary({
+        kind: 'ok',
+        merges: r.merges,
+        successes: r.successes,
+        failures: r.failures,
+        best: Math.max(...r.results.map((x) => x.resultLevel)),
+        byLevel: [...byLevel.entries()].sort((a, b) => a[0] - b[0]),
+        hasMore: r.hasMore,
+      });
+      setBusy(false);
+      setSelected([]);
+      await load();
+    } catch (e) {
+      const err = e as ApiError;
+      if (err.code !== 'NETWORK') quickKey = null;
+      setQuickSummary({ kind: 'error', message: err.message });
+      setBusy(false);
+      if (err.code === 'NOTHING_TO_UPGRADE') await load();
+      else setQuickConfirming(false);
+    }
+  }
+
+  return (
+    <>
+      <section class="panel">
+        <h2>Ghép 2 Ngọc</h2>
+        <p class="muted">
+          Chọn đúng 2 viên Ngọc <b>cùng loại</b> và <b>cùng cấp</b> (Cấp 1–9) để ghép thành 1 viên cấp cao hơn. Dùng chung công thức, tỷ lệ và tài nguyên với
+          Tướng.
+        </p>
+        <div class="quick">
+          <Show when={loaded()}>
+            <div class="quick-box">
+              <div class="quick-head">
+                <button
+                  class="btn primary"
+                  disabled={busy() || quickLevels().length === 0 || quickPairs() === 0 || quickConfirming()}
+                  onClick={() => setQuickConfirming(true)}
+                >
+                  ⚡ Ghép nhanh
+                </button>
+                <span class="muted small">
+                  {quickPairs() > 0
+                    ? `${quickPairs()} cặp Ngọc có thể ghép ngay. Tự ghép liên tục mọi cặp 2 viên cùng loại, cùng cấp trong các mức đã chọn.`
+                    : 'Chưa có cặp Ngọc nào trong các mức đã chọn để ghép nhanh.'}
+                </span>
+              </div>
+              <div class="quick-levels">
+                <span class="muted small">Cấp ghép nhanh:</span>
+                <For each={allLevels()}>
+                  {(lv) => (
+                    <label class="lv-chk" classList={{ on: quickLevels().includes(lv) }}>
+                      <input type="checkbox" checked={quickLevels().includes(lv)} disabled={busy()} onChange={() => toggleQuickLevel(lv)} />
+                      Cấp {lv}
+                    </label>
+                  )}
+                </For>
+              </div>
+              <Show when={quickConfirming()}>
+                <div class="quick-confirm">
+                  <table class="rates">
+                    <thead>
+                      <tr>
+                        <td>Ghép</td>
+                        <td>Thành công</td>
+                        <td>Giữ nguyên</td>
+                        <td>Tụt</td>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <For each={quickRates()}>
+                        {(r) => {
+                          const fail = 10000 - r.successBps;
+                          const keep = r.failureDistribution.find((e) => e.level === r.level)?.bps ?? 0;
+                          return (
+                            <tr>
+                              <td>
+                                Cấp {r.level} → {r.level + 1}
+                              </td>
+                              <td>{pct(r.successBps)}</td>
+                              <td>{pct((fail * keep) / 10000)}</td>
+                              <td>{pct(fail - (fail * keep) / 10000)}</td>
+                            </tr>
+                          );
+                        }}
+                      </For>
+                    </tbody>
+                  </table>
+                  <p class="warn">
+                    ⚠ Mỗi lần ghép tiêu thụ 2 viên Ngọc, có thể thất bại hoặc tụt cấp. Ngọc mới tạo ra thuộc mức đã chọn sẽ được ghép tiếp. Ngọc ở mức không
+                    chọn không bị đụng tới.
+                  </p>
+                  <button class="btn ghost" onClick={() => setQuickConfirming(false)}>
+                    Huỷ
+                  </button>{' '}
+                  <button class="btn danger" disabled={busy()} onClick={() => void runQuick()}>
+                    {busy() ? 'Đang ghép…' : 'Xác nhận ghép nhanh'}
+                  </button>
+                </div>
+              </Show>
+              <Show when={quickSummary()}>
+                {(s) => (
+                  <div class="quick-summary" aria-live="polite">
+                    {(() => {
+                      const q = s();
+                      if (q.kind === 'error') return <span class="error">{q.message}</span>;
+                      return (
+                        <>
+                          <b>Đã ghép {q.merges} lần:</b> <span class="ok">{q.successes} thành công</span>,{' '}
+                          <span class="bad">{q.failures} thất bại</span>. Cấp cao nhất đạt được: <b>Cấp {q.best}</b>.
+                          <div class="small muted">{q.byLevel.map(([lv, b]) => `Cấp ${lv}: ${b.ok}/${b.n} thành công`).join(' · ')}</div>
+                          <Show when={q.hasMore}>
+                            <div class="small">Vẫn còn cặp có thể ghép — bấm Ghép nhanh lần nữa.</div>
+                          </Show>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+              </Show>
+            </div>
+          </Show>
+        </div>
+      </section>
+      <div class="two-col upgrade-layout">
+        <section class="panel">
+          <Show when={!loadError()} fallback={<div class="state-msg error">Không tải được Ngọc: {loadError()}</div>}>
+            <Show when={loaded()} fallback={<div class="state-msg">Đang tải Ngọc…</div>}>
+              <Show when={gems().length > 0} fallback={<div class="state-msg">Bạn chưa có viên Ngọc nào. Quay thẻ để nhận Ngọc rớt kèm.</div>}>
+                <div class="pick-grid">
+                  <For each={groups()}>
+                    {(grp) => (
+                      <div class={`gen-group e-${grp.element}`}>
+                        <div class="gen-head">
+                          <b>{`Ngọc ${GEM_ELEMENT_LABELS[grp.element]}`}</b>
+                          <span class="muted small">{`Ngũ Hành · ${grp.total} viên`}</span>
+                          <Show when={grp.runs.some((r) => r.gems.length >= GN && r.level < MAX_LEVEL)}>
+                            <span class="ready-tag">Ghép được</span>
+                          </Show>
+                        </div>
+                        <div class="gen-runs">
+                          <For each={grp.runs}>
+                            {(r) => {
+                              const ready = () => r.gems.length >= GN && r.level < MAX_LEVEL;
+                              return (
+                                <div class="lv-run" classList={{ ready: ready() }}>
+                                  <div class="run-label">
+                                    Cấp {r.level} ×{r.gems.length}
+                                    {ready() ? ` · đủ ghép${r.gems.length >= 2 * GN ? ` ${Math.floor(r.gems.length / GN)} lần` : ''}` : ''}
+                                  </div>
+                                  <div class="run-cards">
+                                    <For each={r.gems}>
+                                      {(g) => {
+                                        const on = () => selected().includes(g.id);
+                                        return (
+                                          <button
+                                            class="pick"
+                                            classList={{ on: on() }}
+                                            disabled={!on() && (!selectable(g) || selected().length >= GN)}
+                                            aria-pressed={on() ? 'true' : 'false'}
+                                            onClick={() => togglePick(g)}
+                                          >
+                                            <GemCard element={g.element} level={g.level} />
+                                          </button>
+                                        );
+                                      }}
+                                    </For>
+                                  </div>
+                                </div>
+                              );
+                            }}
+                          </For>
+                        </div>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </Show>
+          </Show>
+        </section>
+        <section class="panel side" classList={{ 'has-sel': selected().length > 0 }}>
+          <h3>
+            Đã chọn <span class="sel-count">{selected().length}</span>/{GN}
+          </h3>
+          <div class="sel-slots" style={{ 'grid-template-columns': `repeat(${GN}, minmax(0, 1fr))` }}>
+            <For each={Array.from({ length: GN }, (_, i) => i)}>
+              {(i) => (
+                <Show when={pickedGem(i)} fallback={<div class="slot empty">Trống</div>}>
+                  {(g) => (
+                    <button class="slot" title="Bỏ chọn viên Ngọc này" disabled={busy()} onClick={() => togglePick(g())}>
+                      <GemCard element={g().element} level={g().level} />
+                    </button>
+                  )}
+                </Show>
+              )}
+            </For>
+          </div>
+          <div class="preview">
+            <Show
+              when={selected().length >= GN}
+              fallback={
+                <>
+                  <p class="muted">Chọn thêm {GN - selected().length} viên Ngọc cùng loại & cùng cấp.</p>
+                  <Show when={selected().length > 0}>
+                    <div class="confirm-area">
+                      <button class="btn ghost" disabled={busy()} onClick={clearSel}>
+                        Huỷ
+                      </button>
+                    </div>
+                  </Show>
+                </>
+              }
+            >
+              <Show when={previewRate()} fallback={<p class="warn">Ngọc Cấp 10 đã ở mức tối đa — không ghép tiếp được.</p>}>
+                {(r) => (
+                  <>
+                    <div class="odds">
+                      <div class="ok">
+                        Thành công <b>{pct(r().successBps)}</b> → Cấp {r().level + 1}
+                      </div>
+                      <div class="bad">
+                        Thất bại <b>{pct(10000 - r().successBps)}</b>
+                      </div>
+                    </div>
+                    <h4>Nếu thất bại, Ngọc nhận được:</h4>
+                    <table class="rates">
+                      <tbody>
+                        <For each={r().failureDistribution}>
+                          {(e) => (
+                            <tr>
+                              <td>{e.level === r().level ? `Giữ nguyên Cấp ${e.level}` : `Về Cấp ${e.level}`}</td>
+                              <td>{pct(e.bps)}</td>
+                            </tr>
+                          )}
+                        </For>
+                      </tbody>
+                    </table>
+                    <p class="warn">
+                      ⚠ Cả 2 viên Ngọc đầu vào sẽ bị tiêu thụ dù thành công hay thất bại. Bạn luôn nhận lại đúng 1 viên Ngọc{' '}
+                      {GEM_ELEMENT_LABELS[pickedGem(0)!.element]}.
+                    </p>
+                    <p class="muted small">Tỷ lệ chỉ để tham khảo; server tính lại khi thực hiện.</p>
+                    <div class="confirm-area">
+                      <Show
+                        when={confirming()}
+                        fallback={
+                          <>
+                            <button class="btn ghost" disabled={busy()} onClick={clearSel}>
+                              Huỷ
+                            </button>{' '}
+                            <button class="btn primary" disabled={busy()} onClick={() => setConfirming(true)}>
+                              Ghép Ngọc
+                            </button>
+                          </>
+                        }
+                      >
+                        <p>
+                          <b>Xác nhận ghép?</b> 2 viên Ngọc sẽ bị tiêu thụ.
+                        </p>
+                        <button
+                          class="btn ghost"
+                          disabled={busy()}
+                          onClick={() => {
+                            setConfirming(false);
+                            setMsg('');
+                          }}
+                        >
+                          Quay lại
+                        </button>{' '}
+                        <button class="btn danger" disabled={busy()} onClick={() => void attempt()}>
+                          Xác nhận ghép
+                        </button>
+                      </Show>
+                    </div>
+                    <div class="up-msg error" aria-live="polite">
+                      {msg()}
+                    </div>
+                  </>
+                )}
               </Show>
             </Show>
           </div>

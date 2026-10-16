@@ -1,6 +1,6 @@
 import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
-import type { GeneralDto, UpgradeOutcome } from '@tq/shared';
-import { FACTION_STYLE, FRAME_LAYOUT, frameUrl, levelTier, portraitUrl, prefersReducedMotion } from '../art.ts';
+import { GEM_ELEMENT_LABELS, type GemDto, type GemElement, type GeneralDto, type UpgradeOutcome } from '@tq/shared';
+import { FACTION_STYLE, FRAME_LAYOUT, frameUrl, gemUrl, levelTier, portraitUrl, prefersReducedMotion } from '../art.ts';
 
 const W = 520;
 const H = 460;
@@ -282,6 +282,75 @@ function makeCard(general: GeneralDto, level: number): Container {
   return c;
 }
 
+/** Bảng màu Ngọc Ngũ Hành — chỉ dùng cho viên Ngọc VẼ DỰ PHÒNG khi thiếu ảnh trong `public/gem`. */
+const GEM_STYLE: Record<GemElement, { main: number; dark: number; text: number }> = {
+  kim: { main: 0xcbb26a, dark: 0x8d7a3f, text: 0x2b2410 },
+  moc: { main: 0x63b95e, dark: 0x2f6b2e, text: 0x0d2409 },
+  thuy: { main: 0x4f9de0, dark: 0x245a8f, text: 0x04182b },
+  hoa: { main: 0xef6b3a, dark: 0x97331a, text: 0x2b0b03 },
+  tho: { main: 0xc9963f, dark: 0x7b5a22, text: 0x2a1c05 },
+};
+
+/**
+ * Ảnh viên Ngọc theo (loại, cấp) — Assets cache dùng chung; mỗi sprite dùng một Texture mới trỏ tới
+ * cùng source nên destroy stage (texture:true) không làm hỏng cache. Thiếu ảnh thì vẽ dự phòng.
+ */
+const gemTex = new Map<string, Texture>();
+const gemKey = (element: GemElement, level: number) => `${element}|${Math.min(Math.max(level, 1), 10)}`;
+async function ensureGems(items: { element: GemElement; level: number }[]): Promise<void> {
+  const need = [...new Set(items.map((g) => gemKey(g.element, g.level)))].filter((k) => !gemTex.has(k));
+  await Promise.all(
+    need.map(async (k) => {
+      const [element, level] = k.split('|') as [GemElement, string];
+      try {
+        gemTex.set(k, (await Assets.load(gemUrl(element, Number(level)))) as Texture);
+      } catch {
+        /* thiếu ảnh Ngọc: dùng viên Ngọc vẽ dự phòng */
+      }
+    }),
+  );
+}
+
+/**
+ * Viên Ngọc Ngũ Hành hiện NGAY CẠNH thẻ tướng trong màn mở thẻ (Ngọc rớt kèm khi quay Tướng).
+ * Bán kính gốc 30, thu nhỏ bằng `scale` ở màn nhiều thẻ.
+ */
+function makeGemOrb(element: GemElement, level: number): Container {
+  const c = new Container();
+  const s = GEM_STYLE[element];
+  const r = 30;
+  const tex = gemTex.get(gemKey(element, level));
+  if (tex) {
+    // Ảnh viên Ngọc (public/gem), cắt tròn theo viền sáng màu Ngũ Hành cho nổi trên nền thẻ.
+    const sprite = new Sprite(new Texture({ source: tex.source }));
+    sprite.anchor.set(0.5);
+    sprite.width = r * 2;
+    sprite.height = r * 2;
+    const mask = new Graphics().circle(0, 0, r).fill({ color: 0xffffff });
+    sprite.mask = mask;
+    c.addChild(mask, sprite, new Graphics().circle(0, 0, r).stroke({ width: 2, color: s.main, alpha: 0.95 }));
+    return c;
+  }
+  const ring = new Graphics().circle(0, 0, r + 3).fill({ color: s.dark });
+  const ball = new Graphics().circle(0, 0, r).fill({ color: s.main });
+  const gloss = new Graphics().circle(-r * 0.3, -r * 0.34, r * 0.44).fill({ color: 0xffffff, alpha: 0.42 });
+  const rim = new Graphics().circle(0, 0, r + 3).stroke({ width: 2, color: 0xffffff, alpha: 0.32 });
+  const name = new Text({
+    text: GEM_ELEMENT_LABELS[element],
+    style: { fontSize: 15, fill: s.text, fontWeight: '800', fontFamily: 'system-ui, sans-serif' },
+  });
+  name.anchor.set(0.5);
+  name.y = -6;
+  const lv = new Text({
+    text: `Lv.${level}`,
+    style: { fontSize: 12, fill: s.text, fontWeight: '800', fontFamily: 'system-ui, sans-serif' },
+  });
+  lv.anchor.set(0.5);
+  lv.y = 12;
+  c.addChild(ring, ball, gloss, rim, name, lv);
+  return c;
+}
+
 function makeRays(color: number): Graphics {
   const g = new Graphics();
   for (let i = 0; i < 16; i++) {
@@ -312,12 +381,18 @@ function burst(stage: Stage, color: number, count: number) {
   });
 }
 
-/** Animation mở thẻ sau khi /api/gacha/draw trả kết quả. */
-export async function playReveal(general: GeneralDto, level: number, caption: string, actions: StageAction[] = []): Promise<string | null> {
+/** Animation mở thẻ sau khi /api/gacha/draw trả kết quả. `gem` = Ngọc rớt kèm (hiện cạnh thẻ). */
+export async function playReveal(
+  general: GeneralDto,
+  level: number,
+  caption: string,
+  actions: StageAction[] = [],
+  gem?: GemDto | null,
+): Promise<string | null> {
   const stage = new Stage();
   try {
     await stage.init();
-    await ensureFrames([level], [general.artKey]);
+    await Promise.all([ensureFrames([level], [general.artKey]), gem ? ensureGems([gem]) : Promise.resolve()]);
     const tier = levelTier(level);
     const rays = makeRays(tier.color);
     rays.position.set(W / 2, H / 2);
@@ -337,6 +412,17 @@ export async function playReveal(general: GeneralDto, level: number, caption: st
     front.scale.set(0, 1);
     stage.root.addChild(front);
     await stage.tween(200, (t) => (front.scale.x = easeOut(t)));
+    // Ngọc rớt kèm: hiện NGAY CẠNH mép dưới-phải thẻ, bật nảy nhẹ để người chơi thấy rõ là của thẻ này.
+    if (gem) {
+      const orb = makeGemOrb(gem.element, gem.level);
+      orb.position.set(W / 2 + CARD_W / 2 - 14, H / 2 + CARD_H / 2 - 20);
+      orb.scale.set(0);
+      stage.root.addChild(orb);
+      await stage.tween(240, (t) => {
+        const e = easeOut(t);
+        orb.scale.set(e * (1 + Math.sin(t * Math.PI) * 0.22));
+      });
+    }
     rays.alpha = level >= 3 ? 1 : 0.4;
     burst(stage, tier.color, 12 + level * 8);
     if (!stage.skipping) stage.app.ticker.add(() => (rays.rotation += 0.004));
@@ -350,17 +436,20 @@ export async function playReveal(general: GeneralDto, level: number, caption: st
 
 /** Animation mở nhiều thẻ (quay ×10) — lật lần lượt từng thẻ theo đúng thứ tự server trả về. */
 export async function playRevealMany(
-  items: { general: GeneralDto; level: number }[],
+  items: { general: GeneralDto; level: number; gem?: GemDto | null }[],
   caption: string,
   actions: StageAction[] = [],
 ): Promise<string | null> {
   const stage = new Stage();
   try {
     await stage.init();
-    await ensureFrames(
-      items.map((i) => i.level),
-      items.map((i) => i.general.artKey),
-    );
+    await Promise.all([
+      ensureFrames(
+        items.map((i) => i.level),
+        items.map((i) => i.general.artKey),
+      ),
+      ensureGems(items.flatMap((i) => (i.gem ? [i.gem] : []))),
+    ]);
     const n = items.length;
     // Tối đa 5 thẻ mỗi hàng; 6–10 thẻ => 2 hàng
     const perRow = 5;
@@ -408,6 +497,14 @@ export async function playRevealMany(
       front.scale.set(0, scale);
       stage.root.addChild(front);
       await stage.tween(flip + 20, (t) => (front.scale.x = scale * easeOut(t)));
+      // Ngọc rớt kèm: gắn viên Ngọc nhỏ ở góc dưới-phải của CHÍNH thẻ đó.
+      if (it.gem) {
+        const orb = makeGemOrb(it.gem.element, it.gem.level);
+        orb.position.set(back.x + CARD_W * scale * 0.5 - 6, baseY + CARD_H * scale * 0.5 - 8);
+        orb.scale.set(0);
+        stage.root.addChild(orb);
+        await stage.tween(160, (t) => orb.scale.set(0.46 * easeOut(t)));
+      }
       if (it.level >= 3 && !stage.skipping) {
         // Thẻ hiếm nhảy nhẹ lên để nổi bật
         void stage.tween(300, (t) => (front.y = baseY - Math.sin(t * Math.PI) * 14));

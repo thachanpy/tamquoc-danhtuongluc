@@ -58,7 +58,11 @@ function loadAndValidate(db: DB, userId: number, ids: number[]): { generalId: st
   return { generalId: first.general_id, level: first.level };
 }
 
-function ratesFor(level: number): { successBps: number; failureBps: number; failureDistribution: WeightEntry[] } {
+/**
+ * Tỷ lệ ghép theo level đầu vào — DÙNG CHUNG cho thẻ Tướng và Ngọc Ngũ Hành
+ * (DESIGN: Ngọc dùng chung 100% công thức/tỷ lệ với Tướng).
+ */
+export function upgradeRatesFor(level: number): { successBps: number; failureBps: number; failureDistribution: WeightEntry[] } {
   const successBps = UPGRADE_SUCCESS_BPS[level];
   const dist = UPGRADE_FAILURE_DISTRIBUTION[level];
   if (successBps === undefined || !dist) throw new AppError(500, 'CONFIG_MISSING', 'Thiếu cấu hình nâng cấp.');
@@ -68,7 +72,7 @@ function ratesFor(level: number): { successBps: number; failureBps: number; fail
 export function previewUpgrade(ctx: GameContext, userId: number, cardIds: number[]): UpgradePreviewDto {
   const ids = normalizeIds(cardIds);
   const { generalId, level } = loadAndValidate(ctx.db, userId, ids);
-  return { generalId, inputLevel: level, successLevel: level + 1, ...ratesFor(level), bpsScale: BPS_SCALE };
+  return { generalId, inputLevel: level, successLevel: level + 1, ...upgradeRatesFor(level), bpsScale: BPS_SCALE };
 }
 
 /**
@@ -77,7 +81,7 @@ export function previewUpgrade(ctx: GameContext, userId: number, cardIds: number
  */
 function performUpgradeInTx(ctx: GameContext, userId: number, ids: number[], historyKey: string): UpgradeResultDto {
   const { generalId, level } = loadAndValidate(ctx.db, userId, ids);
-  const { successBps, failureBps, failureDistribution } = ratesFor(level);
+  const { successBps, failureBps, failureDistribution } = upgradeRatesFor(level);
 
   // Roll thành công trước; chỉ roll bảng thất bại khi đã xác định thất bại.
   const success = rollSuccess(successBps, ctx.rand);

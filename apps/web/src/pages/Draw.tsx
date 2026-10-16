@@ -1,5 +1,5 @@
 import { For, Show, createMemo, createSignal, onCleanup, type JSX } from 'solid-js';
-import { TICKET_LABELS, TICKET_TYPES, FACTION_LABELS, type TicketType } from '@tq/shared';
+import { TICKET_LABELS, TICKET_TYPES, FACTION_LABELS, GEM_ELEMENT_LABELS, type TicketType } from '@tq/shared';
 import { api, newKey, type ApiError } from '../api.ts';
 import { state, setTickets, tickets, gen } from '../state.ts';
 import { pct, levelTier } from '../art.ts';
@@ -101,15 +101,24 @@ export function DrawPage(): JSX.Element {
           : many
             ? `Đã mở ${r.drawn} thẻ bằng ${label} · ${TOP_SHOWN} thẻ xịn nhất · +${rest} thẻ khác`
             : `Đã dùng ${r.drawn} ${label}`;
+      // Ngọc Ngũ Hành rớt kèm (mỗi lượt quay): hiện thành viên Ngọc NGAY CẠNH thẻ tướng trong màn mở thẻ.
+      const gems = r.results.flatMap((x) => (x.gem ? [x.gem] : []));
+      const gemNote = gems.length
+        ? ` — Ngọc rớt kèm: ${gems.map((g) => `${GEM_ELEMENT_LABELS[g.element]} Cấp ${g.level}`).join(', ')}`
+        : '';
       setLast('');
       setBusy(false);
       // Chỉ hiện kết quả trong màn mở thẻ (không lộ trước ở trang); sau khi đóng chỉ còn dòng tóm tắt.
       const actions = againActions(r.tickets.balances[r.ticketType]);
       const choice =
         r.results.length === 1
-          ? await playReveal(r.results[0]!.general, r.results[0]!.card.level, caption, actions)
-          : await playRevealMany(shown.map((x) => ({ general: x.general, level: x.card.level })), caption, actions);
-      setLast(many ? `Đã mở ${r.drawn} thẻ bằng ${label}: ${levelSummary}` : caption);
+          ? await playReveal(r.results[0]!.general, r.results[0]!.card.level, caption, actions, r.results[0]!.gem)
+          : await playRevealMany(
+              shown.map((x) => ({ general: x.general, level: x.card.level, gem: x.gem })),
+              caption,
+              actions,
+            );
+      setLast((many ? `Đã mở ${r.drawn} thẻ bằng ${label}: ${levelSummary}` : caption) + gemNote);
       // "Quay tiếp": quay ngay cùng loại vé, y như bấm nút quay ở trang
       if (choice && alive) void doDraw(Number(choice));
     } catch (e) {

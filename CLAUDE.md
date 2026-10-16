@@ -470,6 +470,7 @@ Trang Quản trị (`apps/web/src/pages/Admin.tsx`, tab "Quản trị" chỉ hi�
 
 - **Người chơi**: ô bật/tắt "Duyệt tài khoản đăng ký" ở đầu tab; tìm theo tên, lọc trạng thái; tài khoản chờ duyệt lên đầu. Mỗi dòng: tên, admin, ngày đăng ký/duyệt, trạng thái, số dư từng loại vé và tổng, số thẻ và level cao nhất. Thao tác: Duyệt, Từ chối (có bước xác nhận), Cộng vé (form chọn loại + số lượng), Xem thẻ, Cấp/Thu quyền admin. Khóa nút khi đang xử lý.
 - **Thẻ tướng**: mọi thẻ đang active của mọi người chơi, chỉ xem; lọc theo người chơi, tên tướng, phe, level; sắp xếp level cao nhất (mặc định) / mới nhất / tên tướng / theo người chơi; phân trang 60 thẻ; bấm thẻ mở popup ngắm thẻ.
+- **Ngọc**: mọi viên Ngọc đang active của mọi người chơi, chỉ xem (mục 6.8); lọc theo người chơi, loại (Ngũ Hành), cấp; sắp xếp mới nhất (mặc định) / cấp giảm / cấp tăng / theo người chơi; phân trang 60 viên; mỗi ô ghi tên chủ sở hữu, bấm mở popup chi tiết Ngọc ở đúng cấp.
 
 ### 3.9. Giftcode
 
@@ -631,6 +632,8 @@ Yêu cầu:
 - UI hiển thị tỷ lệ thực tế đang được server áp dụng.
 - Viết unit test cho bảng cấu hình và thuật toán roll.
 - Không giả lập kết quả ở client rồi yêu cầu server chấp nhận.
+
+**Rớt kèm Ngọc Ngũ Hành** (mục 6.8): mỗi Tướng quay ra có **5%** rớt kèm 1 viên Ngọc **cùng cấp** với thẻ, chọn đều **20%/loại** trong 5 loại. Kết quả nằm ở `DrawnCardDto.gem` (null = không rớt); Ngọc lưu vào `user_gems` trong cùng transaction với thẻ.
 
 ### 4.4. Quay nhiều lần (×10)
 
@@ -899,7 +902,7 @@ Hiển thị lịch sử phân trang:
 
 Do chủ dự án yêu cầu. Tab **Xếp hạng** (`#leaderboard`, `apps/web/src/pages/Leaderboard.tsx`), chỉ đọc, không ảnh hưởng vé/thẻ.
 
-- Chỉ số duy nhất: **Lực chiến (LC)** = **TỔNG LC của ĐỘI HÌNH đang dùng** (mục 6.7). Đội đã lưu (mọi slot còn sở hữu đúng tướng + cấp) được cộng LC từng slot; **chưa lưu đội thì dùng đội tự động** = 6 tướng LC cao nhất (đúng như `autoTeam` ở `pvp.manager`). LC mỗi tướng ở cấp đang xét tính bằng `pvpUnitLc(generalId, level)` = `pvpLc(style, level, passive)` (`packages/game-config/src/pvp.ts`, mục 6.7) — **không** tính Chỉ số Nền Ra Trận nên LC đội không đổi theo ô xếp. **Không còn** tính theo số thẻ / cấp thẻ đang có (bỏ `LEADERBOARD_POWER_BY_LEVEL`).
+- Chỉ số duy nhất: **Lực chiến (LC)** = **TỔNG LC của ĐỘI HÌNH đang dùng** (mục 6.7). Đội đã lưu (mọi slot còn sở hữu đúng tướng + cấp) được cộng LC từng slot; **chưa lưu đội thì dùng đội tự động** = 6 tướng LC cao nhất (đúng như `autoTeam` ở `pvp.manager`). LC mỗi tướng ở cấp đang xét tính bằng `pvpUnitLc(generalId, level, gem)` = `pvpLc(style, level, passive)` (`packages/game-config/src/pvp.ts`, mục 6.7) **kèm chỉ số Ngọc Ngũ Hành đã gắn cho đội** — **không** tính Chỉ số Nền Ra Trận nên LC đội không đổi theo ô xếp, nhưng **đổi theo Ngọc** (mục 6.8). **Không còn** tính theo số thẻ / cấp thẻ đang có (bỏ `LEADERBOARD_POWER_BY_LEVEL`).
 - Server tính trực tiếp từ `pvp_teams` + `user_cards` mỗi lần gọi (không lưu bảng riêng). Slot đã mất thẻ (do ghép) tự động bị bỏ qua; thẻ đã tiêu thụ không tính; thẻ tặng đi tính cho người nhận.
 - Chỉ xếp hạng tài khoản đã duyệt, **không phải admin** (chủ dự án yêu cầu ẩn admin) và có **ít nhất 1 tướng trong đội** (LC > 0).
 - Đồng Lực chiến → đồng hạng (`RANK`); trong cùng hạng sắp theo tên A→Z (`localeCompare('vi', { sensitivity: 'base' })`).
@@ -923,6 +926,24 @@ Do chủ dự án yêu cầu, theo GDD `PVP.md`. Tab **Đấu trường** (`#pvp
 - **Hiệu ứng kỹ năng quy theo CẤP**: mọi hệ số HIỆU ỨNG trong `SKILLS.md`/`PVP_ROSTER_ROWS` là **giá trị chốt ở cấp 10**; engine tự quy về cấp thực tế qua `pvpEffectBps(baseBps, level)` (`packages/game-config/src/pvp.ts`): **cấp 1 = giá trị chốt − 10 điểm %**, **cấp 10 = giá trị chốt**, nội suy tuyến tính (làm tròn, không xuống dưới 0). `PVP_EFFECT_LEVEL_SPAN_BPS` = 1000. Áp cho buff có lợi (ST, HP tối đa, chí mạng, ST chí mạng, giảm ST nhận, ban hút máu), hồi máu/tự hồi máu, debuff lên địch (giảm ST/HP tối đa/chí mạng/ST chí mạng, thiêu đốt), phản kích, "đao phủ". Tỉ lệ khai báo dạng **"mỗi cấp"** (Choáng `cấp×X%`, Hút máu `cấp×X%`, Phản kích `cấp×5%` trần 50%, Chí mạng `cấp×3%`) dùng `pvpPerLevelEffectBps(perLevelBps, level)` = **tuyến tính theo cấp** (KHÁC công thức "chốt − 10 điểm %" ở trên): cấp 1 = `perLevelBps`, cấp 10 = `perLevelBps × 10` (giá trị chốt) — ví dụ Choáng `cấp×10%` thì cấp 8 = 80%. `pvpSkillDefAtLevel(def, level)` trả định nghĩa kỹ năng đã quy cấp — engine dùng qua `unit.def` và `getCombatStats` đẩy ra `PvpCombatDto`/snapshot nên client hiển thị đúng số theo cấp. **KHÔNG** quy theo cấp: hệ số sát thương kỹ năng (`250%–320%` — đã tự lớn theo chỉ số nền), ST chí mạng nền 150%, `rounds`/`maxLayers`, Aura/Chỉ số nội tại Phong cách. Giải choáng dùng trần `PVP_CLEANSE_CHAMP_BPS` = 75% (cấp 10); riêng **Hoa Đà** ghi đè span **55% (cấp 1) → 100% (cấp 10)** qua `cleanseMinBps`/`cleanseMaxBps` trong `PVP_ROSTER_ROWS`. **Nội tại tướng** (`PVP_PASSIVES`, `PVP_PASSIVE_EFFECT` — `packages/game-config/src/pvp.ts`) gồm **đúng 4 loại**: `CRIT_5` (+5% tỷ lệ chí mạng), `DAMAGE_10` (+10% sát thương), `HP_10` (+10% HP tối đa), `DEF_5` (+5% phòng thủ); chúng được **RẢI ĐỀU trên toàn roster** (mỗi nội tại ~1/4 số tướng, số lượng lệch nhau tối đa 1) — `assignPassives` xếp ưu tiên theo hướng kỹ năng (phòng thủ/hồi sinh → `DEF_5`; hồi máu & giải khống → `HP_10`; choáng/đao phủ/buff đồng minh → `DAMAGE_10`; còn lại `CRIT_5`) rồi siết quota để cân bằng, `validatePvpConfig` chặn nếu lệch quá 1. Nội tại cộng trực tiếp khi vào trận như Chỉ số Nền Ra Trận (**không bị Xóa Buff**, không chiếm `maxLayers`).
 - **Không ảnh hưởng vé/thẻ**: PvP không tiêu vé, không tạo thẻ, **không thưởng trực tiếp**; chỉ ghi nhật ký trận (`pvp_battles`). Trận **chủ động khiêu chiến** được tính vào **nhiệm vụ đấu trường hằng ngày và thành tựu đấu trường** (mục 3.10).
 - **Admin không tham gia**: mọi route PvP dùng `playerGuard` → admin bị 403 `ADMIN_NOT_PLAYER` (mục 3.8).
+- **Ngọc đội hình (mục 6.8)**: dưới bàn đội hình ở trang Đấu trường có dải chip **Ngọc Ngũ Hành** để gắn/bỏ gắn (tối đa 5 loại khác nhau, chỉ loại đang sở hữu mới bật được, chip kèm cấp cao nhất). Thay đổi Ngọc cũng **tự động lưu** như đổi đội và được cộng vào **Lực chiến** hiển thị. Ngọc gắn cho đội **cả 2 phía** đều được truyền vào `GET /api/pvp/generals/:id/combat` để chỉ số hiển thị đúng (gồm aura Ngọc).
+
+### 6.8. Ngọc Ngũ Hành
+
+Do chủ dự án yêu cầu (đặc tả *Hệ thống Ngọc Ngũ Hành — PVP*). Ngọc là **vật phẩm rời** theo (loại, cấp 1→10); cấu hình ở `packages/game-config/src/gems.ts`, DTO ở `packages/shared/src/index.ts`.
+
+- **5 loại** `['kim','moc','thuy','hoa','tho']`, mỗi loại cộng **đúng 2 chỉ số**, tăng dần theo cấp (`GEM_TABLE`): **Kim** = Sát thương / Giảm sát thương (+5%→+25%); **Mộc** = HP tối đa / Hút máu (+5%→+25% · +2%→+12%); **Thủy** = Chính xác / Né tránh (+10%→+30% · +5%→+25%); **Hỏa** = Chí mạng / ST chí mạng (+5%→+25% · +10%→+40%); **Thổ** = Phòng thủ / Xuyên giáp (+5%→+25%). Đơn vị nội bộ bps (`BPS_SCALE = 10000`).
+- **Ảnh Ngọc**: `apps/web/public/gem/{loại}_{cấp}.jpg` — 50 ảnh JPEG cắt từ bảng *Hệ thống Ngọc 10 cấp* chủ dự án cung cấp; tên loại dạng tiếng Anh: `metal` (Kim), `wood` (Mộc), `water` (Thủy), `fire` (Hỏa), `earth` (Thổ), cấp 1–10 (VD `metal_1.jpg`, `fire_10.jpg`). Đường dẫn dựng ở `art.ts#gemUrl` (kèm `GEM_ART_VERSION` để bỏ cache khi đổi ảnh). **Thiếu ảnh thì nơi hiển thị tự rơi về viên Ngọc vẽ dự phòng** (CSS gradient ở DOM, Graphics ở PixiJS).
+- **Gắn theo đội hình**: một đội hình gắn tối đa `PVP_TEAM_GEM_COUNT` = **5 loại KHÁC NHAU** (không trùng loại — tức cả 5 loại Ngũ Hành). Trong một loại, hệ thống tự dùng viên **cấp cao nhất đang sở hữu** (loại không còn viên nào thì bỏ). Đội **tự động** (chưa lưu) tự chọn loại có viên cấp cao nhất (`autoTeamGemElements`).
+- **Hiệu lực**: chỉ số Ngọc cộng **TRỰC TIẾP vào Chỉ số Nền Ra Trận cho TOÀN ĐỘI** khi vào trận — aura gốc, **không chiếm `maxLayers`, không thể bị Xóa Buff** (giống Vị trí/Cổng đồng phe/nội tại). Ngọc **được tính vào Lực chiến (LC)** ở ô đội hình, đội đã lưu và bảng xếp hạng (mục 6.6).
+- **Rớt kèm khi gacha**: mỗi Tướng quay ra có **5%** (`PVP_GEM_DROP_BPS`) rớt kèm 1 Ngọc **cùng cấp** với thẻ; khi trúng chọn đều **20%/loại** (`PVP_GEM_TYPE_WEIGHT_BPS`) — `rollGemDrop` trong `gems.ts`, gọi trong `gacha.manager`; kết quả trả ở `DrawnCardDto.gem`.
+- **Ghép 2→1**: 2 viên **cùng loại & cùng cấp** ghép thành 1 viên **cấp +1**, dùng lại **cùng công thức / tỷ lệ / phân phối thất bại / tài nguyên (miễn phí)** với ghép thẻ Tướng (mục 5). Cấp 10 là trần.
+- **UI** (hai tab Ngọc dùng **chung UI với Tướng**: `components/GemCard.tsx` tái dùng khung `.tq-card`, lưới `.pick-grid`/`gen-group`/`gen-runs`/`lv-run`/`run-cards`):
+  - **Nâng cấp** (`#upgrade`): sub-tab **Ngọc** — nhóm theo **loại** rồi chia theo **cấp** ("Cấp 8 ×2"), mỗi viên là một thẻ bấm chọn; ghép từng cặp hoặc **Ghép nhanh** theo cấp (tái dùng layout ghép thẻ). Khung "Đã chọn" hiện thẻ Ngọc như thẻ tướng.
+  - **Bộ sưu tập** (`#collection`): sub-tab **Ngọc** — nhóm theo **loại** (đủ 5 loại), trong nhóm chia theo cấp; bấm một viên (hoặc nút **Chi tiết**) mở **popup chi tiết** dùng chung `CombatDetailModal` với tướng, ruột là **chỉ số của ĐÚNG cấp đang xem** (2 dòng có nhãn, cùng bố cục dòng chỉ số tướng) + trạng thái sở hữu.
+  - **Quay thẻ**: khi lượt quay rớt Ngọc, màn mở thẻ hiện **viên Ngọc ngay cạnh chính thẻ tướng đó** (ảnh `public/gem`, cắt tròn kèm viền màu Ngũ Hành, vẽ bằng PixiJS `makeGemOrb`). Quay 1 thẻ: viên Ngọc nằm ở mép dưới-phải thẻ và bật nảy nhẹ; quay nhiều thẻ: mỗi thẻ có Ngọc đều gắn viên Ngọc nhỏ ở góc dưới-phải. Dòng tóm tắt dưới trang sau khi đóng vẫn liệt kê `Ngọc rớt kèm: <loại> Cấp n`.
+  - **Đấu trường**: dải chip gắn Ngọc cho đội (xem bullet cuối mục 6.7).
+  - **Quản trị** (tab **Ngọc**, chỉ admin — mục 3.8): mọi viên Ngọc active của mọi người chơi, chỉ xem; lọc theo người chơi/loại/cấp; bấm mở popup chi tiết Ngọc ở đúng cấp (kèm tên chủ sở hữu, không có dòng "Sở hữu").
 
 ## 7. Database SQLite
 
@@ -1113,11 +1134,14 @@ Lịch sử tặng thẻ (migration v5).
 
 - Thêm cột `users.display_name` và `users.avatar`; `UPDATE users SET display_name = username` để tài khoản cũ có tên hiển thị mặc định (mục 3.11). `avatar` mặc định `NULL`.
 
-### 7.8g. Đấu trường PvP (migration v14, v15)
+### 7.8g. Đấu trường PvP (migration v14, v15) và Ngọc Ngũ Hành (migration v16)
 
 - `pvp_teams`: `user_id`, `slot` (1–6, CHECK), `general_id`, `level` (1–10, CHECK), `updated_at`; PK (`user_id`, `slot`). Lưu cặp (tướng, cấp) chứ không lưu `card_id` để đội hình không hỏng khi thẻ bị tiêu thụ lúc ghép (mục 6.7).
 - `pvp_battles`: `id`, `attacker_id`, `defender_id`, `winner` (`a`|`b`|`draw`), `rounds`, `attacker_lc`, `defender_lc` (tổng Lực chiến từng đội trong trận — migration 15 đổi tên từ `attacker_power`/`defender_power`), `data` (JSON: seed + `units` + `events` để phát lại), `created_at`. Index `(attacker_id, id)`, `(defender_id, id)`.
 - Không thêm bảng/ledger vé: PvP không tiêu vé, không tạo thẻ.
+- **Ngọc Ngũ Hành (v16)** — `user_gems`: `id`, `user_id`, `element` (`kim|moc|thuy|hoa|tho`), `level` (1–10), `status` (`active|consumed`), `consumed_at`, `consumed_by_merge_id`, `updated_at`, `created_at` (ràng buộc status ↔ consumed_at nhất quán). Index `(user_id, status)`, `(user_id, element, level)`.
+- **`gem_merge_history`** (v16): nhật ký từng lần ghép Ngọc — `input_gem_ids_snapshot`, `element`, `input_level` (1–9), `result_gem_id` (viên kết quả, cấp `input_level+1`), `success_chance`, `failure_chance`, `outcome` (`success|failure`), `failure_distribution_snapshot`, `idempotency_key`, `created_at`; UNIQUE `(user_id, idempotency_key)`.
+- **`pvp_team_gems`** (v16): Ngọc **loại** đã gắn cho đội hình — `user_id`, `element`, `updated_at`; PK `(user_id, element)`. Chỉ lưu LOẠI (tối đa 3); cấp là viên cao nhất đang sở hữu, giải khi đọc (`resolveTeamGems`).
 
 ### 7.9. Idempotency
 
@@ -1230,6 +1254,7 @@ Server phải:
 - `POST /api/admin/tickets/grant`: body `{ userId, ticketType, amount, idempotencyKey }`. Lỗi: `INVALID_AMOUNT`, `NOT_APPROVED`, `TARGET_IS_ADMIN`, `IDEMPOTENCY_KEY_REUSED`.
 - Route chơi game gọi bằng tài khoản admin → 403 `ADMIN_NOT_PLAYER` (mục 3.8).
 - `GET /api/admin/cards?userId=&faction=&level=&q=&sort=&page=&pageSize=`: thẻ active của mọi người chơi kèm `username`.
+- `GET /api/admin/gems?userId=&element=&level=&sort=&page=&pageSize=`: Ngọc active của mọi người chơi kèm `username` (mục 6.8).
 - Có rate limit cho các thao tác ghi.
 
 ### 8.4d. Giftcode (mục 3.9)
@@ -1262,13 +1287,21 @@ Server phải:
 
 Mọi route dưới `/api/pvp` (trừ route chi tiết chiến đấu) dùng `playerGuard` (admin → 403 `ADMIN_NOT_PLAYER`), cần đăng nhập và có rate limit.
 
-- `GET /api/pvp`: tổng quan — đội hình đang lưu (hoặc gợi ý tự xếp) + `saved`, thành tích thắng/thua/hoà, `ownedCombat` (chi tiết chiến đấu của từng tướng đang sở hữu ở cấp cao nhất — Picker dùng để hiện chỉ số + kỹ năng chi tiết). `team.lc` là tổng Lực chiến (LC) của đội hình.
-- `POST /api/pvp/team`: body `{ units: [{ slot, generalId, level }] }`. Lỗi: `CARD_NOT_OWNED`, `DUPLICATE_GENERAL`, `DUPLICATE_SLOT`, `INVALID_GENERAL`. Lưu trong transaction sau khi xác thực quyền sở hữu.
+- `GET /api/pvp`: tổng quan — đội hình đang lưu (hoặc gợi ý tự xếp) + `saved`, thành tích thắng/thua/hoà, `ownedCombat` (chi tiết chiến đấu của từng tướng đang sở hữu ở cấp cao nhất — Picker dùng để hiện chỉ số + kỹ năng chi tiết). `team.lc` là tổng Lực chiến (LC) của đội hình (đã gồm Ngọc — mục 6.8); `team.gems` là danh sách loại Ngọc đã gắn kèm cấp cao nhất đang sở hữu.
+- `POST /api/pvp/team`: body `{ units: [{ slot, generalId, level }], gems?: GemElement[] }` (`gems` = tối đa 5 loại khác nhau, mặc định rỗng). Lỗi: `CARD_NOT_OWNED`, `DUPLICATE_GENERAL`, `DUPLICATE_SLOT`, `INVALID_GENERAL`. Lưu trong transaction sau khi xác thực quyền sở hữu (Ngọc loại không còn sở hữu sẽ bị bỏ khi giải đội).
 - `GET /api/pvp/opponent/:id`: xem đội hình + hồ sơ đối thủ. Lỗi: `SELF_CHALLENGE`, `OPPONENT_NOT_FOUND`.
 - `POST /api/pvp/challenge`: body `{ opponentId }`. Server mô phỏng trọn trận rồi trả `units` + `events` + `rounds`/`winner` để phát lại. Lỗi: `TEAM_EMPTY`, `OPPONENT_NO_TEAM`, `SELF_CHALLENGE`, `OPPONENT_NOT_FOUND`.
 - `GET /api/pvp/battles?page=&pageSize=`: lịch sử trận (mình là bên khiêu chiến hoặc bị khiêu chiến).
 - `GET /api/pvp/battles/:id`: chi tiết một trận để phát lại; người ngoài cuộc → 404. Trả thêm `mySide` để client hiển thị đúng phía.
-- `GET /api/pvp/generals/:id/combat?level=&squad=`: chi tiết chiến đấu của một tướng ở một cấp (`PvpCombatDto`: phong cách, kỹ năng, nội tại, chỉ số nền/riêng tướng, buff hàng) — modal xem thẻ ở Bộ sưu tập. Query `squad` (danh sách `generalId` cách nhau dấu phẩy) để server tính **Chỉ số Nền Ra Trận** theo đúng đội → DTO trả thêm `preBattle` (`maxHp`, `damage`, `bonus` bps chi tiết); không truyền `squad` thì `preBattle = null` (giữ chỉ số gốc cho Bộ sưu tập/Lobby). Chỉ số `self` là của **riêng tướng** (nội tại + cấp); buff tăng sức mạnh theo kỹ năng (`teamBuff`) **không cộng sẵn ở ảnh chụp đầu trận** mà phát dần mỗi lượt tới lượt khi vào trận (mục 6.7), buff theo hàng cũng chỉ áp khi vào trận. Chỉ là dữ liệu cấu hình nên dùng `authGuard` (không cần đăng nhập thao tác chơi). Lỗi: `GENERAL_NOT_FOUND`.
+- `GET /api/pvp/generals/:id/combat?level=&squad=&gems=`: chi tiết chiến đấu của một tướng ở một cấp (`PvpCombatDto`: phong cách, kỹ năng, nội tại, chỉ số nền/riêng tướng, buff hàng) — modal xem thẻ ở Bộ sưu tập. Query `squad` (danh sách `generalId` cách nhau dấu phẩy) để server tính **Chỉ số Nền Ra Trận** theo đúng đội → DTO trả thêm `preBattle` (`maxHp`, `damage`, `bonus` bps chi tiết); query `gems` (danh sách loại Ngọc cách nhau dấu phẩy, tối đa 3) để cộng thêm **aura Ngọc** vào chỉ số. Không truyền `squad` thì `preBattle = null` (giữ chỉ số gốc cho Bộ sưu tập/Lobby). Chỉ số `self` là của **riêng tướng** (nội tại + cấp); buff tăng sức mạnh theo kỹ năng (`teamBuff`) **không cộng sẵn ở ảnh chụp đầu trận** mà phát dần mỗi lượt tới lượt khi vào trận (mục 6.7), buff theo hàng cũng chỉ áp khi vào trận. Chỉ là dữ liệu cấu hình nên dùng `authGuard` (không cần đăng nhập thao tác chơi). Lỗi: `GENERAL_NOT_FOUND`.
+
+### 8.4i. Ngọc Ngũ Hành (mục 6.8)
+
+Routes Ngọc: `GET /api/gems` dùng `authGuard`; 2 route ghép dùng `playerGuard` (admin → 403) + rate limit.
+
+- `GET /api/gems`: tổng quan kho Ngọc — `config` (`GemConfigDto`: bảng chỉ số 10 cấp mọi loại, tỷ lệ ghép, tỷ lệ rớt, số Ngọc tối đa/đội), `gems` (mọi viên đang sở hữu, mới nhất trước), `total`.
+- `POST /api/gems/merge`: body `{ gemIds: [id, id], idempotencyKey }` — ghép 2 viên **cùng loại & cùng cấp** thành 1 viên cấp +1 (dùng chung công thức ghép thẻ Tướng). Lỗi khi 2 viên khác loại/khác cấp, không sở hữu, hoặc đã ở cấp trần. Retry cùng key không ghép lại.
+- `POST /api/gems/merge/quick`: body `{ idempotencyKey, levels?: number[] }` — **Ghép nhanh**: tự ghép mọi cặp còn ghép được theo các `level` chọn (mặc định mọi cấp), trả danh sách kết quả từng lần + `hasMore` khi chạm trần số lần/bấm mà vẫn còn cặp.
 
 ### 8.5. Lịch sử
 
@@ -1529,7 +1562,7 @@ Thứ tự ưu tiên:
 - 5 loại vé: thường, Thục, Ngụy, Ngô, Quần.
 - Vé miễn phí hồi 1 vé mỗi 5 phút theo mốc đồng hồ server.
 - Duyệt tài khoản bật/tắt trên trang Quản trị (mặc định tắt: đăng ký là vào game ngay); tài khoản mới nhận 100 vé quà đăng ký một lần lúc được duyệt (loại vé random theo mục 3.5).
-- Trang Quản trị: duyệt/từ chối đăng ký, danh sách người chơi, admin cộng vé (chọn loại + số lượng), xem mọi thẻ của mọi người chơi, tạo/bật/tắt giftcode.
+- Trang Quản trị: duyệt/từ chối đăng ký, danh sách người chơi, admin cộng vé (chọn loại + số lượng), xem mọi thẻ và mọi Ngọc của mọi người chơi, tạo/bật/tắt giftcode.
 - Giftcode chỉ tặng vé quay (nhiều loại + số lượng, hạn tuỳ chọn, mỗi người nhập 1 lần); 4 code tân thủ THUCQUOC/NGUYQUOC/NGOQUOC/QUANQUOC, mỗi code 200 vé phe tương ứng.
 - Không có nút "+50 vé" trên UI; endpoint thử nghiệm chỉ chạy khi server bật `ENABLE_DEV_TOPUP` (mặc định tắt).
 - Người chơi offline vẫn tích lũy đầy đủ các mốc hợp lệ.

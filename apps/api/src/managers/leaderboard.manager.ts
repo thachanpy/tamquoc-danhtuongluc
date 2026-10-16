@@ -1,14 +1,22 @@
-import type { LeaderboardDto, LeaderboardEntryDto } from '@tq/shared';
-import { LEADERBOARD_SIZE, LEADERBOARD_TOP, PVP_TEAM_SIZE, pvpTeamLc, pvpUnitLc } from '@tq/game-config';
+import type { GemElement, LeaderboardDto, LeaderboardEntryDto, PvpGemStats } from '@tq/shared';
+import { LEADERBOARD_SIZE, LEADERBOARD_TOP, PVP_TEAM_SIZE, autoTeamGemElements, pvpGemTeamStats, pvpTeamLc, pvpUnitLc } from '@tq/game-config';
 import type { GameContext } from '../context.ts';
 import { iso } from '../utils.ts';
-import { listBestPairsForAutoTeams, listEligibleUsers, listValidTeams } from '../repositories/leaderboard.repository.ts';
+import {
+  listBestPairsForAutoTeams,
+  listEligibleUsers,
+  listOwnedGems,
+  listTeamGemElements,
+  listValidTeams,
+} from '../repositories/leaderboard.repository.ts';
 import { findUserRow } from '../repositories/user.repository.ts';
+import { resolveTeamGems } from './pvp.manager.ts';
 
 /**
  * Bảng xếp hạng Lực chiến (mục 6.6) — chỉ đọc.
  * - Lực chiến = TỔNG LC của ĐỘI HÌNH đang dùng: đội đã lưu (còn hợp lệ), hoặc đội tự động
  *   (6 tướng LC cao nhất) nếu chưa lưu. Không còn tính theo số thẻ / cấp thẻ đang có.
+ * - Ngọc Ngũ Hành gắn kèm đội cũng cộng vào LC — khớp `effectiveTeam` ở pvp.manager.
  * - Chỉ xếp hạng tài khoản đã duyệt, KHÔNG phải admin, và có ít nhất 1 tướng trong đội.
  * - Đồng Lực chiến => đồng hạng (RANK). Trong cùng hạng: tên A→Z.
  */
@@ -28,14 +36,30 @@ const byName = (a: string, b: string) => a.localeCompare(b, 'vi', { sensitivity:
 /** Tổng LC đội hình của mọi người chơi đủ điều kiện, khoá theo user id. */
 function lcOfEveryone(ctx: GameContext): Map<number, number> {
   const out = new Map<number, number>();
-  // 1) Đội đã lưu còn hợp lệ — cộng LC từng slot.
+  // Ngọc: loại đã gắn của đội đã lưu, và (loại, cấp) đang sở hữu để chọn Ngọc cho đội tự động.
+  const teamGems = new Map<number, GemElement[]>();
+  for (const r of listTeamGemElements(ctx.db)) {
+    const list = teamGems.get(r.user_id);
+    if (list) list.push(r.element);
+    else teamGems.set(r.user_id, [r.element]);
+  }
+  const ownedGems = new Map<number, { element: GemElement; level: number }[]>();
+  for (const r of listOwnedGems(ctx.db)) {
+    const list = ownedGems.get(r.user_id);
+    if (list) list.push({ element: r.element, level: r.level });
+    else ownedGems.set(r.user_id, [{ element: r.element, level: r.level }]);
+  }
+  const gemStatsOf = (id: number, elements: GemElement[]): PvpGemStats =>
+    pvpGemTeamStats(resolveTeamGems(elements, ownedGems.get(id) ?? []));
+
+  // 1) Đội đã lưu còn hợp lệ — cộng LC từng slot kèm Ngọc đã gắn.
   const saved = new Map<number, { generalId: string; level: number }[]>();
   for (const r of listValidTeams(ctx.db)) {
     const list = saved.get(r.user_id);
     if (list) list.push({ generalId: r.general_id, level: r.level });
     else saved.set(r.user_id, [{ generalId: r.general_id, level: r.level }]);
   }
-  for (const [id, units] of saved) out.set(id, pvpTeamLc(units));
+  for (const [id, units] of saved) out.set(id, pvpTeamLc(units, gemStatsOf(id, teamGems.get(id) ?? [])));
 
   // 2) Chưa có slot hợp lệ: dựng đội tự động = 6 tướng LC cao nhất (khớp `autoTeam` ở pvp.manager).
   const auto = new Map<number, { generalId: string; level: number }[]>();
@@ -46,13 +70,14 @@ function lcOfEveryone(ctx: GameContext): Map<number, number> {
     else auto.set(p.user_id, [unit]);
   }
   for (const [id, pairs] of auto) {
+    const gem = gemStatsOf(id, autoTeamGemElements(ownedGems.get(id) ?? []));
     pairs.sort(
       (a, b) =>
-        pvpUnitLc(b.generalId, b.level) - pvpUnitLc(a.generalId, a.level) ||
+        pvpUnitLc(b.generalId, b.level, gem) - pvpUnitLc(a.generalId, a.level, gem) ||
         b.level - a.level ||
         a.generalId.localeCompare(b.generalId),
     );
-    out.set(id, pvpTeamLc(pairs.slice(0, PVP_TEAM_SIZE)));
+    out.set(id, pvpTeamLc(pairs.slice(0, PVP_TEAM_SIZE), gem));
   }
   return out;
 }

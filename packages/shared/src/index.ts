@@ -6,11 +6,128 @@ export type Faction = (typeof FACTIONS)[number];
 export const TICKET_TYPES = ['normal', 'shu', 'wei', 'wu', 'qun'] as const;
 export type TicketType = (typeof TICKET_TYPES)[number];
 
+/** Ngũ hành của Ngọc: Kim / Mộc / Thủy / Hỏa / Thổ. */
+export const GEM_ELEMENTS = ['kim', 'moc', 'thuy', 'hoa', 'tho'] as const;
+export type GemElement = (typeof GEM_ELEMENTS)[number];
+
+export const GEM_ELEMENT_LABELS: Record<GemElement, string> = {
+  kim: 'Kim',
+  moc: 'Mộc',
+  thuy: 'Thủy',
+  hoa: 'Hỏa',
+  tho: 'Thổ',
+};
+
+/**
+ * Chỉ số Ngọc Ngũ Hành cộng cho TOÀN ĐỘI khi vào trận (Chỉ số Nền Ra Trận — aura gốc, không thể bị Xóa Buff).
+ * Đơn vị bps: 10000 = 100%. Mỗi loại Ngọc chỉ dùng ĐÚNG 2 trường (xem `GemConfigDto.table`).
+ */
+export interface PvpGemStats {
+  damageBps: number;
+  takenDownBps: number;
+  hpBps: number;
+  lifestealBps: number;
+  hitBps: number;
+  dodgeBps: number;
+  critBps: number;
+  critDamageBps: number;
+  defBps: number;
+  defPenBps: number;
+}
+
+/** Nhãn tiếng Việt của từng chỉ số Ngọc (UI dựng bảng chỉ số). */
+export const GEM_STAT_LABELS: Record<keyof PvpGemStats, string> = {
+  damageBps: 'Sát thương',
+  takenDownBps: 'Giảm sát thương',
+  hpBps: 'HP tối đa',
+  lifestealBps: 'Hút máu',
+  hitBps: 'Chính xác',
+  dodgeBps: 'Né tránh',
+  critBps: 'Chí mạng',
+  critDamageBps: 'ST chí mạng',
+  defBps: 'Phòng thủ',
+  defPenBps: 'Xuyên giáp',
+};
+
+/** Một viên Ngọc Ngũ Hành người chơi đang sở hữu (vật phẩm rời theo loại + cấp). */
+export interface GemDto {
+  id: number;
+  element: GemElement;
+  level: number;
+  createdAt: string;
+}
+
+/** Một loại Ngọc gắn vào đội hình, kèm cấp cao nhất đang sở hữu của loại đó. */
+export interface PvpTeamGemDto {
+  element: GemElement;
+  level: number;
+}
+
+/** Cấu hình công khai của hệ thống Ngọc: bảng chỉ số + tỷ lệ ghép/rớt. */
+export interface GemConfigDto {
+  bpsScale: number;
+  /** Số Ngọc tối đa một đội hình được gắn (không trùng loại). */
+  teamGemCount: number;
+  /** Tỉ lệ rớt Ngọc đính kèm mỗi Tướng quay ra (bps). */
+  dropBps: number;
+  /** Tỉ lệ mỗi loại Ngọc khi trúng rớt (bps). */
+  typeWeightBps: number;
+  /** Loại Ngọc theo thứ tự hiển thị. */
+  elements: GemElement[];
+  /** Bảng chỉ số: loại → 10 cấp (index 0 = cấp 1); mỗi cấp chỉ 2 chỉ số khác 0. */
+  table: Record<GemElement, PvpGemStats[]>;
+  /** Tỷ lệ ghép theo level đầu vào — dùng chung công thức với thẻ Tướng. */
+  rates: { level: number; successBps: number; failureDistribution: WeightEntry[] }[];
+}
+
+/** Tổng quan Ngọc của người chơi (tab Ngọc ở Nâng cấp & Bộ sưu tập). */
+export interface GemsDto {
+  config: GemConfigDto;
+  /** Mọi viên Ngọc đang sở hữu (chưa tiêu hao), mới nhất trước. */
+  gems: GemDto[];
+  total: number;
+}
+
+/** Kết quả một lần ghép 2 viên Ngọc cùng loại & cùng cấp. */
+export interface GemMergeResultDto {
+  mergeId: number;
+  outcome: UpgradeOutcome;
+  element: GemElement;
+  inputLevel: number;
+  inputGemIds: number[];
+  resultGem: GemDto;
+  successBps: number;
+  failureBps: number;
+  failureDistribution: WeightEntry[];
+}
+
+/** Kết quả Ghép nhanh Ngọc: danh sách các lần ghép theo thứ tự thực hiện. */
+export interface QuickGemMergeResultDto {
+  /** Các level đầu vào (đã sắp tăng dần) người chơi chọn cho lần ghép nhanh này. */
+  levels: number[];
+  merges: number;
+  successes: number;
+  failures: number;
+  /** Chạm trần số lần ghép mỗi lần bấm nhưng vẫn còn cặp ghép được. */
+  hasMore: boolean;
+  results: {
+    mergeId: number;
+    element: GemElement;
+    inputLevel: number;
+    resultLevel: number;
+    resultGemId: number;
+    outcome: UpgradeOutcome;
+  }[];
+}
+
 export const MIN_LEVEL = 1;
 export const MAX_LEVEL = 10;
 
 /** Số tướng tối đa mỗi đội PvP (PVP.md mục 2.1). */
 export const PVP_TEAM_SIZE = 6;
+
+/** Số Ngọc Ngũ Hành tối đa gắn cho một đội hình PvP (không trùng loại). */
+export const PVP_TEAM_GEM_COUNT = 5;
 
 export const FACTION_LABELS: Record<Faction, string> = {
   wei: 'Ngụy',
@@ -146,6 +263,8 @@ export interface DrawnCardDto {
   drawId: number;
   card: CardDto;
   general: GeneralDto;
+  /** Ngọc Ngũ Hành rớt đính kèm (5% mỗi lượt quay, cùng cấp với Tướng); null = lượt này không rớt Ngọc. */
+  gem: GemDto | null;
 }
 
 /**
@@ -310,6 +429,12 @@ export interface AdminUsersPage extends Page<AdminUserDto> {
 }
 
 export interface AdminCardDto extends CardDto {
+  userId: number;
+  username: string;
+}
+
+/** Một viên Ngọc của bất kỳ người chơi nào (tab Ngọc ở trang Quản trị). */
+export interface AdminGemDto extends GemDto {
   userId: number;
   username: string;
 }
@@ -523,6 +648,18 @@ export const schemas = {
       pageSize: { type: 'integer', minimum: 1, maximum: 500, default: 60 },
     },
   },
+  adminGemsQuery: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      userId: { type: 'integer', minimum: 1 },
+      element: { type: 'string', enum: [...GEM_ELEMENTS] },
+      level: { type: 'integer', minimum: MIN_LEVEL, maximum: MAX_LEVEL },
+      sort: { type: 'string', enum: ['newest', 'level_desc', 'level_asc', 'owner'] },
+      page: { type: 'integer', minimum: 1, default: 1 },
+      pageSize: { type: 'integer', minimum: 1, maximum: 500, default: 60 },
+    },
+  },
   questClaimBody: {
     type: 'object',
     additionalProperties: false,
@@ -604,6 +741,33 @@ export const schemas = {
           },
         },
       },
+      // Ngọc gắn cho đội: tối đa PVP_TEAM_GEM_COUNT loại KHÁC nhau. Bỏ trống = gỡ hết Ngọc.
+      gems: {
+        type: 'array',
+        maxItems: PVP_TEAM_GEM_COUNT,
+        uniqueItems: true,
+        items: { type: 'string', enum: [...GEM_ELEMENTS] },
+      },
+    },
+  },
+  gemMergeAttemptBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['gemIds', 'idempotencyKey'],
+    properties: {
+      // Đúng UPGRADE_INPUT_COUNT (2) viên cùng loại & cùng cấp; server kiểm tra lại.
+      gemIds: { type: 'array', minItems: 2, maxItems: 2, items: { type: 'integer', minimum: 1 } },
+      idempotencyKey,
+    },
+  },
+  gemMergeQuickBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['idempotencyKey'],
+    properties: {
+      idempotencyKey,
+      // Level đầu vào tham gia ghép nhanh; bỏ trống = mặc định Lv.1–QUICK_UPGRADE_MAX_LEVEL (Lv.5).
+      levels: { type: 'array', minItems: 1, maxItems: 9, uniqueItems: true, items: { type: 'integer', minimum: 1, maximum: 9 } },
     },
   },
   pvpChallengeBody: {
@@ -635,6 +799,8 @@ export const schemas = {
       // Danh sách generalId trong đội (phân tách bằng dấu phẩy) — để tính Chỉ số Nền Ra Trận
       // (aura Hỗ trợ + Cổng Đồng Phe). Bỏ trống = xem tự do, không cộng chỉ số nền đội.
       squad: { type: 'string', maxLength: 512 },
+      // Danh sách LOẠI Ngọc đã gắn cho đội (phân tách bằng dấu phẩy) — để Chỉ số Nền khớp khi vào trận.
+      gems: { type: 'string', maxLength: 128 },
     },
   },
   profileBody: {
@@ -802,7 +968,7 @@ export const PVP_TARGETINGS = ['single', 'lane', 'back_row', 'back_single', 'hig
 export type PvpTargeting = (typeof PVP_TARGETINGS)[number];
 
 export const PVP_TARGETING_LABELS: Record<PvpTargeting, string> = {
-  single: 'một mục tiêu (ưu tiên cùng hàng ngang)',
+  single: 'một mục tiêu (ưu tiên hàng trước)',
   lane: 'toàn bộ hàng ngang',
   back_row: 'các tướng ở hàng sau',
   back_single: 'một tướng ở hàng sau',
@@ -855,6 +1021,8 @@ export interface PvpUnitDto {
 /** Đội hình PvP đã lưu. units rỗng = chưa xếp; lc = TỔNG Lực chiến của đội (mục 6.7). */
 export interface PvpTeamDto {
   units: PvpUnitDto[];
+  /** Ngọc Ngũ Hành đã gắn (tối đa PVP_TEAM_GEM_COUNT loại khác nhau; cấp = cấp cao nhất đang sở hữu). */
+  gems: PvpTeamGemDto[];
   lc: number;
 }
 
@@ -1205,9 +1373,11 @@ export interface PvpPreBattleBonusDto {
   factionHpBps: number;
   /** Cổng Đồng Phe: +% sát thương theo số tướng cùng phe (bps). */
   factionDamageBps: number;
-  /** Tổng % cộng vào Máu (vị trí + phong cách + cổng đồng phe). */
+  /** Ngọc Ngũ Hành đang gắn: chỉ số cộng cho TOÀN ĐỘI (aura gốc, bps). */
+  gem: PvpGemStats;
+  /** Tổng % cộng vào Máu (vị trí + phong cách + cổng đồng phe + ngọc). */
   hpBps: number;
-  /** Tổng % cộng vào Sát thương (vị trí + phong cách + cổng đồng phe). */
+  /** Tổng % cộng vào Sát thương (vị trí + phong cách + cổng đồng phe + ngọc). */
   damageBps: number;
 }
 

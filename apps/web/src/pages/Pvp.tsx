@@ -2,6 +2,8 @@ import { For, Show, batch, createEffect, createMemo, createSignal, onCleanup, on
 import type {
   CardDto,
   Faction,
+  GemElement,
+  GemsDto,
   PvpBattleDto,
   PvpBattleSummaryDto,
   PvpCombatDto,
@@ -15,14 +17,14 @@ import type {
   PvpUnitDto,
   PvpUnitStateDto,
 } from '@tq/shared';
-import { FACTIONS, FACTION_LABELS, PVP_BUFF_SCOPE_LABELS, PVP_PASSIVE_LABELS, PVP_SKILL_LABELS, PVP_STYLES, PVP_STYLE_LABELS } from '@tq/shared';
+import { FACTIONS, FACTION_LABELS, GEM_ELEMENTS, GEM_ELEMENT_LABELS, PVP_BUFF_SCOPE_LABELS, PVP_PASSIVE_LABELS, PVP_SKILL_LABELS, PVP_STYLES, PVP_STYLE_LABELS, PVP_TEAM_GEM_COUNT } from '@tq/shared';
 import { api, fetchAllCards } from '../api.ts';
 import { gen, genStyle, pvpTarget, setPvpTarget } from '../state.ts';
 import { Avatar } from '../components/Avatar.tsx';
 import { CombatDetailModal } from '../components/CombatDetailModal.tsx';
 import { StyleIcon } from '../components/StyleIcon.tsx';
 import { StatIcon } from '../components/StatIcon.tsx';
-import { FACTION_STYLE, STYLE_COLOR, initials, levelTier, pct, portraitUrl } from '../art.ts';
+import { FACTION_STYLE, STYLE_COLOR, gemUrl, initials, levelTier, pct, portraitUrl } from '../art.ts';
 import { preBattleNote } from '../combat-notes.ts';
 import type { IconId } from '../icons.ts';
 import { createArena, type ArenaHandle, type ArenaUnit, type ArenaView, type FloatPart } from '../pixi/arena.ts';
@@ -125,14 +127,20 @@ const statOf = (c: PvpCombatDto): UnitStat => {
       : null,
   };
 };
-/** Khóa tra chỉ số: gồm cả chữ ký đội (kèm vị trí) để hai đội khác nhau không dùng nhầm chỉ số nền của nhau. */
+/**
+ * Khóa tra chỉ số: gồm cả chữ ký đội (kèm vị trí) VÀ chữ ký Ngọc đã gắn để hai đội / hai bộ Ngọc
+ * khác nhau không dùng nhầm chỉ số nền của nhau.
+ */
 const squadKey = (units: PvpUnitDto[]) =>
   units
     .slice()
     .sort((a, b) => a.slot - b.slot)
     .map((u) => `${u.generalId}@${u.slot}`)
     .join(',');
-const statKey = (u: PvpUnitDto, squad: PvpUnitDto[]) => `${u.generalId}|${u.level}|${squadKey(squad)}`;
+/** Chữ ký các loại Ngọc đã gắn (theo thứ tự Ngũ Hành) — dùng cho khóa cache chỉ số. */
+const gemSigOf = (els: GemElement[]) => GEM_ELEMENTS.filter((e) => els.includes(e)).join('+');
+const statKey = (u: PvpUnitDto, squad: PvpUnitDto[], gemSig = '') =>
+  `${u.generalId}|${u.level}|${squadKey(squad)}|${gemSig}`;
 
 /**
  * Mô tả buff tăng sức mạnh của một kỹ năng (nhóm TEAM_ và BUFF_ALLIES) kèm LƯỢNG tăng mỗi lớp:
@@ -410,6 +418,8 @@ function TeamBoard(props: {
   units: PvpUnitDto[];
   /** Chi tiết chiến đấu theo (tướng|cấp) — dùng cho dòng chỉ số và hộp chi tiết khi bấm ảnh đại diện. */
   combat?: Record<string, PvpCombatDto>;
+  /** Chữ ký Ngọc đã gắn của đội — phải khớp với khóa trong `combat` để tra đúng chỉ số đã gồm aura Ngọc. */
+  gemSig?: string;
   foe?: boolean;
   onSlot?: (slot: number) => void;
   /** Kéo thả đổi vị trí hai ô trong đội mình (mục 6.7). */
@@ -501,7 +511,7 @@ function TeamBoard(props: {
   // Chi tiết chiến đấu của tướng ở slot — tra theo (tướng, cấp, đội); chưa tải xong thì undefined (hiện "…").
   const unitCombat = (slot: number) => {
     const u = bySlot().get(slot);
-    return u ? props.combat?.[statKey(u, props.units)] : undefined;
+    return u ? props.combat?.[statKey(u, props.units, props.gemSig ?? '')] : undefined;
   };
   const unitStat = (slot: number): UnitStat | undefined => {
     const c = unitCombat(slot);
@@ -1852,6 +1862,43 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   );
 }
 
+/**
+ * Dải chip chọn Ngọc Ngũ Hành gắn cho đội hình: bấm để gắn/bỏ gắn, tối đa PVP_TEAM_GEM_COUNT loại
+ * khác nhau. Chỉ hiện bật được với loại Ngọc người chơi đang sở hữu (kèm cấp cao nhất).
+ */
+function GemPicker(props: {
+  value: GemElement[];
+  best: (el: GemElement) => number;
+  onToggle: (el: GemElement) => void;
+}) {
+  return (
+    <div class="pvp-gems">
+      <span class="muted small">{`Ngọc đội hình — tối đa ${PVP_TEAM_GEM_COUNT} loại, chỉ loại đang sở hữu:`}</span>
+      <div class="gem-cards">
+        <For each={GEM_ELEMENTS}>
+          {(el) => {
+            const on = () => props.value.includes(el);
+            const lv = () => props.best(el);
+            return (
+              <button
+                class="gem-pill"
+                classList={{ on: on() }}
+                disabled={!on() && (lv() === 0 || props.value.length >= PVP_TEAM_GEM_COUNT)}
+                onClick={() => props.onToggle(el)}
+                title={lv() ? `${GEM_ELEMENT_LABELS[el]} · cấp cao nhất đang sở hữu: ${lv()}` : `Chưa sở hữu Ngọc ${GEM_ELEMENT_LABELS[el]}`}
+              >
+                <img class="gem-dot" src={gemUrl(el, lv() || 1)} alt="" />
+                {GEM_ELEMENT_LABELS[el]}
+                <Show when={lv()}>{(l) => <b>{` L${l()}`}</b>}</Show>
+              </button>
+            );
+          }}
+        </For>
+      </div>
+    </div>
+  );
+}
+
 // ======================= Trang Đấu trường =======================
 
 export function PvpPage() {
@@ -1861,6 +1908,10 @@ export function PvpPage() {
 
   const [overview, setOverview] = createSignal<PvpOverviewDto | null>(null);
   const [team, setTeam] = createSignal<PvpUnitDto[]>([]);
+  /** Ngọc Ngũ Hành gắn cho đội hình mình (tối đa PVP_TEAM_GEM_COUNT loại khác nhau). */
+  const [teamGems, setTeamGems] = createSignal<GemElement[]>([]);
+  /** Kho Ngọc đang sở hữu — dùng để biết loại nào gắn được và cấp cao nhất của mỗi loại. */
+  const [gems, setGems] = createSignal<GemsDto | null>(null);
   const [dirty, setDirty] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal('');
@@ -1887,11 +1938,12 @@ export function PvpPage() {
    */
   const [combat, setCombat] = createSignal<Record<string, PvpCombatDto>>({});
   const pendingStats = new Set<string>();
-  async function ensureStats(units: PvpUnitDto[]) {
+  async function ensureStats(units: PvpUnitDto[], gemEls: GemElement[] = []) {
     // Gửi theo ĐÚNG thứ tự vị trí (slot 1→6) để server suy ra hàng (trước/sau) cho Chỉ số Nền Ra Trận.
     const squad = units.slice().sort((a, b) => a.slot - b.slot).map((u) => u.generalId);
+    const gemSig = gemSigOf(gemEls);
     const jobs = units.filter((u) => {
-      const k = statKey(u, units);
+      const k = statKey(u, units, gemSig);
       if (untrack(combat)[k] || pendingStats.has(k)) return false;
       pendingStats.add(k);
       return true;
@@ -1899,13 +1951,13 @@ export function PvpPage() {
     await Promise.all(
       jobs.map(async (u) => {
         try {
-          const dto = await api.generalCombat(u.generalId, u.level, squad);
+          const dto = await api.generalCombat(u.generalId, u.level, squad, gemEls);
           if (!alive) return;
-          setCombat((s) => ({ ...s, [statKey(u, units)]: dto }));
+          setCombat((s) => ({ ...s, [statKey(u, units, gemSig)]: dto }));
         } catch {
           /* lỗi tải chỉ số thì bỏ qua — ô tướng hiện dấu "…" */
         } finally {
-          pendingStats.delete(statKey(u, units));
+          pendingStats.delete(statKey(u, units, gemSig));
         }
       }),
     );
@@ -1940,10 +1992,34 @@ export function PvpPage() {
       setError('');
       setOverview(d);
       setTeam(d.team.units);
+      setTeamGems(d.team.gems.map((g) => g.element));
       setDirty(false);
     } catch (e) {
       if (alive) setError((e as Error).message);
     }
+  }
+  /** Nạp kho Ngọc đang sở hữu (loại nào gắn được + cấp cao nhất mỗi loại). */
+  async function loadGems() {
+    try {
+      const g = await api.gems();
+      if (alive) setGems(g);
+    } catch {
+      /* lỗi tải kho Ngọc thì coi như chưa sở hữu loại nào */
+    }
+  }
+  /** Cấp cao nhất đang sở hữu của một loại Ngọc (0 = chưa có viên nào). */
+  const gemBestLevel = (el: GemElement) =>
+    (gems()?.gems ?? []).reduce((m, g) => (g.element === el ? Math.max(m, g.level) : m), 0);
+  /** Bật/tắt một loại Ngọc cho đội hình (tối đa PVP_TEAM_GEM_COUNT loại khác nhau). */
+  function toggleGem(el: GemElement) {
+    setTeamGems((prev) =>
+      prev.includes(el)
+        ? prev.filter((e) => e !== el)
+        : prev.length >= PVP_TEAM_GEM_COUNT
+          ? prev
+          : GEM_ELEMENTS.filter((e) => prev.includes(e) || e === el),
+    );
+    setDirty(true);
   }
   async function loadHistory() {
     try {
@@ -1982,14 +2058,16 @@ export function PvpPage() {
   onMount(() => {
     void loadOverview();
     void loadHistory();
+    void loadGems();
   });
 
   // Nạp chỉ số cơ bản cho đội mình + đội đối thủ để hiển thị ở bước chuẩn bị khiêu chiến
   createEffect(() => {
     const t = team();
-    if (t.length) void ensureStats(t);
+    const g = teamGems();
+    if (t.length) void ensureStats(t, g);
     const o = opponent();
-    if (o) void ensureStats(o.team.units);
+    if (o) void ensureStats(o.team.units, o.team.gems.map((x) => x.element));
   });
 
   // Đối thủ chọn từ bảng xếp hạng (#pvp/<id>)
@@ -2056,11 +2134,12 @@ export function PvpPage() {
     if (saving() || !alive) return;
     setSaving(true);
     try {
-      const r = await api.pvpSaveTeam(snapshot);
+      const r = await api.pvpSaveTeam(snapshot, teamGems());
       if (!alive) return;
       batch(() => {
         if (team() === snapshot) {
           setTeam(r.units);
+          setTeamGems(r.gems.map((g) => g.element));
           setDirty(false);
         }
       });
@@ -2075,9 +2154,10 @@ export function PvpPage() {
   const saveHint = () => (saving() || dirty() ? 'Đang tự động lưu đội hình…' : 'Đội hình được lưu tự động.');
   let saveTimer: number | undefined;
   onCleanup(() => clearTimeout(saveTimer));
-  // Người chơi ngừng chỉnh ~700ms thì tự lưu đội hình.
+  // Người chơi ngừng chỉnh ~700ms thì tự lưu đội hình (gồm cả Ngọc đang gắn).
   createEffect(() => {
     const t = team();
+    teamGems();
     if (!dirty() || !t.length) return;
     clearTimeout(saveTimer);
     saveTimer = window.setTimeout(() => void saveTeam(t), 700);
@@ -2169,7 +2249,8 @@ export function PvpPage() {
                   <h3>Đội hình của bạn</h3>
                   <span class="pvp-power" title="Tổng Lực chiến của đội">{`Lực chiến ${num(teamLc())}`}</span>
                 </div>
-                <TeamBoard units={team()} combat={combat()} onSlot={openPicker} onMove={moveSlot} />
+                <TeamBoard units={team()} combat={combat()} gemSig={gemSigOf(teamGems())} onSlot={openPicker} onMove={moveSlot} />
+                <GemPicker value={teamGems()} best={gemBestLevel} onToggle={toggleGem} />
                 <div class="pvp-team-actions">
                   <span class="muted small">{saveHint()}</span>
                 </div>
@@ -2253,7 +2334,7 @@ export function PvpPage() {
                       <div class="muted small">{`Lực chiến ${num(teamLc())}`}</div>
                     </div>
                   </div>
-                  <TeamBoard units={team()} combat={combat()} onSlot={openPicker} onMove={moveSlot} />
+                  <TeamBoard units={team()} combat={combat()} gemSig={gemSigOf(teamGems())} onSlot={openPicker} onMove={moveSlot} />
                 </div>
                 <div class="pvp-duel-vs" aria-hidden="true">
                   VS
@@ -2266,7 +2347,7 @@ export function PvpPage() {
                       <div class="muted small">{`Lực chiến ${num(o().team.lc)}${o().saved ? '' : ' · đội gợi ý'}`}</div>
                     </div>
                   </div>
-                  <TeamBoard units={o().team.units} combat={combat()} foe />
+                  <TeamBoard units={o().team.units} combat={combat()} gemSig={gemSigOf(o().team.gems.map((g) => g.element))} foe />
                 </div>
               </div>
               <div class="pvp-rulebar">

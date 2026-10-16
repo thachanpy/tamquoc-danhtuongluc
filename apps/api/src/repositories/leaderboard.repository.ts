@@ -1,3 +1,4 @@
+import type { GemElement } from '@tq/shared';
 import type { DB } from '../db.ts';
 
 /**
@@ -73,4 +74,41 @@ export function listBestPairsForAutoTeams(db: DB): BestPairRow[] {
         GROUP BY c.user_id, c.general_id`,
     )
     .all() as unknown as BestPairRow[];
+}
+
+/** Một loại Ngọc đã gắn cho đội đã lưu của người chơi. */
+export interface TeamGemRow {
+  user_id: number;
+  element: GemElement;
+}
+
+/** Cặp (loại Ngọc, cấp cao nhất đang sở hữu) — nguyên liệu chọn Ngọc cho đội tự động. */
+export interface OwnedGemRow {
+  user_id: number;
+  element: GemElement;
+  level: number;
+}
+
+/** Mọi loại Ngọc đã gắn của người chơi đủ điều kiện (đọc cùng `listValidTeams` khi tính LC đội đã lưu). */
+export function listTeamGemElements(db: DB): TeamGemRow[] {
+  return db
+    .prepare(
+      `SELECT g.user_id, g.element
+         FROM pvp_team_gems g
+         JOIN users u ON u.id = g.user_id AND u.status = 'approved' AND u.is_admin = 0`,
+    )
+    .all() as unknown as TeamGemRow[];
+}
+
+/** Loại Ngọc (kèm cấp cao nhất) mỗi người chơi đang sở hữu — khớp `autoTeamGemElements` ở pvp.manager. */
+export function listOwnedGems(db: DB): OwnedGemRow[] {
+  return db
+    .prepare(
+      `SELECT g.user_id, g.element, MAX(g.level) AS level
+         FROM user_gems g
+         JOIN users u ON u.id = g.user_id AND u.status = 'approved' AND u.is_admin = 0
+        WHERE g.status = 'active'
+        GROUP BY g.user_id, g.element`,
+    )
+    .all() as unknown as OwnedGemRow[];
 }
