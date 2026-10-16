@@ -95,6 +95,8 @@ interface UnitStat {
   dodgeBps: number;
   /** Phòng thủ khi vào trận (bps): % giảm sát thương nhận vào. */
   defBps: number;
+  /** Lực chiến (LC) của riêng tướng ở cấp này — chỉ số tổng hợp dùng xếp thứ tự ra đòn (mục 1). */
+  lc: number;
   /**
    * Chỉ số Nền Ra Trận (màn chuẩn bị): phần cộng thêm so với chỉ số gốc + nhãn chi tiết % để hiện badge.
    * null = xem tự do (không có ngữ cảnh đội) nên không có badge.
@@ -112,6 +114,7 @@ const statOf = (c: PvpCombatDto): UnitStat => {
     hitBps: c.self.hitBps,
     dodgeBps: c.self.dodgeBps,
     defBps: c.self.defBps,
+    lc: c.self.lc,
     pre: pb
       ? {
           hpPlus: pb.maxHp - c.self.maxHp,
@@ -389,6 +392,10 @@ function UnitCell(props: {
               <span class="pvp-cell-style" style={{ color: STYLE_COLOR[genStyle(g()!.id)] }} title={PVP_STYLE_LABELS[genStyle(g()!.id)]}>
                 <StyleIcon style={genStyle(g()!.id)} size={11} />
               </span>
+              {/* Lực chiến (LC) — chip cuối trong chuỗi định danh: cấp → phe → phong cách → LC */}
+              <Show when={props.stat}>
+                {(s) => <span class="pvp-cell-lc" title="Lực chiến">{`LC ${num(s().lc)}`}</span>}
+              </Show>
             </span>
             <StatLine stat={props.stat} />
           </>
@@ -540,7 +547,8 @@ interface GenOpt {
   style: PvpStyle;
   /** Cấp cao nhất đang sở hữu — dùng để xếp đội (mỗi tướng chỉ cần một lựa chọn). */
   best: number;
-  power: number;
+  /** Lực chiến (LC) của tướng ở cấp cao nhất — dùng sắp thứ tự gợi ý. */
+  lc: number;
 }
 
 function Picker(props: {
@@ -695,6 +703,8 @@ function Picker(props: {
                           <Show when={c()}>
                             {(x) => (
                               <>
+                                {/* Lực chiến (LC) — cùng chuỗi định danh với cấp · phe · phong cách ở trên */}
+                                <span class="pvp-pick-lc" title="Lực chiến">{`LC ${num(x().self.lc)}`}</span>
                                 <span class="pvp-pick-stat-num">
                                   <StatIcon id="attack" size={11} /> {num(x().self.damage)} · <StatIcon id="heart" size={11} /> {num(x().self.maxHp)} ·{' '}
                                   <StatIcon id="armor" size={11} /> {pct(x().self.defBps)}
@@ -1197,6 +1207,10 @@ function BattleReport(props: { units: PvpUnitStateDto[]; mySide: PvpSide; analys
               </span>
             )}
           </Show>
+          {/* Lực chiến (LC) — chip cuối trong chuỗi định danh: cấp → phe → phong cách → LC */}
+          <Show when={unitAt(idx)}>
+            {(u) => <span class="rp-t-lc" title="Lực chiến">{`LC ${num(u().lc)}`}</span>}
+          </Show>
         </span>
       </td>
       <td class="rp-t-num dmg">{num(t.dealt)}</td>
@@ -1674,6 +1688,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
       slot: u.slot,
       name: g.name,
       level: u.level,
+      lc: u.lc,
       artKey: g.artKey,
       style: u.style,
       // Nhóm kỹ năng + phe: dùng chọn kiểu và pha màu hiệu ứng kỹ năng trên sân (arena.ts)
@@ -1852,8 +1867,10 @@ export function PvpPage() {
   const [battle, setBattle] = createSignal<PvpBattleDto | null>(null);
   const [history, setHistory] = createSignal<PvpBattleSummaryDto[]>([]);
 
-  const powerOf = (level: number) => overview()?.powerByLevel[level] ?? 0;
-  const teamPower = () => team().reduce((s, u) => s + powerOf(u.level), 0);
+  // Lực chiến (LC) của một tướng ở cấp cao nhất đang sở hữu — server tính sẵn trong `ownedCombat`.
+  const unitLc = (generalId: string) => overview()?.ownedCombat[generalId]?.self.lc ?? 0;
+  // Tổng LC đội hình đang dựng (mỗi tướng đã mang sẵn LC; tướng mới gán lấy LC từ `unitLc`).
+  const teamLc = () => team().reduce((s, u) => s + (u.lc || unitLc(u.generalId)), 0);
 
   /**
    * Chi tiết chiến đấu của từng tướng theo (tướng|cấp|đội) — dùng chung cho cả 2 đội:
@@ -1903,9 +1920,9 @@ export function PvpPage() {
         artKey: gen(id).artKey,
         style: genStyle(id),
         best: lv,
-        power: powerOf(lv),
+        lc: unitLc(id),
       }))
-      .sort((a, b) => b.power - a.power || b.best - a.best || a.name.localeCompare(b.name));
+      .sort((a, b) => b.lc - a.lc || b.best - a.best || a.name.localeCompare(b.name));
   });
 
   async function loadOverview() {
@@ -1990,7 +2007,7 @@ export function PvpPage() {
     setTeam((prev) => {
       // Bỏ tướng này khỏi slot cũ (mỗi tướng chỉ xếp một lần) rồi gán vào slot được chọn
       const rest = prev.filter((u) => u.slot !== slot && u.generalId !== generalId);
-      return [...rest, { slot, generalId, level }].sort((a, b) => a.slot - b.slot);
+      return [...rest, { slot, generalId, level, lc: unitLc(generalId) }].sort((a, b) => a.slot - b.slot);
     });
     setDirty(true);
     setPickerSlot(null);
@@ -2142,7 +2159,7 @@ export function PvpPage() {
               <div class="pvp-myteam">
                 <div class="pvp-team-head">
                   <h3>Đội hình của bạn</h3>
-                  <span class="pvp-power" title="Tổng Lực chiến của đội">{`Lực chiến ${num(teamPower())}`}</span>
+                  <span class="pvp-power" title="Tổng Lực chiến của đội">{`Lực chiến ${num(teamLc())}`}</span>
                 </div>
                 <TeamBoard units={team()} combat={combat()} onSlot={openPicker} onMove={moveSlot} />
                 <div class="pvp-team-actions">
@@ -2169,7 +2186,7 @@ export function PvpPage() {
                       <Avatar avatar={o().opponent.avatar} name={o().opponent.displayName} class="pvp-opp-avatar" />
                       <div class="pvp-opp-row-info">
                         <b>{o().opponent.displayName}</b>
-                        <span class="muted small">{`Lực chiến ${num(o().team.power)}${o().saved ? '' : ' · đội gợi ý'}`}</span>
+                        <span class="muted small">{`Lực chiến ${num(o().team.lc)}${o().saved ? '' : ' · đội gợi ý'}`}</span>
                       </div>
                       <button class="btn primary small" onClick={() => setChallengeOpen(true)}>
                         Chuẩn bị khiêu chiến
@@ -2195,7 +2212,7 @@ export function PvpPage() {
                           <span class="hist-role">{h.role === 'attack' ? 'Tấn công' : 'Phòng thủ'}</span>
                           <Avatar avatar={h.opponent.avatar} name={h.opponent.displayName} class="hist-avatar" />
                           <span class="hist-name">{h.opponent.displayName}</span>
-                          <span class="hist-power muted small">{`${num(h.myPower)} vs ${num(h.opponentPower)}`}</span>
+                          <span class="hist-power muted small">{`${num(h.myLc)} vs ${num(h.opponentLc)}`}</span>
                           <span class="hist-time muted small">{time(h.createdAt)}</span>
                         </button>
                       )}
@@ -2225,7 +2242,7 @@ export function PvpPage() {
                     <Avatar avatar={overview()?.me.avatar ?? null} name={overview()?.me.displayName ?? ''} class="pvp-opp-avatar" />
                     <div>
                       <b>{overview()?.me.displayName}</b>
-                      <div class="muted small">{`Lực chiến ${num(teamPower())}`}</div>
+                      <div class="muted small">{`Lực chiến ${num(teamLc())}`}</div>
                     </div>
                   </div>
                   <TeamBoard units={team()} combat={combat()} onSlot={openPicker} onMove={moveSlot} />
@@ -2238,7 +2255,7 @@ export function PvpPage() {
                     <Avatar avatar={o().opponent.avatar} name={o().opponent.displayName} class="pvp-opp-avatar" />
                     <div>
                       <b>{o().opponent.displayName}</b>
-                      <div class="muted small">{`Lực chiến ${num(o().team.power)}${o().saved ? '' : ' · đội gợi ý'}`}</div>
+                      <div class="muted small">{`Lực chiến ${num(o().team.lc)}${o().saved ? '' : ' · đội gợi ý'}`}</div>
                     </div>
                   </div>
                   <TeamBoard units={o().team.units} combat={combat()} foe />

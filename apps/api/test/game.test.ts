@@ -15,7 +15,7 @@ import { seedGenerals } from '../src/seed.ts';
 import { getLeaderboard } from '../src/managers/leaderboard.manager.ts';
 import { runMigrations } from '../src/migrations.ts';
 import { DatabaseSync } from 'node:sqlite';
-import { RECOVERY_CAP_PER_TYPE, DRAW_ALL_MAX, ROSTER } from '@tq/game-config';
+import { RECOVERY_CAP_PER_TYPE, DRAW_ALL_MAX, ROSTER, pvpUnitLc } from '@tq/game-config';
 import { SIGNUP_BONUS_TICKETS as BONUS, DEV_TOPUP_TICKETS, UPGRADE_INPUT_COUNT, RECOVERY_INTERVAL_MS, GIFT_MAX_CARDS } from '@tq/game-config';
 
 /** Đăng ký + duyệt ngay (tài khoản đầu tiên tự được duyệt; các tài khoản sau được admin duyệt). */
@@ -1154,59 +1154,68 @@ test('giftcode nguyên tử: lỗi giữa chừng => không cộng vé nào, ch�
 
 // ======================= Bảng xếp hạng =======================
 
-test('leaderboard: Lực chiến = tổng 2^(lv-1) mỗi (tướng, cấp) tính 1 lần, đồng điểm đồng hạng, ẩn admin, bỏ thẻ đã tiêu thụ', () => {
+test('leaderboard: xếp theo TỔNG LC đội hình (đội tự động), đồng LC đồng hạng, ẩn admin, bỏ thẻ đã tiêu thụ', () => {
   const { ctx } = makeCtx();
   const admin = register(ctx, 'boss', 'secret123').userId; // tài khoản đầu tiên = admin
   const a = register(ctx, 'alice', 'secret123').userId;
   const b = register(ctx, 'bob', 'secret123').userId;
   const c = register(ctx, 'carol', 'secret123').userId;
+  const d = register(ctx, 'dave', 'secret123').userId;
   register(ctx, 'nocards', 'secret123');
   insertCard(ctx, admin, 'cao-cao', 10); // admin không được xếp hạng
-  insertCard(ctx, a, 'cao-cao', 10); // 512
-  insertCard(ctx, a, 'liu-bei', 1); // +1 => 513
-  insertCard(ctx, b, 'liu-bei', 9); // 256
-  insertCard(ctx, b, 'liu-bei', 9); // cùng tướng + cùng cấp => không cộng thêm
-  insertCard(ctx, b, 'cao-cao', 9); // tướng khác cùng cấp => +256 = 512
-  const used = insertCard(ctx, b, 'zhao-yun', 1);
-  ctx.db.prepare("UPDATE user_cards SET status = 'consumed', consumed_at = 'x' WHERE id = ?").run(used); // không tính
-  for (let i = 0; i < 5; i++) insertCard(ctx, c, 'sun-quan', 10); // 5 thẻ Tôn Quyền Lv.10 => chỉ 512; max Lv10 => trên bob
+  // alice: 2 tướng => đội tự động gồm 2 tướng (chưa đủ 6)
+  insertCard(ctx, a, 'cao-cao', 10);
+  insertCard(ctx, a, 'liu-bei', 1);
+  // bob: 3 tướng nhưng 1 thẻ đã tiêu thụ => chỉ còn 2 tướng được tính LC
+  insertCard(ctx, b, 'liu-bei', 9);
+  insertCard(ctx, b, 'cao-cao', 9);
+  const used = insertCard(ctx, b, 'zhao-yun', 10);
+  ctx.db.prepare("UPDATE user_cards SET status = 'consumed', consumed_at = 'x' WHERE id = ?").run(used);
+  // carol: 5 thẻ CÙNG tướng => đội tự động chỉ gồm 1 tướng (mỗi tướng tính một lần).
+  // dave cũng 1 tướng đó cùng cấp => đồng LC => đồng hạng.
+  for (let i = 0; i < 5; i++) insertCard(ctx, c, 'sun-quan', 10);
+  insertCard(ctx, d, 'sun-quan', 10);
   // Hồ sơ (mục 3.11): bob đổi tên hiển thị + ảnh đại diện => bảng xếp hạng trả về cả hai
   ctx.db.prepare("UPDATE users SET display_name = 'Lưu Bị', avatar = '/generals/liu-bei.jpg' WHERE id = ?").run(b);
 
+  const lcAlice = pvpUnitLc('cao-cao', 10) + pvpUnitLc('liu-bei', 1);
+  const lcBob = pvpUnitLc('liu-bei', 9) + pvpUnitLc('cao-cao', 9); // KHÔNG gồm zhao-yun (đã tiêu thụ)
+  const lcCarol = pvpUnitLc('sun-quan', 10);
+  const lcDave = pvpUnitLc('sun-quan', 10);
+
   const lb = getLeaderboard(ctx, b);
-  assert.equal(lb.totalRanked, 3);
-  assert.deepEqual(
-    lb.items.map((e) => [e.rank, e.username, e.power, e.maxLevel]),
-    [
-      [1, 'alice', 513, 10],
-      [2, 'carol', 512, 10],
-      [2, 'bob', 512, 9],
-    ],
-  );
+  assert.equal(lb.metric, 'lc');
+  assert.equal(lb.totalRanked, 4); // alice, bob, carol, dave (admin & nocards không tính)
+  const byUser = Object.fromEntries(lb.items.map((e) => [e.username, e]));
+  assert.equal(byUser['alice']!.lc, lcAlice);
+  assert.equal(byUser['bob']!.lc, lcBob);
+  assert.equal(byUser['carol']!.lc, lcCarol);
+  assert.equal(byUser['dave']!.lc, lcDave);
+  // carol và dave cùng đội => đồng LC => đồng hạng
+  assert.equal(byUser['carol']!.rank, byUser['dave']!.rank);
+  // Hạng 1 thuộc người có LC cao nhất
+  assert.equal(lb.items[0]!.rank, 1);
+  assert.equal(lb.items[0]!.lc, Math.max(lcAlice, lcBob, lcCarol));
   // Tên hiển thị mặc định = tên đăng nhập, ảnh mặc định = null
-  assert.equal(lb.items.find((e) => e.username === 'alice')!.displayName, 'alice');
-  assert.equal(lb.items.find((e) => e.username === 'alice')!.avatar, null);
+  assert.equal(byUser['alice']!.displayName, 'alice');
+  assert.equal(byUser['alice']!.avatar, null);
   assert.equal(lb.items.find((e) => e.isMe)?.username, 'bob');
   assert.deepEqual(lb.me, {
     id: b,
-    rank: 2,
+    rank: byUser['bob']!.rank,
     username: 'bob',
     displayName: 'Lưu Bị',
     avatar: '/generals/liu-bei.jpg',
-    power: 512,
-    cardCount: 3,
-    maxLevel: 9,
+    lc: lcBob,
     isMe: true,
   });
-  assert.equal(lb.items.find((e) => e.username === 'carol')!.cardCount, 5); // số thẻ vẫn đếm đủ
-  assert.equal(lb.powerByLevel[10], 512);
 
   // Admin xem: không có hạng của mình, không xuất hiện trong bảng
   const asAdmin = getLeaderboard(ctx, admin);
   assert.equal(asAdmin.me, null);
   assert.ok(!asAdmin.items.some((e) => e.username === 'boss'));
 
-  // Người chưa có thẻ: chưa xếp hạng
+  // Người chưa có tướng: chưa xếp hạng
   const nocards = Number((ctx.db.prepare("SELECT id FROM users WHERE username='nocards'").get() as { id: number }).id);
   const none = getLeaderboard(ctx, nocards);
   assert.deepEqual(none.me, {
@@ -1215,9 +1224,7 @@ test('leaderboard: Lực chiến = tổng 2^(lv-1) mỗi (tướng, cấp) tính
     username: 'nocards',
     displayName: 'nocards',
     avatar: null,
-    power: 0,
-    cardCount: 0,
-    maxLevel: null,
+    lc: 0,
     isMe: true,
   });
 });
@@ -1225,18 +1232,20 @@ test('leaderboard: Lực chiến = tổng 2^(lv-1) mỗi (tướng, cấp) tính
 test('leaderboard: tối đa 100 người, hạng của mình ngoài top vẫn trả về', () => {
   const { ctx } = makeCtx();
   register(ctx, 'boss', 'secret123');
+  // 100 người đầu xếp đội 6 tướng Lv.1 (LC cao), 5 người cuối xếp 5 tướng Lv.1 (LC thấp hơn)
+  // => hai nhóm đồng hạng: nhóm mạnh hạng 1, nhóm yếu hạng 101.
+  const strong = ROSTER.slice(0, 6).map((g) => g.id);
+  const weak = ROSTER.slice(0, 5).map((g) => g.id);
   let last = 0;
-  // Cặp (tướng, cấp) khác nhau: 100 tướng Lv.1 + 6 tướng Lv.2 => p000 nhiều cặp nhất, Lực chiến giảm dần
-  const pairs = [...ROSTER.map((g) => [g.id, 1] as const), ...ROSTER.slice(0, 6).map((g) => [g.id, 2] as const)];
   for (let i = 0; i < 105; i++) {
     const id = register(ctx, `p${String(i).padStart(3, '0')}`, 'secret123').userId;
-    for (let k = 0; k <= 105 - i; k++) insertCard(ctx, id, pairs[k]![0], pairs[k]![1]);
+    for (const g of i < 100 ? strong : weak) insertCard(ctx, id, g, 1);
     last = id;
   }
   const lb = getLeaderboard(ctx, last);
   assert.equal(lb.items.length, 100);
   assert.equal(lb.totalRanked, 105);
   assert.equal(lb.items[0]!.username, 'p000');
-  assert.equal(lb.me?.rank, 105);
+  assert.equal(lb.me?.rank, 101);
   assert.ok(!lb.items.some((e) => e.isMe));
 });

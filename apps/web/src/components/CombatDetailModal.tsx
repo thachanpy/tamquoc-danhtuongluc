@@ -4,6 +4,8 @@ import { FACTION_LABELS, type Faction, type PvpCombatDto } from '@tq/shared';
 import { levelTier, prefersReducedMotion } from '../art.ts';
 import { CombatDetail } from './CombatDetail.tsx';
 
+const num = (n: number) => n.toLocaleString('vi-VN');
+
 /**
  * Modal chi tiết tướng dùng chung (mục 6.1 + 6.7): khung, tên, phe/cấp và bảng chi tiết chiến đấu.
  * - Bộ sưu tập truyền thêm `card` (thẻ lớn, nghiêng nhẹ theo chuột) và ghi chú ngày nhận.
@@ -81,6 +83,15 @@ export function CombatDetailModal(props: {
                     )}
                   </Show>
                   <span style={{ color: levelTier(props.level).css }}>{`Lv.${props.level}`}</span>
+                  {/* Lực chiến (LC) đứng NGANG HÀNG với cấp độ — cùng chuỗi chip định danh tướng */}
+                  <Show when={props.combat}>
+                    {(c) => (
+                      <>
+                        <span class="dot">·</span>
+                        <span class="viewer-lc" title="Lực chiến">{`LC ${num(c().self.lc)}`}</span>
+                      </>
+                    )}
+                  </Show>
                 </div>
               </div>
             </div>

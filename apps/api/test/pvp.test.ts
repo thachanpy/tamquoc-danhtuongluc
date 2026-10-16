@@ -561,13 +561,14 @@ test('engine: choáng kết thúc khi tướng gây choáng ra skill ở lượt
   // Trương Hợp: choáng đơn (hàng sau), không hút máu/tự hồi/giải choáng. Mỗi lượt tốn 4 lượt RNG:
   // 1 lớp buff bản thân (Kỳ binh đột kích +Chính xác) + Chính xác + Chí mạng + Choáng (mục 18).
   const stunner = 'zhang-he';
-  // Nạn nhân: phong cách Phòng thủ (tổng LC của đội B thấp hơn → A đi trước), cấp 10 để sống qua các lượt.
+  // Nạn nhân: phong cách Phòng thủ, cấp 10 để sống qua nhiều lượt. Hai tướng CÙNG cấp 10 nên LC quyết
+  // bởi hệ số phong cách: Tấn công (Trương Hợp) > Phòng thủ (Cao Hồng) → tổng LC đội A cao hơn, A đi trước.
   const victim = 'cao-hong';
   // Bốn lần gọi RNG đầu của lượt A1 (lớp buff + Chính xác + Chí mạng + Choáng) trả 0 → choáng ngay vòng 1;
   // các lần sau trả 5000 (luôn TRÚNG nhưng không chí mạng/choáng) để trận tiếp diễn bình thường.
   let calls = 0;
   const stunOnce: RandomInt = () => (calls++ < 4 ? 0 : 5000);
-  const res = simulatePvp([one('a', [{ slot: 1, generalId: stunner, level: 1 }]), one('b', [{ slot: 4, generalId: victim, level: 10 }])], stunOnce);
+  const res = simulatePvp([one('a', [{ slot: 1, generalId: stunner, level: 10 }]), one('b', [{ slot: 4, generalId: victim, level: 10 }])], stunOnce);
   const victimIdx = 9; // B đứng slot 4 (hàng sau) → idx 9
 
   const stunEvents = res.events.flatMap((e) => (e.t === 'stun' && e.idx === victimIdx ? [e] : []));
@@ -1310,7 +1311,7 @@ test('HTTP: tổng quan tự xếp đội gợi ý từ thẻ mạnh nhất khi 
   assert.equal(ov.team.units.length, 2);
   assert.equal(ov.me.id, testerId);
   assert.deepEqual([ov.wins, ov.losses, ov.draws], [0, 0, 0]);
-  assert.ok(ov.powerByLevel[5] > 0);
+  assert.ok(ov.team.lc > 0);
   assert.equal(ov.maxRounds, PVP_MAX_ROUNDS);
   // Bảng chọn tướng hiện chỉ số + kỹ năng chi tiết ngay: chi tiết chỉ có ở tướng ĐANG SỞ HỮU, ở cấp cao nhất.
   assert.deepEqual(Object.keys(ov.ownedCombat).sort(), [ROSTER[0]!.id, ROSTER[1]!.id].sort());
@@ -1432,7 +1433,7 @@ test('HTTP: lưu đội hình — xác thực slot/tướng/quyền sở hữu',
   });
   assert.equal(ok.statusCode, 200);
   assert.deepEqual(ok.json().units.map((u: { slot: number }) => u.slot), [1, 4]);
-  assert.ok(ok.json().power > 0);
+  assert.ok(ok.json().lc > 0);
   assert.equal((await app.inject({ method: 'GET', url: '/api/pvp', headers: auth })).json().saved, true);
 
   const notOwned = await app.inject({ method: 'POST', url: '/api/pvp/team', headers: auth, payload: { units: [{ slot: 1, generalId: ROSTER[0]!.id, level: 9 }] } });

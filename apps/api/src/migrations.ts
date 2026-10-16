@@ -517,6 +517,16 @@ CREATE INDEX idx_pvp_battles_attacker ON pvp_battles(attacker_id, id);
 CREATE INDEX idx_pvp_battles_defender ON pvp_battles(defender_id, id);
 `,
   },
+  {
+    // Bảng xếp hạng đổi thước đo từ "điểm theo cấp thẻ" sang Lực chiến (LC) đội hình (mục 6.6/6.7):
+    // hai cột lưu LC của đội tấn công/phòng thủ trong từng trận — đổi tên cho khớp ngữ nghĩa.
+    version: 15,
+    name: 'pvp_battle_lc',
+    sql: `
+ALTER TABLE pvp_battles RENAME COLUMN attacker_power TO attacker_lc;
+ALTER TABLE pvp_battles RENAME COLUMN defender_power TO defender_lc;
+`,
+  },
 ];
 
 /** target: chỉ chạy tới version này (dùng khi test migration). */

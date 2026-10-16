@@ -55,14 +55,14 @@ const INFO_ROW_Y: readonly number[] = [122, 136];
 /** Tên tướng nằm ngay dưới chân dung (khớp font/màu ô tướng ở trang chuẩn bị chiến). */
 const NAME_Y = 82;
 /**
- * Ba chip ở góc trên-trái ô: **cấp → phe → phong cách**, xếp dọc. Mỗi chip ôm vừa nội dung
- * (không kéo dãn) nhưng cả ba **canh giữa trên cùng một trục dọc** nên trông đều nhau.
+ * Bốn chip ở góc trên-trái ô: **cấp → phe → phong cách → LC**, xếp dọc. Mỗi chip ôm vừa nội dung
+ * (không kéo dãn) nhưng cả bốn **canh giữa trên cùng một trục dọc** nên trông đều nhau.
  */
 const TAG_X = 5;
-/** Toạ độ y của chip đầu tiên (cấp độ); hai chip dưới xếp tiếp theo. */
+/** Toạ độ y của chip đầu tiên (cấp độ); các chip dưới xếp tiếp theo. */
 const TAG_Y0 = 5;
-const TAG_H = 17;
-const TAG_GAP = 3;
+const TAG_H = 15;
+const TAG_GAP = 2;
 const TAG_FONT = 10.5;
 /** Lề ngang trong chip chữ (cấp độ, phe); chuỗi chỉ có icon dùng lề hẹp hơn cho khỏi bị kéo dài. */
 const TAG_PAD = 7;
@@ -160,6 +160,8 @@ export interface ArenaUnit {
   slot: number;
   name: string;
   level: number;
+  /** Lực chiến (LC) của tướng ở cấp này — hiện chip thứ 4 trong chuỗi định danh góc trên-trái. */
+  lc: number;
   artKey: string;
   /** Phong cách chiến đấu — hiện nhãn trên ô (Tấn công / Phòng thủ / Hỗ trợ). */
   style: PvpStyle;
@@ -417,8 +419,8 @@ class Tile {
     this.buffFx.position.set(COL_W / 2, ART_CY);
     this.buffFx.visible = false;
 
-    // Ba chip góc trên trái (cùng kiểu chip với ô tướng ở trang chuẩn bị chiến), xếp dọc:
-    // cấp độ → phe → phong cách chiến đấu. Chip ôm vừa chữ/icon rồi cả ba canh giữa chung một trục.
+    // Bốn chip góc trên trái (cùng kiểu chip với ô tướng ở trang chuẩn bị chiến), xếp dọc:
+    // cấp độ → phe → phong cách chiến đấu → lực chiến (LC). Chip ôm vừa chữ/icon rồi cả bốn canh giữa chung một trục.
     const tagY = (i: number) => TAG_Y0 + i * (TAG_H + TAG_GAP);
     const lvTone = levelTier(u.level).color;
     const facTone = FACTION_STYLE[u.faction].color;
@@ -427,12 +429,15 @@ class Tile {
       new Text({ text, style: { fontFamily: NUM_FONT, fontSize: TAG_FONT, fontWeight: '600', fill: tone } });
     const lv = mkTag(`Lv.${u.level}`, lvTone);
     const fac = mkTag(FACTION_LABELS[u.faction], facTone);
+    // Lực chiến dùng tông vàng (khớp chip LC ở ô đội hình / bảng chọn tướng).
+    const lc = mkTag(`LC ${num(u.lc)}`, C.gold2);
     // Bề rộng riêng: chip chữ theo độ dài chữ, chip phong cách chỉ ôm vừa icon (không kéo dài).
-    // Cả ba vẫn canh giữa chung một trục dọc nên xếp thẳng hàng.
+    // Cả bốn vẫn canh giữa chung một trục dọc nên xếp thẳng hàng.
     const lvW = Math.max(TAG_H, lv.width + TAG_PAD * 2);
     const facW = Math.max(TAG_H, fac.width + TAG_PAD * 2);
     const stW = TAG_ICON + TAG_ICON_PAD * 2;
-    const cx = TAG_X + Math.max(lvW, facW, stW) / 2;
+    const lcW = Math.max(TAG_H, lc.width + TAG_PAD * 2);
+    const cx = TAG_X + Math.max(lvW, facW, stW, lcW) / 2;
 
     const lvY = tagY(0);
     lv.anchor.set(0.5);
@@ -455,6 +460,13 @@ class Tile {
     const stIcon = new Graphics();
     drawStyleIcon(stIcon, u.style);
     stIcon.position.set(cx - TAG_ICON / 2, stY + (TAG_H - TAG_ICON) / 2);
+
+    // Chip lực chiến (LC) — chip thứ tư, tông vàng, cùng kiểu chip ở ô đội hình/trang chuẩn bị chiến.
+    const lcY = tagY(3);
+    lc.anchor.set(0.5);
+    lc.position.set(cx, lcY + TAG_H / 2);
+    const lcBg = new Graphics().roundRect(cx - lcW / 2, lcY, lcW, TAG_H, 999).fill({ color: C.gold2, alpha: 0.12 });
+    lcBg.stroke({ width: 1, color: C.gold2, alpha: 0.85 });
 
     // Tên tướng ngay dưới chân dung — font/màu khớp .pvp-cell-name ở trang chuẩn bị chiến
     const name = new Text({ text: u.name, style: { fontFamily: UI_FONT, fontSize: 12.5, fontWeight: '700', fill: C.text } });
@@ -541,6 +553,8 @@ class Tile {
       fac,
       stBg,
       stIcon,
+      lcBg,
+      lc,
       name,
       hpBg,
       this.hpFill,

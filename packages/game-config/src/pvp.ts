@@ -54,10 +54,14 @@ export function pvpEffectBps(baseBps: number, level: number): number {
 
 /**
  * Quy hệ số hiệu ứng khai báo dạng "mỗi cấp" (tỉ lệ choáng, hút máu, phản kích, chí mạng) về một cấp:
- * giá trị chốt = `perLevelBps × MAX_LEVEL` (đạt ở cấp 10), cấp 1 = giá trị chốt − 10 điểm %.
+ * TUYẾN TÍNH theo cấp — cấp 1 = `perLevelBps`, cấp MAX_LEVEL = `perLevelBps × MAX_LEVEL` (giá trị chốt).
+ * Ví dụ Choáng `cấp × 10%`: cấp 1 = 10%, cấp 8 = 80%, cấp 10 = 100%.
+ * KHÁC `pvpEffectBps` (khoảng cách cấp 1 → cấp 10 cố định 10 điểm %).
  */
 export function pvpPerLevelEffectBps(perLevelBps: number, level: number): number {
-  return pvpEffectBps(perLevelBps * MAX_LEVEL, level);
+  if (perLevelBps <= 0) return 0;
+  const lv = Math.min(Math.max(level, 1), MAX_LEVEL);
+  return perLevelBps * lv;
 }
 
 /**
@@ -119,11 +123,16 @@ export function pvpSkillDefAtLevel(def: PvpSkillDef, level: number): PvpSkillDef
 }
 
 /**
- * LC (lực chiến từng tướng, dùng để cộng thành tổng LC của đội) theo phong cách + cấp.
- * Tấn công cao nhất, rồi Hỗ trợ, cuối là Phòng thủ.
+ * Tỉ lệ giải choáng/thiêu đốt (bps) của một kỹ năng TẠI CẤP — dùng CHUNG cho engine và `getCombatStats`
+ * để chỉ số hiển thị khớp với thực chiến. Tướng có ghi đè `cleanseMinBps`/`cleanseMaxBps` (Hoa Đà) dùng
+ * span cấp 1 → cấp 10; còn lại dùng mặc định `PVP_CLEANSE_CHAMP_BPS`.
  */
-export const PVP_LC_BY_STYLE: Record<PvpStyle, number> = { attack: 130, support: 120, defense: 110 };
-export const pvpLc = (style: PvpStyle, level: number) => PVP_LC_BY_STYLE[style] + (level - 1) * 2;
+export function pvpCleanseBps(def: PvpSkillDef, level: number): number {
+  if (!def.cleanse) return 0;
+  if (def.cleanseMinBps !== undefined && def.cleanseMaxBps !== undefined)
+    return pvpLevelSpanBps(def.cleanseMinBps, def.cleanseMaxBps, level);
+  return pvpEffectBps(PVP_CLEANSE_CHAMP_BPS, level);
+}
 
 // ===== Chỉ số Nền Ra Trận: phong cách + cổng đồng phe (SKILLS.md mục 1) =====
 // Chỉ số bổ trợ mặc định lúc ra trận, cộng TRỰC TIẾP vào cọc Máu/Sát thương gốc của tướng.
@@ -551,10 +560,10 @@ export const pvpDefBps = (level: number) => pvpLevelSpanBps(PVP_DEF_BPS_MIN, PVP
 
 export interface PvpPassiveEffect {
   /** Chỉ số chịu tác động. */
-  stat: 'crit' | 'damage' | 'maxHp' | 'stun' | 'cleanse';
+  stat: 'crit' | 'damage' | 'maxHp' | 'def';
   /** Với 'damage'/'maxHp': phần trăm của chỉ số nền (bps). */
   bps: number;
-  /** Với 'crit'/'stun'/'cleanse': điểm phần trăm (bps). */
+  /** Với 'crit'/'def': điểm phần trăm cộng thẳng vào chỉ số (bps). */
   pointsBps: number;
 }
 
@@ -562,9 +571,7 @@ export const PVP_PASSIVE_EFFECT: Record<PvpPassive, PvpPassiveEffect> = {
   CRIT_5: { stat: 'crit', bps: 0, pointsBps: 500 },
   DAMAGE_10: { stat: 'damage', bps: 1000, pointsBps: 0 },
   HP_10: { stat: 'maxHp', bps: 1000, pointsBps: 0 },
-  STUN_5: { stat: 'stun', bps: 0, pointsBps: 500 },
-  STUN_10: { stat: 'stun', bps: 0, pointsBps: 1000 },
-  CLEANSE_10: { stat: 'cleanse', bps: 0, pointsBps: 1000 },
+  DEF_5: { stat: 'def', bps: 0, pointsBps: 500 },
 };
 
 // ===== Kỹ năng =====
@@ -642,8 +649,8 @@ export const PVP_SKILL_DEF: Record<PvpSkill, PvpSkillDef> = {
 /** Chí mạng: giá trị CHỐT ở cấp 10 = 30% (`cấp × 3%`), cấp 1 = 20% theo công thức scale hiệu ứng. */
 export const PVP_CRIT_BPS_PER_LEVEL = 300;
 /**
- * Giải choáng: giá trị CHỐT ở cấp 10 = 75% (đã gồm nội tại CLEANSE_10 +10 điểm); cấp 1 = 65%
- * theo công thức scale hiệu ứng. Tướng có kỹ năng giải choáng dùng trần này.
+ * Giải choáng: giá trị CHỐT ở cấp 10 = 75%; cấp 1 = 65% theo công thức scale hiệu ứng.
+ * Tướng có kỹ năng giải choáng dùng trần này (riêng Hoa Đà ghi đè 55% → 100%).
  */
 export const PVP_CLEANSE_CHAMP_BPS = 7500;
 
@@ -656,6 +663,49 @@ export const PVP_CRIT_DAMAGE_BPS_MIN = 3000;
 export const PVP_CRIT_DAMAGE_BPS = 6000;
 /** ST chí mạng của một tướng ở cấp hiện tại: +30% (cấp 1) → +60% (cấp 10). */
 export const pvpCritDamageBps = (level: number) => pvpLevelSpanBps(PVP_CRIT_DAMAGE_BPS_MIN, PVP_CRIT_DAMAGE_BPS, level);
+
+// ===== Lực chiến (LC) =====
+
+/**
+ * Hệ số nhân LC theo phong cách: Tấn công cao nhất, rồi Hỗ trợ, cuối là Phòng thủ.
+ * Nhờ vậy phong cách vẫn là yếu tố định hướng nhịp độ trận (xem `pvpLc`).
+ */
+export const PVP_LC_STYLE_MUL_BPS: Record<PvpStyle, number> = { attack: 10000, support: 9200, defense: 8500 };
+
+/**
+ * LC (Lực chiến) của MỘT tướng ở cấp đang xét — tổng hợp từ **chỉ số chiến đấu** (đã gồm nội tại
+ * của tướng), quy mọi chỉ số về cùng thang "sát thương" rồi nhân hệ số phong cách:
+ *   - Sinh tồn   = `HP / 10` (HP nền luôn gấp 10 lần ST nền nên hai cọc cùng thang)
+ *   - Sát thương = `ST × (1 + Tỉ lệ chí mạng × ST chí mạng)` (kỳ vọng sát thương)
+ *   - Phòng thủ  = `ST × %Phòng thủ`
+ * Cộng LC của 6 tướng thành TỔNG LC của đội — bên tổng cao hơn ra đòn trước (SKILLS.md mục 1).
+ * KHÔNG tính Chỉ số Nền Ra Trận (vị trí · cổng đồng phe · aura Hỗ trợ) để con số hiện ở bảng chọn
+ * tướng / ô đội hình luôn khớp con số dùng trong trận (LC không phụ thuộc tướng xếp ở ô nào).
+ */
+export function pvpLc(style: PvpStyle, level: number, passive: PvpPassive): number {
+  const e = PVP_PASSIVE_EFFECT[passive];
+  const hp = pvpBaseHp(level) * (1 + (e.stat === 'maxHp' ? e.bps : 0) / BPS_SCALE);
+  const damage = pvpBaseDamage(level) * (1 + (e.stat === 'damage' ? e.bps : 0) / BPS_SCALE);
+  const critBps = pvpPerLevelEffectBps(PVP_CRIT_BPS_PER_LEVEL, level) + (e.stat === 'crit' ? e.pointsBps : 0);
+  const defBps = pvpDefBps(level) + (e.stat === 'def' ? e.pointsBps : 0);
+  const expectedDamage = damage * (1 + (critBps / BPS_SCALE) * (pvpCritDamageBps(level) / BPS_SCALE));
+  const defense = damage * (defBps / BPS_SCALE);
+  return Math.round(((hp / 10 + expectedDamage + defense) * PVP_LC_STYLE_MUL_BPS[style]) / BPS_SCALE);
+}
+
+/** LC của MỘT tướng theo (id, cấp) — tiện cho nơi chỉ có cặp dữ liệu này (đội hình, bảng xếp hạng). */
+export function pvpUnitLc(generalId: string, level: number): number {
+  const p = pvpProfile(generalId);
+  return pvpLc(p.style, level, p.passive);
+}
+
+/**
+ * Tổng Lực chiến (LC) của một ĐỘI HÌNH = cộng LC từng tướng ở cấp đang xét (mục 6.6, 6.7).
+ * Dùng chung cho Bảng xếp hạng và mọi chỗ hiển thị "Lực chiến" của đội; KHÔNG tính Chỉ số Nền Ra Trận.
+ */
+export function pvpTeamLc(units: readonly { generalId: string; level: number }[]): number {
+  return units.reduce((sum, u) => sum + pvpUnitLc(u.generalId, u.level), 0);
+}
 
 // ===== Hút máu (SKILLS.md mục 1.13) =====
 
@@ -944,16 +994,42 @@ const buffsAllies = (def: PvpSkillDef) =>
   def.buffs.some((e) => e.scope !== 'none' && e.scope !== 'self' && hasBuffEffect(e.buff));
 
 /**
- * Nội tại suy ra từ kỹ năng (SKILLS.md không quy định nội tại riêng): tướng có choáng thiên về choáng,
- * tướng hồi/giải/thanh tẩy thiên về phòng thủ, tướng buff đồng minh thiên về sát thương, còn lại thiên
- * về chí mạng.
+ * Thứ tự ƯU TIÊN nội tại của một tướng theo hướng bộ kỹ năng — chỉ là gợi ý cho bước rải đều bên dưới:
+ * thiên phòng thủ (Phong cách Phòng thủ / hồi sinh) → +5% Phòng thủ; thiên hồi máu & giải khống → +10% Máu;
+ * thiên công (choáng / đao phủ / buff đồng minh) → +10% Sát thương; còn lại → +5% tỷ lệ chí mạng. Danh sách
+ * luôn chứa ĐỦ cả 4 nội tại nên bước rải đều luôn tìm được lựa chọn còn quota.
  */
-function passiveForDef(def: PvpSkillDef): PvpPassive {
-  if (def.stun !== 'none') return 'STUN_5';
-  if (def.cleanse || def.purify) return 'CLEANSE_10';
-  if (def.healBps > 0 || def.selfHealBps > 0) return 'HP_10';
-  if (buffsAllies(def)) return 'DAMAGE_10';
-  return 'CRIT_5';
+function passivePriority(def: PvpSkillDef, style: PvpStyle): PvpPassive[] {
+  const order: PvpPassive[] = [];
+  const push = (p: PvpPassive) => {
+    if (!order.includes(p)) order.push(p);
+  };
+  if (style === 'defense' || def.revive) push('DEF_5');
+  if (def.healBps > 0 || def.selfHealBps > 0 || def.cleanse || def.purify) push('HP_10');
+  if (def.stun !== 'none' || def.vsDebuffBonusBps > 0 || buffsAllies(def)) push('DAMAGE_10');
+  push('CRIT_5');
+  for (const p of PVP_PASSIVES) push(p);
+  return order;
+}
+
+/**
+ * Rải nội tại cho toàn bộ roster sao cho 4 nội tại chia ĐỀU nhất (mỗi nội tại ~1/4 số tướng): duyệt roster
+ * theo thứ tự cố định, mỗi tướng nhận nội tại ưu tiên cao nhất còn quota, hết quota thì lùi xuống lựa chọn
+ * sau. Kết quả tất định nên hồ sơ tướng ổn định giữa các lần chạy.
+ */
+function assignPassives(rows: readonly RosterPvpRow[]): Map<string, PvpPassive> {
+  const quota = new Map<PvpPassive, number>();
+  const base = Math.floor(rows.length / PVP_PASSIVES.length);
+  const extra = rows.length % PVP_PASSIVES.length;
+  PVP_PASSIVES.forEach((p, i) => quota.set(p, base + (i < extra ? 1 : 0)));
+  const out = new Map<string, PvpPassive>();
+  for (const row of rows) {
+    const order = passivePriority(buildDef(row), row.style);
+    const pick = order.find((p) => (quota.get(p) ?? 0) > 0) ?? order[order.length - 1]!;
+    quota.set(pick, (quota.get(pick) ?? 1) - 1);
+    out.set(row.id, pick);
+  }
+  return out;
 }
 
 export interface PvpProfile {
@@ -972,13 +1048,14 @@ export interface PvpProfile {
   def: PvpSkillDef;
 }
 
-function buildProfile(row: RosterPvpRow): PvpProfile {
+/** Dựng định nghĩa kỹ năng tường minh (đã điền mặc định) từ một dòng roster. */
+function buildDef(row: RosterPvpRow): PvpSkillDef {
   const buffs: PvpBuffEntry[] = (row.buffs ?? []).map((b) => ({
     scope: b.buffScope ?? 'all_allies',
     buff: { ...PVP_NO_BUFF, ...b.buff },
   }));
   const debuff: PvpDebuff = { ...PVP_NO_DEBUFF, ...row.debuff };
-  const def: PvpSkillDef = {
+  return {
     targeting: row.targeting,
     damageBps: row.damageBps ?? 0,
     healBps: row.healBps ?? 0,
@@ -1002,17 +1079,23 @@ function buildProfile(row: RosterPvpRow): PvpProfile {
     burnLifesteal: row.burnLifesteal ?? false,
     burnCritDamageBps: row.burnCritDamageBps ?? 0,
   };
+}
+
+function buildProfile(row: RosterPvpRow): PvpProfile {
   return {
     style: row.style,
     skill: row.skill,
     skillName: row.skillName,
-    passive: passiveForDef(def),
+    passive: PASSIVE_BY_ID.get(row.id)!,
     hot: HOT_GENERALS.has(row.id),
     lifestealPerLevelBps: row.lifestealPerLevelBps ?? 0,
     teamLifestealPerLevelBps: row.teamLifestealPerLevelBps ?? 0,
-    def,
+    def: buildDef(row),
   };
 }
+
+/** Nội tại rải đều cho cả roster (tất định) — tính trước khi dựng hồ sơ từng tướng. */
+const PASSIVE_BY_ID = assignPassives(PVP_ROSTER_ROWS);
 
 const PROFILES = new Map<string, PvpProfile>(PVP_ROSTER_ROWS.map((row) => [row.id, buildProfile(row)]));
 
@@ -1029,11 +1112,22 @@ export function validatePvpConfig(assert: (cond: unknown, msg: string) => void):
     assert(PVP_SKILL_DEF[id], `Thiếu định nghĩa nhóm kỹ năng ${id}`);
   }
   for (const s of PVP_STYLES) {
-    assert(s in PVP_LC_BY_STYLE, `Thiếu LC cho phong cách ${s}`);
+    assert(s in PVP_LC_STYLE_MUL_BPS, `Thiếu hệ số LC cho phong cách ${s}`);
   }
   for (const p of PVP_PASSIVES) {
     assert(PVP_PASSIVE_EFFECT[p], `Thiếu hiệu ứng nội tại ${p}`);
   }
+  // Nội tại phải rải ĐỀU: mọi nội tại đều có tướng và số tướng mỗi nội tại lệch nhau không quá 1.
+  const passiveCount = new Map<PvpPassive, number>(PVP_PASSIVES.map((p) => [p, 0]));
+  for (const row of PVP_ROSTER_ROWS) {
+    const p = PROFILES.get(row.id)!.passive;
+    passiveCount.set(p, (passiveCount.get(p) ?? 0) + 1);
+  }
+  const counts = [...passiveCount.values()];
+  assert(
+    Math.max(...counts) - Math.min(...counts) <= 1,
+    `Nội tại chưa rải đều giữa các tướng: ${counts.join(' / ')}`,
+  );
   for (const g of ROSTER) {
     assert(PROFILES.has(g.id), `Tướng ${g.id} chưa có hồ sơ PvP trong SKILLS.md`);
   }

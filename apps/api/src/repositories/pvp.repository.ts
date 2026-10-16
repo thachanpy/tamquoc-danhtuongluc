@@ -42,18 +42,18 @@ export interface PvpBattleInsert {
   defenderId: number;
   winner: string;
   rounds: number;
-  attackerPower: number;
-  defenderPower: number;
+  attackerLc: number;
+  defenderLc: number;
   data: string;
 }
 
 export function insertBattle(db: DB, b: PvpBattleInsert, nowIso: string): number {
   const r = db
     .prepare(
-      `INSERT INTO pvp_battles (attacker_id, defender_id, winner, rounds, attacker_power, defender_power, data, created_at)
+      `INSERT INTO pvp_battles (attacker_id, defender_id, winner, rounds, attacker_lc, defender_lc, data, created_at)
        VALUES (?,?,?,?,?,?,?,?)`,
     )
-    .run(b.attackerId, b.defenderId, b.winner, b.rounds, b.attackerPower, b.defenderPower, b.data, nowIso);
+    .run(b.attackerId, b.defenderId, b.winner, b.rounds, b.attackerLc, b.defenderLc, b.data, nowIso);
   return Number(r.lastInsertRowid);
 }
 
@@ -63,8 +63,8 @@ export interface PvpBattleRow {
   defender_id: number;
   winner: string;
   rounds: number;
-  attacker_power: number;
-  defender_power: number;
+  attacker_lc: number;
+  defender_lc: number;
   data: string;
   created_at: string;
   attacker_username: string;
@@ -75,7 +75,7 @@ export interface PvpBattleRow {
   defender_avatar: string | null;
 }
 
-const BATTLE_SELECT = `SELECT b.id, b.attacker_id, b.defender_id, b.winner, b.rounds, b.attacker_power, b.defender_power,
+const BATTLE_SELECT = `SELECT b.id, b.attacker_id, b.defender_id, b.winner, b.rounds, b.attacker_lc, b.defender_lc,
          b.data, b.created_at,
          ua.username AS attacker_username, ua.display_name AS attacker_display_name, ua.avatar AS attacker_avatar,
          ud.username AS defender_username, ud.display_name AS defender_display_name, ud.avatar AS defender_avatar

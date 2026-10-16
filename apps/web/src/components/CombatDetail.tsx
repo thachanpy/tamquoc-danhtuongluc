@@ -32,7 +32,8 @@ export function statRows(c: PvpCombatDto): { label: string; value: string; note?
       value: `${Math.round(c.base.damage * (1 + dmgPct / c.bpsScale))}`,
       note: note(dmgPct, c.base.damage, preBattleNote(c, 'damage')),
     },
-    { label: 'Lực chiến (LC)', value: `${c.self.lc}` },
+    // LC đã hiện cạnh cấp ở đầu modal (ngang hàng Lv) nên không lặp lại trong bảng chỉ số.
+    { label: 'Phòng thủ', value: pct(c.self.defBps) },
     { label: 'Chí mạng', value: pct(c.self.critBps) },
     { label: 'ST chí mạng', value: pct(c.self.critDamageBps) },
   ];
@@ -61,7 +62,16 @@ export function CombatDetail(props: { c: PvpCombatDto }) {
         <span class="cmb-key">Kỹ năng</span>
         <span class="cmb-val">
           <b>{props.c.skillName}</b>
-          <i>{skillNote(props.c)}</i>
+          <span class="cmb-skillnote">
+            <For each={skillNote(props.c)}>
+              {(l) => (
+                <span class="cmb-note-row">
+                  <em>{l.label}</em>
+                  <span>{l.text}</span>
+                </span>
+              )}
+            </For>
+          </span>
         </span>
       </div>
       <div class="cmb-row">

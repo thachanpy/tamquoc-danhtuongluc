@@ -2,7 +2,6 @@ import { For, Show, createSignal, onCleanup, onMount } from 'solid-js';
 import type { LeaderboardDto, LeaderboardEntryDto } from '@tq/shared';
 import { api } from '../api.ts';
 import { setPvpTarget } from '../state.ts';
-import { levelTier } from '../art.ts';
 import { Avatar } from '../components/Avatar.tsx';
 
 const num = (n: number) => n.toLocaleString('vi-VN');
@@ -35,15 +34,6 @@ function RankBadge(props: { rank: number | null }) {
   );
 }
 
-/** Level cao nhất (màu bậc khung). */
-function Meta(props: { maxLevel: number | null }) {
-  return (
-    <span class="lb-meta">
-      <Show when={props.maxLevel}>{(lv) => <b style={{ color: levelTier(lv()).css }}>Lv.{lv()}</b>}</Show>
-    </span>
-  );
-}
-
 function Row(props: { e: LeaderboardEntryDto }) {
   const podium = () => props.e.rank !== null && props.e.rank <= 3;
   const canFight = () => !props.e.isMe;
@@ -72,8 +62,7 @@ function Row(props: { e: LeaderboardEntryDto }) {
           <span class="lb-you">Bạn</span>
         </Show>
       </span>
-      <Meta maxLevel={props.e.maxLevel} />
-      <b class="lb-power">{num(props.e.power)}</b>
+      <b class="lb-power">{num(props.e.lc)}</b>
       <Show when={canFight()}>
         <span class="lb-fight" aria-hidden="true">
           ⚔
@@ -119,12 +108,10 @@ export function LeaderboardPage() {
   onMount(() => void load());
 
   const rule = () => {
-    const d = data();
-    if (!d) return '';
-    const lv = d.powerByLevel;
+    if (!data()) return '';
     return (
-      `Lực chiến = tổng điểm các thẻ đang có, mỗi tướng + cấp chỉ tính 1 lần (5 thẻ Tào Tháo Lv.5 tính như 1): Lv.1 = ${lv[1]} · Lv.2 = ${lv[2]} · Lv.3 = ${lv[3]} · … · Lv.10 = ${num(lv[10] ?? 0)}. ` +
-      `Ghép thẻ lên level cao để leo hạng. Đồng điểm thì đồng hạng. Bấm vào một người chơi để khiêu chiến ở Đấu trường.`
+      `Lực chiến = TỔNG Lực chiến (LC) của đội hình đang dùng: cộng LC từng tướng theo cấp (đội đã lưu, hoặc đội tự động 6 tướng mạnh nhất nếu chưa lưu). ` +
+      `Nâng cấp tướng trong đội để leo hạng. Đồng Lực chiến thì đồng hạng. Bấm vào một người chơi để khiêu chiến ở Đấu trường.`
     );
   };
 
@@ -174,7 +161,7 @@ export function LeaderboardPage() {
                   when={me().rank !== null}
                   fallback={
                     <div class="lb-me-box">
-                      <b>Bạn chưa có thẻ nào</b> — quay thẻ để có tên trên bảng xếp hạng.
+                      <b>Bạn chưa có tướng nào</b> — quay thẻ và xếp đội để có tên trên bảng xếp hạng.
                     </div>
                   }
                 >
@@ -186,8 +173,7 @@ export function LeaderboardPage() {
                         <Avatar avatar={me().avatar} name={me().displayName} class="lb-avatar" />
                         <span class="lb-name-text">{me().displayName}</span>
                       </span>
-                      <Meta maxLevel={me().maxLevel} />
-                      <b class="lb-power">{num(me().power)}</b>
+                      <b class="lb-power">{num(me().lc)}</b>
                     </div>
                     <Show when={d().items.some((e) => e.isMe) && (me().rank ?? 0) > d().top}>
                       <button class="btn ghost small" onClick={gotoMe}>

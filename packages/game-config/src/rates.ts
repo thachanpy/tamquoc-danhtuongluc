@@ -93,12 +93,9 @@ export const GACHA_LEVEL_RATES: WeightEntry[] = [
 export const UPGRADE_INPUT_COUNT = 2;
 
 /**
- * Bảng xếp hạng Lực chiến (mục 6.6): điểm mỗi thẻ đang có theo level, Lv.n = 2^(n-1)
- * (2 thẻ Lv.n ghép thành công = 1 thẻ Lv.n+1 giữ nguyên điểm). LEADERBOARD_SIZE: số người hiển thị tối đa.
+ * Bảng xếp hạng Lực chiến (mục 6.6): xếp theo TỔNG LC của đội hình (mỗi tướng × cấp), không còn
+ * theo số thẻ / cấp thẻ đang có. LEADERBOARD_SIZE: số người hiển thị tối đa.
  */
-export const LEADERBOARD_POWER_BY_LEVEL: Record<number, number> = Object.fromEntries(
-  Array.from({ length: 10 }, (_, i) => [i + 1, 2 ** i]),
-);
 export const LEADERBOARD_SIZE = 100;
 export const LEADERBOARD_TOP = 10;
 

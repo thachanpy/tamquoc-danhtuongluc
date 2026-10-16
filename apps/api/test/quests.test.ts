@@ -51,7 +51,7 @@ function addUpgradeSuccess(ctx: GameContext, userId: number, n: number) {
 function addBattle(ctx: GameContext, attackerId: number, defenderId: number, winner: 'a' | 'b' | 'draw', at: number) {
   ctx.db
     .prepare(
-      `INSERT INTO pvp_battles (attacker_id, defender_id, winner, rounds, attacker_power, defender_power, data, created_at)
+      `INSERT INTO pvp_battles (attacker_id, defender_id, winner, rounds, attacker_lc, defender_lc, data, created_at)
        VALUES (?,?,?,?,?,?,?,?)`,
     )
     .run(attackerId, defenderId, winner, 3, 100, 100, '{}', new Date(at).toISOString());

@@ -1,9 +1,7 @@
 import {
   BPS_SCALE,
   GENERALS_BY_ID,
-  LEADERBOARD_POWER_BY_LEVEL,
   PVP_BACK_DAMAGE_BPS,
-  PVP_CLEANSE_CHAMP_BPS,
   PVP_CRIT_BPS_PER_LEVEL,
   PVP_DEF_PEN_BPS,
   PVP_FRONT_HP_BPS,
@@ -13,10 +11,10 @@ import {
   PVP_TEAM_SIZE,
   pvpBaseDamage,
   pvpBaseHp,
+  pvpCleanseBps,
   pvpCritDamageBps,
   pvpDefBps,
   pvpDodgeBps,
-  pvpEffectBps,
   pvpHitBps,
   pvpLc,
   pvpPerLevelEffectBps,
@@ -24,6 +22,8 @@ import {
   pvpProfile,
   pvpSkillDefAtLevel,
   pvpStyleBonus,
+  pvpTeamLc,
+  pvpUnitLc,
   ROSTER,
   type PvpRow,
 } from '@tq/game-config';
@@ -69,19 +69,24 @@ import { simulatePvp, type PvpSideInput } from './pvp.engine.ts';
  * Đội hình: người chơi tự lưu (pvp_teams). Chưa lưu thì server tự xếp 6 tướng mạnh nhất (theo Lực chiến/level).
  */
 
-const powerOfLevel = (level: number) => LEADERBOARD_POWER_BY_LEVEL[level] ?? 0;
-const teamPower = (units: PvpUnitDto[]) => units.reduce((s, u) => s + powerOfLevel(u.level), 0);
+/** Tổng Lực chiến (LC) của một đội hình: cộng LC từng tướng ở cấp đang xét (mục 6.6/6.7). */
+const teamLc = (units: PvpUnitDto[]) => pvpTeamLc(units);
 
 const ROSTER_IDS = new Set(ROSTER.map((g) => g.id));
 
 /** Đội hình đang lưu của người chơi (chưa xác thực lại quyền sở hữu). */
 function readSaved(db: GameContext['db'], userId: number): PvpUnitDto[] {
-  return (listTeam(db, userId) as PvpTeamRow[]).map((r) => ({ slot: r.slot, generalId: r.general_id, level: r.level }));
+  return (listTeam(db, userId) as PvpTeamRow[]).map((r) => ({
+    slot: r.slot,
+    generalId: r.general_id,
+    level: r.level,
+    lc: pvpUnitLc(r.general_id, r.level),
+  }));
 }
 
 /**
  * Đội hình tự động: lấy tướng mạnh nhất của mỗi tướng (level cao nhất đang sở hữu),
- * sắp theo Lực chiến giảm dần rồi xếp vào slot 1–6. Mỗi tướng chỉ xuất hiện một lần.
+ * sắp theo Lực chiến (LC) giảm dần rồi xếp vào slot 1–6. Mỗi tướng chỉ xuất hiện một lần.
  */
 function autoTeam(ctx: GameContext, userId: number): PvpUnitDto[] {
   const best = new Map<string, number>();
@@ -90,10 +95,10 @@ function autoTeam(ctx: GameContext, userId: number): PvpUnitDto[] {
     if (cur === undefined || p.level > cur) best.set(p.general_id, p.level);
   }
   return [...best.entries()]
-    .map(([generalId, level]) => ({ generalId, level, power: powerOfLevel(level) }))
-    .sort((a, b) => b.power - a.power || b.level - a.level || a.generalId.localeCompare(b.generalId))
+    .map(([generalId, level]) => ({ generalId, level, lc: pvpUnitLc(generalId, level) }))
+    .sort((a, b) => b.lc - a.lc || b.level - a.level || a.generalId.localeCompare(b.generalId))
     .slice(0, PVP_TEAM_SIZE)
-    .map((u, i) => ({ slot: i + 1, generalId: u.generalId, level: u.level }));
+    .map((u, i) => ({ slot: i + 1, generalId: u.generalId, level: u.level, lc: u.lc }));
 }
 
 /**
@@ -173,13 +178,12 @@ export function getOverview(ctx: GameContext, userId: number): PvpOverviewDto {
   const record = getRecord(ctx.db, userId);
   return {
     me: toFighter(user),
-    team: { units, power: teamPower(units) },
+    team: { units, lc: teamLc(units) },
     saved,
     wins: record.wins,
     losses: record.losses,
     draws: record.draws,
     maxRounds: PVP_MAX_ROUNDS,
-    powerByLevel: { ...LEADERBOARD_POWER_BY_LEVEL },
     ownedCombat: ownedCombatOf(ctx, userId),
   };
 }
@@ -236,13 +240,13 @@ export function getCombatStats(generalId: string, level: number, squad?: string[
     self: {
       maxHp,
       damage,
-      lc: pvpLc(profile.style, level),
+      lc: pvpLc(profile.style, level, profile.passive),
       critBps,
       // ST chí mạng theo cấp — buff/debuff kỹ năng điều chỉnh quanh mốc này khi vào trận.
       critDamageBps: pvpCritDamageBps(level),
-      stunBps: pvpPerLevelEffectBps(def.stunPerLevelBps, level) + (passive.stat === 'stun' ? passive.pointsBps : 0),
-      // Giải choáng khớp engine: chốt 75% ở cấp 10, quy theo cấp (cấp 1 = 65%).
-      cleanseBps: def.cleanse ? pvpEffectBps(PVP_CLEANSE_CHAMP_BPS, level) : 0,
+      stunBps: pvpPerLevelEffectBps(def.stunPerLevelBps, level),
+      // Giải choáng khớp engine: mặc định chốt 75% ở cấp 10 (Hoa Đà ghi đè 55% → 100%).
+      cleanseBps: pvpCleanseBps(def, level),
       heal,
       // Hút máu ở cấp hiện tại (khớp engine): chốt ở cấp 10, quy theo cấp.
       lifestealBps: pvpPerLevelEffectBps(profile.lifestealPerLevelBps, level),
@@ -251,7 +255,7 @@ export function getCombatStats(generalId: string, level: number, squad?: string[
       // Bộ chỉ số Trao đổi đòn (mục 18): Chính xác/Né tránh scale theo cấp; buff/debuff cộng trừ thêm trong trận.
       hitBps: pvpHitBps(level),
       dodgeBps: pvpDodgeBps(level),
-      defBps: pvpDefBps(level),
+      defBps: pvpDefBps(level) + (passive.stat === 'def' ? passive.pointsBps : 0),
       defPenBps: PVP_DEF_PEN_BPS,
     },
     passiveEffect: { ...passive },
@@ -349,14 +353,16 @@ export function saveTeam(ctx: GameContext, userId: number, units: PvpUnitDto[]):
       iso(ctx.now()),
     ),
   );
-  const sorted = [...units].sort((a, b) => a.slot - b.slot);
-  return { units: sorted, power: teamPower(sorted) };
+  const sorted = [...units]
+    .sort((a, b) => a.slot - b.slot)
+    .map((u) => ({ ...u, lc: pvpUnitLc(u.generalId, u.level) }));
+  return { units: sorted, lc: teamLc(sorted) };
 }
 
 export function getOpponent(ctx: GameContext, userId: number, opponentId: number): PvpOpponentDto {
   const opponent = requireOpponent(ctx, userId, opponentId);
   const { units, saved } = effectiveTeam(ctx, opponentId);
-  return { opponent: toFighter(opponent), team: { units, power: teamPower(units) }, saved };
+  return { opponent: toFighter(opponent), team: { units, lc: teamLc(units) }, saved };
 }
 
 /** Kiểm tra đối thủ hợp lệ: tồn tại, đã duyệt, không phải admin, không phải chính mình. */
@@ -386,8 +392,8 @@ export function challenge(ctx: GameContext, userId: number, opponentId: number):
   ];
   const sim = simulatePvp(sides, ctx.rand);
 
-  const myPower = teamPower(mine.units);
-  const oppPower = teamPower(theirs.units);
+  const myLc = teamLc(mine.units);
+  const oppLc = teamLc(theirs.units);
   const stored: StoredBattle = { units: sim.units, events: sim.events };
   const now = iso(ctx.now());
   const id = tx(ctx.db, () =>
@@ -398,8 +404,8 @@ export function challenge(ctx: GameContext, userId: number, opponentId: number):
         defenderId: opponentId,
         winner: sim.winner,
         rounds: sim.rounds,
-        attackerPower: myPower,
-        defenderPower: oppPower,
+        attackerLc: myLc,
+        defenderLc: oppLc,
         data: JSON.stringify(stored),
       },
       now,
@@ -441,8 +447,8 @@ export function listBattleHistory(ctx: GameContext, userId: number, page: number
       winner,
       result: outcomeOf(winner, side),
       rounds: row.rounds,
-      myPower: role === 'attack' ? row.attacker_power : row.defender_power,
-      opponentPower: role === 'attack' ? row.defender_power : row.attacker_power,
+      myLc: role === 'attack' ? row.attacker_lc : row.defender_lc,
+      opponentLc: role === 'attack' ? row.defender_lc : row.attacker_lc,
     };
   });
   return { items, page, pageSize, total };

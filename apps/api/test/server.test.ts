@@ -440,7 +440,7 @@ test('HTTP: /api/leaderboard cần đăng nhập; admin không có hạng', asyn
   const r = await app.inject({ method: 'GET', url: '/api/leaderboard', headers: adminAuth });
   assert.equal(r.statusCode, 200);
   const body = r.json();
-  assert.equal(body.metric, 'power');
+  assert.equal(body.metric, 'lc');
   assert.equal(body.me, null); // boss là tài khoản đầu tiên => admin
   assert.ok(!body.items.some((e: { username: string }) => e.username === 'boss'));
 
@@ -452,7 +452,7 @@ test('HTTP: /api/leaderboard cần đăng nhập; admin không có hạng', asyn
   assert.equal(mine.me.username, 'player_lb');
   assert.equal(mine.me.displayName, 'player_lb'); // tên hiển thị mặc định = tên đăng nhập (mục 3.11)
   assert.equal(mine.me.avatar, null);
-  assert.ok(mine.me.power >= 1);
+  assert.ok(mine.me.lc >= 1);
 });
 
 test('HTTP: nhiệm vụ — /api/me báo thưởng reset; /api/quests + nhận tất cả; nhận lại => 409', async () => {

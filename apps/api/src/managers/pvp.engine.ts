@@ -8,7 +8,6 @@ import {
   PVP_BURN_HEAL_DOWN_BPS,
   PVP_BURN_CLEANSE_EXPLODE_BPS,
   PVP_BURN_MAX_LAYERS_LONG,
-  PVP_CLEANSE_CHAMP_BPS,
   PVP_COUNTER_MAX_BPS,
   PVP_CRIT_BPS_PER_LEVEL,
   PVP_DEF_MAX_BPS,
@@ -30,10 +29,10 @@ import {
   isAllyTargeting,
   pvpBaseDamage,
   pvpBaseHp,
+  pvpCleanseBps,
   pvpCritDamageBps,
   pvpDefBps,
   pvpDodgeBps,
-  pvpEffectBps,
   pvpFactionBonus,
   pvpHitBps,
   pvpLc,
@@ -288,7 +287,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         teamLifestealBps: 0,
         reviveUsed: false,
         damageMulBps: BPS_SCALE,
-        lc: pvpLc(profile.style, u.level),
+        lc: pvpLc(profile.style, u.level, profile.passive),
         alive: true,
         stunnedByIdx: null,
         buffs: [],
@@ -332,19 +331,16 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     u.hp = u.maxHp;
     // Chí mạng: giá trị chốt 30% ở cấp 10, quy theo cấp (cấp 1 = 20%) + nội tại.
     u.critBps = pvpPerLevelEffectBps(PVP_CRIT_BPS_PER_LEVEL, u.level) + (passiveEffect.stat === 'crit' ? passiveEffect.pointsBps : 0);
-    // Choáng: tỉ lệ chốt ở cấp 10, quy theo cấp + nội tại.
-    u.stunBps = pvpPerLevelEffectBps(u.def.stunPerLevelBps, u.level) + (passiveEffect.stat === 'stun' ? passiveEffect.pointsBps : 0);
+    // Choáng: tỉ lệ chốt ở cấp 10, quy theo cấp (không còn nội tại cộng thêm điểm choáng).
+    u.stunBps = pvpPerLevelEffectBps(u.def.stunPerLevelBps, u.level);
     // Hút máu: chốt ở cấp 10 (mục 13), quy theo cấp.
     u.lifestealBps = pvpPerLevelEffectBps(u.profile.lifestealPerLevelBps, u.level);
     // Hút máu ĐỘI: cũng chốt ở cấp 10, quy theo cấp (hồi cho cả bản thân lẫn đồng minh).
     u.teamLifestealBps = pvpPerLevelEffectBps(u.profile.teamLifestealPerLevelBps, u.level);
-    // Giải choáng: chốt ở cấp 10 = 75%, quy theo cấp (cấp 1 = 65%). Tướng có override riêng
-    // (Hoa Đà: 55% → 100%) dùng span min→max theo cấp thay cho mặc định.
-    u.cleanseBps = u.def.cleanse
-      ? u.def.cleanseMinBps !== undefined && u.def.cleanseMaxBps !== undefined
-        ? pvpLevelSpanBps(u.def.cleanseMinBps, u.def.cleanseMaxBps, u.level)
-        : pvpEffectBps(PVP_CLEANSE_CHAMP_BPS, u.level)
-      : 0;
+    // Giải choáng: chốt ở cấp 10 = 75% (Hoa Đà ghi đè 55% → 100%) — xem `pvpCleanseBps`.
+    u.cleanseBps = pvpCleanseBps(u.def, u.level);
+    // Phòng thủ: chỉ số nền theo cấp (12% → 30%) + nội tại (+5% Phòng thủ) — buff/debuff cộng thêm khi vào trận.
+    u.defBps += passiveEffect.stat === 'def' ? passiveEffect.pointsBps : 0;
   }
 
   // Ảnh chụp đầu trận để client dựng giao diện.

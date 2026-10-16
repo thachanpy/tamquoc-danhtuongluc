@@ -663,7 +663,7 @@ export const schemas = {
 export interface LeaderboardEntryDto {
   /** Id người chơi (dùng để mời thi đấu PvP, mục 6.7). */
   id: number;
-  /** Hạng theo Lực chiến (đồng điểm => đồng hạng). null = chưa có thẻ nên chưa xếp hạng. */
+  /** Hạng theo Lực chiến của đội hình (đồng LC => đồng hạng). null = chưa có tướng nên chưa xếp hạng. */
   rank: number | null;
   /** Tên đăng nhập (dùng phân định nội bộ / sắp xếp). */
   username: string;
@@ -671,23 +671,20 @@ export interface LeaderboardEntryDto {
   displayName: string;
   /** Ảnh đại diện (xem mục 3.11); null = dùng ảnh mặc định. */
   avatar: string | null;
-  power: number;
-  cardCount: number;
-  maxLevel: number | null;
+  /** Tổng Lực chiến (LC) của đội hình đang dùng (đội đã lưu, hoặc đội tự động nếu chưa lưu). */
+  lc: number;
   isMe: boolean;
 }
 
 export interface LeaderboardDto {
-  metric: 'power';
-  /** Điểm Lực chiến mỗi thẻ theo level (cấu hình server). */
-  powerByLevel: Record<number, number>;
+  metric: 'lc';
   /** Số hạng đầu được làm nổi bật (top 10). */
   top: number;
   /** Tối đa LEADERBOARD_SIZE người, đã sắp theo hạng. */
   items: LeaderboardEntryDto[];
   /** Hạng của người đang xem; null nếu là tài khoản quản trị (không tham gia xếp hạng). */
   me: LeaderboardEntryDto | null;
-  /** Tổng số người chơi có thẻ được xếp hạng. */
+  /** Tổng số người chơi có tướng trong đội được xếp hạng (LC > 0). */
   totalRanked: number;
   generatedAt: string;
 }
@@ -832,17 +829,18 @@ export const PVP_BUFF_SCOPE_LABELS: Record<PvpBuffScope, string> = {
   back_allies: 'các tướng hàng sau',
 };
 
-/** Nội tại tướng (PVP.md mục 10.1). */
-export const PVP_PASSIVES = ['CRIT_5', 'DAMAGE_10', 'HP_10', 'STUN_5', 'STUN_10', 'CLEANSE_10'] as const;
+/**
+ * Nội tại tướng (SKILLS.md — mục "Nội tại tướng"). Chỉ có 4 nội tại và được RẢI ĐỀU trên toàn roster
+ * (mỗi nội tại ~1/4 số tướng); tướng được gán theo hướng kỹ năng nhưng luôn giữ số lượng cân bằng.
+ */
+export const PVP_PASSIVES = ['CRIT_5', 'DAMAGE_10', 'HP_10', 'DEF_5'] as const;
 export type PvpPassive = (typeof PVP_PASSIVES)[number];
 
 export const PVP_PASSIVE_LABELS: Record<PvpPassive, string> = {
-  CRIT_5: '+5 điểm chí mạng',
-  DAMAGE_10: '+10% damage',
+  CRIT_5: '+5% tỷ lệ chí mạng',
+  DAMAGE_10: '+10% sát thương',
   HP_10: '+10% HP tối đa',
-  STUN_5: '+5 điểm choáng',
-  STUN_10: '+10 điểm choáng',
-  CLEANSE_10: '+10 điểm giải choáng',
+  DEF_5: '+5% phòng thủ',
 };
 
 /** Một tướng trong đội hình: slot 1–3 hàng trước (trên → dưới), slot 4–6 hàng sau. */
@@ -850,12 +848,14 @@ export interface PvpUnitDto {
   slot: number;
   generalId: string;
   level: number;
+  /** Lực chiến (LC) của tướng ở cấp này — cộng lại thành Lực chiến của đội. */
+  lc: number;
 }
 
-/** Đội hình PvP đã lưu. units rỗng = chưa xếp; power = tổng điểm Lực chiến của đội. */
+/** Đội hình PvP đã lưu. units rỗng = chưa xếp; lc = TỔNG Lực chiến của đội (mục 6.7). */
 export interface PvpTeamDto {
   units: PvpUnitDto[];
-  power: number;
+  lc: number;
 }
 
 /** Người chơi trong trận (thông tin hiển thị). */
@@ -1005,8 +1005,9 @@ export interface PvpBattleSummaryDto {
   winner: PvpWinner;
   result: PvpOutcome;
   rounds: number;
-  myPower: number;
-  opponentPower: number;
+  /** Lực chiến (LC) của đội mình / đội đối thủ trong trận này. */
+  myLc: number;
+  opponentLc: number;
 }
 
 /** Tổng quan trang Đấu trường. */
@@ -1019,8 +1020,6 @@ export interface PvpOverviewDto {
   losses: number;
   draws: number;
   maxRounds: number;
-  /** Điểm Lực chiến mỗi thẻ theo level (dùng hiển thị sức mạnh tướng khi xếp đội). */
-  powerByLevel: Record<number, number>;
   /**
    * Chi tiết chiến đấu của từng tướng ĐANG SỞ HỮU ở cấp cao nhất (mục 6.7) — bảng chọn tướng
    * hiện chỉ số + kỹ năng chi tiết mà không phải gọi thêm API. Khoá = generalId.
@@ -1062,6 +1061,8 @@ export interface PvpBuffDto {
   defBps: number;
   /** % Xuyên giáp cộng mỗi lớp: bỏ qua Phòng thủ của địch (trần 50% — mục 18). */
   defPenBps: number;
+  /** Hồi máu theo lượt (HoT): mỗi lớp hồi % sát thương nền của người thi triển vào đầu mỗi lượt. 0 = không có. */
+  hotBps: number;
   /** Số lượt mỗi lớp còn hiệu lực. */
   rounds: number;
   /** Số lớp cộng dồn tối đa. */
@@ -1128,10 +1129,10 @@ export interface PvpCounterDto {
 
 /** Hiệu ứng nội tại tướng (SKILLS.md). */
 export interface PvpPassiveEffectDto {
-  stat: 'crit' | 'damage' | 'maxHp' | 'stun' | 'cleanse';
+  stat: 'crit' | 'damage' | 'maxHp' | 'def';
   /** Với damage/maxHp: phần trăm của chỉ số nền. */
   bps: number;
-  /** Với crit/stun/cleanse: điểm phần trăm. */
+  /** Với crit/def: điểm phần trăm cộng thẳng vào chỉ số. */
   pointsBps: number;
 }
 
