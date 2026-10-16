@@ -519,8 +519,10 @@ test('engine: tướng tự hồi máu theo % HP tối đa mỗi lượt ra đò
 });
 
 test('engine: hút máu — tướng hồi bản thân theo % sát thương gây ra (mục 6.5)', () => {
-  const lsId = 'yue-jin';
-  const foe = 'cao-pi';
+  // Dùng tướng hút máu MỐC CHUẨN (Tào Phi, 2%/cấp) — các tướng signature hút máu rất cao
+  // (85%–100%) nên lượng hồi thường bị chặn bởi máu đã mất, không kiểm tra được đúng hệ số.
+  const lsId = 'cao-pi';
+  const foe = 'guan-yu';
   const res = simulatePvp([one('a', [{ slot: 1, generalId: lsId, level: 10 }]), one('b', [{ slot: 1, generalId: foe, level: 10 }])], never);
   const profile = pvpProfile(lsId);
   const u = res.units.find((x) => x.idx === 0)!;
@@ -573,9 +575,9 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(lm.def.buffs[0]!.buff.hpBps, 1000);
   assert.equal(lm.def.buffs[0]!.scope, 'all_allies');
   assert.equal(lm.def.dispel, false);
-  // Tào Tháo: AoE 110%, 100% xóa 1 buff địch, buff ST toàn đội 20%.
+  // Tào Tháo: AoE 95%, 100% xóa 1 buff địch, buff ST toàn đội 20%.
   const cc = pvpProfile('cao-cao');
-  assert.equal(cc.def.damageBps, 11000);
+  assert.equal(cc.def.damageBps, 9500);
   assert.equal(cc.def.dispelChanceBps, BPS_SCALE);
   assert.equal(cc.def.buffs[0]!.buff.damageBps, 2000);
   // Trương Liêu: hàng ngang 225%, giảm ST địch 10%, hút máu 3%/cấp (max 30%), phản kích đơn (50% ST, không tự buff ST).
@@ -597,10 +599,25 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(lb.def.stunPerLevelBps, 0);
   assert.equal(lb.lifestealPerLevelBps, 300);
   assert.equal(lb.def.counter.scope, 'single');
-  // Nhạc Tiến: đánh đơn 290%, xóa buff địch.
+  // Nhạc Tiến (Ngụy): signature hút máu — đánh đơn 300%, hút máu 8.5%/cấp (max 85%), tự tăng 10% HP tối đa.
   const yj = pvpProfile('yue-jin');
-  assert.equal(yj.def.damageBps, 29000);
-  assert.ok(yj.def.dispel);
+  assert.equal(yj.def.damageBps, 30000);
+  assert.equal(yj.def.targeting, 'single');
+  assert.equal(yj.lifestealPerLevelBps, 850);
+  assert.equal(yj.def.dispel, false, 'Nhạc Tiến không còn xóa buff địch');
+  assert.equal(yj.def.buffs[0]!.buff.hpBps, 1000);
+  // Cam Ninh (Ngô): signature hút máu — đánh đơn 265%, hút máu 9.5%/cấp (max 95%), tự tăng 10% HP tối đa.
+  const gn = pvpProfile('gan-ning');
+  assert.equal(gn.def.damageBps, 26500);
+  assert.equal(gn.def.targeting, 'single');
+  assert.equal(gn.lifestealPerLevelBps, 950);
+  assert.equal(gn.def.buffs[0]!.buff.hpBps, 1000);
+  // Hoa Hùng (Quần): signature hút máu — đánh đơn 290%, hút máu 9%/cấp (max 90%), tự tăng 10% HP tối đa.
+  const hx = pvpProfile('hua-xiong');
+  assert.equal(hx.def.damageBps, 29000);
+  assert.equal(hx.def.targeting, 'single');
+  assert.equal(hx.lifestealPerLevelBps, 900);
+  assert.equal(hx.def.buffs[0]!.buff.hpBps, 1000);
   // Tân Hiến Anh: AoE 75% + giải choáng & thiêu đốt.
   const xx = pvpProfile('xin-xianying');
   assert.equal(xx.def.damageBps, 7500);
@@ -652,7 +669,7 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(zh.def.debuff.burnRounds, 4);
   // Bảng AoE: hệ số chốt trong SKILLS.md (nhóm thuần buff đồng đội như Quách Gia/Bàng Thống/Hoàng Nguyệt Anh vẫn gây sát thương AoE).
   const aoes: [string, number][] = [
-    ['cao-cao', 11000],
+    ['cao-cao', 9500],
     ['sima-yi', 12500],
     ['xin-xianying', 7500],
     ['zhuge-liang', 10400],
