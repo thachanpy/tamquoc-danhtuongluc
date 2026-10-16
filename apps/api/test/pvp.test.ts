@@ -319,6 +319,21 @@ test('engine: Quan Vũ nhắm tướng địch có sát thương cao nhất (m�
   assert.deepEqual(act.targets, [7], 'phải nhắm tướng Tấn công (sát thương cao nhất)');
 });
 
+test('engine: Điêu Thuyền choáng đúng tướng địch có sát thương cao nhất (mục 2.4, 6.2)', () => {
+  // Cùng cấp nên sát thương nền bằng nhau; tướng Tấn công (+25% ST) mạnh hơn tướng Phòng thủ (+25% HP).
+  // Địch: slot 1 = Phòng thủ (idx 6), slot 2 = Tấn công (idx 7) → Điêu Thuyền (idx 0) phải nhắm idx 7.
+  const atk = findGeneral((id) => id !== 'diao-chan' && pvpProfile(id).style === 'attack' && skillDef(id).stun === 'none');
+  const def = findGeneral((id) => pvpProfile(id).style === 'defense' && skillDef(id).stun === 'none');
+  const res = simulatePvp(
+    [one('a', [{ slot: 1, generalId: 'diao-chan', level: 10 }]), one('b', [{ slot: 1, generalId: def, level: 10 }, { slot: 2, generalId: atk, level: 10 }])],
+    never,
+  );
+  const dmgOf = (idx: number) => res.units.find((u) => u.idx === idx)!.damage;
+  assert.ok(dmgOf(7) > dmgOf(6), 'tướng Tấn công phải có sát thương cao hơn tướng Phòng thủ');
+  const act = res.events.find((e): e is Extract<PvpEventDto, { t: 'act' }> => e.t === 'act' && e.idx === 0)!;
+  assert.deepEqual(act.targets, [7], 'phải nhắm tướng Tấn công (sát thương cao nhất)');
+});
+
 test('engine: hồi sinh một lần/trận — sống lại theo cấp và giảm 50% sát thương tới hết trận (mục 1.14)', () => {
   // Danh sách tướng có Hồi sinh: Triệu Vân (Thục · Tấn công), Tào Nhân (Ngụy · Phòng thủ),
   // Hoàng Cái (Ngô · Phòng thủ), Văn Súy (Quần · Tấn công). Các tướng khác không có.
@@ -760,9 +775,10 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(cg.def.buffs[0]!.buff.critBps, 1500);
   assert.ok(cg.def.cleanse);
   assert.equal(cg.def.dispel, false);
-  // Điêu Thuyền: đánh đơn 120%, choáng 8%/cấp, kèm giảm sát thương địch 20%.
+  // Điêu Thuyền: đánh đơn 120%, choáng 8%/cấp, kèm giảm sát thương địch 20%; nhắm tướng địch có sát thương cao nhất.
   const dc = pvpProfile('diao-chan');
   assert.equal(dc.def.damageBps, 12000);
+  assert.equal(dc.def.targeting, 'highest_damage_enemy');
   assert.equal(dc.def.stunPerLevelBps, 800);
   assert.equal(dc.def.debuff.damageDownBps, 2000);
   // Quách Gia: AoE 85% + giảm ST địch 10% + tăng 15% HP tối đa toàn đội.

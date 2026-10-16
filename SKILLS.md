@@ -43,6 +43,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
    - **Cơ chế Ghi đè / Nối tiếp**: Cho phép choáng đè. Nếu một tướng khác tiếp tục gây choáng lên mục tiêu đang bị choáng, thời gian choáng sẽ được làm mới và **tính nối tiếp cho tới khi tướng gây choáng sau đó ra skill ở lượt kế tiếp**.
    - **Tỷ lệ & Cân bằng Sát thương**:
      - *Tướng Hỗ trợ Choáng đơn mục tiêu*: Sát thương giảm xuống **120% – 180%**, đổi lấy **Tỷ lệ choáng 80% – 100%** (`cấp × 8%` đến `cấp × 10%`).
+       - *Điêu Thuyền* (Quần): thay vì đánh theo hàng ngang, **nhắm thẳng tướng địch có sát thương hiệu dụng cao nhất** (`highest_damage_enemy`, bằng nhau thì chọn vị trí nhỏ hơn) rồi mới gây choáng — khóa chủ lực của địch.
      - *Tướng Tấn công Choáng đơn mục tiêu*: Sát thương cao (**250% – 285%**), tỷ lệ choáng **30% – 40%** (`cấp × 3%` đến `cấp × 4%`).
      - *Tướng Choáng diện rộng (Ngang/Dọc/AoE)*: Tỷ lệ choáng `cấp × 2%` đến `cấp × 3%` (max 20% – 30%).
 7. **Giải choáng & Thiêu đốt**: Giải hiệu ứng Choáng hoặc Thiêu đốt cho đồng minh (tỷ lệ 30% – 75%). Tướng có kỹ năng giải choáng/thiêu đốt **miễn nhiễm Choáng**. *Tác dụng tức thì*.
@@ -104,7 +105,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 | 15 | **Quách Gia** | Hỗ trợ | ⭐ | **Diệu kế thiên cơ**: Tấn công toàn bộ địch 85%, Tăng 15% HP tối đa cho toàn đội và Giảm sát thương nhận vào của toàn bộ địch 10% (3 lượt). | Tăng HP max toàn đội, Giảm ST địch |
 | 16 | **Tuân Úc** | Hỗ trợ | | **Vương tá chi sách**: Buff sát thương 15% toàn đội (3 lượt), Giảm sát thương nhận vào cho toàn đội 10% (3 lượt) và Ban hút máu 15% cho toàn đội (2 lượt). | Buff ST, Giảm ST nhận, Ban hút máu |
 | 17 | **Tuân Du** | Hỗ trợ | | **Liên hoàn kế**: Tấn công hàng dọc 180%, gây Choáng (tỷ lệ cấp×3%, max 30%). | Choáng |
-| 18 | **Giả Hủ** | Hỗ trợ | | **Độc kế**: Tấn công hàng dọc 150%, gây Choáng các mục tiêu (tỷ lệ cấp×10%, max 100%) và Giảm sát thương địch 20%. | Choáng 100%, Giảm ST địch |
+| 18 | **Giả Hủ** | Hỗ trợ | | **Độc kế**: Tấn công hàng dọc 150%, gây Choáng các mục tiêu (tỷ lệ cấp×3%, max 30%) và Giảm sát thương địch 20%. | Choáng, Giảm ST địch |
 | 19 | **Tư Mã Ý** | Hỗ trợ | ⭐ | **Ẩn nhẫn phản kích**: Tấn công toàn bộ địch 125%, Giảm sát thương toàn bộ địch 15%, Giảm tỷ lệ chí mạng 15% VÀ Giảm 20% ST chí mạng toàn bộ địch (3 lượt). | Giảm ST địch, Giảm chí mạng, Giảm ST chí mạng |
 | 20 | **Bàng Đức** | Phòng thủ | | **Quan tài quyết chiến**: Tấn công đơn 280%, Hút máu theo cấp (cấp×2%, max 20%), Tăng tỷ lệ chí mạng bản thân 25% và Tăng 25% ST chí mạng bản thân (3 lượt). | Hút máu, Tăng chí mạng, Tăng ST chí mạng |
 | 21 | **Chân Cơ** | Hỗ trợ | | **Lạc Thần**: Hồi máu toàn đội (110% ST cơ bản) và Giảm sát thương nhận vào cho toàn đội 10% (3 lượt). | Hồi máu, Giảm ST nhận |
@@ -191,7 +192,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 |---|-------|-----------|-----|---------|------------------|
 | 1 | **Đổng Trác** | Phòng thủ | ⭐ | **Bạo chúa**: Giảm máu tối đa của toàn bộ đối thủ 15%, Hồi máu bản thân 20% HP tối đa và Phản kích toàn bộ địch (Nội tại: cấp×3%, max 30%, ST 30%). | Giảm HP max địch, Hồi máu, Phản kích diện rộng |
 | 2 | **Lữ Bố** | Tấn công | ⭐ | **Vô song**: Tấn công toàn bộ địch 127%, Tăng tỷ lệ chí mạng bản thân 20%, Tăng 20% ST chí mạng, Hút máu theo cấp (cấp×3%, max 30%) và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Tăng chí mạng, Tăng ST chí mạng, Hút máu, Phản kích đơn |
-| 3 | **Điêu Thuyền** | Hỗ trợ | ⭐ | **Bế nguyệt**: Tấn công đơn 120%, gây Choáng (tỷ lệ cấp×8%, max 80%) và Giảm sát thương mục tiêu 20%. | Choáng, Giảm ST địch |
+| 3 | **Điêu Thuyền** | Hỗ trợ | ⭐ | **Bế nguyệt**: Tấn công tướng địch có sát thương cao nhất 120%, gây Choáng (tỷ lệ cấp×8%, max 80%) và Giảm sát thương mục tiêu 20%. | Choáng, Giảm ST địch |
 | 4 | **Viên Thiệu** | Hỗ trợ | ⭐ | **Thế gia hào tộc**: Tăng máu tối đa toàn đội 15%, Buff sát thương toàn đội 10% và Ban hút máu 15% cho toàn đội (2 lượt). | Tăng HP max, Buff ST, Ban hút máu |
 | 5 | **Viên Thuật** | Hỗ trợ | | **Trọng thị đế nghiệp**: Giảm máu tối đa hàng trước của đối thủ 15% (3 lượt). | Giảm HP max địch |
 | 6 | **Công Tôn Toản** | Tấn công | ⭐ | **Bạch mã nghĩa tùng**: Tấn công hàng sau 220%, Tăng tỷ lệ chí mạng 20% và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Tăng chí mạng, Phản kích đơn |
