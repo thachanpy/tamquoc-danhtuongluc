@@ -1,5 +1,5 @@
 import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
-import type { Faction, PvpSide, PvpSkill, PvpStyle } from '@tq/shared';
+import { FACTION_LABELS, type Faction, type PvpSide, type PvpSkill, type PvpStyle } from '@tq/shared';
 import { FACTION_STYLE, initials, levelTier, portraitUrl, prefersReducedMotion } from '../art.ts';
 import { iconSvg, iconViewBox, type IconId } from '../icons.ts';
 import { castKindOf, spawnSkillFx, type Fx, type FxKind } from './skillsfx.ts';
@@ -13,7 +13,7 @@ import { castKindOf, spawnSkillFx, type Fx, type FxKind } from './skillsfx.ts';
  */
 
 const W = 900;
-const H = 444;
+const H = 500;
 /** Bề rộng dải phân cách giữa hai đội. */
 const DIV_W = 28;
 const SIDE_GAP = 10;
@@ -21,17 +21,21 @@ const SIDE_W = (W - DIV_W) / 2 - SIDE_GAP;
 const PAD = 6;
 const COL_GAP = 14;
 const COL_W = (SIDE_W - PAD * 2 - COL_GAP) / 2;
-const TILE_H = 130;
-const ROW_GAP = 12;
-const ROW_Y0 = 20;
+/**
+ * Ô tướng cao rộng rãi (152px) để chân dung, thanh máu, số máu và hai hàng chỉ số không còn
+ * chen chúc; 3 hàng ô cộng khoảng cách vẫn nằm gọn trong chiều cao sân `H`.
+ */
+const TILE_H = 152;
+const ROW_GAP = 10;
+const ROW_Y0 = 16;
 /** Vòng chân dung trong ô (56px, khớp ô tướng ở trang chuẩn bị chiến). */
 const ART_R = 28;
-const ART_CY = 16 + ART_R;
+const ART_CY = 14 + ART_R;
 /** Thanh máu + số máu + dòng chỉ số trong ô. */
 const HP_W = COL_W - 16;
-const HP_Y = 87;
+const HP_Y = 94;
 const HP_H = 6;
-const NUM_Y = 99;
+const NUM_Y = 108;
 /** Bán kính icon cạnh số máu (trái tim) và khoảng cách tới con số. */
 const HP_ICO = 11;
 const HP_ICO_GAP = 3;
@@ -46,10 +50,26 @@ const INFO_ROWS: readonly (readonly IconId[])[] = [
 ];
 /** Danh sách icon theo thứ tự phẳng (khớp `infoIcons`/`infoVals`). */
 const INFO_ITEMS: readonly IconId[] = INFO_ROWS.flat();
-/** Toạ độ y của từng hàng chỉ số (dưới số máu). */
-const INFO_ROW_Y: readonly number[] = [110, 123];
+/** Toạ độ y của từng hàng chỉ số (dưới số máu) — hàng dưới vẫn chừa lề đáy trong ô. */
+const INFO_ROW_Y: readonly number[] = [122, 136];
 /** Tên tướng nằm ngay dưới chân dung (khớp font/màu ô tướng ở trang chuẩn bị chiến). */
-const NAME_Y = 80;
+const NAME_Y = 82;
+/**
+ * Ba chip ở góc trên-trái ô: **cấp → phe → phong cách**, xếp dọc. Mỗi chip ôm vừa nội dung
+ * (không kéo dãn) nhưng cả ba **canh giữa trên cùng một trục dọc** nên trông đều nhau.
+ */
+const TAG_X = 5;
+/** Toạ độ y của chip đầu tiên (cấp độ); hai chip dưới xếp tiếp theo. */
+const TAG_Y0 = 5;
+const TAG_H = 17;
+const TAG_GAP = 3;
+const TAG_FONT = 10.5;
+/** Lề ngang trong chip chữ (cấp độ, phe); chuỗi chỉ có icon dùng lề hẹp hơn cho khỏi bị kéo dài. */
+const TAG_PAD = 7;
+/** Lề ngang của chip phong cách — khớp `padding: 1px 5px` của `.pvp-pick-style`. */
+const TAG_ICON_PAD = 5;
+/** Cỡ icon phong cách (khung vẽ của `drawStyleIcon` là 13×13). */
+const TAG_ICON = 13;
 /** Chip hiệu ứng trên ô: cỡ chữ tối đa/tối thiểu, khoảng cách, số hàng tối đa khi phải xuống dòng. */
 const CHIP_FONT = 10;
 const CHIP_FONT_MIN = 8;
@@ -99,7 +119,7 @@ function drawIcon(g: Graphics, id: IconId, size: number, color: number): void {
   g.scale.set(size / iconViewBox(id));
 }
 
-/** Màu nhãn phong cách chiến đấu (khớp .pvp-style ở trang chuẩn bị chiến). */
+/** Màu nhãn phong cách chiến đấu (khớp `STYLE_COLOR` và chip `.pvp-cell-style` ở trang chuẩn bị chiến). */
 const STYLE_TONE: Record<PvpStyle, number> = {
   attack: 0xef6f6a,
   defense: 0x5aa2ff,
@@ -397,21 +417,44 @@ class Tile {
     this.buffFx.position.set(COL_W / 2, ART_CY);
     this.buffFx.visible = false;
 
-    // Chip cấp độ góc trên trái — cùng kiểu chip với ô tướng ở trang chuẩn bị chiến
-    const lv = new Text({ text: `Lv.${u.level}`, style: { fontFamily: NUM_FONT, fontSize: 11, fontWeight: '600', fill: levelTier(u.level).color } });
-    const lvBg = new Graphics().roundRect(5, 5, lv.width + 14, 17, 999).fill({ color: 0xffffff, alpha: 0.04 });
-    lvBg.stroke({ width: 1, color: C.line });
-    lv.position.set(12, 6);
-
-    // Chip phong cách chiến đấu xếp NGAY DƯỚI chip cấp độ (cùng canh trái): chỉ hiện icon
-    // định danh — kiếm (Tấn công) / khiên (Phòng thủ) / sách (Hỗ trợ) — nhãn chữ nằm ở tooltip.
-    const stY = 25;
+    // Ba chip góc trên trái (cùng kiểu chip với ô tướng ở trang chuẩn bị chiến), xếp dọc:
+    // cấp độ → phe → phong cách chiến đấu. Chip ôm vừa chữ/icon rồi cả ba canh giữa chung một trục.
+    const tagY = (i: number) => TAG_Y0 + i * (TAG_H + TAG_GAP);
+    const lvTone = levelTier(u.level).color;
+    const facTone = FACTION_STYLE[u.faction].color;
     const stTone = STYLE_TONE[u.style];
-    const stBg = new Graphics().roundRect(5, stY, 17, 17, 8).fill({ color: stTone, alpha: 0.14 });
+    const mkTag = (text: string, tone: number) =>
+      new Text({ text, style: { fontFamily: NUM_FONT, fontSize: TAG_FONT, fontWeight: '600', fill: tone } });
+    const lv = mkTag(`Lv.${u.level}`, lvTone);
+    const fac = mkTag(FACTION_LABELS[u.faction], facTone);
+    // Bề rộng riêng: chip chữ theo độ dài chữ, chip phong cách chỉ ôm vừa icon (không kéo dài).
+    // Cả ba vẫn canh giữa chung một trục dọc nên xếp thẳng hàng.
+    const lvW = Math.max(TAG_H, lv.width + TAG_PAD * 2);
+    const facW = Math.max(TAG_H, fac.width + TAG_PAD * 2);
+    const stW = TAG_ICON + TAG_ICON_PAD * 2;
+    const cx = TAG_X + Math.max(lvW, facW, stW) / 2;
+
+    const lvY = tagY(0);
+    lv.anchor.set(0.5);
+    lv.position.set(cx, lvY + TAG_H / 2);
+    const lvBg = new Graphics().roundRect(cx - lvW / 2, lvY, lvW, TAG_H, 999).fill({ color: 0xffffff, alpha: 0.04 });
+    lvBg.stroke({ width: 1, color: C.line });
+
+    // Chip phe (Ngụy/Thục/Ngô/Quần) — tô màu theo phe như ô tướng ở trang chuẩn bị chiến.
+    const facY = tagY(1);
+    fac.anchor.set(0.5);
+    fac.position.set(cx, facY + TAG_H / 2);
+    const facBg = new Graphics().roundRect(cx - facW / 2, facY, facW, TAG_H, 999).fill({ color: facTone, alpha: 0.12 });
+    facBg.stroke({ width: 1, color: facTone, alpha: 0.85 });
+
+    // Chip phong cách chiến đấu: chỉ hiện icon định danh — kiếm (Tấn công) / khiên (Phòng thủ) /
+    // sách (Hỗ trợ) — nhãn chữ đầy đủ nằm ở tooltip.
+    const stY = tagY(2);
+    const stBg = new Graphics().roundRect(cx - stW / 2, stY, stW, TAG_H, 999).fill({ color: stTone, alpha: 0.14 });
     stBg.stroke({ width: 1, color: stTone, alpha: 0.85 });
     const stIcon = new Graphics();
     drawStyleIcon(stIcon, u.style);
-    stIcon.position.set(7, stY + 2);
+    stIcon.position.set(cx - TAG_ICON / 2, stY + (TAG_H - TAG_ICON) / 2);
 
     // Tên tướng ngay dưới chân dung — font/màu khớp .pvp-cell-name ở trang chuẩn bị chiến
     const name = new Text({ text: u.name, style: { fontFamily: UI_FONT, fontSize: 12.5, fontWeight: '700', fill: C.text } });
@@ -494,6 +537,8 @@ class Tile {
       this.buffFx,
       lvBg,
       lv,
+      facBg,
+      fac,
       stBg,
       stIcon,
       name,

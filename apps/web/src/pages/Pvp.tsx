@@ -22,7 +22,7 @@ import { Avatar } from '../components/Avatar.tsx';
 import { CombatDetailModal } from '../components/CombatDetailModal.tsx';
 import { StyleIcon } from '../components/StyleIcon.tsx';
 import { StatIcon } from '../components/StatIcon.tsx';
-import { FACTION_STYLE, initials, levelTier, pct, portraitUrl } from '../art.ts';
+import { FACTION_STYLE, STYLE_COLOR, initials, levelTier, pct, portraitUrl } from '../art.ts';
 import { preBattleNote } from '../combat-notes.ts';
 import type { IconId } from '../icons.ts';
 import { createArena, type ArenaHandle, type ArenaUnit, type ArenaView, type FloatPart } from '../pixi/arena.ts';
@@ -193,9 +193,6 @@ function StatLine(props: { stat?: UnitStat }) {
     <Show when={props.stat} fallback={<span class="pvp-cell-stat loading">…</span>}>
       {(s) => (
         <span class="pvp-cell-stat">
-          <span class={`pvp-style ${s().style}`} title={PVP_STYLE_LABELS[s().style]}>
-            <StyleIcon style={s().style} size={11} />
-          </span>
           {/* Hàng 1: sát thương · HP tối đa · phòng thủ (kèm badge phần cộng thêm của Chỉ số Nền Ra Trận).
               Mỗi chỉ số là một khối riêng nên tự xuống dòng khi ô hẹp, không tràn/cắt mất chữ. */}
           <span class="pvp-cell-num row1">
@@ -387,6 +384,10 @@ function UnitCell(props: {
               {/* Phe của tướng — hiện ngay trên ô đội hình để biết đội đang có những phe nào */}
               <span class="pvp-cell-faction" style={{ color: FACTION_STYLE[g()!.faction].css }} title={FACTION_LABELS[g()!.faction]}>
                 {FACTION_LABELS[g()!.faction]}
+              </span>
+              {/* Phong cách chiến đấu: Tấn công (kiếm) / Phòng thủ (khiên) / Hỗ trợ (sách) — cùng hàng với cấp và phe */}
+              <span class="pvp-cell-style" style={{ color: STYLE_COLOR[genStyle(g()!.id)] }} title={PVP_STYLE_LABELS[genStyle(g()!.id)]}>
+                <StyleIcon style={genStyle(g()!.id)} size={11} />
               </span>
             </span>
             <StatLine stat={props.stat} />
@@ -1164,6 +1165,8 @@ function BattleReport(props: { units: PvpUnitStateDto[]; mySide: PvpSide; analys
     const u = unitByIdx().get(idx);
     return u ? gen(u.generalId).faction : null;
   };
+  /** Tướng ở ô `idx` (null nếu ô trống) — dùng cho chip cấp độ và phong cách trong bảng tổng kết. */
+  const unitAt = (idx: number) => unitByIdx().get(idx) ?? null;
   const artOf = (idx: number) => {
     const u = unitByIdx().get(idx);
     return <MiniArt unit={u} mine={u?.side === props.mySide} />;
@@ -1173,14 +1176,28 @@ function BattleReport(props: { units: PvpUnitStateDto[]; mySide: PvpSide; analys
       <td class="rp-t-name">
         {artOf(idx)}
         <span>{nameOf(idx)}</span>
-        {/* Phe của tướng — hiện kèm tên để đọc bảng tổng kết là biết ngay phe nào */}
-        <Show when={factionOf(idx)}>
-          {(f) => (
-            <span class="rp-t-faction" style={{ color: FACTION_STYLE[f()].css }} title={FACTION_LABELS[f()]}>
-              {FACTION_LABELS[f()]}
-            </span>
-          )}
-        </Show>
+        {/* Chip theo thứ tự cấp độ → phe → phong cách, khớp ô tướng ở đội hình */}
+        <span class="rp-t-tags">
+          <Show when={unitAt(idx)}>
+            {(u) => (
+              <span class="rp-t-lv" style={{ 'border-color': levelTier(u().level).css, color: levelTier(u().level).css }}>{`Lv.${u().level}`}</span>
+            )}
+          </Show>
+          <Show when={factionOf(idx)}>
+            {(f) => (
+              <span class="rp-t-faction" style={{ color: FACTION_STYLE[f()].css }} title={FACTION_LABELS[f()]}>
+                {FACTION_LABELS[f()]}
+              </span>
+            )}
+          </Show>
+          <Show when={unitAt(idx)}>
+            {(u) => (
+              <span class="rp-t-style" style={{ color: STYLE_COLOR[u().style] }} title={PVP_STYLE_LABELS[u().style]}>
+                <StyleIcon style={u().style} size={11} />
+              </span>
+            )}
+          </Show>
+        </span>
       </td>
       <td class="rp-t-num dmg">{num(t.dealt)}</td>
       <td class="rp-t-num taken">{num(t.taken)}</td>
