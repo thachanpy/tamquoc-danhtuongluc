@@ -23,6 +23,7 @@ import { CombatDetailModal } from '../components/CombatDetailModal.tsx';
 import { StyleIcon } from '../components/StyleIcon.tsx';
 import { FACTION_STYLE, initials, levelTier, pct, portraitUrl } from '../art.ts';
 import { createArena, type ArenaHandle, type ArenaUnit, type ArenaView } from '../pixi/arena.ts';
+import type { FxKind } from '../pixi/skillsfx.ts';
 import { toast } from '../ui.ts';
 import { playSfx, sfxPrefs, stopAllSfx, toggleSfx, type SfxName } from '../sfx.ts';
 
@@ -999,6 +1000,12 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     arena?.float(idx, text, crit, heal);
   };
 
+  /** Hiệu ứng kỹ năng trên ô tướng (niệm chiêu ở người ra đòn / va chạm trên mục tiêu). */
+  const addFx = (idx: number, kind: FxKind) => {
+    if (fastForward) return;
+    arena?.impact(idx, kind);
+  };
+
   function apply(ev: PvpEventDto) {
     builder.add(ev);
     if (!fastForward) setDetail(builder.rows.slice());
@@ -1029,6 +1036,8 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         setActing(ev.idx);
         setActingSkill(ev.skill);
         setTargets(ev.targets);
+        // Hiệu ứng niệm chiêu ở người ra đòn (kiểu theo nhóm kỹ năng + phe + sắc thái riêng tướng)
+        if (!fastForward) arena?.cast(ev.idx, ev.skill);
         // Tướng ra đòn → gỡ choáng do CHÍNH tướng này gây (khớp engine).
         setView((v) => {
           let changed = false;
@@ -1051,23 +1060,28 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         setActing(ev.from);
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp }));
         addFloat(ev.idx, `-${num(ev.amount)}`, ev.crit);
+        addFx(ev.idx, 'damage');
         break;
       case 'counter':
         // Phản kích: `from` đánh trả `idx` (kẻ vừa gây sát thương chủ động cho `from`).
         setActing(ev.from);
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp }));
         addFloat(ev.idx, `-${num(ev.amount)}`, ev.crit);
+        addFx(ev.idx, 'damage');
         break;
       case 'heal':
         setActing(ev.from);
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp }));
         addFloat(ev.idx, `+${num(ev.amount)}`, ev.crit, true);
+        addFx(ev.idx, 'heal');
         break;
       case 'stun':
         upd(ev.idx, (s) => ({ ...s, stunned: true, stunnedByIdx: ev.byIdx }));
+        addFx(ev.idx, 'stun');
         break;
       case 'cleanse':
         upd(ev.idx, (s) => ({ ...s, stunned: false, stunnedByIdx: null }));
+        addFx(ev.idx, 'purify');
         break;
       case 'buff': {
         // Thêm MỘT lớp cho tướng: cộng thẳng sát thương + tăng trần HP (hồi đúng lượng tăng).
@@ -1094,6 +1108,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         });
         const gains = [ev.damageFlat > 0 ? `+${num(ev.damageFlat)} ⚔` : '', ev.hpFlat > 0 ? `+${num(ev.hpFlat)} ❤` : ''].filter(Boolean).join('  ');
         if (gains) addFloat(ev.idx, gains, ev.crit, true);
+        addFx(ev.idx, 'buff');
         break;
       }
       case 'debuff': {
@@ -1119,16 +1134,19 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
           }
           return syncHp({ ...s, debuffs });
         });
+        addFx(ev.idx, 'debuff');
         break;
       }
       case 'burn':
         // Thiêu đốt gây sát thương vào đầu mỗi lượt (có thể ăn chí mạng theo chỉ số người thi triển).
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp }));
         addFloat(ev.idx, `-${num(ev.amount)}`, ev.crit);
+        addFx(ev.idx, 'burn');
         break;
       case 'dispel':
         // Xóa toàn bộ hiệu ứng có lợi của đối thủ — trần HP giảm theo (kẹp máu xuống trần mới).
         upd(ev.idx, (s) => syncHp({ ...s, buffed: false, buffs: [] }));
+        addFx(ev.idx, 'dispel');
         break;
       case 'purify':
         // Thanh tẩy hiệu ứng bất lợi cho đồng minh, TRỪ thiêu đốt: zero hóa giảm sát thương/HP/chí mạng,
@@ -1139,6 +1157,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
             .filter((d): d is CV['debuffs'][number] => d !== null);
           return syncHp({ ...s, debuffs });
         });
+        addFx(ev.idx, 'purify');
         break;
       case 'down':
         // Tướng bị hạ: đánh dấu chết + gỡ mọi choáng do chính tướng này gây (khớp engine).
@@ -1256,6 +1275,9 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
       level: u.level,
       artKey: g.artKey,
       style: u.style,
+      // Nhóm kỹ năng + phe: dùng chọn kiểu và pha màu hiệu ứng kỹ năng trên sân (arena.ts)
+      skill: u.skill,
+      faction: g.faction,
       damage: u.damage,
       // Tướng có nội tại Phản kích: luôn hiện chip "PK" trên ô để biết nó đánh trả khi bị đánh
       counter: u.counter !== undefined,
@@ -1310,12 +1332,20 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
 
         {/* Sân đấu + diễn biến: luôn nằm trong DOM để canvas PixiJS không bị hủy khi mở bảng kết quả */}
         <div class="rp-live" hidden={report()}>
-          {/* Tên kỹ năng đang thi triển */}
+          {/* Tên kỹ năng đang thi triển: keyed để mỗi lần ra chiêu khối được dựng lại -> chạy lại hoạt ảnh bật nảy */}
           <div class="rp-cast" classList={{ on: !!actingSkill() }}>
-            <Show when={actingSkill() && acting() !== null} fallback={<span class="rp-cast-hint">Diễn biến trận đấu</span>}>
-              <span class="rp-cast-who">{nameOf(acting()!)}</span>
-              <span class="rp-cast-tag">dùng</span>
-              <span class="rp-cast-skill">{skillNameAt(acting()!, actingSkill()!)}</span>
+            <Show
+              when={actingSkill() && acting() !== null ? { idx: acting()!, skill: actingSkill()! } : null}
+              keyed
+              fallback={<span class="rp-cast-hint">Diễn biến trận đấu</span>}
+            >
+              {(v) => (
+                <>
+                  <span class="rp-cast-who">{nameOf(v.idx)}</span>
+                  <span class="rp-cast-tag">dùng</span>
+                  <span class="rp-cast-skill">{skillNameAt(v.idx, v.skill)}</span>
+                </>
+              )}
             </Show>
           </div>
 

@@ -1,6 +1,7 @@
 import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
-import type { PvpSide, PvpStyle } from '@tq/shared';
-import { initials, levelTier, portraitUrl, prefersReducedMotion } from '../art.ts';
+import type { Faction, PvpSide, PvpSkill, PvpStyle } from '@tq/shared';
+import { FACTION_STYLE, initials, levelTier, portraitUrl, prefersReducedMotion } from '../art.ts';
+import { castKindOf, spawnSkillFx, type Fx, type FxKind } from './skillsfx.ts';
 
 /**
  * Sân đấu PvP vẽ bằng PixiJS (mục 6.7).
@@ -111,6 +112,10 @@ export interface ArenaUnit {
   artKey: string;
   /** Phong cách chiến đấu — hiện nhãn trên ô (Tấn công / Phòng thủ / Hỗ trợ). */
   style: PvpStyle;
+  /** Nhóm kỹ năng — chọn kiểu hiệu ứng niệm chiêu khi tướng ra đòn. */
+  skill: PvpSkill;
+  /** Phe — pha màu hiệu ứng kỹ năng (Ngụy lam, Thục lục, Ngô đỏ, Quần tím). */
+  faction: Faction;
   /** Sát thương hiện tại = sát thương nền + các lớp buff đang hiệu lực. */
   damage: number;
   /** Tướng có nội tại Phản kích (luôn hiện chip "PK" trên ô). */
@@ -150,11 +155,25 @@ export interface ArenaHandle {
   sync(s: ArenaSnapshot): void;
   /** Số sát thương/hồi máu/buff bay lên trên ô tướng. */
   float(idx: number, text: string, crit: boolean, heal?: boolean): void;
+  /** Hiệu ứng niệm chiêu ở ô tướng thi triển, kiểu theo nhóm kỹ năng + phe + sắc thái riêng tướng. */
+  cast(idx: number, skill: PvpSkill): void;
+  /** Hiệu ứng va chạm trên ô mục tiêu, kiểu theo sự kiện (sát thương, hồi máu, buff, debuff…). */
+  impact(idx: number, kind: FxKind): void;
   destroy(): void;
 }
 
 const colXLeft = (col: number) => PAD + col * (COL_W + COL_GAP);
 const colXRight = (col: number) => W - SIDE_W + colXLeft(col);
+
+/** Băm artKey thành số dương ổn định — làm "sắc thái riêng" cho hiệu ứng kỹ năng của từng tướng (FNV-1a). */
+function seedOf(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
 
 /** Toạ độ ô tướng: bên mình ở nửa trái, hàng trước luôn sát vạch giữa. */
 function tilePos(side: PvpSide, slot: number, mySide: PvpSide) {
@@ -233,7 +252,6 @@ class Tile {
   private readonly hpFill = new Graphics();
   private readonly hpT: Text;
   private readonly infoT: Text;
-  private readonly skillT: Text;
   private readonly buffFx: Graphics;
   /** Hàng chip hiệu ứng trạng thái ở góc trên phải ô: ▲ buff, ▼ suy yếu, 🔥 thiêu đốt, PK phản kích. */
   private readonly fxC = new Container();
@@ -248,7 +266,6 @@ class Tile {
   private readonly turnT: Text;
   private hpShown = 0;
   private hpTarget = 1;
-  private skillAge = 0;
 
   constructor(u: ArenaUnit, mySide: PvpSide) {
     this.u = u;
@@ -318,15 +335,6 @@ class Tile {
     this.infoT.anchor.set(0.5);
     this.infoT.position.set(COL_W / 2, INFO_Y);
 
-    // Tên kỹ năng bay lên trên ô mỗi khi tướng ra đòn
-    this.skillT = new Text({
-      text: '',
-      style: { fontFamily: NUM_FONT, fontSize: 15, fontWeight: '900', fill: 0xffe8a8, stroke: { color: 0x0a0604, width: 4 } },
-    });
-    this.skillT.anchor.set(0.5);
-    this.skillT.position.set(COL_W / 2, -18);
-    this.skillT.visible = false;
-
     // Hàng chip hiệu ứng trạng thái ở góc trên phải ô (chip tạo lười khi cần).
     this.fxC.position.set(0, 5);
 
@@ -376,7 +384,6 @@ class Tile {
       this.stunFx,
       this.fxC,
       this.turnC,
-      this.skillT,
     );
   }
 
@@ -395,15 +402,18 @@ class Tile {
     this.artC.addChild(mask, sp);
   }
 
-  /** Toạ độ tâm ô (để đặt số sát thương bay lên). */
+  /** Toạ độ tâm ô (để đặt số sát thương bay lên và hiệu ứng kỹ năng). */
   get centerX(): number {
     return this.root.x + COL_W / 2;
+  }
+  get centerY(): number {
+    return this.baseY + ART_CY;
   }
   get topY(): number {
     return this.baseY;
   }
 
-  apply(v: ArenaView, acting: boolean, targeted: boolean, skill: string | null): void {
+  apply(v: ArenaView, acting: boolean, targeted: boolean): void {
     this.hpTarget = v.maxHp > 0 ? Math.max(0, Math.min(1, v.hp / v.maxHp)) : 0;
     const pctv = Math.round(this.hpTarget * 100);
     const low = v.alive && this.hpTarget <= 0.25;
@@ -436,17 +446,6 @@ class Tile {
     // Tướng gục mờ hẳn; tướng bị choáng làm dịu chân dung nhưng số liệu vẫn rõ nét
     this.root.alpha = v.alive ? 1 : 0.35;
     this.artC.alpha = v.alive ? (v.stunned ? 0.6 : 1) : 0.5;
-
-    if (!skill) {
-      this.skillT.visible = false;
-      this.skillAge = 0;
-    } else {
-      if (this.skillT.text !== skill) {
-        this.skillT.text = skill;
-        this.skillAge = 0;
-      }
-      this.skillT.visible = true;
-    }
   }
 
   /**
@@ -546,12 +545,6 @@ class Tile {
     }
     // Nhãn "Tới lượt" nhấp nháy nhẹ để mắt bắt ngay tướng đang đánh
     if (this.turnC.visible) this.turnC.alpha = 0.72 + 0.28 * Math.sin(time * 0.007);
-    if (this.skillT.visible) {
-      this.skillAge += dt;
-      const e = easeOut(Math.min(1, this.skillAge / 350));
-      this.skillT.y = -18 + (1 - e) * 12;
-      this.skillT.alpha = 0.15 + 0.85 * e;
-    }
   }
 }
 
@@ -561,11 +554,34 @@ class Arena implements ArenaHandle {
   private readonly fxLayer = new Container();
   private readonly tiles = new Map<number, Tile>();
   private readonly fx: FloatFx[] = [];
+  /** Hiệu ứng kỹ năng đang chạy (niệm chiêu ở người thi triển + va chạm trên mục tiêu). */
+  private readonly effs: Fx[] = [];
   private readonly reduce = prefersReducedMotion();
   private readonly units: ArenaUnit[];
   private readonly mySide: PvpSide;
   /** Mô tả hiệu ứng đang có của từng tướng — ghép vào chú thích khi rê chuột lên ô. */
   private readonly fxInfo = new Map<number, string>();
+  /**
+   * Nhãn tên chiêu đang thi triển. Đặt riêng TRÊN lớp hiệu ứng (không nằm trong ô tướng) nên
+   * không bị ô tướng choáng/gục làm mờ và không bị ô khác che — luôn nổi rõ trên sân đấu.
+   */
+  private readonly skillC = new Container();
+  private readonly skillBg = new Graphics();
+  private readonly skillT = new Text({
+    text: '',
+    style: {
+      fontFamily: NUM_FONT,
+      fontSize: 18,
+      fontWeight: '900',
+      letterSpacing: 0.4,
+      fill: 0xfff4d2,
+      stroke: { color: 0x3a1c05, width: 6 },
+      dropShadow: { color: 0x000000, alpha: 0.8, blur: 6, distance: 0, angle: 0 },
+    },
+  });
+  private skillKey = '';
+  private skillW = 200;
+  private skillAge = 0;
   private time = 0;
   private dead = false;
 
@@ -611,6 +627,11 @@ class Arena implements ArenaHandle {
       this.root.addChild(t.root);
     }
     this.root.addChild(this.fxLayer);
+    // Nhãn tên chiêu nằm trên cùng: luôn nổi rõ, không bị ô tướng hay hiệu ứng khác che
+    this.skillT.anchor.set(0.5);
+    this.skillC.addChild(this.skillBg, this.skillT);
+    this.skillC.visible = false;
+    this.root.addChild(this.skillC);
     this.app.ticker.add((ticker) => this.tick(ticker.deltaMS));
     // Chân dung nạp nền: sân đấu dùng được ngay, ảnh xong thì gắn vào sau
     void loadPortraits(this.units.map((u) => u.artKey)).then(() => {
@@ -639,9 +660,41 @@ class Arena implements ArenaHandle {
     for (const [idx, t] of this.tiles) {
       const v = s.view[idx];
       if (!v) continue;
-      t.apply(v, s.acting === idx, s.targets.includes(idx), s.acting === idx ? s.skillName : null);
+      t.apply(v, s.acting === idx, s.targets.includes(idx));
       this.fxInfo.set(idx, v.effects.length ? `Hiệu ứng đang có: ${v.effects.map((e) => e.text).join(' · ')}` : '');
     }
+    this.setSkillName(s.acting, s.skillName);
+  }
+
+  /** Hiện tên chiêu đang thi triển trên ô của tướng ra đòn; `null` thì ẩn. */
+  private setSkillName(acting: number | null, name: string | null): void {
+    const tile = acting === null ? undefined : this.tiles.get(acting);
+    if (!name || !tile) {
+      this.skillC.visible = false;
+      this.skillKey = '';
+      return;
+    }
+    const key = `${acting}:${name}`;
+    if (key !== this.skillKey) {
+      this.skillKey = key;
+      this.skillAge = 0;
+      this.skillT.text = name;
+      // Khung nền ôm theo tên chiêu: nền nâu đậm + viền vàng kép (viền ngoài mờ làm quầng sáng)
+      const w = Math.ceil(this.skillT.width) + 34;
+      const h = 27;
+      this.skillW = w;
+      this.skillBg
+        .clear()
+        .roundRect(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6, 16)
+        .stroke({ width: 5, color: C.gold2, alpha: 0.28 })
+        .roundRect(-w / 2, -h / 2, w, h, 14)
+        .fill({ color: 0x1c0f05, alpha: 0.96 })
+        .stroke({ width: 2, color: C.gold2, alpha: 0.95 });
+    }
+    // Ghim trong sân: tên chiêu dài không được tràn ra ngoài khung canvas
+    const x = Math.min(Math.max(tile.centerX, this.skillW / 2 + 4), W - this.skillW / 2 - 4);
+    this.skillC.visible = true;
+    this.skillC.position.set(x, tile.topY - 8);
   }
 
   float(idx: number, text: string, crit: boolean, heal = false): void {
@@ -649,6 +702,36 @@ class Arena implements ArenaHandle {
     const t = this.tiles.get(idx);
     if (!t) return;
     this.fx.push(new FloatFx(this.fxLayer, t.centerX, t.topY + 34, text, crit, heal, this.reduce));
+  }
+
+  /** Hiệu ứng niệm chiêu ở người thi triển (kiểu theo nhóm kỹ năng; màu + sắc thái theo tướng). */
+  cast(idx: number, skill: PvpSkill): void {
+    const t = this.tiles.get(idx);
+    const u = this.units.find((x) => x.idx === idx);
+    if (this.dead || !t || !u) return;
+    this.spawn(t, u, castKindOf(skill), 'cast');
+  }
+
+  /** Hiệu ứng va chạm trên mục tiêu (kiểu theo sự kiện; màu + sắc thái theo tướng trúng đòn). */
+  impact(idx: number, kind: FxKind): void {
+    const t = this.tiles.get(idx);
+    const u = this.units.find((x) => x.idx === idx);
+    if (this.dead || !t || !u) return;
+    this.spawn(t, u, kind, 'hit');
+  }
+
+  private spawn(t: Tile, u: ArenaUnit, kind: FxKind, phase: 'cast' | 'hit'): void {
+    this.effs.push(
+      spawnSkillFx(this.fxLayer, {
+        x: t.centerX,
+        y: t.centerY,
+        kind,
+        color: FACTION_STYLE[u.faction].color,
+        seed: seedOf(u.artKey) + (phase === 'hit' ? 7 : 0),
+        phase,
+        reduce: this.reduce,
+      }),
+    );
   }
 
   private tick(dt: number): void {
@@ -661,11 +744,29 @@ class Arena implements ArenaHandle {
         this.fx.splice(i, 1);
       }
     }
+    for (let i = this.effs.length - 1; i >= 0; i--) {
+      const e = this.effs[i]!;
+      if (e.tick(dt)) {
+        e.destroy();
+        this.effs.splice(i, 1);
+      }
+    }
+    // Tên chiêu bật nảy: phóng vọt lên rồi co về đúng cỡ, kèm quầng vàng nhấp nháy nhẹ
+    if (this.skillC.visible) {
+      this.skillAge += dt;
+      const grow = easeOut(Math.min(1, this.skillAge / 150));
+      const settle = easeOut(Math.min(1, Math.max(0, (this.skillAge - 150) / 170)));
+      this.skillC.scale.set(0.62 + 0.52 * grow - 0.14 * settle);
+      this.skillC.alpha = Math.min(1, 0.25 + 1.9 * grow);
+      this.skillBg.alpha = 0.94 + 0.06 * Math.sin(this.time * 0.006);
+    }
   }
 
   destroy(): void {
     if (this.dead) return;
     this.dead = true;
+    for (const e of this.effs) e.destroy();
+    this.effs.length = 0;
     try {
       this.app.destroy(true, { children: true, texture: true });
     } catch {
