@@ -133,6 +133,26 @@ export function countOwnedByLevel(db: DB, userId: number): { level: number; n: n
     .all(userId) as { level: number; n: number }[];
 }
 
+/**
+ * Số trận người chơi CHỦ ĐỘNG khiêu chiến trong khoảng thời gian, kèm số trận thắng.
+ * `from`/`to` để trống (null) = tính toàn bộ lịch sử (dùng cho thành tựu).
+ */
+export function countPvpAttacks(
+  db: DB,
+  userId: number,
+  from: string | null,
+  to: string | null,
+): { battles: number; wins: number } {
+  const range = from && to ? ' AND created_at >= ? AND created_at < ?' : '';
+  const args: (string | number)[] = from && to ? [userId, from, to] : [userId];
+  return db
+    .prepare(
+      `SELECT COUNT(*) AS battles, COALESCE(SUM(CASE WHEN winner = 'a' THEN 1 ELSE 0 END), 0) AS wins
+         FROM pvp_battles WHERE attacker_id = ?${range}`,
+    )
+    .get(...args) as { battles: number; wins: number };
+}
+
 export function findDailyState(db: DB, userId: number): { last_game_day: string; last_cal_date: string } | undefined {
   return db.prepare('SELECT last_game_day, last_cal_date FROM daily_state WHERE user_id = ?').get(userId) as
     | { last_game_day: string; last_cal_date: string }

@@ -733,6 +733,8 @@ export interface QuestsDto {
   resetBonus: { tickets: TicketBalances; granted: boolean };
   daily: QuestItemDto[];
   faction: Record<Faction, QuestItemDto[]>;
+  /** Nhiệm vụ đấu trường PvP trong ngày (chỉ tính trận người chơi chủ động khiêu chiến). */
+  pvp: QuestItemDto[];
   login: { month: string; days: LoginDayDto[] };
   achievements: AchievementGroupDto[];
   /** Số phần thưởng đang chờ bấm Nhận (badge tab). */

@@ -59,6 +59,39 @@ export const FACTION_MISSIONS: FactionMissionDef[] = [
 /** Mốc thành tựu: [ngưỡng, số vé]. */
 export type Milestones = readonly (readonly [number, number])[];
 
+// ======================= Nhiệm vụ đấu trường PvP =======================
+
+/** Chỉ số tính tiến trình nhiệm vụ đấu trường trong ngày game. */
+export type PvpMetric = 'pvpBattles' | 'pvpWins';
+
+export interface PvpMissionDef {
+  id: string;
+  name: string;
+  desc: string;
+  metric: PvpMetric;
+  target: number;
+  reward: number;
+}
+
+/**
+ * Nhiệm vụ đấu trường — thưởng vé thường.
+ * Chỉ tính các trận người chơi CHỦ ĐỘNG khiêu chiến (không tính lúc bị người khác khiêu chiến).
+ */
+export const PVP_DAILY_MISSIONS: PvpMissionDef[] = [
+  { id: 'pvp2', name: 'Ra trận', desc: 'Khiêu chiến 2 trận trong ngày', metric: 'pvpBattles', target: 2, reward: 4 },
+  { id: 'pvp5', name: 'Giao chiến', desc: 'Khiêu chiến 5 trận trong ngày', metric: 'pvpBattles', target: 5, reward: 8 },
+  { id: 'pvp10', name: 'Chinh chiến', desc: 'Khiêu chiến 10 trận trong ngày', metric: 'pvpBattles', target: 10, reward: 14 },
+  { id: 'pvp20', name: 'Đại chiến', desc: 'Khiêu chiến 20 trận trong ngày', metric: 'pvpBattles', target: 20, reward: 24 },
+  { id: 'pvpwin2', name: 'Thắng lợi', desc: 'Thắng 2 trận đấu trường trong ngày', metric: 'pvpWins', target: 2, reward: 6 },
+  { id: 'pvpwin5', name: 'Bách chiến bách thắng', desc: 'Thắng 5 trận đấu trường trong ngày', metric: 'pvpWins', target: 5, reward: 12 },
+  { id: 'pvpwin10', name: 'Vô địch đấu trường', desc: 'Thắng 10 trận đấu trường trong ngày', metric: 'pvpWins', target: 10, reward: 20 },
+];
+
+/** Tổng số trận đã chủ động khiêu chiến (toàn bộ lịch sử) — vé thường. */
+export const ACH_PVP_BATTLES: Milestones = [[10, 10], [50, 30], [100, 50], [500, 150], [1_000, 250], [5_000, 800]];
+/** Tổng số trận đấu trường đã thắng khi chủ động khiêu chiến (toàn bộ lịch sử) — vé thường. */
+export const ACH_PVP_WINS: Milestones = [[5, 10], [25, 30], [50, 60], [200, 150], [500, 300], [2_000, 800]];
+
 /** Tổng số lần chiêu mộ (mọi loại vé, toàn bộ lịch sử) — vé thường. */
 export const ACH_DRAWS: Milestones = [
   [10, 10], [50, 20], [100, 40], [500, 100], [1_000, 200], [5_000, 500], [10_000, 1_000], [50_000, 2_000],
@@ -99,7 +132,7 @@ export function validateQuestConfig(assert: (cond: unknown, msg: string) => void
     assert(Number.isSafeInteger(n) && n >= 0, `DAILY_RESET_BONUS.${t} không hợp lệ`);
   }
   const ids = new Set<string>();
-  for (const m of [...DAILY_MISSIONS, ...FACTION_MISSIONS]) {
+  for (const m of [...DAILY_MISSIONS, ...FACTION_MISSIONS, ...PVP_DAILY_MISSIONS]) {
     assert(!ids.has(m.id) && /^[a-z0-9]+$/.test(m.id), `id nhiệm vụ trùng/không hợp lệ: ${m.id}`);
     ids.add(m.id);
     assert(Number.isSafeInteger(m.target) && m.target >= 1, `target nhiệm vụ ${m.id} không hợp lệ`);
@@ -121,6 +154,8 @@ export function validateQuestConfig(assert: (cond: unknown, msg: string) => void
   checkMs('ACH_COLLECT', ACH_COLLECT, ROSTER_SIZE);
   checkMs('ACH_FACTION_COLLECT', ACH_FACTION_COLLECT, GENERALS_PER_FACTION);
   checkMs('ACH_CARDS_RECEIVED', ACH_CARDS_RECEIVED, Number.MAX_SAFE_INTEGER);
+  checkMs('ACH_PVP_BATTLES', ACH_PVP_BATTLES, Number.MAX_SAFE_INTEGER);
+  checkMs('ACH_PVP_WINS', ACH_PVP_WINS, Number.MAX_SAFE_INTEGER);
   for (let lv = 1; lv <= MAX_LEVEL; lv++) {
     for (let n = 1; n <= ACH_OWN_MAX; n++) assert(ownLevelReward(lv, n) >= 1, `ownLevelReward(${lv}, ${n}) không hợp lệ`);
   }
@@ -131,4 +166,5 @@ export function validateQuestConfig(assert: (cond: unknown, msg: string) => void
 export const DAILY_MAX = {
   general: DAILY_MISSIONS.reduce((s, m) => s + m.reward, 0),
   perFaction: FACTION_MISSIONS.reduce((s, m) => s + m.reward, 0),
+  pvp: PVP_DAILY_MISSIONS.reduce((s, m) => s + m.reward, 0),
 };

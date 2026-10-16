@@ -20,10 +20,13 @@ import {
   ACH_DRAWS,
   ACH_FACTION_COLLECT,
   ACH_OWN_MAX,
+  ACH_PVP_BATTLES,
+  ACH_PVP_WINS,
   DAILY_MISSIONS,
   DAILY_RESET_BONUS,
   DAILY_RESET_HOUR,
   FACTION_MISSIONS,
+  PVP_DAILY_MISSIONS,
   VN_UTC_OFFSET_MS,
   loginDayReward,
   ownLevelReward,
@@ -44,6 +47,7 @@ import {
   listUnclaimedOldCalendarDates,
   countDrawsByTicketType,
   countDrawsByFaction,
+  countPvpAttacks,
   countUpgradeSuccess,
   countTotalDraws,
   sumLegacyGiftCodeCards,
@@ -65,8 +69,9 @@ import { getTickets } from './ticket.manager.ts';
  *
  * Khoá phần thưởng:
  *   d:{ngày}:{id}            nhiệm vụ chung       f:{ngày}:{phe}:{id}   nhiệm vụ phe
- *   reset:{ngày}             thưởng reset 05:00   login:{YYYY-MM-DD}    điểm danh ngày trong tháng
- *   a:draws:{n} a:collect:{n} a:fcollect:{phe}:{n} a:own:{lv}:{n} a:cards:{n}   thành tựu
+ *   p:{ngày}:{id}            nhiệm vụ đấu trường  reset:{ngày}          thưởng reset 05:00
+ *   login:{YYYY-MM-DD}       điểm danh ngày trong tháng
+ *   a:draws:{n} a:collect:{n} a:fcollect:{phe}:{n} a:own:{lv}:{n} a:cards:{n} a:pvp:{n} a:pvpw:{n}   thành tựu
  */
 
 const DAY_MS = 86_400_000;
@@ -106,6 +111,10 @@ interface DayMetrics {
   cardsReceived: number;
   factionDraws: Record<Faction, number>;
   factionCards: Record<Faction, number>;
+  /** Số trận đấu trường chủ động khiêu chiến trong ngày. */
+  pvpBattles: number;
+  /** Số trận thắng trong đó. */
+  pvpWins: number;
 }
 
 const zeroFactions = (): Record<Faction, number> => ({ wei: 0, shu: 0, wu: 0, qun: 0 });
@@ -120,6 +129,8 @@ function dayMetrics(db: DB, userId: number, day: string): DayMetrics {
     cardsReceived: 0,
     factionDraws: zeroFactions(),
     factionCards: zeroFactions(),
+    pvpBattles: 0,
+    pvpWins: 0,
   };
   for (const r of countDrawsByTicketType(db, userId, start, end)) {
     m.draws += r.n;
@@ -129,10 +140,18 @@ function dayMetrics(db: DB, userId: number, day: string): DayMetrics {
   m.cardsReceived = m.draws;
   for (const r of countDrawsByFaction(db, userId, start, end)) m.factionCards[r.f] = r.n;
   m.upgradeSuccess = countUpgradeSuccess(db, userId, start, end);
+  // Đấu trường: chỉ tính trận người chơi tự khiêu chiến (không tính lúc bị khiêu chiến)
+  const pvp = countPvpAttacks(db, userId, start, end);
+  m.pvpBattles = pvp.battles;
+  m.pvpWins = pvp.wins;
   return m;
 }
 
-function dailyItems(m: DayMetrics, day: string, claimed: Set<string>): { general: QuestItemDto[]; faction: Record<Faction, QuestItemDto[]> } {
+function dailyItems(
+  m: DayMetrics,
+  day: string,
+  claimed: Set<string>,
+): { general: QuestItemDto[]; faction: Record<Faction, QuestItemDto[]>; pvp: QuestItemDto[] } {
   const value = (metric: string): number =>
     metric === 'login' ? (m.login ? 1 : 0) : metric === 'draws' ? m.draws : metric === 'upgradeSuccess' ? m.upgradeSuccess : m.cardsReceived;
   const base = DAILY_MISSIONS.filter((d) => d.metric !== 'dailyDone').map((d) => ({ d, progress: value(d.metric) }));
@@ -166,7 +185,20 @@ function dailyItems(m: DayMetrics, day: string, claimed: Set<string>): { general
       };
     });
   }
-  return { general, faction };
+  const pvp = PVP_DAILY_MISSIONS.map((d) => {
+    const progress = d.metric === 'pvpBattles' ? m.pvpBattles : m.pvpWins;
+    const key = `p:${day}:${d.id}`;
+    return {
+      key,
+      name: d.name,
+      desc: d.desc,
+      progress: Math.min(progress, d.target),
+      target: d.target,
+      reward: { pool: 'normal' as TicketType, count: d.reward },
+      status: status(progress >= d.target, claimed.has(key)),
+    };
+  });
+  return { general, faction, pvp };
 }
 
 // ======================= Điểm danh theo tháng =======================
@@ -223,6 +255,8 @@ function achievementView(db: DB, userId: number, claimed: Set<string>): Achievem
   for (const r of countCollectedByFaction(db, userId)) perFaction[r.f] = r.n;
   const totalCollected = FACTIONS.reduce((s, f) => s + perFaction[f], 0);
   const owned = new Map(countOwnedByLevel(db, userId).map((r) => [r.level, r.n]));
+  // Đấu trường: thành tựu tính toàn bộ lịch sử (chỉ trận người chơi chủ động khiêu chiến)
+  const pvpTotal = countPvpAttacks(db, userId, null, null);
 
   const groups: AchievementGroupDto[] = [
     {
@@ -265,6 +299,20 @@ function achievementView(db: DB, userId: number, claimed: Set<string>): Achievem
       progress: draws + legacyCodeCards,
       items: milestoneItems('a:cards', (n) => `Nhận ${n.toLocaleString('vi-VN')} thẻ`, ACH_CARDS_RECEIVED, draws + legacyCodeCards, 'normal', claimed),
     },
+    {
+      id: 'pvp-battles',
+      title: 'Đấu trường — khiêu chiến',
+      desc: 'Tổng số trận bạn chủ động khiêu chiến (không tính lúc bị khiêu chiến)',
+      progress: pvpTotal.battles,
+      items: milestoneItems('a:pvp', (n) => `Khiêu chiến ${n.toLocaleString('vi-VN')} trận`, ACH_PVP_BATTLES, pvpTotal.battles, 'normal', claimed),
+    },
+    {
+      id: 'pvp-wins',
+      title: 'Đấu trường — thắng trận',
+      desc: 'Tổng số trận đấu trường bạn đã thắng khi chủ động khiêu chiến',
+      progress: pvpTotal.wins,
+      items: milestoneItems('a:pvpw', (n) => `Thắng ${n.toLocaleString('vi-VN')} trận đấu trường`, ACH_PVP_WINS, pvpTotal.wins, 'normal', claimed),
+    },
   ];
   return groups;
 }
@@ -276,10 +324,19 @@ function buildView(ctx: GameContext, userId: number): QuestsDto {
   const day = gameDayOf(now);
   const today = calendarDateOf(now);
   const db = ctx.db;
-  const daily = dailyItems(dayMetrics(db, userId, day), day, new Set([...claimedSet(db, userId, `d:${day}:%`), ...claimedSet(db, userId, `f:${day}:%`)]));
+  const daily = dailyItems(dayMetrics(db, userId, day), day, new Set([
+    ...claimedSet(db, userId, `d:${day}:%`),
+    ...claimedSet(db, userId, `f:${day}:%`),
+    ...claimedSet(db, userId, `p:${day}:%`),
+  ]));
   const login = loginView(db, userId, today, claimedSet(db, userId, `login:${today.slice(0, 7)}-%`));
   const achievements = achievementView(db, userId, claimedSet(db, userId, 'a:%'));
-  const all = [...daily.general, ...FACTIONS.flatMap((f) => daily.faction[f]), ...achievements.flatMap((g) => g.items)];
+  const all = [
+    ...daily.general,
+    ...FACTIONS.flatMap((f) => daily.faction[f]),
+    ...daily.pvp,
+    ...achievements.flatMap((g) => g.items),
+  ];
   const claimable = all.filter((i) => i.status === 'claimable').length + login.days.filter((d) => d.status === 'claimable').length;
   return {
     gameDay: day,
@@ -291,6 +348,7 @@ function buildView(ctx: GameContext, userId: number): QuestsDto {
     },
     daily: daily.general,
     faction: daily.faction,
+    pvp: daily.pvp,
     login,
     achievements,
     claimable,
@@ -305,6 +363,7 @@ function claimableGrants(view: QuestsDto): Grant[] {
   };
   view.daily.forEach((i) => add(i, 'mission'));
   FACTIONS.forEach((f) => view.faction[f].forEach((i) => add(i, 'mission')));
+  view.pvp.forEach((i) => add(i, 'mission'));
   for (const d of view.login.days) {
     if (d.status === 'claimable') out.push({ key: `login:${d.date}`, name: `Điểm danh ngày ${d.day}`, pool: 'normal', count: d.reward, reason: 'achievement' });
   }
@@ -365,9 +424,13 @@ export function touchDaily(ctx: GameContext, userId: number): DailyEventsDto | n
       // 2. Ngày game trước (ngày gần nhất người chơi có vào game) — tự nhận nhiệm vụ đạt mà chưa nhận
       if (st && st.last_game_day < day) {
         const prev = st.last_game_day;
-        const claimed = new Set([...claimedSet(db, userId, `d:${prev}:%`), ...claimedSet(db, userId, `f:${prev}:%`)]);
+        const claimed = new Set([
+          ...claimedSet(db, userId, `d:${prev}:%`),
+          ...claimedSet(db, userId, `f:${prev}:%`),
+          ...claimedSet(db, userId, `p:${prev}:%`),
+        ]);
         const v = dailyItems(dayMetrics(db, userId, prev), prev, claimed);
-        for (const i of [...v.general, ...FACTIONS.flatMap((f) => v.faction[f])]) {
+        for (const i of [...v.general, ...FACTIONS.flatMap((f) => v.faction[f]), ...v.pvp]) {
           if (i.status !== 'claimable') continue;
           const g: Grant = { key: i.key, name: i.name, pool: i.reward.pool, count: i.reward.count, reason: 'mission' };
           grant(db, userId, g, true, nowIso);

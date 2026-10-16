@@ -101,7 +101,7 @@ export function QuestsPage() {
     const d = data();
     if (!d) return { daily: 0, login: 0, ach: 0 };
     return {
-      daily: [...d.daily, ...FACTIONS.flatMap((f) => d.faction[f])].filter((i) => i.status === 'claimable').length,
+      daily: [...d.daily, ...FACTIONS.flatMap((f) => d.faction[f]), ...d.pvp].filter((i) => i.status === 'claimable').length,
       login: d.login.days.filter((x) => x.status === 'claimable').length,
       ach: d.achievements.flatMap((g) => g.items).filter((i) => i.status === 'claimable').length,
     };
@@ -157,6 +157,11 @@ export function QuestsPage() {
       <h3>Nhiệm vụ chung</h3>
       <div class="q-list">
         <For each={p.d.daily}>{(i) => <QuestRow i={i} />}</For>
+      </div>
+      <h3>Nhiệm vụ đấu trường</h3>
+      <p class="muted small">Chỉ tính các trận bạn chủ động khiêu chiến trong ngày (không tính lúc bị khiêu chiến).</p>
+      <div class="q-list">
+        <For each={p.d.pvp}>{(i) => <QuestRow i={i} />}</For>
       </div>
       <h3>Nhiệm vụ theo phe</h3>
       <div class="q-factions">
@@ -280,9 +285,13 @@ export function QuestsPage() {
     return (
       <>
         {sec('Chiêu mộ & thu thập', gs().filter((g) => g.id === 'draws' || g.id === 'cards' || g.id === 'collect'))}
+        {sec('Đấu trường', gs().filter((g) => g.id.startsWith('pvp-')))}
         {sec('Sưu tầm theo phe', gs().filter((g) => g.id.startsWith('fcollect-')))}
         {sec('Sở hữu thẻ theo cấp', gs().filter((g) => g.id.startsWith('own-')))}
-        <p class="muted small">Mỗi mốc chỉ nhận 1 lần, không reset. Thẻ được người khác tặng không tính vào chiêu mộ/sưu tầm/số thẻ đã nhận.</p>
+        <p class="muted small">
+          Mỗi mốc chỉ nhận 1 lần, không reset. Thẻ được người khác tặng không tính vào chiêu mộ/sưu tầm/số thẻ đã nhận. Thành tựu đấu trường chỉ
+          tính số trận bạn chủ động khiêu chiến.
+        </p>
       </>
     );
   };

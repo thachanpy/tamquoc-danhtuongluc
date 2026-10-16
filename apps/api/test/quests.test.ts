@@ -47,6 +47,16 @@ function addUpgradeSuccess(ctx: GameContext, userId: number, n: number) {
   }
 }
 
+/** Ghi 1 trận đấu trường vào lịch sử (đủ cột NOT NULL). */
+function addBattle(ctx: GameContext, attackerId: number, defenderId: number, winner: 'a' | 'b' | 'draw', at: number) {
+  ctx.db
+    .prepare(
+      `INSERT INTO pvp_battles (attacker_id, defender_id, winner, rounds, attacker_power, defender_power, data, created_at)
+       VALUES (?,?,?,?,?,?,?,?)`,
+    )
+    .run(attackerId, defenderId, winner, 3, 100, 100, '{}', new Date(at).toISOString());
+}
+
 const ledger = (ctx: GameContext, userId: number, reason: string) =>
   (ctx.db.prepare('SELECT COALESCE(SUM(amount_delta),0) AS s FROM ticket_transactions WHERE user_id = ? AND reason = ?').get(userId, reason) as {
     s: number;
@@ -63,6 +73,7 @@ test('quests: ngày game reset lúc 05:00 giờ Việt Nam; ngày dương lịch
   assert.equal(gameDayOf(Date.UTC(2026, 9, 14, 17, 30)), '2026-10-14');
   assert.equal(DAILY_MAX.general, 52);
   assert.equal(DAILY_MAX.perFaction, 14);
+  assert.equal(DAILY_MAX.pvp, 88);
   assert.equal(RESET, 25);
 });
 
@@ -132,6 +143,72 @@ test('quests: nhiệm vụ phe tính đúng loại vé/phe và thưởng vé đ�
   const shuBefore = readBalances(ctx.db, u).shu;
   claimQuests(ctx, u, q.faction.shu.map((i) => i.key));
   assert.equal(readBalances(ctx.db, u).shu - shuBefore, 14);
+});
+
+test('quests: nhiệm vụ đấu trường chỉ tính trận chủ động khiêu chiến trong ngày; thưởng vé thường', () => {
+  const { ctx } = makeCtx();
+  const u = newUser(ctx, 'huy');
+  const foe = newUser(ctx, 'kien');
+  touchDaily(ctx, u);
+  // 3 trận do người chơi khiêu chiến (2 thắng, 1 thua)
+  addBattle(ctx, u, foe, 'a', ctx.now());
+  addBattle(ctx, u, foe, 'a', ctx.now() + 1000);
+  addBattle(ctx, u, foe, 'b', ctx.now() + 2000);
+  // 5 trận người chơi BỊ khiêu chiến — không được tính vào nhiệm vụ đấu trường
+  for (let i = 0; i < 5; i++) addBattle(ctx, foe, u, 'b', ctx.now() + 3000 + i);
+  const q = getQuests(ctx, u);
+  const st = (id: string) => q.pvp.find((d) => d.key.endsWith(`:${id}`))!;
+  // Tiến trình hiển thị bị kẹp theo mốc (như mọi nhiệm vụ): 3 trận → mốc 2 đã đạt, mốc 5 = 3/5
+  assert.equal(st('pvp2').progress, 2);
+  assert.equal(st('pvp2').status, 'claimable');
+  assert.equal(st('pvp5').progress, 3);
+  assert.equal(st('pvp5').status, 'progress');
+  assert.equal(st('pvp20').status, 'progress');
+  assert.equal(st('pvpwin2').progress, 2);
+  assert.equal(st('pvpwin2').status, 'claimable');
+  assert.equal(st('pvpwin5').progress, 2);
+  // Nhiệm vụ chung không bị ảnh hưởng
+  assert.equal(q.daily.find((d) => d.key.endsWith(':draw10'))!.progress, 0);
+  const before = readBalances(ctx.db, u).normal;
+  claimQuests(ctx, u, [st('pvp2').key, st('pvpwin2').key]);
+  assert.equal(readBalances(ctx.db, u).normal - before, 10); // 4 vé khiêu chiến 2 + 6 vé thắng 2
+  assert.equal(ledger(ctx, u, 'mission'), 10);
+});
+
+test('quests: nhiệm vụ đấu trường đạt mà chưa nhận được tự nhận khi sang ngày mới', () => {
+  const { ctx, advance } = makeCtx();
+  const u = newUser(ctx, 'nam');
+  const foe = newUser(ctx, 'oanh');
+  touchDaily(ctx, u);
+  addBattle(ctx, u, foe, 'a', ctx.now());
+  addBattle(ctx, u, foe, 'a', ctx.now() + 1000);
+  const day1 = getQuests(ctx, u).gameDay;
+  advance(DAY);
+  const ev = touchDaily(ctx, u)!;
+  assert.ok(ev.autoClaimed.some((a) => a.key === `p:${day1}:pvp2` && a.count === 4));
+  assert.ok(ev.autoClaimed.some((a) => a.key === `p:${day1}:pvpwin2` && a.count === 6));
+  // Ngày mới: tiến trình đấu trường về 0
+  assert.equal(getQuests(ctx, u).pvp.find((d) => d.key.endsWith(':pvp2'))!.progress, 0);
+});
+
+test('quests: thành tựu đấu trường theo tổng trận và tổng thắng chủ động khiêu chiến', () => {
+  const { ctx } = makeCtx();
+  const u = newUser(ctx, 'linh');
+  const foe = newUser(ctx, 'minh');
+  for (let i = 0; i < 12; i++) addBattle(ctx, u, foe, i < 5 ? 'a' : 'b', ctx.now() + i); // 12 trận, 5 thắng
+  for (let i = 0; i < 7; i++) addBattle(ctx, foe, u, 'a', ctx.now() + 100 + i); // bị khiêu chiến: không tính
+  const q = getQuests(ctx, u);
+  const battles = q.achievements.find((a) => a.id === 'pvp-battles')!;
+  const wins = q.achievements.find((a) => a.id === 'pvp-wins')!;
+  assert.equal(battles.progress, 12);
+  assert.deepEqual(battles.items.filter((i) => i.status === 'claimable').map((i) => i.target), [10]);
+  assert.equal(wins.progress, 5);
+  assert.deepEqual(wins.items.filter((i) => i.status === 'claimable').map((i) => i.target), [5]);
+  const keys = [...battles.items, ...wins.items].filter((i) => i.status === 'claimable').map((i) => i.key);
+  claimQuests(ctx, u, keys);
+  assert.equal(ledger(ctx, u, 'achievement'), 20); // mốc 10 trận (10 vé) + mốc 5 thắng (10 vé)
+  // Nhận lại không cộng thêm
+  assert.throws(() => claimQuests(ctx, u, keys), (e: AppError) => e.code === 'NOTHING_TO_CLAIM');
 });
 
 test('quests: qua ngày mới tự nhận nhiệm vụ ngày cũ đã đạt mà chưa bấm nhận', () => {

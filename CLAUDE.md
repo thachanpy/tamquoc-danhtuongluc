@@ -15,7 +15,7 @@ Xây dựng game web gacha thu thập thẻ tướng Tam Quốc. Trọng tâm:
 - Tặng thẻ cho người chơi khác (tối đa 20 thẻ mỗi lần) — **đang tạm tắt** (mục 5.6).
 - Trang quản trị: duyệt tài khoản đăng ký, danh sách người chơi, cộng vé, xem mọi thẻ, tạo giftcode (mục 3.8).
 - Giftcode tặng vé quay (mục 3.9).
-- Nhiệm vụ hằng ngày, thưởng reset 05:00, điểm danh theo tháng và thành tựu — chỉ thưởng vé (mục 3.10).
+- Nhiệm vụ hằng ngày (chung, theo phe, **đấu trường PvP**), thưởng reset 05:00, điểm danh theo tháng và thành tựu — chỉ thưởng vé (mục 3.10).
 - Bảng xếp hạng Lực chiến (mục 6.6).
 - Hồ sơ người chơi: đổi ảnh đại diện, tên hiển thị và mật khẩu (mục 3.11).
 - Đấu trường PvP: dàn đội 6 tướng rồi khiêu chiến người chơi khác (chọn từ bảng xếp hạng), server mô phỏng trọn trận và trả dữ liệu để client phát lại; không thưởng, chỉ thắng/thua (mục 6.7).
@@ -483,7 +483,19 @@ Nhiệm vụ chung (vé thường; tối đa 52 vé/ngày):
 
 Nhiệm vụ theo phe (mỗi phe Ngụy/Thục/Ngô/Quần, vé đúng phe; tối đa 14 vé/phe, 56 vé/ngày): quay 5 lần bằng vé phe → 4; quay 15 lần bằng vé phe → 6; nhận 10 thẻ thuộc phe (từ mọi loại vé) → 4.
 
-Tiến trình ngày được tính từ lịch sử server trong khung ngày game (`gacha_history`, `upgrade_history` outcome `success`, `login_days`), không có bộ đếm riêng. Quay 30 lần đồng thời đạt nhiệm vụ quay 10; nâng cấp 10 lần đồng thời đạt nâng cấp 3.
+Nhiệm vụ đấu trường PvP (vé thường; tối đa 88 vé/ngày): **chỉ tính các trận người chơi CHỦ ĐỘNG khiêu chiến** trong ngày game (không tính lúc bị người khác khiêu chiến).
+
+| Nhiệm vụ | Điều kiện | Thưởng |
+|---|---|---:|
+| Ra trận | Khiêu chiến 2 trận | 4 |
+| Giao chiến | Khiêu chiến 5 trận | 8 |
+| Chinh chiến | Khiêu chiến 10 trận | 14 |
+| Đại chiến | Khiêu chiến 20 trận | 24 |
+| Thắng lợi | Thắng 2 trận | 6 |
+| Bách chiến bách thắng | Thắng 5 trận | 12 |
+| Vô địch đấu trường | Thắng 10 trận | 20 |
+
+Tiến trình ngày được tính từ lịch sử server trong khung ngày game (`gacha_history`, `upgrade_history` outcome `success`, `login_days`, `pvp_battles`), không có bộ đếm riêng. Quay 30 lần đồng thời đạt nhiệm vụ quay 10; nâng cấp 10 lần đồng thời đạt nâng cấp 3.
 
 Thành tựu (không reset, mỗi mốc nhận 1 lần, **tính cả lịch sử trước khi có tính năng**):
 
@@ -493,11 +505,13 @@ Thành tựu (không reset, mỗi mốc nhận 1 lần, **tính cả lịch sử
 - **Sưu tầm theo phe** (mỗi phe độc lập): 5→5, 10→10, 15→20, 25→50 vé đúng phe.
 - **Sở hữu thẻ cấp 1–10**: mỗi cấp 25 mốc (đang sở hữu 1…25 thẻ active cùng cấp, tính thẻ trùng); thưởng vé thường theo bảng khoảng mốc (1–4, 5–9, 10–14, 15–19, 20–24, 25) × cấp trong `ownLevelReward`. Mốc đã nhận lưu vĩnh viễn.
 - **Tổng số thẻ đã nhận**: 10→5, 100→15, 500→40, 1.000→100, 5.000→250, 10.000→500 vé thường.
+- **Đấu trường** (tổng số trận **chủ động khiêu chiến**, tính cả lịch sử cũ): 10→10, 50→30, 100→50, 500→150, 1.000→250, 5.000→800 vé thường.
+- **Đấu trường — thắng** (tổng số trận **chủ động khiêu chiến** giành thắng lợi): 5→10, 25→30, 50→60, 200→150, 500→300, 2.000→800 vé thường.
 - "Thẻ đã nhận" / "đã thu thập" = thẻ từ **chiêu mộ** (+ thẻ từ giftcode thẻ cũ trước v9). **Không tính** thẻ tạo ra khi ghép và **thẻ được người khác tặng** (chống cày bằng tài khoản phụ).
 
 Không có: thành tựu số lần nâng cấp, nhiệm vụ tuần, rương hoạt động, thành tựu reset hằng ngày, thưởng ngoài vé.
 
-Khoá phần thưởng / `reference_id` ledger: `reset:{ngày}`, `d:{ngày}:{id}`, `f:{ngày}:{phe}:{id}`, `login:{YYYY-MM-DD}`, `a:draws:{n}`, `a:collect:{n}`, `a:fcollect:{phe}:{n}`, `a:own:{lv}:{n}`, `a:cards:{n}`. Lịch sử hiển thị nhãn theo khoá.
+Khoá phần thưởng / `reference_id` ledger: `reset:{ngày}`, `d:{ngày}:{id}`, `f:{ngày}:{phe}:{id}`, `login:{YYYY-MM-DD}`, `a:draws:{n}`, `a:collect:{n}`, `a:fcollect:{phe}:{n}`, `a:own:{lv}:{n}`, `a:cards:{n}`, `p:{ngày}:{id}`, `a:pvp:{n}`, `a:pvpw:{n}`. Lịch sử hiển thị nhãn theo khoá.
 
 ### 3.11. Hồ sơ người chơi
 
@@ -865,7 +879,7 @@ Do chủ dự án yêu cầu, theo GDD `PVP.md`. Tab **Đấu trường** (`#pvp
 - **Phát lại ở client**: server trả `units` (snapshot đầu trận) + `events` (danh sách sự kiện có thứ tự) + `rounds`/`winner`; client dựng bàn đấu từ `units` rồi áp `events` tuần tự, có chỉnh tốc độ và thanh tiến trình. 2 đội nằm **2 bên trái/phải** ngăn bằng dải phân cách; tên kỹ năng thật (lấy từ `SKILLS.md`, ví dụ *"Hiệu lệnh thiên hạ"*) **bay lên trên ô tướng đang ra đòn** (kèm bảng tên chiêu ở giữa); số sát thương/hồi máu/buff nhảy trên đầu tướng **cỡ lớn, có viền + quầng sáng** cho dễ đọc, **luôn rõ nét** (giữ nguyên độ đậm suốt hoạt ảnh, không bị ô tướng choáng/gục làm nhạt; z-index cao nên không bị ảnh tướng che; chí mạng thì số to hơn hẳn, màu vàng); tướng bị choáng hiện **vòng sao xoay tròn** quanh ô để thấy rõ đang bị khống chế. Ô tướng hiện **thanh máu kèm số HP thật và %** (`1.500 · 62%`, sắp hết máu thì nhấp nháy vàng) và dòng **⚔ sát thương hiện tại · CM %** — thay cho LC; sát thương này **tự cộng các lớp buff đang hiệu lực** (đổi màu sáng khi đang được buff) và lớp buff hết hạn bị bỏ đúng như engine nhờ `expiresRound` trong sự kiện `buff`. **Diễn biến chi tiết hiện ngay trong lúc đang đánh** (cùng nội dung với tab *Diễn biến chi tiết* ở bảng kết quả, tự cuộn xuống dòng mới nhất). Kết quả **Thắng/Hòa/Thua** hiển thị **cỡ lớn có quầng sáng** cho dễ thấy. Nút **Kết quả** nhảy tới cuối trận và mở bảng kết quả (trận kết thúc tự nhiên cũng tự mở). Ở màn kết quả có nút **Khiêu chiến lại** để đánh lại chính đối thủ đó ngay.
 - **Bảng kết quả trận**: 2 tab — *Tổng kết chỉ số* (mỗi tướng: sát thương gây ra, sát thương đã chịu, tổng hồi máu cho bản thân + đồng đội, số lần hạ/choáng/giải/buff) và *Diễn biến chi tiết* (từng lượt/hành động kèm avatar người thi triển → mục tiêu, **nhãn "Ta"/"Địch"** để biết dòng của bên nào, lượng sát thương/hồi máu, nhãn CHÍ MẠNG; hành động **tự hồi máu** hiện kèm lượng hồi cụ thể, ví dụ *"Điển Vi dùng Ác Lai hộ vệ (tự hồi 25% HP tối đa)"*, và hành động **buff** hiện lượng tăng cụ thể `+X% sát thương · +Y% HP tối đa · +Z điểm chí mạng` kèm nhãn **CHÍ MẠNG** khi lớp buff đó chí mạng). Tên hiệu ứng/chiêu hiển thị là **tên kỹ năng thật** (trường `skillName` theo `SKILLS.md`), không dùng nhãn chung. Tướng có **hút máu** hiện thêm *"hút máu X%"* ở ô tướng. Dữ liệu phân tích trọn từ `events`, không phụ thuộc tốc độ phát lại. Không gửi lại server trong lúc phát.
 - **Cân bằng**: `packages/game-config/src/pvp.ts` (`PVP_MAX_ROUNDS` = 50, `pvpBaseHp`/`pvpBaseDamage` — **HP nền luôn gấp 10 lần sát thương nền**, cấp 1: 2000 HP ↔ 200 sát thương, mỗi cấp ×1.25 (`PVP_LEVEL_GROWTH`) nên cấp 10 gấp ~7,5 lần cấp 1); `PVP_SKILL_DEF` — mỗi kỹ năng kèm `teamBuff` (nhóm `TEAM_*`/`BUFF_ALLIES`), `PVP_CRIT_*`, `pvpProfile` — hệ số đã nhân hot ×1.1); nguồn cân bằng là `SKILLS.md`. Sát thương theo số mục tiêu (đơn 250%, hàng 180%/mục tiêu, toàn bộ 100%/mục tiêu); hồi máu cân theo số mục tiêu (toàn đội 110%, hàng 220%, thấp máu nhất 330%). Tướng có **hút máu** (`PVP_LIFESTEAL_BPS_PER_LEVEL` = 2%/cấp, `PVP_LIFESTEAL_DAMAGE_PENALTY_BPS` = −10% sát thương kỹ năng); `pvpProfile` trả thêm `skillName` (tên chiêu theo `SKILLS.md`) và `lifestealPerLevelBps`. Choáng đơn mục tiêu `cấp × 7%` (tối đa 70%), hàng/diện rộng `cấp × 3%`; choáng **chỉ kéo dài 2 lượt** (`PVP_STUN_ROUNDS` — gây ở lượt r thì mục tiêu bỏ lượt tới hết lượt r+1, đầu lượt r+2 tự hết; đang choáng thì không choáng chồng); giải choáng `30% + 5%×(cấp−1)` (30%→75%); tướng **sở hữu kỹ năng giải choáng miễn nhiễm choáng**. Buff tăng sức mạnh theo kỹ năng (`teamBuff`, nhóm `TEAM_*`/`BUFF_ALLIES`) **cộng dồn tối đa 3 lớp** (`PVP_SKILL_BUFF_MAX_LAYERS`), mỗi lớp hiệu lực **4 lượt** (`PVP_SKILL_BUFF_ROUNDS`); mỗi lớp **+10% HP tối đa** (`PVP_SKILL_BUFF_HP_BPS`, tăng trần HP và **hồi ngay đúng lượng trần tăng**), **+10% sát thương** (`PVP_SKILL_BUFF_DAMAGE_BPS`) và **+5 điểm chí mạng** (`PVP_SKILL_BUFF_CRIT_POINTS_BPS`); **%HP và %sát thương ăn chí mạng (×1,5)** theo **một lần roll chung cho cả lớp**. Validate khi khởi động qua `validate.ts` (`validatePvpConfig(assert)` — mỗi phe đúng 10 tướng hot). Hết 50 vòng không phân thắng bại → hoà.
-- **Không ảnh hưởng vé/thẻ**: PvP không tiêu vé, không tạo thẻ, không thưởng; chỉ ghi nhật ký trận (`pvp_battles`).
+- **Không ảnh hưởng vé/thẻ**: PvP không tiêu vé, không tạo thẻ, **không thưởng trực tiếp**; chỉ ghi nhật ký trận (`pvp_battles`). Trận **chủ động khiêu chiến** được tính vào **nhiệm vụ đấu trường hằng ngày và thành tựu đấu trường** (mục 3.10).
 - **Admin không tham gia**: mọi route PvP dùng `playerGuard` → admin bị 403 `ADMIN_NOT_PLAYER` (mục 3.8).
 
 ## 7. Database SQLite
@@ -1191,7 +1205,7 @@ Server phải:
 
 ### 8.4f. Nhiệm vụ & thành tựu (mục 3.10)
 
-- `GET /api/quests`: `gameDay`, `nextResetAt`, `calendarDate`, `resetBonus { tickets, granted }`, `daily[]`, `faction{wei,shu,wu,qun}[]`, `login { month, days[] }`, `achievements[] (nhóm + mốc)`, `claimable`. Mỗi mục có `key`, `progress`, `target`, `reward {pool,count}`, `status` (`progress` | `claimable` | `claimed`).
+- `GET /api/quests`: `gameDay`, `nextResetAt`, `calendarDate`, `resetBonus { tickets, granted }`, `daily[]`, `faction{wei,shu,wu,qun}[]`, `pvp[]`, `login { month, days[] }`, `achievements[] (nhóm + mốc)`, `claimable`. Mỗi mục có `key`, `progress`, `target`, `reward {pool,count}`, `status` (`progress` | `claimable` | `claimed`).
 - `POST /api/quests/claim`: body `{ keys?: string[] }` (bỏ trống = nhận tất cả). Trả `{ claimed[], balances }`. Không có gì để nhận → 409 `NOTHING_TO_CLAIM`. Có rate limit.
 - `GET /api/me` và `POST /api/tickets/claim-recovery` trả thêm `dailyEvents { resetBonus, autoClaimed[] }` khi request đó vừa xử lý ngày mới.
 
@@ -1372,6 +1386,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 - Thưởng reset 25 vé chỉ 1 lần mỗi ngày game; vắng nhiều ngày không cộng bù.
 - Quay 30 lần đạt cả nhiệm vụ quay 10; "Hoàn thành 5 nhiệm vụ" chỉ đếm 6 nhiệm vụ chung khác.
 - Nhiệm vụ phe đếm đúng loại vé/phe, thưởng vé đúng phe.
+- Nhiệm vụ đấu trường **chỉ đếm trận chủ động khiêu chiến** trong ngày game (không tính lúc bị khiêu chiến); thưởng vé thường; thành tựu đấu trường đếm tổng trận/tổng thắng cả lịch sử cũ.
 - Nhận 2 lần → `NOTHING_TO_CLAIM`; ledger khớp số vé.
 - Sang ngày mới tự nhận nhiệm vụ ngày cũ đã đạt chưa nhận; sang tháng mới tự nhận điểm danh chưa nhận.
 - Thành tựu sở hữu thẻ: mỗi mốc 1 lần, bỏ thẻ ra rồi đưa lại không nhận lần nữa.
@@ -1392,7 +1407,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 - Lưu đội: từ chối `CARD_NOT_OWNED`, `DUPLICATE_GENERAL`, `DUPLICATE_SLOT`, `INVALID_GENERAL`.
 - Xem đối thủ: chặn `SELF_CHALLENGE`, `OPPONENT_NOT_FOUND`.
 - Khiêu chiến: mô phỏng trọn trận, ghi lịch sử, xem lại được; người ngoài cuộc 404; `mySide` và thành tích đối xứng; đội trống → `TEAM_EMPTY` hoặc `OPPONENT_NO_TEAM`.
-- PvP không tiêu vé, không tạo thẻ, không thưởng.
+- PvP không tiêu vé, không tạo thẻ, không thưởng trực tiếp; trận chủ động khiêu chiến tính vào nhiệm vụ/thành tựu đấu trường (mục 3.10).
 
 ### 10.6. Database và API
 
@@ -1493,7 +1508,7 @@ Thứ tự ưu tiên:
 - Nâng cấp thất bại tiêu thụ 2 thẻ và tạo 1 thẻ cùng tướng theo phân phối kết quả thất bại riêng theo level đầu vào.
 - Bảng phân phối thất bại ưu tiên giảm cảm giác mất tiến trình, nhất là ở level cao.
 - Bảng xếp hạng Lực chiến (tổng 2^(lv−1), mỗi tướng + cấp tính 1 lần), top 100, ẩn admin.
-- Đấu trường PvP: dàn 6 tướng (2 hàng), khiêu chiến người chơi khác chọn từ bảng xếp hạng; server mô phỏng trọn trận rồi client phát lại; không thưởng, không tiêu vé, không tạo thẻ.
+- Đấu trường PvP: dàn 6 tướng (2 hàng), khiêu chiến người chơi khác chọn từ bảng xếp hạng; server mô phỏng trọn trận rồi client phát lại; không thưởng trực tiếp, không tiêu vé, không tạo thẻ (trận chủ động tính vào nhiệm vụ/thành tựu đấu trường).
 - Mọi kết quả game do backend xác định.
 - Database SQLite, API Fastify, frontend SolidJS.
 - Mọi thao tác quan trọng có transaction, lịch sử và cơ chế chống request trùng.
