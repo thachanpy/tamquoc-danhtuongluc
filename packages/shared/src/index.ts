@@ -796,7 +796,7 @@ export const PVP_SKILL_LABELS: Record<PvpSkill, string> = {
 };
 
 /** Cách chọn mục tiêu của kỹ năng (PVP.md mục 2.4). */
-export const PVP_TARGETINGS = ['single', 'lane', 'row', 'back_row', 'back_single', 'front_enemies', 'all_enemies', 'all_allies', 'lowest_ally', 'front_allies', 'back_allies'] as const;
+export const PVP_TARGETINGS = ['single', 'lane', 'row', 'back_row', 'back_single', 'highest_damage_enemy', 'front_enemies', 'all_enemies', 'all_allies', 'lowest_ally', 'front_allies', 'back_allies'] as const;
 export type PvpTargeting = (typeof PVP_TARGETINGS)[number];
 
 export const PVP_TARGETING_LABELS: Record<PvpTargeting, string> = {
@@ -805,6 +805,7 @@ export const PVP_TARGETING_LABELS: Record<PvpTargeting, string> = {
   row: 'toàn bộ hàng dọc',
   back_row: 'các tướng ở hàng sau',
   back_single: 'một tướng ở hàng sau',
+  highest_damage_enemy: 'tướng địch có sát thương cao nhất',
   front_enemies: 'các tướng hàng trước của địch',
   all_enemies: 'toàn bộ tướng địch',
   all_allies: 'toàn bộ đồng minh',
@@ -919,10 +920,11 @@ export type PvpEventDto =
    * Buff có lợi phát cho đồng minh: mỗi lần tướng tới lượt cộng MỘT lớp. Các giá trị `*Flat` là lượng
    * cộng thẳng của lớp này theo chỉ số nền của CHÍNH tướng nhận (client tự cộng vào chỉ số hiển thị).
    * `crit` = lớp này ăn chí mạng (×ST chí mạng cho % sát thương/HP). `expiresRound` = lượt cuối hiệu lực;
-   * `from` = idx người thi triển; `maxLayers` = số lớp cộng dồn tối đa THEO TỪNG nguồn (client bỏ lớp cũ
-   * nhất của cùng `from` khi vượt trần; nhiều tướng khác nguồn vẫn cộng dồn).
+   * `from` = idx người thi triển; `channel` = kênh buff trong kỹ năng của nguồn (trần `maxLayers` tính
+   * riêng theo từng (nguồn, kênh)). `maxLayers` = số lớp cộng dồn tối đa THEO TỪNG (nguồn, kênh) (client
+   * bỏ lớp cũ nhất cùng `from` + `channel` khi vượt trần; nguồn/kênh khác vẫn cộng dồn).
    */
-  | { t: 'buff'; from: number; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; crit: boolean; expiresRound: number; maxLayers: number }
+  | { t: 'buff'; from: number; channel: number; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; lifestealBps: number; crit: boolean; expiresRound: number; maxLayers: number }
   /**
    * Áp một lớp hiệu ứng bất lợi lên mục tiêu địch: giảm sát thương gây ra (`damageFlat`),
    * giảm trần HP (`hpFlat`), giảm chí mạng (`critBps`), giảm ST chí mạng (`critDamageBps`)
@@ -936,6 +938,11 @@ export type PvpEventDto =
   | { t: 'dispel'; idx: number }
   /** Thanh tẩy hiệu ứng bất lợi của đồng minh (trừ choáng và thiêu đốt). */
   | { t: 'purify'; idx: number }
+  /**
+   * Hồi sinh (mục 1.14): máu về 0 lần đầu trong trận nhưng tướng KHÔNG gục — hồi lại `hp` và bị
+   * giảm sát thương gây ra `damageDownBps` (bps) VĨNH VIỄN tới hết trận. Chỉ hiệu lực MỘT lần/trận.
+   */
+  | { t: 'revive'; idx: number; hp: number; damageDownBps: number }
   | { t: 'down'; idx: number }
   | { t: 'end'; winner: PvpWinner; rounds: number; reason: 'wipe' | 'timeout' };
 
@@ -1009,6 +1016,8 @@ export interface PvpBuffDto {
   critDamageBps: number;
   /** % sát thương gánh chịu được giảm mỗi lớp. */
   takenDownBps: number;
+  /** % hút máu cộng mỗi lớp (hồi bản thân theo sát thương gây ra; 2000 = +20%). */
+  lifestealBps: number;
   /** Số lượt mỗi lớp còn hiệu lực. */
   rounds: number;
   /** Số lớp cộng dồn tối đa. */
@@ -1096,6 +1105,10 @@ export interface PvpSkillDefDto {
   debuff: PvpDebuffDto;
   /** Phản kích của bản thân khi gánh chịu sát thương (rỗng = không phản kích). */
   counter: PvpCounterDto;
+  /** Kỹ năng có Hồi sinh: máu về 0 lần đầu thì không gục mà hồi lại rồi giảm sát thương (mục 1.14). */
+  revive: boolean;
+  /** Cộng thêm % sát thương kỹ năng khi đánh trúng mục tiêu đang chịu hiệu ứng bất lợi (mục 1.17). */
+  vsDebuffBonusBps: number;
   /** Kỹ năng tự gây thiêu đốt lên bản thân (Khổ nhục kế — Hoàng Cái). */
   selfBurn: boolean;
   /** Số lượt tự thiêu đốt. */

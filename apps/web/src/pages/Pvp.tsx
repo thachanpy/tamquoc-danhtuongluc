@@ -56,6 +56,8 @@ function sfxOf(ev: PvpEventDto): SfxName | null {
       return ev.damageFlat > 0 ? 'buff' : 'heal';
     case 'burn':
       return 'burn';
+    case 'revive':
+      return 'heal';
     case 'stun':
       return 'stun';
     case 'dispel':
@@ -82,12 +84,13 @@ const statKey = (u: PvpUnitDto) => `${u.generalId}|${u.level}`;
  * Mô tả buff tăng sức mạnh của một kỹ năng (nhóm TEAM_ và BUFF_ALLIES) kèm LƯỢNG tăng mỗi lớp:
  * "cả đội +10% sát thương", "cả đội +10% HP tối đa", "cả đội +5 điểm chí mạng".
  */
-const TEAM_BUFF_FIELDS: { key: 'damageBps' | 'hpBps' | 'critBps' | 'critDamageBps' | 'takenDownBps'; text: (v: number) => string }[] = [
+const TEAM_BUFF_FIELDS: { key: 'damageBps' | 'hpBps' | 'critBps' | 'critDamageBps' | 'takenDownBps' | 'lifestealBps'; text: (v: number) => string }[] = [
   { key: 'damageBps', text: (v) => `+${pct(v)} sát thương` },
   { key: 'hpBps', text: (v) => `+${pct(v)} HP tối đa` },
   { key: 'critBps', text: (v) => `+${v / 100} điểm chí mạng` },
   { key: 'critDamageBps', text: (v) => `+${pct(v)} ST chí mạng` },
   { key: 'takenDownBps', text: (v) => `−${pct(v)} sát thương gánh chịu` },
+  { key: 'lifestealBps', text: (v) => `+${pct(v)} hút máu` },
 ];
 function teamBuffText(buffs?: PvpUnitStateDto['buffs']): string {
   if (!buffs?.length) return '';
@@ -545,8 +548,10 @@ interface CV {
   /** Ô của tướng ĐANG gây choáng (khớp engine): choáng kéo dài tới khi tướng đó ra đòn lượt kế. */
   stunnedByIdx: number | null;
   buffed: boolean;
-  /** Các lớp buff đang hiệu lực (khớp engine): sát thương/HP/chí mạng/ST chí mạng/giảm ST gánh chịu + lượt hết hạn. */
-  buffs: { sourceIdx: number; flat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; expiresRound: number }[];
+  /** Hệ số nhân sát thương gây ra (bps): 10000 bình thường, giảm còn 5000 sau khi Hồi sinh (mục 1.14). */
+  damageMulBps: number;
+  /** Các lớp buff đang hiệu lực (khớp engine): sát thương/HP/chí mạng/ST chí mạng/giảm ST gánh chịu/hút máu + lượt hết hạn. */
+  buffs: { sourceIdx: number; channel: number; flat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; lifestealBps: number; expiresRound: number }[];
   /** Các lớp hiệu ứng bất lợi đang chịu (khớp engine): giảm sát thương/HP/chí mạng/ST chí mạng + thiêu đốt. */
   debuffs: { sourceIdx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; burnFlat: number; expiresRound: number }[];
 }
@@ -557,6 +562,9 @@ const maxHpOf = (s: CV) =>
 
 /** Tỉ lệ máu hồi thêm khi trần HP tăng (1/4) — khớp `PVP_MAXHP_GAIN_HEAL_BPS` của server. */
 const MAXHP_GAIN_HEAL = 0.25;
+
+/** Hệ số 100% (bps) — khớp `BPS_SCALE` của server (dùng cho hệ số nhân sát thương sau Hồi sinh). */
+const BPS_SCALE = 10000;
 
 /**
  * Đồng bộ máu theo trần HP mới (khớp `syncMaxHp` của engine): trần TĂNG thì chỉ hồi **1/4 lượng tăng**
@@ -583,11 +591,13 @@ function effectChips(s: CV): { text: string; tone: 'buff' | 'debuff' | 'burn' }[
   const bCrit = sum(s.buffs, (b) => b.critBps);
   const bCritD = sum(s.buffs, (b) => b.critDamageBps);
   const bTaken = sum(s.buffs, (b) => b.takenDownBps);
+  const bLifesteal = sum(s.buffs, (b) => b.lifestealBps);
   if (bDmg > 0) out.push({ text: `⚔+${num(bDmg)}`, tone: 'buff' });
   if (bHp > 0) out.push({ text: `❤+${num(bHp)}`, tone: 'buff' });
   if (bCrit > 0) out.push({ text: `CM+${bCrit / 100}`, tone: 'buff' });
   if (bCritD > 0) out.push({ text: `STCM+${pct(bCritD)}`, tone: 'buff' });
   if (bTaken > 0) out.push({ text: `ST nhận−${pct(bTaken)}`, tone: 'buff' });
+  if (bLifesteal > 0) out.push({ text: `HÚT+${pct(bLifesteal)}`, tone: 'buff' });
   // Hiệu ứng bất lợi (tím) + thiêu đốt (cam)
   const dDmg = sum(s.debuffs, (d) => d.damageFlat);
   const dHp = sum(s.debuffs, (d) => d.hpFlat);
@@ -615,6 +625,7 @@ const EVENT_MS: Record<PvpEventDto['t'], number> = {
   burn: 380,
   dispel: 320,
   purify: 320,
+  revive: 700,
   skip: 480,
   down: 380,
   end: 500,
@@ -636,7 +647,7 @@ const newTally = (): Tally => ({ dealt: 0, taken: 0, healedAllies: 0, healedSelf
 /** Một dòng diễn biến chi tiết (kèm avatar người thi triển / mục tiêu). */
 interface DetailRow {
   id: number;
-  kind: 'round' | 'act' | 'skip' | 'damage' | 'counter' | 'heal' | 'stun' | 'cleanse' | 'buff' | 'debuff' | 'burn' | 'dispel' | 'purify' | 'down';
+  kind: 'round' | 'act' | 'skip' | 'damage' | 'counter' | 'heal' | 'stun' | 'cleanse' | 'buff' | 'debuff' | 'burn' | 'dispel' | 'purify' | 'revive' | 'down';
   actor?: number;
   target?: number;
   text: string;
@@ -720,6 +731,7 @@ function createDetailBuilder(units: PvpUnitStateDto[]) {
           ev.critBps > 0 ? `+${ev.critBps / 100} điểm chí mạng` : '',
           ev.critDamageBps > 0 ? `+${pct(ev.critDamageBps)} ST chí mạng` : '',
           ev.takenDownBps > 0 ? `−${pct(ev.takenDownBps)} sát thương gánh chịu` : '',
+          ev.lifestealBps > 0 ? `+${pct(ev.lifestealBps)} hút máu` : '',
         ]
           .filter(Boolean)
           .join(' · ');
@@ -757,6 +769,14 @@ function createDetailBuilder(units: PvpUnitStateDto[]) {
         return push({ kind: 'dispel', actor, target: ev.idx, text: `${actor !== undefined ? nameOf(actor) : 'Kẻ địch'} xóa hiệu ứng có lợi của ${nameOf(ev.idx)}` });
       case 'purify':
         return push({ kind: 'purify', actor, target: ev.idx, text: `${actor !== undefined ? nameOf(actor) : 'Đồng minh'} thanh tẩy hiệu ứng bất lợi cho ${nameOf(ev.idx)}` });
+      case 'revive':
+        // Hồi sinh: tướng gục lần đầu nhưng sống lại (chỉ 1 lần/trận), đổi lại bị giảm sát thương vĩnh viễn.
+        return push({
+          kind: 'revive',
+          target: ev.idx,
+          amount: ev.hp,
+          text: `${nameOf(ev.idx)} HỒI SINH với ${num(ev.hp)} máu nhưng giảm ${pct(ev.damageDownBps)} sát thương tới hết trận`,
+        });
       case 'down':
         return push({ kind: 'down', target: ev.idx, text: `${nameOf(ev.idx)} bị hạ` });
       case 'end':
@@ -926,7 +946,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   const initView = () => {
     const o: Record<number, CV> = {};
     // Máu đầu trận lấy từ snapshot server (vào trận luôn đầy 100% theo trần đã gồm aura phong cách).
-    for (const u of units) o[u.idx] = { hp: u.hp, maxHp: u.maxHp, maxHpStatic: u.maxHp, alive: true, stunned: false, stunnedByIdx: null, buffed: false, buffs: [], debuffs: [] };
+    for (const u of units) o[u.idx] = { hp: u.hp, maxHp: u.maxHp, maxHpStatic: u.maxHp, alive: true, stunned: false, stunnedByIdx: null, buffed: false, damageMulBps: BPS_SCALE, buffs: [], debuffs: [] };
     return o;
   };
 
@@ -976,8 +996,12 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         buffed: s.buffed,
         // Đang bị debuff (giảm sát thương/HP/chí mạng/ST chí mạng) → dòng chỉ số đổi màu tím.
         debuffed: s.debuffs.some((d) => d.damageFlat > 0 || d.hpFlat > 0 || d.critBps > 0 || d.critDamageBps > 0),
-        // Sát thương hiện tại = sát thương nền + lớp buff đang hiệu lực − lớp debuff giảm sát thương
-        damage: Math.max(0, u.damage + s.buffs.reduce((acc, b) => acc + b.flat, 0) - s.debuffs.reduce((acc, d) => acc + d.damageFlat, 0)),
+        // Sát thương hiện tại = sát thương nền + lớp buff đang hiệu lực − lớp debuff giảm sát thương,
+        // nhân hệ số Hồi sinh (giảm 50% vĩnh viễn sau khi sống lại — mục 1.14)
+        damage: Math.round(
+          Math.max(0, u.damage + s.buffs.reduce((acc, b) => acc + b.flat, 0) - s.debuffs.reduce((acc, d) => acc + d.damageFlat, 0)) *
+            (s.damageMulBps / BPS_SCALE),
+        ),
         // Chí mạng / ST chí mạng hiện tại = chỉ số nền + lớp buff − lớp debuff (khớp engine)
         critBps: Math.max(0, u.critBps + s.buffs.reduce((acc, b) => acc + b.critBps, 0) - s.debuffs.reduce((acc, d) => acc + d.critBps, 0)),
         critDamageBps: Math.max(
@@ -1085,28 +1109,30 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         break;
       case 'buff': {
         // Thêm MỘT lớp cho tướng: cộng thẳng sát thương + tăng trần HP (hồi đúng lượng tăng).
-        // Trần `maxLayers` tính theo TỪNG nguồn (khớp engine): chỉ bỏ lớp cũ nhất của cùng người thi triển.
+        // Trần `maxLayers` tính theo TỪNG (nguồn, kênh) (khớp engine): chỉ bỏ lớp cũ nhất cùng người thi triển + kênh.
         upd(ev.idx, (s) => {
           const buffs = [
             ...s.buffs,
             {
               sourceIdx: ev.from,
+              channel: ev.channel,
               flat: ev.damageFlat,
               hpFlat: ev.hpFlat,
               critBps: ev.critBps,
               critDamageBps: ev.critDamageBps,
               takenDownBps: ev.takenDownBps,
+              lifestealBps: ev.lifestealBps,
               expiresRound: ev.expiresRound,
             },
           ];
-          while (buffs.filter((b) => b.sourceIdx === ev.from).length > ev.maxLayers) {
-            const at = buffs.findIndex((b) => b.sourceIdx === ev.from);
+          while (buffs.filter((b) => b.sourceIdx === ev.from && b.channel === ev.channel).length > ev.maxLayers) {
+            const at = buffs.findIndex((b) => b.sourceIdx === ev.from && b.channel === ev.channel);
             if (at < 0) break;
             buffs.splice(at, 1);
           }
           return syncHp({ ...s, buffed: true, buffs });
         });
-        const gains = [ev.damageFlat > 0 ? `+${num(ev.damageFlat)} ⚔` : '', ev.hpFlat > 0 ? `+${num(ev.hpFlat)} ❤` : ''].filter(Boolean).join('  ');
+        const gains = [ev.damageFlat > 0 ? `+${num(ev.damageFlat)} ⚔` : '', ev.hpFlat > 0 ? `+${num(ev.hpFlat)} ❤` : '', ev.lifestealBps > 0 ? `+${pct(ev.lifestealBps)} 🩸` : ''].filter(Boolean).join('  ');
         if (gains) addFloat(ev.idx, gains, ev.crit, true);
         addFx(ev.idx, 'buff');
         break;
@@ -1158,6 +1184,12 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
           return syncHp({ ...s, debuffs });
         });
         addFx(ev.idx, 'purify');
+        break;
+      case 'revive':
+        // Hồi sinh (mục 1.14): tướng sống lại với `hp` máu và giảm sát thương vĩnh viễn → cập nhật hệ số nhân.
+        upd(ev.idx, (s) => ({ ...s, alive: true, hp: ev.hp, damageMulBps: Math.max(0, BPS_SCALE - ev.damageDownBps) }));
+        addFloat(ev.idx, `HỒI SINH +${num(ev.hp)}`, false, true);
+        addFx(ev.idx, 'heal');
         break;
       case 'down':
         // Tướng bị hạ: đánh dấu chết + gỡ mọi choáng do chính tướng này gây (khớp engine).

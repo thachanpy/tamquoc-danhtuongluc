@@ -17,6 +17,7 @@ export function teamBuffNote(c: PvpCombatDto): string {
         b.critBps ? `+${b.critBps / 100} điểm chí mạng` : '',
         b.critDamageBps ? `+${pct(b.critDamageBps)} ST chí mạng` : '',
         b.takenDownBps ? `−${pct(b.takenDownBps)} sát thương gánh chịu` : '',
+        b.lifestealBps ? `+${pct(b.lifestealBps)} hút máu` : '',
       ]
         .filter(Boolean)
         .join(', ');
@@ -63,6 +64,11 @@ export function skillNote(c: PvpCombatDto): string {
     parts.push(`phản kích bị động ${pct(d.counter.damageBps)} sát thương cơ bản lên ${scope}`);
   }
   if (d.selfBurn) parts.push(`tự thiêu đốt bản thân ${d.selfBurnRounds} lượt`);
+  // Hồi sinh: gục lần đầu thì sống lại đổi lấy việc giảm sát thương vĩnh viễn (mục 1.14).
+  if (d.revive) parts.push('hồi sinh 1 lần/trận (hồi 5%→50% máu theo cấp, đổi lại −50% sát thương tới hết trận)');
+  // Cộng thêm sát thương lên mục tiêu đang chịu hiệu ứng bất lợi (mục 1.17).
+  if (d.vsDebuffBonusBps)
+    parts.push(`+${pct(d.vsDebuffBonusBps)} sát thương khi đánh mục tiêu đang có hiệu ứng bất lợi (suy yếu/thiêu đốt/choáng)`);
   // Thiêu đốt đặc biệt: Chu Du nhân thêm chí mạng cho đòn thiêu đốt, Lục Tốn hút máu (50% hiệu suất) cả từ thiêu đốt,
   // Lăng Thống cộng thêm ST chí mạng khi đánh mục tiêu đang thiêu đốt.
   if (d.burnCritMulBps) parts.push(`sát thương thiêu đốt +${pct(d.burnCritMulBps - 10000)} tỷ lệ chí mạng và ST chí mạng`);

@@ -10,17 +10,23 @@ import {
   BPS_SCALE,
   PVP_BUFF_MAX_LAYERS,
   PVP_BUFF_ROUNDS,
-  PVP_BURN_BPS,
   PVP_BURN_CRIT_MUL_BPS,
   PVP_DEBUFF_ROUNDS,
   PVP_CRIT_DAMAGE_BPS,
   PVP_MAXHP_GAIN_HEAL_BPS,
   PVP_MAX_ROUNDS,
   PVP_PASSIVE_EFFECT,
+  PVP_REVIVE_DAMAGE_DOWN_BPS,
+  PVP_REVIVE_HP_BPS_PER_LEVEL,
+  PVP_SKILL_BUFF_LIFESTEAL_BPS,
   PVP_SKILL_DEF,
+  PVP_VS_DEBUFF_BONUS_BPS,
   ROSTER,
   pvpBaseHp,
+  pvpEffectBps,
+  pvpPerLevelEffectBps,
   pvpProfile,
+  pvpSkillDefAtLevel,
   pvpStyleBonus,
   type RandomInt,
 } from '@tq/game-config';
@@ -262,6 +268,122 @@ test('engine: hồi máu chọn đúng mục tiêu — hàng trước / hàng sa
   assert.deepEqual(firstAct(rL, 1).targets, [0]);
 });
 
+test('engine: tướng hỗ trợ ban hút máu 15% cho đồng đội — mỗi phe 1 tướng (mục 1.13)', () => {
+  // Mỗi phe đúng MỘT tướng hỗ trợ ban hút máu: Lưu Bị (Thục) · Tuân Úc (Ngụy) · Lỗ Túc (Ngô) · Viên Thiệu (Quần).
+  for (const id of ['liu-bei', 'xun-yu', 'lu-su', 'yuan-shao']) {
+    const ls = skillDef(id).buffs.find((e) => e.buff.lifestealBps > 0);
+    assert.ok(ls, `${id} phải có kênh buff hút máu`);
+    assert.equal(ls.scope, 'all_allies', `${id}: hút máu ban cho toàn đội`);
+    assert.equal(ls.buff.lifestealBps, PVP_SKILL_BUFF_LIFESTEAL_BPS, `${id}: trần hút máu 15%`);
+    assert.equal(ls.buff.rounds, 2, `${id}: chỉ kéo dài 2 lượt`);
+    assert.equal(ls.buff.maxLayers, 1, `${id}: không cộng dồn lớp để giữ trần 15%`);
+  }
+  // Hành vi: đồng minh KHÔNG có hút máu gốc vẫn hồi máu nhờ hút máu được ban.
+  // Lưu Bị (tổng LC cao) đi trước nên đồng minh đã có buff hút máu khi tới lượt ở ngay vòng 1.
+  const res = simulatePvp(
+    [
+      one('a', [
+        { slot: 1, generalId: 'liu-bei', level: 10 },
+        { slot: 2, generalId: 'xu-huang', level: 10 },
+      ]),
+      one('b', [{ slot: 1, generalId: 'xin-xianying', level: 10 }]),
+    ],
+    never,
+  );
+  const ally = res.units.find((x) => x.idx === 1)!;
+  assert.equal(ally.lifestealBps, 0, 'tiền đề: Xu Hoảng không có hút máu gốc');
+  assert.ok(
+    res.events.some((e) => e.t === 'buff' && e.idx === 1 && e.lifestealBps === PVP_SKILL_BUFF_LIFESTEAL_BPS),
+    'đồng minh nhận lớp buff hút máu',
+  );
+  // Sự kiện hồi máu đánh dấu `lifesteal` để client chọn đúng âm thanh.
+  assert.ok(
+    res.events.some((e) => e.t === 'heal' && e.from === 1 && e.idx === 1 && e.lifesteal === true),
+    'đồng minh hồi máu nhờ hút máu được ban',
+  );
+});
+
+test('engine: Quan Vũ nhắm tướng địch có sát thương cao nhất (mục 2.4, 6.2)', () => {
+  // Cùng cấp nên sát thương nền bằng nhau; tướng Tấn công (+25% ST) mạnh hơn tướng Phòng thủ (+25% HP).
+  // Địch: slot 1 = Phòng thủ (idx 6), slot 2 = Tấn công (idx 7) → Quan Vũ (idx 0) phải nhắm idx 7.
+  const atk = findGeneral((id) => id !== 'guan-yu' && pvpProfile(id).style === 'attack' && skillDef(id).stun === 'none');
+  const def = findGeneral((id) => pvpProfile(id).style === 'defense' && skillDef(id).stun === 'none');
+  const res = simulatePvp(
+    [one('a', [{ slot: 1, generalId: 'guan-yu', level: 5 }]), one('b', [{ slot: 1, generalId: def, level: 5 }, { slot: 2, generalId: atk, level: 5 }])],
+    never,
+  );
+  // Bảo đảm tiền đề test: tướng Tấn công địch đúng là mạnh hơn tướng Phòng thủ.
+  const dmgOf = (idx: number) => res.units.find((u) => u.idx === idx)!.damage;
+  assert.ok(dmgOf(7) > dmgOf(6), 'tướng Tấn công phải có sát thương cao hơn tướng Phòng thủ');
+  const act = res.events.find((e): e is Extract<PvpEventDto, { t: 'act' }> => e.t === 'act' && e.idx === 0)!;
+  assert.deepEqual(act.targets, [7], 'phải nhắm tướng Tấn công (sát thương cao nhất)');
+});
+
+test('engine: hồi sinh một lần/trận — sống lại theo cấp và giảm 50% sát thương tới hết trận (mục 1.14)', () => {
+  // Danh sách tướng có Hồi sinh: Triệu Vân (Thục · Tấn công), Tào Nhân (Ngụy · Phòng thủ),
+  // Hoàng Cái (Ngô · Phòng thủ), Văn Súy (Quần · Tấn công). Các tướng khác không có.
+  for (const id of ['zhao-yun', 'cao-ren', 'huang-gai', 'wen-chou']) assert.equal(skillDef(id).revive, true, `${id} phải có hồi sinh`);
+  assert.equal(skillDef('liu-bei').revive, false, 'tướng không nằm trong danh sách thì không hồi sinh');
+
+  // Triệu Vân cấp 1 gặp Quan Vũ cấp 10 đánh đơn: bị hạ ngay lượt đầu nhưng không gục.
+  const reviver = 'zhao-yun';
+  const res = simulatePvp(
+    [one('a', [{ slot: 1, generalId: reviver, level: 1 }]), one('b', [{ slot: 1, generalId: 'guan-yu', level: 10 }])],
+    never,
+  );
+  const u = res.units.find((x) => x.idx === 0)!;
+
+  // Chỉ hồi sinh MỘT lần mỗi trận, hồi đúng `cấp × 5%` HP tối đa (cấp 1 → 5%).
+  const revives = res.events.filter((e): e is Extract<PvpEventDto, { t: 'revive' }> => e.t === 'revive' && e.idx === 0);
+  assert.equal(revives.length, 1, 'chỉ hồi sinh một lần trong trận');
+  const rev = revives[0]!;
+  assert.equal(rev.damageDownBps, PVP_REVIVE_DAMAGE_DOWN_BPS, 'đổi lại bằng việc giảm 50% sát thương gây ra');
+  const wantHp = Math.min(u.maxHp, Math.max(1, Math.round((u.maxHp * Math.min(BPS_SCALE, 1 * PVP_REVIVE_HP_BPS_PER_LEVEL)) / BPS_SCALE)));
+  assert.equal(rev.hp, wantHp, 'hồi đúng cấp × 5% HP tối đa');
+  assert.ok(rev.hp > 0 && rev.hp < u.maxHp, 'sống lại với một phần máu, không đầy');
+
+  // Hồi sinh xảy ra trước khi gục thật (lần chết thứ hai mới thực sự gục).
+  const reviveAt = res.events.indexOf(rev);
+  const downAt = res.events.findIndex((e) => e.t === 'down' && e.idx === 0);
+  assert.ok(downAt > reviveAt, 'hồi sinh rồi mới gục thật ở lần chết sau');
+
+  // Đòn đánh của Triệu Vân chỉ còn MỘT NỬA (kỹ năng đánh đơn, không tự buff sát thương nên không nhiễu).
+  const hit = res.events.find((e): e is Extract<PvpEventDto, { t: 'damage' }> => e.t === 'damage' && e.from === 0);
+  assert.ok(hit, 'Triệu Vân phải ra được một đòn sau khi hồi sinh');
+  const skillMul = skillDef(reviver).damageBps / BPS_SCALE;
+  const half = Math.round(Math.round((u.damage * (BPS_SCALE - PVP_REVIVE_DAMAGE_DOWN_BPS)) / BPS_SCALE) * skillMul);
+  assert.equal(hit.amount, half, 'sát thương gây ra giảm đúng 50%');
+  assert.equal(hit.amount * 2, Math.round(u.damage * skillMul), 'bằng nửa sát thương bình thường');
+});
+
+test('engine: tướng cộng thêm 30% sát thương khi đánh mục tiêu đang chịu hiệu ứng bất lợi (mục 1.17)', () => {
+  // Danh sách 6 tướng "đao phủ": 3 Ngụy (Tào Phi, Tào Chân, Từ Hoảng) + 1 mỗi phe khác
+  // (Mã Đại — Thục, Đinh Phụng — Ngô, Trương Bảo — Quần). Tướng ngoài danh sách không có cơ chế này.
+  for (const id of ['cao-pi', 'cao-zhen', 'xu-huang', 'ma-dai', 'ding-feng', 'zhang-bao'])
+    assert.equal(skillDef(id).vsDebuffBonusBps, PVP_VS_DEBUFF_BONUS_BPS, `${id} phải cộng thêm sát thương lên mục tiêu đang debuff`);
+  assert.equal(skillDef('guan-yu').vsDebuffBonusBps, 0, 'tướng ngoài danh sách không có cơ chế này');
+
+  // Cao Chân (Ngụy) vừa gây suy yếu vừa có cơ chế: vòng 1 đánh mục tiêu SẠCH (hiệu ứng bất lợi được áp
+  // SAU đòn đánh trong cùng lượt), từ vòng 2 mục tiêu đã dính suy yếu nên đòn đánh được cộng thêm 30%.
+  // Mục tiêu phải là tướng ôn hoà KHÔNG thanh tẩy/suy yếu/giảm ST nhận (nếu không debuff bị gỡ hoặc
+  // sát thương nhận vào bị lệch giữa các vòng), cấp 10 để sống qua nhiều vòng.
+  const victim = findGeneral((id) => {
+    const d = skillDef(id);
+    return isPeaceful(id) && !d.purify && !d.cleanse && d.counter.damageBps === 0 && d.buffs.every((e) => e.buff.takenDownBps === 0);
+  });
+  const res = simulatePvp(
+    [one('a', [{ slot: 1, generalId: 'cao-zhen', level: 1 }]), one('b', [{ slot: 1, generalId: victim, level: 10 }])],
+    never,
+  );
+  const hits = res.events
+    .filter((e): e is Extract<PvpEventDto, { t: 'damage' }> => e.t === 'damage' && e.from === 0)
+    .map((e) => e.amount);
+  assert.ok(hits.length >= 2, 'phải có ít nhất hai đòn đánh để so sánh');
+  // Cao Chân ở cấp 1 nên hệ số "đao phủ" đã quy theo cấp (cấp 1 = giá trị chốt − 10 điểm %).
+  const mul = (BPS_SCALE + pvpEffectBps(PVP_VS_DEBUFF_BONUS_BPS, 1)) / BPS_SCALE;
+  assert.equal(hits[1], Math.round(hits[0]! * mul), 'mục tiêu đang suy yếu → đòn đánh được cộng thêm 30%');
+});
+
 test('engine: choáng làm mục tiêu bỏ lượt (mục 5.3, 8)', () => {
   // Hạ Hầu Đôn (choáng đơn) đánh Tào Phi; cả hai cùng LC nên A đi trước → nạn nhân bị choáng ngay vòng 1.
   const stunner = findGeneral((id) => skillDef(id).stun !== 'none' && skillDef(id).targeting === 'single');
@@ -302,7 +424,8 @@ test('engine: kỹ năng buff cộng HP tối đa + sát thương cho đồng mi
   const buffed = buffEvs.map((e) => e.idx);
   assert.ok(buffed.includes(0) && buffed.includes(1), 'cả hai đồng minh đều nhận buff');
   // Sự kiện buff mang lượng tăng cụ thể để client hiện ở Diễn biến chi tiết (mục 6.7).
-  const b = skillDef(buffer).buffs[0]!.buff;
+  // Hệ số buff đã quy theo cấp của Lưu Bị (cấp 6) nên lấy định nghĩa kỹ năng TẠI CẤP.
+  const b = pvpSkillDefAtLevel(skillDef(buffer), 6).buffs[0]!.buff;
   const u0 = res.units.find((x) => x.idx === buffEvs[0]!.idx)!;
   assert.equal(buffEvs[0]!.damageFlat, Math.round((u0.damage * b.damageBps) / BPS_SCALE));
   assert.equal(buffEvs[0]!.hpFlat, Math.round((u0.maxHp * b.hpBps) / BPS_SCALE));
@@ -331,7 +454,7 @@ test('engine: buff %HP của kỹ năng chỉ hồi 1/4 lượng trần tăng, k
 
 test('engine: chí mạng nhân hệ số %HP và %sát thương của buff — một roll chung cho cả lớp (mục 11.2)', () => {
   const buffer = 'liu-bei';
-  const b = skillDef(buffer).buffs[0]!.buff;
+  const b = pvpSkillDefAtLevel(skillDef(buffer), 6).buffs[0]!.buff;
   const res = simulatePvp([one('a', [{ slot: 1, generalId: buffer, level: 6 }]), one('b', [{ slot: 1, generalId: 'da-qiao', level: 10 }])], always0);
   const ev = res.events.find((e): e is Extract<PvpEventDto, { t: 'buff' }> => e.t === 'buff');
   assert.ok(ev, 'phải có ít nhất một lớp buff');
@@ -404,8 +527,10 @@ test('engine: Chu Du tăng thêm 30% tỷ lệ chí mạng và ST chí mạng ch
     );
     const e = res.events.find((x): x is Extract<PvpEventDto, { t: 'burn' }> => x.t === 'burn');
     assert.ok(e, `${id} phải gây thiêu đốt`);
-    // Lớp thiêu đốt = ST hiệu dụng × PVP_BURN_BPS; sát thương thiêu đốt = lớp đó × (1 + ST chí mạng × hệ số riêng).
-    const flat = Math.round((res.units[0]!.damage * PVP_BURN_BPS) / BPS_SCALE);
+    // Lớp thiêu đốt = ST hiệu dụng × hệ số thiêu đốt TẠI CẤP (cấp 5); sát thương thiêu đốt =
+    // lớp đó × (1 + ST chí mạng × hệ số riêng).
+    const burnBps = pvpSkillDefAtLevel(skillDef(id), 5).debuff.burnBps;
+    const flat = Math.round((res.units[0]!.damage * burnBps) / BPS_SCALE);
     return { amount: e.amount, flat };
   };
   const normal = firstBurn('zhu-huan'); // Chu Hoàn: không có hệ số riêng cho thiêu đốt.
@@ -490,7 +615,7 @@ test('engine: buff %HP chỉ phát khi tới lượt, không cộng sẵn ở �
   assert.equal(res.units[0]!.maxHp, Math.round(pvpBaseHp(4) * (1 + hpBps / BPS_SCALE)), 'ảnh chụp đầu trận chỉ gồm chỉ số tĩnh');
   // Snapshot mang DTO các KÊNH buff để client mô tả LƯỢNG tăng khi tướng thi triển kỹ năng (mục 6.7).
   const entries = res.units[0]!.buffs ?? [];
-  const b = skillDef(id).buffs.find((e) => e.buff.hpBps > 0)!.buff;
+  const b = pvpSkillDefAtLevel(skillDef(id), 4).buffs.find((e) => e.buff.hpBps > 0)!.buff;
   assert.ok(entries.some((e) => e.buff.hpBps === b.hpBps), 'ảnh chụp mang kênh buff tăng HP');
   assert.ok(entries.every((e) => e.buff.rounds === PVP_BUFF_ROUNDS));
   assert.ok(entries.every((e) => e.buff.maxLayers === PVP_BUFF_MAX_LAYERS));
@@ -541,9 +666,10 @@ test('engine: hút máu — tướng hồi bản thân theo % sát thương gây
 });
 
 test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => {
-  // Quan Vũ: đánh đơn 320%, tự buff +30 điểm chí mạng và +30% ST chí mạng.
+  // Quan Vũ: đánh TƯỚNG ĐỊCH CÓ SÁT THƯƠNG CAO NHẤT 320%, tự buff +30 điểm chí mạng và +30% ST chí mạng.
   const gy = pvpProfile('guan-yu');
   assert.equal(gy.def.damageBps, 32000);
+  assert.equal(gy.def.targeting, 'highest_damage_enemy');
   assert.equal(gy.def.buffs[0]!.buff.critBps, 3000);
   assert.equal(gy.def.buffs[0]!.buff.critDamageBps, 3000);
   assert.equal(gy.def.buffs[0]!.scope, 'self');
@@ -792,7 +918,8 @@ test('HTTP: chi tiết chiến đấu của một tướng — chỉ số, kỹ 
   assert.equal(c.base.maxHp, 10 * c.base.damage);
   assert.ok(c.self.maxHp > 0 && c.self.damage > 0 && c.self.lc > 0);
   // Hút máu ở cấp hiện tại (0 với tướng không hút máu) — client hiện dòng "Hút máu" khi > 0.
-  assert.equal(c.self.lifestealBps, 5 * profile.lifestealPerLevelBps);
+  // Hút máu khai báo dạng "mỗi cấp" nên quy theo cấp bằng công thức chung.
+  assert.equal(c.self.lifestealBps, pvpPerLevelEffectBps(profile.lifestealPerLevelBps, 5));
   // ST chí mạng nền = 150% (mục 7) — buff/debuff kỹ năng điều chỉnh quanh mốc này khi vào trận.
   assert.equal(c.self.critDamageBps, PVP_CRIT_DAMAGE_BPS);
   assert.equal(c.bpsScale, BPS_SCALE);
@@ -808,7 +935,8 @@ test('HTTP: chi tiết chiến đấu — tướng có buff toàn đội mang đ
   const r = await app.inject({ method: 'GET', url: `/api/pvp/generals/${id}/combat?level=5`, headers: auth });
   assert.equal(r.statusCode, 200);
   const c = r.json();
-  const b = skillDef(id).buffs.find((e) => e.buff.hpBps > 0 && e.buff.damageBps > 0)!.buff;
+  // Hệ số buff đã quy theo cấp của tướng (cấp 5) nên lấy định nghĩa kỹ năng TẠI CẤP.
+  const b = pvpSkillDefAtLevel(skillDef(id), 5).buffs.find((e) => e.buff.hpBps > 0 && e.buff.damageBps > 0)!.buff;
   const entry = c.buffs.find((e: { scope: string; buff: { hpBps: number } }) => e.scope === 'all_allies' && e.buff.hpBps === b.hpBps);
   assert.ok(entry, 'chi tiết mang kênh buff toàn đội đúng chỉ số');
   assert.equal(entry.buff.damageBps, b.damageBps);

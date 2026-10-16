@@ -2,8 +2,7 @@ import {
   BPS_SCALE,
   LEADERBOARD_POWER_BY_LEVEL,
   PVP_BACK_DAMAGE_BPS,
-  PVP_CLEANSE_BASE_BPS,
-  PVP_CLEANSE_BPS_PER_LEVEL,
+  PVP_CLEANSE_CHAMP_BPS,
   PVP_CRIT_BPS_PER_LEVEL,
   PVP_CRIT_DAMAGE_BPS,
   PVP_FRONT_HP_BPS,
@@ -12,8 +11,11 @@ import {
   PVP_TEAM_SIZE,
   pvpBaseDamage,
   pvpBaseHp,
+  pvpEffectBps,
   pvpLc,
+  pvpPerLevelEffectBps,
   pvpProfile,
+  pvpSkillDefAtLevel,
   pvpStyleBonus,
   ROSTER,
 } from '@tq/game-config';
@@ -190,7 +192,8 @@ export const rosterSkillNames = (): Record<string, string> => ROSTER_SKILL_NAMES
 export function getCombatStats(generalId: string, level: number): PvpCombatDto {
   if (!ROSTER_IDS.has(generalId)) throw new AppError(404, 'GENERAL_NOT_FOUND', 'Không tìm thấy tướng.');
   const profile = pvpProfile(generalId);
-  const def = profile.def;
+  // Hệ số kỹ năng TẠI CẤP hiện tại: mọi hiệu ứng (buff/hồi/debuff/…) đã quy theo cấp — khớp engine.
+  const def = pvpSkillDefAtLevel(profile.def, level);
   const passive = PVP_PASSIVE_EFFECT[profile.passive];
   const baseHp = pvpBaseHp(level);
   const baseDamage = pvpBaseDamage(level);
@@ -200,7 +203,7 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
   const damageBps = passive.stat === 'damage' ? passive.bps : 0;
   const maxHp = Math.round(baseHp * (1 + hpBps / BPS_SCALE));
   const damage = Math.round(baseDamage * (1 + damageBps / BPS_SCALE));
-  const critBps = level * PVP_CRIT_BPS_PER_LEVEL + (passive.stat === 'crit' ? passive.pointsBps : 0);
+  const critBps = pvpPerLevelEffectBps(PVP_CRIT_BPS_PER_LEVEL, level) + (passive.stat === 'crit' ? passive.pointsBps : 0);
   // Hồi máu mỗi lần thi triển: hồi đồng minh theo damage, tự hồi theo HP tối đa (hai loại loại trừ nhau).
   const heal =
     (def.healBps > 0 ? Math.round((damage * def.healBps) / BPS_SCALE) : 0) +
@@ -223,12 +226,12 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
       critBps,
       // ST chí mạng nền (150%); buff/debuff kỹ năng điều chỉnh quanh mốc này khi vào trận.
       critDamageBps: PVP_CRIT_DAMAGE_BPS,
-      stunBps: level * def.stunPerLevelBps + (passive.stat === 'stun' ? passive.pointsBps : 0),
-      // Giải choáng khớp engine: mốc nền 30% + 5%/cấp (nội tại CLEANSE_10 đã gộp vào mốc nền).
-      cleanseBps: def.cleanse ? PVP_CLEANSE_BASE_BPS + (level - 1) * PVP_CLEANSE_BPS_PER_LEVEL + (passive.stat === 'cleanse' ? passive.pointsBps : 0) : 0,
+      stunBps: pvpPerLevelEffectBps(def.stunPerLevelBps, level) + (passive.stat === 'stun' ? passive.pointsBps : 0),
+      // Giải choáng khớp engine: chốt 75% ở cấp 10, quy theo cấp (cấp 1 = 65%).
+      cleanseBps: def.cleanse ? pvpEffectBps(PVP_CLEANSE_CHAMP_BPS, level) : 0,
       heal,
-      // Hút máu ở cấp hiện tại (khớp engine): cấp × hệ số mỗi cấp.
-      lifestealBps: level * profile.lifestealPerLevelBps,
+      // Hút máu ở cấp hiện tại (khớp engine): chốt ở cấp 10, quy theo cấp.
+      lifestealBps: pvpPerLevelEffectBps(profile.lifestealPerLevelBps, level),
     },
     passiveEffect: { ...passive },
     // Hệ số kỹ năng ở đây là của riêng tướng (đã nhân hot) — khớp với engine khi vào trận.
@@ -247,6 +250,8 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
       buffs: def.buffs,
       debuff: def.debuff,
       counter: def.counter,
+      revive: def.revive,
+      vsDebuffBonusBps: def.vsDebuffBonusBps,
       selfBurn: def.selfBurn,
       selfBurnRounds: def.selfBurnRounds,
       burnCritMulBps: def.burnCritMulBps,
