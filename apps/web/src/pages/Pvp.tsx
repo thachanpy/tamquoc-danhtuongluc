@@ -973,8 +973,16 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         alive: s.alive,
         stunned: s.stunned,
         buffed: s.buffed,
+        // Đang bị debuff (giảm sát thương/HP/chí mạng/ST chí mạng) → dòng chỉ số đổi màu tím.
+        debuffed: s.debuffs.some((d) => d.damageFlat > 0 || d.hpFlat > 0 || d.critBps > 0 || d.critDamageBps > 0),
         // Sát thương hiện tại = sát thương nền + lớp buff đang hiệu lực − lớp debuff giảm sát thương
         damage: Math.max(0, u.damage + s.buffs.reduce((acc, b) => acc + b.flat, 0) - s.debuffs.reduce((acc, d) => acc + d.damageFlat, 0)),
+        // Chí mạng / ST chí mạng hiện tại = chỉ số nền + lớp buff − lớp debuff (khớp engine)
+        critBps: Math.max(0, u.critBps + s.buffs.reduce((acc, b) => acc + b.critBps, 0) - s.debuffs.reduce((acc, d) => acc + d.critBps, 0)),
+        critDamageBps: Math.max(
+          0,
+          u.critDamageBps + s.buffs.reduce((acc, b) => acc + b.critDamageBps, 0) - s.debuffs.reduce((acc, d) => acc + d.critDamageBps, 0),
+        ),
         // Hiệu ứng đang có, hiển thị rõ tăng/giảm cái gì và bao nhiêu (chip trên ô tướng)
         effects: effectChips(s),
       };
@@ -1247,7 +1255,6 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
       name: g.name,
       level: u.level,
       artKey: g.artKey,
-      critBps: u.critBps,
       style: u.style,
       damage: u.damage,
       // Tướng có nội tại Phản kích: luôn hiện chip "PK" trên ô để biết nó đánh trả khi bị đánh

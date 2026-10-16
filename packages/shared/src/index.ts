@@ -883,6 +883,8 @@ export interface PvpUnitStateDto {
   lc: number;
   /** Tỉ lệ chí mạng cuối cùng (bps, 10000 = 100%). */
   critBps: number;
+  /** Sát thương chí mạng nền (bps; 5000 = ×1,5). Client hiện ở ô tướng khi phát lại. */
+  critDamageBps: number;
   /** Tỉ lệ choáng cuối cùng của kỹ năng (bps). */
   stunBps: number;
   /** Hút máu ở cấp hiện tại: hồi bản thân theo % sát thương thực tế gây ra (bps; 0 = không hút máu). */

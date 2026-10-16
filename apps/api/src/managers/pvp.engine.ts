@@ -240,6 +240,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         damage: u.damage,
         lc: u.lc,
         critBps: u.critBps,
+        critDamageBps: u.critDamageBps,
         stunBps: u.stunBps,
         lifestealBps: u.lifestealBps,
         // Hiệu ứng có lợi / bất lợi / phản kích / tự thiêu đốt của kỹ năng (client mô tả khi thi triển).

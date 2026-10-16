@@ -109,8 +109,6 @@ export interface ArenaUnit {
   name: string;
   level: number;
   artKey: string;
-  /** Điểm chí mạng của tướng (bps) — chỉ để hiện dòng chỉ số. */
-  critBps: number;
   /** Phong cách chiến đấu — hiện nhãn trên ô (Tấn công / Phòng thủ / Hỗ trợ). */
   style: PvpStyle;
   /** Sát thương hiện tại = sát thương nền + các lớp buff đang hiệu lực. */
@@ -127,8 +125,16 @@ export interface ArenaView {
   maxHp: number;
   alive: boolean;
   stunned: boolean;
+  /** Đang được tăng sức mạnh → dòng chỉ số sáng xanh. */
   buffed: boolean;
+  /** Đang bị giảm sức mạnh → dòng chỉ số đổi màu tím. */
+  debuffed: boolean;
+  /** Sát thương hiện tại = nền + buff − debuff (chỉ để hiển thị). */
   damage: number;
+  /** Tỉ lệ chí mạng hiện tại (bps) = nền + buff − debuff. */
+  critBps: number;
+  /** Sát thương chí mạng hiện tại (bps) = nền + buff − debuff. */
+  critDamageBps: number;
   /** Hiệu ứng đang có trên tướng — hiển thị RÕ tăng/giảm chỉ số nào và bao nhiêu (chip trên ô). */
   effects: { text: string; tone: 'buff' | 'debuff' | 'burn' }[];
 }
@@ -405,9 +411,13 @@ class Tile {
     this.hpT.style.fill = v.alive ? (low ? C.numLow : this.color === C.hpMine ? C.numMine : C.numFoe) : C.muted;
     this.hpT.visible = true;
 
-    this.infoT.text = `⚔ ${num(v.damage)} · CM ${(this.u.critBps / 100).toFixed(0)}%`;
-    // Đang được buff thì sáng xanh để thấy chỉ số đã cộng thêm; bình thường dùng màu chữ --text như trang chuẩn bị chiến
-    this.infoT.style.fill = v.buffed ? C.infoUp : C.text;
+    // Dòng chỉ số sống theo buff/debuff: sát thương · tỉ lệ chí mạng · sát thương chí mạng.
+    // Đang được buff thì sáng xanh, đang bị debuff thì tím, bình thường dùng màu chữ --text.
+    this.infoT.text = `⚔ ${num(v.damage)} · CM ${(v.critBps / 100).toFixed(0)}% · STCM ${(v.critDamageBps / 100).toFixed(0)}%`;
+    this.infoT.style.fill = v.buffed ? C.infoUp : v.debuffed ? C.debuff : C.text;
+    // Chỉ số dài (số lớn / buff nhiều) có thể tràn ô: thu nhỏ vừa bề rộng ô.
+    this.infoT.scale.set(1);
+    if (this.infoT.width > COL_W - 8) this.infoT.scale.set((COL_W - 8) / this.infoT.width);
     this.infoT.visible = v.alive;
 
     this.buffFx.visible = v.buffed;
