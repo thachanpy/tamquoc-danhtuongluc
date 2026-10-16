@@ -40,6 +40,7 @@ export function statRows(c: PvpCombatDto): { label: string; value: string; note?
   if (c.skillDef.cleanse) rows.push({ label: 'Giải choáng & thiêu đốt', value: pct(c.self.cleanseBps) });
   if (c.self.heal) rows.push({ label: 'Hồi máu', value: `${c.self.heal} HP` });
   if (c.self.lifestealBps) rows.push({ label: 'Hút máu', value: `${pct(c.self.lifestealBps)} sát thương gây ra` });
+  if (c.self.teamLifestealBps) rows.push({ label: 'Hút máu đội', value: `${pct(c.self.teamLifestealBps)} tổng sát thương` });
   return rows;
 }
 

@@ -894,6 +894,11 @@ export interface PvpUnitStateDto {
   stunBps: number;
   /** Hút máu ở cấp hiện tại: hồi bản thân theo % sát thương thực tế gây ra (bps; 0 = không hút máu). */
   lifestealBps: number;
+  /**
+   * Hút máu ĐỘI ở cấp hiện tại: hồi BẢN THÂN và MỌI ĐỒNG MINH còn sống theo % TỔNG sát thương đòn
+   * đánh gây ra (bps; 0 = không có). Khác `lifestealBps` (chỉ hồi bản thân).
+   */
+  teamLifestealBps?: number;
   /** Chính xác khi vào trận theo cấp (bps; cấp 1 = 8000 = 80% → cấp 10 = 10000 = 100%, trần 15000 — SKILLS.md mục 18). */
   hitBps: number;
   /** Né tránh khi vào trận theo cấp (bps; cấp 1 = 200 = 2% → cấp 10 = 2000 = 20%, trần 5000 — SKILLS.md mục 18). */
@@ -1221,7 +1226,7 @@ export interface PvpCombatDto {
   /** Chỉ số nền theo cấp — chưa tính hiệu ứng kỹ năng, nội tại, vị trí. */
   base: { maxHp: number; damage: number };
   /** Chỉ số của riêng tướng sau khi áp nội tại. */
-  self: { maxHp: number; damage: number; lc: number; critBps: number; critDamageBps: number; stunBps: number; cleanseBps: number; heal: number; lifestealBps: number; hitBps: number; dodgeBps: number; defBps: number; defPenBps: number };
+  self: { maxHp: number; damage: number; lc: number; critBps: number; critDamageBps: number; stunBps: number; cleanseBps: number; heal: number; lifestealBps: number; teamLifestealBps: number; hitBps: number; dodgeBps: number; defBps: number; defPenBps: number };
   passiveEffect: PvpPassiveEffectDto;
   skillDef: PvpSkillDefDto;
   /** Các kênh buff tăng sức mạnh kỹ năng phát mỗi lượt; rỗng = kỹ năng không buff. */

@@ -20,7 +20,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 - **Tỉ lệ khai báo dạng "mỗi cấp"** (Choáng `cấp×X%`, Hút máu `cấp×X%`, Phản kích `cấp×5%` trần 50%, Chí mạng `cấp×3%`) dùng CÙNG công thức trên: giá trị chốt = `X × 10` (đạt ở cấp 10), cấp 1 = giá trị chốt − 10 điểm %.
 - **Ngoại lệ — Xóa Khiên**: dùng **nội suy `pvpLevelSpanBps(20%, 80%, cấp)`** (cấp 1 = 20%, cấp 10 = 80%), không theo công thức "chốt − 10 điểm %".
 - **KHÔNG quy theo cấp**: hệ số SÁT THƯƠNG kỹ năng (`250%–320%`…) vì đã tự lớn theo cấp qua chỉ số nền (Damage/HP nền tăng 25%/cấp); số lượt hiệu lực (`rounds`) và trần cộng dồn (`maxLayers`); Aura/Chỉ số nội tại theo Phong cách.
-- **Chỉ số NỀN scale theo cấp** (KHÁC công thức "chốt − 10 điểm %" ở trên — dùng nội suy `pvpLevelSpanBps(min, max, level)`): **Chính xác** 80% (cấp 1) → 100% (cấp 10), **Né tránh** 2% → 20%, **ST chí mạng nền** +30% (hệ số ×1,30) → +60% (hệ số ×1,60). Buff/debuff kỹ năng vẫn cộng/trừ quanh mốc theo cấp này.
+- **Chỉ số NỀN scale theo cấp** (KHÁC công thức "chốt − 10 điểm %" ở trên — dùng nội suy `pvpLevelSpanBps(min, max, level)`): **Chính xác** 80% (cấp 1) → 100% (cấp 10), **Né tránh** 2% → 20%, **Phòng thủ** 12% → 30%, **ST chí mạng nền** +30% (hệ số ×1,30) → +60% (hệ số ×1,60). Buff/debuff kỹ năng vẫn cộng/trừ quanh mốc theo cấp này.
 
 ### Phong cách & Thứ tự hành động
 
@@ -60,7 +60,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 
 1. **Buff sát thương**: Tăng % sát thương gây ra (10% – 30%, 3 lượt). **Max cộng dồn: 3 lớp/nguồn**.
 2. **Giảm sát thương**: Giảm % sát thương gánh chịu (10% – 25%) hoặc giảm % sát thương đối thủ gây ra (**20% – 30%**, 3 lượt). **Max cộng dồn: 3 lớp**. Hệ số debuff giảm ST được đẩy cao để bù cho rủi ro đánh trượt / bị giải hiệu ứng.
-3. **Hồi máu**: Hồi HP ngay lập tức (hoặc hồi mỗi lượt - HoT) theo % HP tối đa hoặc % ST cơ bản của người thi triển. Hồi máu toàn đội của **Tướng Hỗ trợ** dùng hệ số **120% – 140% ST cơ bản** (tùy tướng).
+3. **Hồi máu**: Hồi HP ngay lập tức (hoặc hồi mỗi lượt - HoT) theo % HP tối đa hoặc % ST cơ bản của người thi triển. Hồi máu toàn đội của **Tướng Hỗ trợ** dùng hệ số **120% – 140% ST cơ bản** (tùy tướng). *HoT* hồi vào **ĐẦU mỗi lượt** cho mọi đồng minh còn sống trong phạm vi, lượng hồi snapshot theo ST của người thi triển lúc phát, **không ăn Chí mạng**; mặc định **3 lớp/nguồn** — riêng **Cát Huyền** không cộng dồn lớp (chỉ làm mới).
 4. **Tăng máu tối đa**: Tăng trần HP tối đa (10% – 20%), chỉ hồi 1/4 lượng trần HP tăng lên. **Max cộng dồn: 3 lớp**.
 5. **Giảm máu tối đa**: Giảm trần HP tối đa của đối thủ (5% – 15%, 3 lượt). Chạy qua **bước rollHit tiêu chuẩn** như mọi chiêu khác (vẫn tính Né/Trượt 1% – 15%); trượt thì bỏ qua toàn bộ hiệu ứng. **Max cộng dồn: 3 lớp**, đồng thời chịu **trần toàn hệ thống: tổng giảm Max HP trên một mục tiêu tối đa 30%** (`PVP_MAXHP_DOWN_CAP_BPS`).
 6. **Choáng**: Mục tiêu bị choáng không thể thực hiện hành động.
@@ -69,7 +69,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
      - *Tướng Hỗ trợ Choáng đơn mục tiêu*: Sát thương **120% – 180%**, Tỷ lệ choáng **80% – 100%** (`cấp × 8%` đến `cấp × 10%`). *Điêu Thuyền* & *Quan Vũ* nhắm thẳng `highest_damage_enemy`.
      - *Tướng Tấn công Choáng đơn mục tiêu*: Sát thương **250% – 285%**, tỷ lệ choáng **30% – 40%** (`cấp × 3%` đến `cấp × 4%`).
      - *Tướng Choáng diện rộng (Ngang/Hàng trước/AoE)*: Tỷ lệ choáng `cấp × 1.5%` đến `cấp × 2%` (max **15% – 20%** ở Cấp 10).
-7. **Giải choáng & Thiêu đốt**: Giải hiệu ứng Choáng hoặc Thiêu đốt cho đồng minh (tỷ lệ 30% – 75%). *Tác dụng tức thì*. Khi Thiêu đốt bị **Xóa/Giải**, toàn bộ sát thương còn lại của các lớp thiêu đốt bị gỡ **nổ ngay lập tức với 50% sát thương còn lại** (`PVP_BURN_CLEANSE_EXPLODE_BPS`).
+7. **Giải choáng & Thiêu đốt**: Giải hiệu ứng Choáng hoặc Thiêu đốt cho đồng minh (tỷ lệ 30% – 75%; riêng **Hoa Đà** đặc thù **55% → 100%** theo cấp). *Tác dụng tức thì*. Khi Thiêu đốt bị **Xóa/Giải**, toàn bộ sát thương còn lại của các lớp thiêu đốt bị gỡ **nổ ngay lập tức với 50% sát thương còn lại** (`PVP_BURN_CLEANSE_EXPLODE_BPS`).
 8. **Thiêu đốt**: Gây thêm sát thương vào đầu mỗi lượt thi triển (mỗi lớp gây **50% sát thương cơ bản**). Có thể ăn Chí mạng. Duy trì **4 lượt**. Mục tiêu đang chịu Thiêu đốt bị **giảm 50% khả năng hồi máu** (áp cho MỌI nguồn hồi máu nhận vào).
    - *Chu Du, Lục Tốn, Hoàng Cái*: Duy trì **4 lượt**, cộng dồn max 3 lớp từ chính tướng đó.
    - *Chu Du*: Đòn Thiêu đốt được tăng thêm **+30% Tỷ lệ chí mạng & +30% ST chí mạng**.
@@ -85,6 +85,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
    - *Mức Sát thủ*: `cấp × 3%` (Max **30%**).
    - *Signature Hero*: **Mã Siêu** (Max **100%**), **Cam Ninh** (Max **95%**), **Hoa Hùng** (Max **90%**), **Nhạc Tiến** (Max **85%**).
    - *Ban hút máu cho đồng đội*: Buff **+15%** Hút máu cho toàn đội (2 lượt, cố định 1 lớp) từ **Lưu Bị**, **Tuân Úc**, **Lỗ Túc**, **Viên Thiệu**.
+   - *Hút máu ĐỘI*: hồi cho **bản thân VÀ mọi đồng minh còn sống** theo `cấp × 1.5%` (Max **15%**) trên **TỔNG** sát thương đòn đánh gây ra — mỗi đồng minh nhận trọn phần % đó mà không cần tự ra đòn. Chỉ đi kèm kỹ năng **đánh toàn bộ địch**: **Chung Hội** (Ngụy), **Khương Duy** (Thục), **Tôn Sách** (Ngô), **Kỷ Linh** (Quần) — mỗi phe 1 tướng.
 14. **Xóa hiệu ứng có lợi của đối thủ**: Loại bỏ lớp buff có lợi của đối thủ (75% – 100%).
 15. **Xóa hiệu ứng bất lợi của bản thân/đồng minh**: Loại bỏ các hiệu ứng xấu (bao gồm **Thiêu đốt** và **Giảm Máu Tối Đa**); gỡ lớp debuff theo tỉ lệ `purifyBps`, gỡ xong thì đồng bộ lại trần HP. Nếu gỡ Thiêu đốt thì kích hoạt hiệu ứng nổ 50% sát thương còn lại (mục 7).
 16. **Tạo Khiên (Shield)**: Hấp thụ sát thương nhận vào trong **3 lượt** (tính theo % HP tối đa hoặc % ST cơ bản). Khiên chịu sát thương trước HP thực tế. **Max cộng dồn: 2 lớp/nguồn** (`PVP_SHIELD_MAX_LAYERS`).
@@ -109,7 +110,7 @@ Toàn bộ chỉ số dùng đơn vị **bps** (`10000 = 100%`). Mọi tính to�
 | Sàn Trúng Tối Thiểu (Min Hit Cap) | — | **69%** (`PVP_HIT_REAL_MIN_BPS`) | Kẹp sàn để Né thực tế **không bao giờ vượt ~31%**, kể cả khi Chính xác bị Suy yếu nặng. |
 | Trần Né Thực Tế (Max Dodge Real) | — | **30%** (`PVP_DODGE_REAL_MAX_BPS`) | Mốc đối chiếu với sàn Trúng 69%; Né cao không vô hiệu hoá đối thủ. |
 | Trọng số Chính xác (Attack Weight) | **K = 1.85** (`PVP_HIT_WEIGHT`) | — | Chính xác nặng gấp 1.85 lần Né tránh trong công thức chia trọng số. |
-| Phòng thủ (Def) | **10%** (`PVP_DEF_BPS`) | **50%** (`PVP_DEF_MAX_BPS`) | Tỷ lệ % giảm sát thương nhận vào. |
+| Phòng thủ (Def) | **12% → 30%** theo cấp (`pvpDefBps`) | **75%** (`PVP_DEF_MAX_BPS`) | Cấp 1 = 12%, cấp 10 = 30%. Tỷ lệ % giảm sát thương nhận vào. |
 | Xuyên giáp (Def Pen) | **0%** (`PVP_DEF_PEN_BPS`) | **50%** (`PVP_DEF_PEN_MAX_BPS`) | Tỷ lệ % bỏ qua Phòng thủ của đối phương. |
 
 **Triết lý thiết kế**: Chính xác cao phối hợp với RNG có kiểm soát — Né tránh là yếu tố may rủi (thực tế ~1%–31%), **không** là chiến thuật vô hiệu hoá toàn bộ sát thương. Nhờ kẹp biên `[69%, 99%]`, đòn đánh **luôn có xác suất trúng ≥ 69%** trong mọi cặp chỉ số.
@@ -122,9 +123,9 @@ Toàn bộ chỉ số dùng đơn vị **bps** (`10000 = 100%`). Mọi tính to�
   - Random: rơi vùng Né → **MISS** (0 sát thương, **giữ nguyên Khiên & Máu**, không phản kích, không hút máu); rơi vùng Hit_Real → **HIT**, sang BƯỚC 2.
 - **BƯỚC 2 — Xuyên giáp & Phòng thủ** (Xuyên giáp tính theo **% của Giáp đối phương**, KHÔNG trừ thẳng điểm %):
   - `Def_Effective = Defender_Def × (1 − Attacker_Def_Pen)` (làm tròn)
-  - `Def_Final = MIN(50%, MAX(0%, Def_Effective))`
+  - `Def_Final = MIN(75%, MAX(0%, Def_Effective))`
   - `Damage_Final = Raw_Damage × (1 − Def_Final)`
-  - Ví dụ: Def 50% bị Pen 20% → `Def_Effective = 50% × 0.8 = 40%`; Def 50% bị Pen 50% → `25%`.
+  - Ví dụ: Def nền cấp 10 (30%) bị Pen 20% → `Def_Effective = 30% × 0.8 = 24%`; Def 75% bị Pen 50% → `37.5%`.
 - **BƯỚC 3 — Trừ vào Khiên & Máu**:
   - Khiên `>=` Damage_Final: `Khiên mới = Khiên cũ − Damage_Final`, Máu giữ nguyên.
   - Khiên `<` Damage_Final: `Khiên = 0`, `Máu mới = MAX(0, Máu cũ − (Damage_Final − Khiên cũ))`.
@@ -152,11 +153,11 @@ Thứ tự trong engine: `rollHit` (bước 1) → `mitigate` (bước 2, sinh r
 
 **Tướng mang hiệu ứng chỉ số mới (bổ sung qua kỹ năng)**
 
-- **Phòng thủ `defBps`** (buff bản thân): Cao Hồng, Điển Vi, Mãn Sủng, Vu Cấm, Tào Nhân (Ngụy); Vương Bình, Liêu Hóa (Thục); Chu Thái, Từ Thịnh, Trình Phổ (Ngô); Cao Thuận (Quần). **Buff toàn đội**: Tuân Úc (Ngụy), Trương Chiêu (Ngô).
+- **Phòng thủ `defBps`** (buff bản thân): Cao Hồng, Điển Vi, Mãn Sủng, Vu Cấm, Tào Nhân (Ngụy); Vương Bình, Liêu Hóa (Thục); Chu Thái, Từ Thịnh, Trình Phổ (Ngô); Cao Thuận (Quần). **Buff toàn đội**: Tuân Úc (Ngụy), Trương Chiêu (Ngô), Đặng Chi, Mã Lương (Thục), Tôn Lỗ Dục (Ngô), Thủy Kính, Thái Văn Cơ (Quần).
 - **Né tránh `dodgeBps`** (buff bản thân): Triệu Vân, Mã Siêu (Thục), Cam Ninh (Ngô), Công Tôn Toản, Mã Đằng (Quần). **Buff toàn đội**: Gia Cát Quả (Thục), Tả Từ (Quần).
-- **Xuyên giáp `defPenBps`** (buff bản thân): Tào Phi, Hứa Chử (Ngụy); Quan Vũ, Khương Duy, Ngụy Diên (Thục); Tôn Sách (Ngô); Lữ Bố, Nhan Lương, Văn Sú, Hoa Hùng, Kỷ Linh (Quần). **Buff toàn đội**: Pháp Chính (Thục), Trần Cung (Quần).
+- **Xuyên giáp `defPenBps`** (buff bản thân): Tào Phi, Hứa Chử (Ngụy); Quan Vũ, Khương Duy, Ngụy Diên (Thục); Lữ Bố, Nhan Lương, Văn Sú, Hoa Hùng (Quần). **Buff toàn đội**: Pháp Chính (Thục), Trần Cung (Quần).
 - **Chính xác `hitBps`** (buff bản thân): Hạ Hầu Uyên, Trương Cáp (Ngụy); Hoàng Trung (Thục); Thái Sử Từ, Tôn Thượng Hương (Ngô). **Buff toàn đội**: Tôn Quyền (Ngô), Tào Thực (Ngụy), Trương Hoành (Ngô).
-- **Giảm Phòng thủ `defDownBps`** (debuff lên địch): Tào Tháo, Giả Hủ, Tư Mã Ý (Ngụy), Mã Đại, Từ Thứ (Thục), Lữ Đại, Tôn Phấn (Ngô), Đổng Trác (Quần).
+- **Giảm Phòng thủ `defDownBps`** (debuff lên địch): Tào Tháo, Giả Hủ, Tư Mã Ý (Ngụy), Mã Đại, Từ Thứ (Thục), Tôn Lỗ Ban, Lữ Đại, Tôn Phấn (Ngô), Hứa Du, Đổng Trác (Quần).
 - **Giảm Né tránh `dodgeDownBps`** (debuff lên địch): Trương Liêu (Ngụy), Trương Bảo (Quần).
 
 ---
@@ -189,7 +190,7 @@ Thứ tự trong engine: `rollHit` (bước 1) → `mitigate` (bước 2, sinh r
 | 20 | **Bàng Đức** | Phòng thủ | | **Quan tài quyết chiến**: Tấn công đơn 280%, Hút máu theo cấp (cấp×2%, max 20%), Tăng tỷ lệ chí mạng bản thân 25% và Tăng 25% ST chí mạng bản thân (3 lượt). | Hút máu, Tăng chí mạng, Tăng ST chí mạng |
 | 21 | **Chân Cơ** | Hỗ trợ | | **Lạc Thần**: Hồi máu toàn đội (110% ST cơ bản) và Giảm sát thương nhận vào cho toàn đội 10% (3 lượt). | Hồi máu, Giảm ST nhận |
 | 22 | **Biện Ngọc Nhi** | Hỗ trợ | | **Hậu cung an định**: Tăng máu tối đa toàn đội 10% và Hồi máu toàn đội (100% ST cơ bản). | Tăng HP max, Hồi máu |
-| 23 | **Tào Hoa** | Hỗ trợ | | **Nhu tình hộ mệnh**: Hồi máu đồng minh thấp HP nhất (420% ST cơ bản) và Buff sát thương cho người đó 15% (3 lượt). | Hồi máu đơn, Buff ST |
+| 23 | **Tào Hoa** | Hỗ trợ | | **Nhu tình hộ mệnh**: Tấn công đơn hàng sau 110%, gây Choáng mục tiêu (tỷ lệ cấp×10%, max 100%). | Choáng |
 | 24 | **Tào Tiết** | Hỗ trợ | | **Trung trinh**: Tạo Khiên cho toàn đội bằng 10% HP tối đa VÀ Giảm 10% sát thương nhận vào cho toàn đội (3 lượt). | Tạo Khiên toàn đội, Giảm ST nhận |
 | 25 | **Tân Hiến Anh** | Hỗ trợ | | **Tuệ nhãn phá cục**: Tấn công toàn bộ địch 55%, Giải choáng và Giải thiêu đốt cho đồng minh (tỷ lệ 30%-75%). | Giải choáng & thiêu đốt |
 | 26 | **Tào Thực** | Hỗ trợ | | **Thất bộ thành thi**: Tăng tỷ lệ chí mạng toàn đội 15%, Tăng 20% ST chí mạng toàn đội và Tăng Chính xác toàn đội 15% (3 lượt). | Tăng chí mạng, Tăng ST chí mạng, Tăng Chính xác |
@@ -201,7 +202,7 @@ Thứ tự trong engine: `rollHit` (bước 1) → `mitigate` (bước 2, sinh r
 | 32 | **Đặng Ngãi** | Tấn công | | **Vượt Âm Bình**: Tấn công hàng dọc sau 180%, Giảm sát thương địch 10%, Tăng tỷ lệ chí mạng bản thân 15% (3 lượt) và +30% ST lên mục tiêu đang debuff. | Giảm ST địch, Tăng chí mạng, +30% ST lên mục tiêu đang debuff |
 | 33 | **Quách Hoài** | Phòng thủ | | **Trấn thủ Ung Lương**: Tấn công hàng dọc trước 190%, Tạo Khiên cho bản thân bằng 15% HP tối đa (3 lượt) và Giảm sát thương các mục tiêu 15% (3 lượt). | Tạo Khiên bản thân, Giảm ST địch |
 | 34 | **Trần Quần** | Hỗ trợ | | **Cửu phẩm trung chính**: Buff sát thương toàn đội 15% VÀ Tăng 20% ST chí mạng cho toàn đội (3 lượt). | Buff ST, Tăng ST chí mạng toàn đội |
-| 35 | **Chung Hội** | Hỗ trợ | | **Kiếm chỉ Hán Trung**: Tấn công đơn 140%, Xóa 1 buff có lợi, có 5%-50% tỷ lệ Xóa Khiên mục tiêu VÀ Giảm 20% sát thương mục tiêu (3 lượt). | Xóa buff địch, Xóa Khiên (5%-50%), Giảm ST địch |
+| 35 | **Chung Hội** | Tấn công | | **Kiếm chỉ Hán Trung**: Tấn công toàn bộ địch 110%, Hút máu đội (cấp×1.5%, max 15%), Xóa 1 buff có lợi, có 5%-50% tỷ lệ Xóa Khiên mục tiêu VÀ Giảm 15% sát thương mục tiêu (3 lượt). | Hút máu đội, Xóa buff địch, Xóa Khiên (5%-50%), Giảm ST địch |
 
 ---
 
@@ -219,7 +220,7 @@ Thứ tự trong engine: `rollHit` (bước 1) → `mitigate` (bước 2, sinh r
 | 6 | **Mã Siêu** | Tấn công | ⭐ | **Cẩm Mã Siêu**: Tấn công đơn 280%, Hút máu theo cấp đặc biệt (cấp×10%, max 100%), Tăng máu tối đa 10% bản thân và Tăng Né tránh bản thân 10% (3 lượt). | Hút máu 100%, Tăng HP max, Tăng Né tránh |
 | 7 | **Hoàng Trung** | Tấn công | ⭐ | **Lão Đương Ích Tráng**: Tấn công hàng dọc sau 185%, Tăng tỷ lệ chí mạng 35% cho phát bắn này và Tăng Chính xác bản thân 25% (3 lượt). | Tăng chí mạng, Tăng Chính xác |
 | 8 | **Ngụy Diên** | Tấn công | ⭐ | **Kỳ phong đột kích**: Tấn công hàng dọc trước 220%, Buff sát thương bản thân 20%, Tăng Xuyên giáp bản thân 15% và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Buff ST, Tăng Xuyên giáp, Phản kích đơn |
-| 9 | **Khương Duy** | Tấn công | ⭐ | **Kế thừa Khổng Minh**: Tấn công đơn 260%, Buff sát thương bản thân 15%, Tăng Xuyên giáp bản thân 15% và gây Choáng (tỷ lệ cấp×4%, max 40%). | Choáng, Buff ST, Tăng Xuyên giáp |
+| 9 | **Khương Duy** | Tấn công | ⭐ | **Kế thừa Khổng Minh**: Tấn công toàn bộ địch 122%, Hút máu đội (cấp×1.5%, max 15%), Buff sát thương bản thân 15% và Tăng Xuyên giáp bản thân 15%. | Hút máu đội, Buff ST, Tăng Xuyên giáp |
 | 10 | **Bàng Thống** | Hỗ trợ | ⭐ | **Phượng Sồ liên hoàn**: Tấn công toàn bộ địch 85%, Buff sát thương toàn đội 15% (3 lượt). | Buff ST |
 | 11 | **Pháp Chính** | Hỗ trợ | | **Tiên liệu chiến cơ**: Buff sát thương toàn đội 15%, Tăng tỷ lệ chí mạng toàn đội 15%, Tăng 20% ST chí mạng toàn đội và Tăng Xuyên giáp toàn đội 15% (3 lượt). | Buff ST, Tăng chí mạng, Tăng ST chí mạng, Tăng Xuyên giáp |
 | 12 | **Từ Thứ** | Hỗ trợ | | **Kiếm hiệp phá trận**: Tấn công hàng ngang 160%, gây Choáng (tỷ lệ cấp×3%, max 30%), có 5%-50% tỷ lệ Xóa Khiên các mục tiêu, Giảm Phòng thủ địch 10% (3 lượt) và Tăng 10% Tỷ lệ chí mạng cho đồng minh cùng hàng. | Choáng, Xóa Khiên (5%-50%), Giảm Phòng thủ địch, Tăng chí mạng đồng minh |
@@ -236,12 +237,12 @@ Thứ tự trong engine: `rollHit` (bước 1) → `mitigate` (bước 2, sinh r
 | 23 | **Gia Cát Quả** | Hỗ trợ | | **Tiên thuật**: Giảm sát thương nhận vào toàn đội 10% (3 lượt), Tăng Né tránh toàn đội 10% (3 lượt) và Giải choáng/thiêu đốt cho đồng minh (tỷ lệ 30%-75%). | Giảm ST nhận, Tăng Né tránh, Giải choáng & thiêu đốt |
 | 24 | **Bao Tam Nương** | Tấn công | | **Hoa vũ song đao**: Tấn công hàng ngang 200%, Tăng tỷ lệ chí mạng bản thân 20% và Tăng 20% ST chí mạng (3 lượt). | Tăng chí mạng, Tăng ST chí mạng |
 | 25 | **Ngô Ý** | Phòng thủ | | **Trấn thủ Ích Châu**: Giảm sát thương nhận vào 20%, Hồi máu bản thân 15% HP tối đa và Tạo Khiên cho đồng minh thấp HP nhất bằng 15% HP tối đa (3 lượt). | Giảm ST nhận, Hồi máu, Tạo Khiên đồng minh |
-| 26 | **Đặng Chi** | Hỗ trợ | | **Sứ giả Đông Ngô**: Buff sát thương toàn đội 10% VÀ Tạo Khiên cho toàn đội bằng 10% HP tối đa (3 lượt). | Buff ST, Tạo Khiên toàn đội |
+| 26 | **Đặng Chi** | Hỗ trợ | | **Sứ giả Đông Ngô**: Buff sát thương toàn đội 10%, Tăng Phòng thủ toàn đội 15% VÀ Tạo Khiên cho toàn đội bằng 10% HP tối đa (3 lượt). | Buff ST, Tăng Phòng thủ, Tạo Khiên toàn đội |
 | 27 | **Trương Tinh Thái** | Phòng thủ | | **Tinh Thái hộ giá**: Tăng máu tối đa toàn đội 10%, Hồi máu bản thân 20% HP tối đa và Giảm sát thương nhận vào 20% bản thân (3 lượt). | Tăng HP max, Hồi máu, Giảm ST nhận |
 | 28 | **Mã Trung** | Tấn công | | **Kỳ Sơn phục kích**: Tấn công hàng ngang 200%, Tăng tỷ lệ chí mạng bản thân 20% và Tăng 20% ST chí mạng (3 lượt). | Tăng chí mạng, Tăng ST chí mạng |
 | 29 | **Phí Y** | Hỗ trợ | | **Hòa mục quân thần**: Hồi máu nhẹ toàn đội (80% ST cơ bản) VÀ Tăng 10% HP tối đa cho toàn đội (3 lượt). | Hồi máu toàn đội, Tăng HP max |
 | 30 | **Tưởng Uyển** | Phòng thủ | | **Trấn an Hán Trung**: Hồi máu bản thân 15% HP tối đa, Giảm sát thương nhận vào 25% (3 lượt) và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Hồi máu, Giảm ST nhận, Phản kích đơn |
-| 31 | **Mã Lương** | Hỗ trợ | | **Bạch mi mưu lược**: Buff sát thương toàn đội 15% và Tăng tỷ lệ chí mạng toàn đội 15% (3 lượt). | Buff ST, Tăng chí mạng |
+| 31 | **Mã Lương** | Hỗ trợ | | **Bạch mi mưu lược**: Buff sát thương toàn đội 15%, Tăng tỷ lệ chí mạng toàn đội 15% và Tăng Phòng thủ toàn đội 15% (3 lượt). | Buff ST, Tăng chí mạng, Tăng Phòng thủ |
 | 32 | **La Hiến** | Phòng thủ | | **Cô thủ Vĩnh An**: Tăng máu tối đa bản thân 20%, Tạo Khiên cho bản thân bằng 20% HP tối đa (3 lượt) và Phản kích toàn bộ địch (Nội tại: cấp×3%, max 30%, ST 30%). | Tăng HP max, Tạo Khiên bản thân, Phản kích diện rộng |
 | 33 | **Lưu Phong** | Tấn công | | **Mãnh hổ xuất trận**: Tấn công đơn 280%, Hút máu theo cấp (cấp×2%, max 20%) và Buff sát thương bản thân 15% (3 lượt). | Hút máu, Buff ST |
 | 34 | **Trương Dực** | Phòng thủ | | **Thủ thành bất khuất**: Tấn công hàng ngang 190% và Giảm sát thương các mục tiêu 15% (3 lượt). | Giảm ST địch |
@@ -256,7 +257,7 @@ Thứ tự trong engine: `rollHit` (bước 1) → `mitigate` (bước 2, sinh r
 | # | Tướng | Phong cách | Hot | Kỹ năng | Hiệu ứng áp dụng |
 |---|-------|-----------|-----|---------|------------------|
 | 1 | **Tôn Kiên** | Phòng thủ | ⭐ | **Giang Đông mãnh hổ**: Tấn công hàng ngang 200%, Giảm sát thương địch 15%, Tạo Khiên cho đồng minh thấp HP nhất bằng 20% HP tối đa (3 lượt) và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Giảm ST địch, Tạo Khiên đồng minh, Phản kích đơn |
-| 2 | **Tôn Sách** | Phòng thủ | ⭐ | **Tiểu Bá Vương**: Tấn công toàn bộ địch 125%, Buff sát thương bản thân 20%, Tăng Xuyên giáp bản thân 15%, Hút máu theo cấp (cấp×2.5%, max 25%) và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Buff ST, Tăng Xuyên giáp, Hút máu, Phản kích đơn |
+| 2 | **Tôn Sách** | Phòng thủ | ⭐ | **Tiểu Bá Vương**: Tấn công toàn bộ địch 125%, Hút máu đội (cấp×1.5%, max 15%), Giảm 15% sát thương nhận vào (3 lượt) và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Hút máu đội, Giảm ST nhận, Phản kích đơn |
 | 3 | **Tôn Quyền** | Hỗ trợ | ⭐ | **Đế nghiệp Giang Đông**: Buff sát thương toàn đội 15%, Giảm sát thương nhận vào cho toàn đội 10%, Tạo Khiên cho toàn đội 10% HP tối đa và Tăng Chính xác toàn đội 15% (3 lượt). | Buff ST, Giảm ST nhận, Tạo Khiên toàn đội, Tăng Chính xác toàn đội |
 | 4 | **Chu Du** | Tấn công | ⭐ | **Hỏa thiêu Xích Bích**: Tấn công toàn bộ địch 117%, gây Thiêu đốt toàn bộ địch (duy trì 4 lượt, dồn max 3 lớp). Đòn Thiêu đốt: tăng thêm 30% tỷ lệ chí mạng và 30% ST chí mạng. | Thiêu đốt (4 lượt, dồn 3), Thiêu đốt +30% chí mạng |
 | 5 | **Lục Tốn** | Tấn công | ⭐ | **Hỏa kế liên doanh**: Tấn công hàng dọc trước 180%, gây Thiêu đốt hàng trước địch (duy trì 4 lượt, dồn max 3 lớp), Giảm HP tối đa địch 15%. Hút máu 50% hiệu suất áp dụng cho cả đòn Thiêu đốt. | Thiêu đốt (4 lượt, dồn 3), Giảm HP max (5%-15%), Hút máu thiêu đốt |
@@ -278,8 +279,8 @@ Thứ tự trong engine: `rollHit` (bước 1) → `mitigate` (bước 2, sinh r
 | 21 | **Đại Kiều** | Hỗ trợ | | **Quốc sắc**: Hồi máu toàn đội (110% ST cơ bản) và Xóa hiệu ứng bất lợi của bản thân/đồng minh (bao gồm Thiêu đốt). | Hồi máu, Xóa debuff đồng minh |
 | 22 | **Tiểu Kiều** | Hỗ trợ | | **Thiên hương**: Tăng tỷ lệ chí mạng toàn đội 15% và Buff sát thương toàn đội 10% (3 lượt). | Tăng chí mạng, Buff ST |
 | 23 | **Bộ Luyện Sư** | Hỗ trợ | | **Hiền hậu hộ quân**: Hồi máu đồng minh thấp HP nhất (420% ST cơ bản) VÀ Tạo Khiên cho người đó bằng 20% HP tối đa (3 lượt). | Hồi máu đơn, Tạo Khiên đồng minh |
-| 24 | **Tôn Lỗ Dục** | Hỗ trợ | | **Hòa giải**: Giải choáng/thiêu đốt cho toàn bộ đồng minh (tỷ lệ 30%-75%) và Hồi máu nhẹ toàn đội (60% ST cơ bản). | Giải choáng & thiêu đốt, Hồi máu |
-| 25 | **Tôn Lỗ Ban** | Hỗ trợ | | **An định Giang Đông**: Tấn công toàn bộ địch 70% và Giảm máu tối đa của toàn bộ đối thủ 15% (3 lượt). | Giảm HP max địch (5%-15%) |
+| 24 | **Tôn Lỗ Dục** | Hỗ trợ | | **Hòa giải**: Giải choáng/thiêu đốt cho toàn bộ đồng minh (tỷ lệ 30%-75%), Hồi máu nhẹ toàn đội (60% ST cơ bản) và Tăng Phòng thủ toàn đội 15% (3 lượt). | Giải choáng & thiêu đốt, Hồi máu, Tăng Phòng thủ |
+| 25 | **Tôn Lỗ Ban** | Hỗ trợ | | **An định Giang Đông**: Tấn công toàn bộ địch 70%, Giảm máu tối đa của toàn bộ đối thủ 15% và Giảm Phòng thủ toàn bộ địch 15% (3 lượt). | Giảm HP max địch (5%-15%), Giảm Phòng thủ địch |
 | 26 | **Chu Phường** | Hỗ trợ | | **Kết trận Giang Đông**: Tấn công toàn bộ địch 75%, Xóa 1 buff có lợi, có 5%-50% tỷ lệ Xóa Khiên toàn bộ đối thủ VÀ Giảm 10% sát thương địch (3 lượt). | Xóa buff địch toàn đội, Xóa Khiên (5%-50%), Giảm ST địch |
 | 27 | **Cố Ung** | Hỗ trợ | | **Trị quốc an dân**: Xóa hiệu ứng bất lợi của bản thân/đồng minh (bao gồm Thiêu đốt) VÀ Giảm 10% sát thương nhận vào cho toàn đội (3 lượt). | Xóa debuff đồng minh, Giảm ST nhận toàn đội |
 | 28 | **Toàn Tông** | Phòng thủ | | **Trùng thành cố thủ**: Hồi máu bản thân 15% HP tối đa, Tạo Khiên cho bản thân bằng 15% HP tối đa (3 lượt) và Phản kích toàn bộ địch (Nội tại: cấp×3%, max 30%, ST 30%). | Hồi máu, Tạo Khiên bản thân, Phản kích diện rộng |
@@ -301,7 +302,7 @@ Thứ tự trong engine: `rollHit` (bước 1) → `mitigate` (bước 2, sinh r
 |---|-------|-----------|-----|---------|------------------|
 | 1 | **Đổng Trác** | Phòng thủ | ⭐ | **Bạo chúa**: Giảm máu tối đa của toàn bộ đối thủ 15%, Giảm Phòng thủ địch 15%, Hồi máu bản thân 20% HP tối đa và Phản kích toàn bộ địch (Nội tại: cấp×3%, max 30%, ST 30%). | Giảm HP max địch (5%-15%), Giảm Phòng thủ địch, Hồi máu, Phản kích diện rộng |
 | 2 | **Lữ Bố** | Tấn công | ⭐ | **Vô song**: Tấn công toàn bộ địch 127%, có 3%-30% tỷ lệ Xóa Khiên toàn bộ địch, Tăng tỷ lệ chí mạng bản thân 20%, Tăng 20% ST chí mạng, Tăng Xuyên giáp bản thân 20%, Hút máu theo cấp (cấp×3%, max 30%) và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Xóa Khiên (3%-30%), Tăng chí mạng, Tăng ST chí mạng, Tăng Xuyên giáp, Hút máu, Phản kích đơn |
-| 3 | **Điêu Thuyền** | Hỗ trợ | ⭐ | **Bế nguyệt**: Tấn công **tướng địch có sát thương cao nhất** 120%, gây Choáng (tỷ lệ cấp×8%, max 80%) và Giảm sát thương mục tiêu 20%. | Nhắm tướng địch mạnh nhất, Choáng, Giảm ST địch |
+| 3 | **Điêu Thuyền** | Hỗ trợ | ⭐ | **Bế nguyệt**: Tấn công **tướng địch có sát thương cao nhất** 120%, gây Choáng (tỷ lệ cấp×10%, max 100%) và Giảm sát thương mục tiêu 20%. | Nhắm tướng địch mạnh nhất, Choáng, Giảm ST địch |
 | 4 | **Viên Thiệu** | Hỗ trợ | ⭐ | **Thế gia hào tộc**: Tăng máu tối đa toàn đội 15%, Buff sát thương toàn đội 10% và Ban hút máu 15% cho toàn đội (2 lượt). | Tăng HP max, Buff ST, Ban hút máu |
 | 5 | **Viên Thuật** | Hỗ trợ | | **Trọng thị đế nghiệp**: Giảm máu tối đa hàng trước của đối thủ 15% (3 lượt). | Giảm HP max địch (5%-15%) |
 | 6 | **Công Tôn Toản** | Tấn công | ⭐ | **Bạch mã nghĩa tùng**: Tấn công đơn hàng sau 175%, Tăng tỷ lệ chí mạng 20%, Tăng Né tránh bản thân 15% (3 lượt) và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Tăng chí mạng, Tăng Né tránh, Phản kích đơn |
@@ -317,9 +318,8 @@ Thứ tự trong engine: `rollHit` (bước 1) → `mitigate` (bước 2, sinh r
 | 16 | **Mạnh Hoạch** | Phòng thủ | | **Viễn mưu**: Tấn công toàn bộ địch 104%, Tăng máu tối đa cho bản thân và đồng minh cùng hàng 15%, Hồi máu 20% HP tối đa cho bản thân. | Tăng HP max đồng minh, Hồi máu |
 | 17 | **Mã Đằng** | Tấn công | | **Tây Lương thiết kỵ**: Tấn công hàng dọc trước 200%, Buff sát thương bản thân 15% và Tăng Né tránh bản thân 15% (3 lượt). | Buff ST, Tăng Né tránh |
 | 18 | **Hàn Toại** | Hỗ trợ | | **Liên hoành**: Giảm sát thương nhận vào cho toàn đội 10% và Xóa hiệu ứng bất lợi của bản thân/đồng minh (bao gồm Thiêu đốt). | Giảm ST nhận, Xóa debuff đồng minh |
-| 19 | **Đào Khiêm** | Hỗ trợ | | **Nhân nghĩa Từ Châu**: Hồi máu toàn đội (110% ST cơ bản) và Tăng máu tối đa toàn đội 10%. | Hồi máu, Tăng HP max |
-| 20 | **Trương Lỗ** | Hỗ trợ | | **Ngũ Đấu Mễ Đạo**: Hồi máu hàng dọc trước (220% ST cơ bản), Tăng 15% Giảm sát thương cho hàng trước và Xóa hiệu ứng bất lợi. | Hồi máu, Giảm ST hàng trước, Xóa debuff |
-| 21 | **Thái Văn Cơ** | Hỗ trợ | | **Bi ca**: Hồi máu toàn bộ đồng minh (110% ST cơ bản) và Buff sát thương cho toàn đội 10% (3 lượt). | Hồi máu toàn đội, Buff ST |
+| 19 | **Đào Khiêm** | Hỗ trợ | | **Nhân nghĩa Từ Châu**: Hồi máu toàn đội (110% ST cơ bản) và Tăng máu tối đa toàn đội 10%. | Hồi máu, Tăng HP max | 20 | **Trương Lỗ** | Hỗ trợ | | **Ngũ Đấu Mễ Đạo**: Hồi máu hàng dọc trước (220% ST cơ bản), Tăng 15% Giảm sát thương cho hàng trước và Xóa hiệu ứng bất lợi. | Hồi máu, Giảm ST hàng trước, Xóa debuff |
+| 21 | **Thái Văn Cơ** | Hỗ trợ | | **Bi ca**: Hồi máu toàn bộ đồng minh (110% ST cơ bản), Buff sát thương cho toàn đội 10% và Tăng Phòng thủ toàn đội 15% (3 lượt). | Hồi máu toàn đội, Buff ST, Tăng Phòng thủ |
 | 22 | **Trâu Ngọc** | Hỗ trợ | | **Mị ảnh**: Tấn công đơn 120%, gây Choáng mục tiêu (tỷ lệ cấp×10%, max 100%). | Choáng |
 | 23 | **Chúc Dung** | Tấn công | | **Phi đao Nam Man**: Tấn công hàng ngang 180%, gây Thiêu đốt hàng ngang địch (4 lượt). | Thiêu đốt (4 lượt) |
 | 24 | **Đổng Bạch** | Tấn công | | **Quý tộc tàn bạo**: Tấn công đơn 280%, Giảm máu tối đa mục tiêu 15% (3 lượt). | Giảm HP max địch (5%-15%) |
@@ -328,9 +328,9 @@ Thứ tự trong engine: `rollHit` (bước 1) → `mitigate` (bước 2, sinh r
 | 27 | **Quách Dĩ** | Phòng thủ | | **Tây Lương hung bạo**: Tấn công hàng dọc trước 200%, Giảm sát thương các mục tiêu 15% (3 lượt) và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Giảm ST địch, Phản kích đơn |
 | 28 | **Cát Huyền** | Hỗ trợ | | **Đan đạo huyền công**: Hồi máu theo lượt cho toàn đội (50% ST cơ bản mỗi lượt, duy trì 3 lượt) VÀ Buff sát thương toàn đội 10% (3 lượt). | Hồi máu theo lượt (HoT), Buff ST |
 | 29 | **Thẩm Phối** | Phòng thủ | | **Tử thủ Nghiệp Thành**: Hồi máu bản thân 15% HP tối đa, Tạo Khiên cho bản thân bằng 15% HP tối đa (3 lượt) và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Hồi máu, Tạo Khiên bản thân, Phản kích đơn |
-| 30 | **Hứa Du** | Hỗ trợ | | **Hiến kế Ô Sào**: Giảm máu tối đa toàn bộ đối thủ 15% VÀ có 5%-50% tỷ lệ Xóa Khiên toàn bộ đối thủ. | Giảm HP max địch (5%-15%), Xóa Khiên (5%-50%) |
+| 30 | **Hứa Du** | Hỗ trợ | | **Hiến kế Ô Sào**: Giảm máu tối đa toàn bộ đối thủ 15%, Giảm Phòng thủ toàn bộ địch 15% VÀ có 5%-50% tỷ lệ Xóa Khiên toàn bộ đối thủ. | Giảm HP max địch (5%-15%), Giảm Phòng thủ địch, Xóa Khiên (5%-50%) |
 | 31 | **Tả Từ** | Hỗ trợ | | **Kỳ môn độn giáp**: Hồi máu toàn đội (100% ST cơ bản), Buff sát thương toàn đội 10%, Tăng tỷ lệ chí mạng toàn đội 10% và Tăng Né tránh toàn đội 10% (3 lượt). | Hồi máu, Buff ST, Tăng chí mạng, Tăng Né tránh |
-| 32 | **Thủy Kính** | Hỗ trợ | | **Thủy Kính tiên sinh**: Tạo Khiên cho toàn đội bằng 15% HP tối đa VÀ Buff sát thương toàn đội 10% (3 lượt), có khả năng Giải choáng. | Tạo Khiên toàn đội, Buff ST, Giải choáng |
-| 33 | **Hoa Đà** | Hỗ trợ | | **Thần y tế thế**: Hồi máu đồng minh thấp HP nhất (420% ST cơ bản), Giảm sát thương nhận vào của người đó 15% (3 lượt) và có khả năng Xóa hiệu ứng bất lợi. | Hồi máu đơn, Giảm ST nhận, Xóa debuff |
-| 34 | **Kỷ Linh** | Tấn công | | **Tam tiêm đao**: Tấn công đơn 280%, Tăng Xuyên giáp bản thân 15% và Tăng tỷ lệ chí mạng bản thân 25% (3 lượt). | Tăng Xuyên giáp, Tăng chí mạng |
+| 32 | **Thủy Kính** | Hỗ trợ | | **Thủy Kính tiên sinh**: Tạo Khiên cho toàn đội bằng 15% HP tối đa, Buff sát thương toàn đội 10%, Tăng Phòng thủ toàn đội 15% (3 lượt) và có khả năng Giải choáng. | Tạo Khiên toàn đội, Buff ST, Tăng Phòng thủ, Giải choáng |
+| 33 | **Hoa Đà** | Hỗ trợ | | **Thần y tế thế**: Hồi máu đồng minh thấp HP nhất (420% ST cơ bản), Giảm sát thương nhận vào của người đó 15% (3 lượt) và Xóa toàn bộ hiệu ứng bất lợi của người đó (kể cả Choáng/Thiêu đốt — tỷ lệ giải 55%→100% theo cấp). | Hồi máu đơn, Giảm ST nhận, Xóa debuff (kể cả choáng & thiêu đốt) |
+| 34 | **Kỷ Linh** | Tấn công | | **Tam tiêm đao**: Tấn công toàn bộ địch 120%, Hút máu đội (cấp×1.5%, max 15%) và Tăng tỷ lệ chí mạng bản thân 25% (3 lượt). | Hút máu đội, Tăng chí mạng |
 | 35 | **Nghiêm Bạch Hổ** | Phòng thủ | | **Sơn tặc chi vương**: Tấn công đơn 230%, gây Choáng (tỷ lệ cấp×3%, max 30%) và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Choáng, Phản kích đơn |

@@ -25,6 +25,7 @@ import {
   PVP_REVIVE_HP_BPS_PER_LEVEL,
   PVP_SHIELD_BREAK,
   PVP_SKILL_BUFF_LIFESTEAL_BPS,
+  PVP_TEAM_LIFESTEAL_BPS_PER_LEVEL,
   PVP_SKILL_DEF,
   PVP_VS_DEBUFF_BONUS_BPS,
   ROSTER,
@@ -94,7 +95,7 @@ type Input = { slot: number; generalId: string; level: number };
 const one = (side: 'a' | 'b', units: Input[]): PvpSideInput => ({ side, units });
 
 /**
- * Phòng thủ hiệu dụng của mục tiêu sau khi trừ Xuyên giáp của người tấn công, kẹp trần 50%
+ * Phòng thủ hiệu dụng của mục tiêu sau khi trừ Xuyên giáp của người tấn công, kẹp trần 75%
  * (SKILLS.md mục 18 — BƯỚC 2: Xuyên giáp ăn theo % của Giáp địch). Đọc chỉ số từ ảnh chụp đầu
  * trận: đúng cho các tình huống test không làm thay đổi Phòng thủ/Xuyên giáp giữa trận.
  */
@@ -857,6 +858,71 @@ test('engine: tướng tự hồi máu theo % HP tối đa mỗi lượt ra đò
   assert.ok(heals.every((e) => !e.crit && e.amount <= expected), 'lượng hồi không vượt hệ số tự hồi');
 });
 
+test('engine: hồi máu theo lượt (HoT) — Cát Huyền hồi cả đội vào ĐẦU mỗi lượt (mục 3)', () => {
+  // Cát Huyền: "Đan đạo huyền công" — Buff ST toàn đội 10% VÀ Hồi máu theo lượt 50% ST cơ bản (3 lượt).
+  const def = skillDef('ge-xuan');
+  assert.equal(def.healBps, 0, 'không hồi máu tức thời');
+  const hot = def.buffs.find((e) => e.buff.hotBps > 0);
+  assert.ok(hot, 'phải có kênh HoT');
+  assert.equal(hot!.buff.hotBps, 5000);
+  assert.equal(hot!.buff.maxLayers, 1, 'HoT không cộng dồn lớp (chỉ làm mới)');
+  assert.equal(hot!.scope, 'all_allies');
+
+  // Đặt 1 tướng sát thương để địch tập trung đánh → có máu mất mà hồi.
+  const ally = 'zhao-yun';
+  const res = simulatePvp(
+    [
+      one('a', [{ slot: 4, generalId: ally, level: 10 }, { slot: 1, generalId: 'ge-xuan', level: 10 }]),
+      one('b', [{ slot: 1, generalId: 'guan-yu', level: 10 }]),
+    ],
+    never,
+  );
+  const casterIdx = res.units.find((u) => u.generalId === 'ge-xuan')!.idx;
+  const allyIdx = res.units.find((u) => u.generalId === ally)!.idx;
+  const heals = res.events.filter((e): e is Extract<PvpEventDto, { t: 'heal' }> => e.t === 'heal' && e.from === casterIdx);
+  assert.ok(heals.some((h) => h.idx === allyIdx), 'Cát Huyền phải hồi máu cho đồng minh trong đội');
+  assert.ok(heals.every((h) => h.crit === false && !h.lifesteal), 'HoT không ăn chí mạng và không phải hút máu');
+
+  // Tick ở ĐẦU lượt: từ mốc "round" gần nhất tới lần hồi KHÔNG có lượt hành động nào của Cát Huyền.
+  const firstHealAt = res.events.findIndex((e) => e.t === 'heal' && e.from === casterIdx && e.idx === allyIdx);
+  assert.ok(firstHealAt > 0);
+  let roundIdx = -1;
+  for (let i = firstHealAt - 1; i >= 0; i--) {
+    if (res.events[i]!.t === 'round') {
+      roundIdx = i;
+      break;
+    }
+  }
+  assert.ok(roundIdx >= 0, 'phải có mốc bắt đầu lượt trước lần hồi');
+  const actedInBetween = res.events.slice(roundIdx + 1, firstHealAt).some((e) => e.t === 'act' && e.idx === casterIdx);
+  assert.equal(actedInBetween, false, 'HoT phải hồi ngay đầu lượt, trước khi tướng ra đòn');
+
+  // Lượng hồi không vượt 50% sát thương của người thi triển.
+  const castDamage = res.units.find((u) => u.idx === casterIdx)!.damage;
+  assert.ok(heals.every((h) => h.amount <= Math.round((castDamage * 5000) / BPS_SCALE) + 1), 'lượng hồi vượt hệ số HoT');
+});
+
+test('config: Cố Ung xóa hiệu ứng bất lợi (kể cả Thiêu đốt) + Giảm 10% ST nhận toàn đội', () => {
+  // SKILLS.md: "Trị quốc an dân" — Xóa hiệu ứng bất lợi và Giảm 10% sát thương nhận vào toàn đội (3 lượt).
+  const def = skillDef('gu-yong');
+  assert.equal(pvpProfile('gu-yong').skill, 'PURIFY');
+  assert.equal(def.purify, true);
+  assert.equal(def.healBps, 0, 'kỹ năng không hồi máu');
+  assert.equal(def.buffs[0]!.scope, 'all_allies');
+  assert.equal(def.buffs[0]!.buff.takenDownBps, 1000);
+  assert.equal(def.buffs[0]!.buff.hpBps, 0, 'không còn tăng HP tối đa');
+});
+
+test('config: Hoa Đà giải khống đặc thù 55% (cấp 1) → 100% (cấp 10)', () => {
+  // SKILLS.md mục 1.7: Hoa Đà là ngoại lệ — tỷ lệ giải Choáng/Thiêu đốt dùng span riêng,
+  // không dùng mặc định `PVP_CLEANSE_CHAMP_BPS` (75% ở cấp 10).
+  const def = skillDef('hua-tuo');
+  assert.equal(def.cleanse, true);
+  assert.equal(def.purify, true, 'vẫn thanh tẩy debuff chỉ số (giữ choáng/thiêu đốt cho cleanse)');
+  assert.equal(def.cleanseMinBps, 5500);
+  assert.equal(def.cleanseMaxBps, 10000);
+});
+
 test('engine: hút máu — tướng hồi bản thân theo % sát thương gây ra (mục 6.5)', () => {
   // Dùng tướng hút máu MỐC CHUẨN (Tào Phi, 2%/cấp) — các tướng signature hút máu rất cao
   // (85%–100%) nên lượng hồi thường bị chặn bởi máu đã mất, không kiểm tra được đúng hệ số.
@@ -896,12 +962,16 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(zy.def.buffs[0]!.buff.critBps, 2000);
   assert.equal(zy.def.buffs[0]!.buff.takenDownBps, 2000);
   assert.equal(zy.def.counter.damageBps, 0, 'Triệu Vân không còn phản kích');
-  // Tôn Sách: AoE 125%, tự buff ST 20%, hút máu 2.5%/cấp, phản kích đơn.
+  // Tôn Sách: AoE 125%, hút máu ĐỘI 2%/cấp, tự giảm ST nhận 15%, phản kích đơn.
   const sc = pvpProfile('sun-ce');
   assert.equal(sc.def.damageBps, 12500);
   assert.equal(sc.def.targeting, 'all_enemies');
-  assert.equal(sc.lifestealPerLevelBps, 250);
+  assert.equal(sc.lifestealPerLevelBps, 0, 'Tôn Sách không còn hút máu cá nhân');
+  assert.equal(sc.teamLifestealPerLevelBps, PVP_TEAM_LIFESTEAL_BPS_PER_LEVEL);
   assert.equal(sc.def.selfHealBps, 0);
+  assert.equal(sc.def.buffs[0]!.buff.takenDownBps, 1500);
+  assert.equal(sc.def.buffs[0]!.buff.damageBps, 0);
+  assert.equal(sc.def.buffs[0]!.buff.defPenBps, 0);
   assert.equal(sc.def.counter.damageBps, 10000, 'phản kích đơn: 100% ST cơ bản');
   // Mã Siêu: đánh đơn 280%, hút máu 10%/cấp (max 100%), tự tăng 10% HP tối đa.
   const mc = pvpProfile('ma-chao');
@@ -975,12 +1045,19 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(cg.def.buffs[0]!.buff.critBps, 1500);
   assert.ok(cg.def.cleanse);
   assert.equal(cg.def.dispel, false);
-  // Điêu Thuyền: đánh đơn 120%, choáng 8%/cấp, kèm giảm sát thương địch 30%; nhắm tướng địch có sát thương cao nhất.
+  // Điêu Thuyền: đánh đơn 120%, choáng 10%/cấp (max 100%), kèm giảm sát thương địch 20%; nhắm tướng địch có sát thương cao nhất.
   const dc = pvpProfile('diao-chan');
   assert.equal(dc.def.damageBps, 12000);
   assert.equal(dc.def.targeting, 'highest_damage_enemy');
-  assert.equal(dc.def.stunPerLevelBps, 800);
-  assert.equal(dc.def.debuff.damageDownBps, 3000);
+  assert.equal(dc.def.stunPerLevelBps, 1000);
+  assert.equal(dc.def.debuff.damageDownBps, 2000);
+  // Tào Hoa: đánh đơn hàng sau 110% + choáng 10%/cấp (max 100%).
+  const ch = pvpProfile('cao-hua');
+  assert.equal(ch.def.targeting, 'back_single');
+  assert.equal(ch.def.damageBps, 11000);
+  assert.equal(ch.def.stun, 'single');
+  assert.equal(ch.def.stunPerLevelBps, 1000);
+  assert.equal(ch.def.healBps, 0, 'không còn hồi máu');
   // Quách Gia: AoE 85% + giảm ST địch 10% + tăng 15% HP tối đa toàn đội.
   const gj = pvpProfile('guo-jia');
   assert.equal(gj.def.damageBps, 8500);
@@ -1023,6 +1100,9 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
     ['guo-jia', 8500],
     ['pang-tong', 8500],
     ['huang-yueying', 7500],
+    ['zhong-hui', 11000],
+    ['jiang-wei', 12200],
+    ['ji-ling', 12000],
   ];
   for (const [id, bps] of aoes) {
     const d = skillDef(id);
@@ -1122,8 +1202,8 @@ test('engine: BƯỚC 1 — Né thành công thì TRƯỢT: 0 sát thương, gi�
   );
 });
 
-test('engine: BƯỚC 2 — Xuyên giáp triệt tiêu Phòng thủ; Phòng thủ mặc định 10% giảm 10% sát thương (mục 18)', () => {
-  // Đại Kiều không tự buff Phòng thủ → Phòng thủ nền 10%; hai tướng cùng cấp 10 để so sánh công bằng.
+test('engine: BƯỚC 2 — Xuyên giáp triệt tiêu Phòng thủ; Phòng thủ cấp 10 (30%) giảm 30% sát thương (mục 18)', () => {
+  // Đại Kiều không tự buff Phòng thủ → Phòng thủ nền theo cấp (cấp 10 = 30%); hai tướng cùng cấp 10 để so sánh công bằng.
   const target = 'da-qiao';
   const firstHit = (attacker: string, selfDamageBps = 0) => {
     const res = simulatePvp(
@@ -1137,15 +1217,15 @@ test('engine: BƯỚC 2 — Xuyên giáp triệt tiêu Phòng thủ; Phòng th�
     return { hit, raw: Math.round((dmg * skillDef(attacker).damageBps) / BPS_SCALE) };
   };
   // Hứa Chử: tự buff +20% sát thương và +20% Xuyên giáp (cấp 10) → Xuyên giáp ăn theo % của Giáp địch:
-  // Phòng thủ 10% còn 10% × (1 − 20%) = 8% → nhận 92% sát thương gốc.
+  // Phòng thủ 30% còn 30% × (1 − 20%) = 24% → nhận 76% sát thương gốc.
   const xu = firstHit('xu-chu', 2000);
   const xuDefFinal = Math.round((PVP_DEF_BPS * (BPS_SCALE - 2000)) / BPS_SCALE);
-  assert.equal(xu.hit.amount, mitigated(xu.raw, xuDefFinal), 'Xuyên giáp 20% ăn theo % Giáp: Phòng thủ 10% còn 8%');
+  assert.equal(xu.hit.amount, mitigated(xu.raw, xuDefFinal), 'Xuyên giáp 20% ăn theo % Giáp: Phòng thủ 30% còn 24%');
   assert.equal(xu.hit.mitigated, xu.raw - xu.hit.amount, 'hiệu số ghi vào sự kiện đúng bằng phần bị Phòng thủ cản lại');
-  // Lữ Mông: Xuyên giáp 0% → giữ nguyên Phòng thủ 10% → chỉ nhận 90% sát thương gốc.
+  // Lữ Mông: Xuyên giáp 0% → giữ nguyên Phòng thủ 30% → chỉ nhận 70% sát thương gốc.
   const lu = firstHit('lu-meng');
   assert.ok(lu.hit.amount < lu.raw, 'Phòng thủ mặc định phải cản lại một phần sát thương');
-  assert.equal(lu.hit.amount, Math.round((lu.raw * (BPS_SCALE - PVP_DEF_BPS)) / BPS_SCALE), 'chỉ nhận 90% sát thương gốc');
+  assert.equal(lu.hit.amount, Math.round((lu.raw * (BPS_SCALE - PVP_DEF_BPS)) / BPS_SCALE), 'chỉ nhận 70% sát thương gốc');
   assert.equal(lu.hit.mitigated, lu.raw - lu.hit.amount, 'hiệu số ghi vào sự kiện đúng bằng phần bị cản lại');
 });
 

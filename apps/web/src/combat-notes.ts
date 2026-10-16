@@ -89,6 +89,9 @@ export function skillNote(c: PvpCombatDto): string {
   else if (c.self.heal) parts.push(`hồi ${c.self.heal} HP cho đồng minh`);
   // Hút máu theo sát thương gây ra (vài tướng riêng) — cấp hiện tại.
   if (c.self.lifestealBps) parts.push(`hút ${pct(c.self.lifestealBps)} sát thương gây ra`);
+  // Hút máu ĐỘI: cả bản thân lẫn mọi đồng minh cùng hồi theo % TỔNG sát thương đòn đánh.
+  if (c.self.teamLifestealBps)
+    parts.push(`hút máu đội: bản thân và mọi đồng minh hồi ${pct(c.self.teamLifestealBps)} tổng sát thương gây ra`);
   if (d.stun !== 'none') parts.push(`choáng ${pct(c.self.stunBps)}`);
   if (d.cleanse) parts.push(`giải choáng & thiêu đốt ${pct(c.self.cleanseBps)}`);
   if (d.purify) parts.push('thanh tẩy hiệu ứng bất lợi cho đồng minh (trừ choáng, thiêu đốt)');

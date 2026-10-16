@@ -5,7 +5,6 @@ import {
   PVP_BACK_DAMAGE_BPS,
   PVP_CLEANSE_CHAMP_BPS,
   PVP_CRIT_BPS_PER_LEVEL,
-  PVP_DEF_BPS,
   PVP_DEF_PEN_BPS,
   PVP_FRONT_HP_BPS,
   PVP_LANES,
@@ -15,6 +14,7 @@ import {
   pvpBaseDamage,
   pvpBaseHp,
   pvpCritDamageBps,
+  pvpDefBps,
   pvpDodgeBps,
   pvpEffectBps,
   pvpHitBps,
@@ -246,10 +246,12 @@ export function getCombatStats(generalId: string, level: number, squad?: string[
       heal,
       // Hút máu ở cấp hiện tại (khớp engine): chốt ở cấp 10, quy theo cấp.
       lifestealBps: pvpPerLevelEffectBps(profile.lifestealPerLevelBps, level),
+      // Hút máu ĐỘI ở cấp hiện tại: hồi cả bản thân lẫn mọi đồng minh theo % tổng sát thương gây ra.
+      teamLifestealBps: pvpPerLevelEffectBps(profile.teamLifestealPerLevelBps, level),
       // Bộ chỉ số Trao đổi đòn (mục 18): Chính xác/Né tránh scale theo cấp; buff/debuff cộng trừ thêm trong trận.
       hitBps: pvpHitBps(level),
       dodgeBps: pvpDodgeBps(level),
-      defBps: PVP_DEF_BPS,
+      defBps: pvpDefBps(level),
       defPenBps: PVP_DEF_PEN_BPS,
     },
     passiveEffect: { ...passive },

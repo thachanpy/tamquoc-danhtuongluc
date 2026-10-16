@@ -11,7 +11,6 @@ import {
   PVP_CLEANSE_CHAMP_BPS,
   PVP_COUNTER_MAX_BPS,
   PVP_CRIT_BPS_PER_LEVEL,
-  PVP_DEF_BPS,
   PVP_DEF_MAX_BPS,
   PVP_DEF_PEN_BPS,
   PVP_DEF_PEN_MAX_BPS,
@@ -32,6 +31,7 @@ import {
   pvpBaseDamage,
   pvpBaseHp,
   pvpCritDamageBps,
+  pvpDefBps,
   pvpDodgeBps,
   pvpEffectBps,
   pvpFactionBonus,
@@ -112,6 +112,11 @@ interface Unit {
   defPenBps: number;
   /** Hút máu: hồi bản thân theo % sát thương gây ra ở cấp hiện tại (bps; 0 = không hút máu). */
   lifestealBps: number;
+  /**
+   * Hút máu ĐỘI ở cấp hiện tại (bps; 0 = không có): hồi cho BẢN THÂN và MỌI ĐỒNG MINH còn sống theo
+   * % TỔNG sát thương đòn đánh gây ra — khác `lifestealBps` (chỉ hồi bản thân).
+   */
+  teamLifestealBps: number;
   /** Đã dùng lượt Hồi sinh chưa (chỉ 1 lần/trận). */
   reviveUsed: boolean;
   /** Hệ số nhân sát thương gây ra (bps): 10000 bình thường, giảm còn 5000 sau khi Hồi sinh. */
@@ -129,6 +134,8 @@ interface Unit {
   debuffs: DebuffInstance[];
   /** Các lớp Thiêu đốt đang chịu — trần cộng dồn tính riêng theo TỪNG nguồn, không có trần toàn hệ thống (mục 8). */
   burns: BurnInstance[];
+  /** Các lớp Hồi máu theo lượt (HoT) đang nhận — hồi vào đầu mỗi lượt, trần lớp theo TỪNG (nguồn, kênh). */
+  hots: HotInstance[];
   /** Các lớp Khiên đang có — hấp thụ sát thương nhận vào trước HP (SKILLS.md mục 16). */
   shields: ShieldInstance[];
 }
@@ -202,6 +209,21 @@ interface BurnInstance {
 }
 
 /**
+ * Một lớp Hồi máu theo lượt (HoT — SKILLS.md mục 3): hồi `amount` cho mục tiêu vào ĐẦU mỗi lượt.
+ * Lượng hồi snapshot theo sát thương nền của NGƯỜI THI TRIỂN lúc phát; trần lớp theo TỪNG (nguồn, kênh).
+ */
+interface HotInstance {
+  /** idx của tướng phát lớp HoT — dùng để giới hạn số lớp cộng dồn theo TỪNG nguồn. */
+  sourceIdx: number;
+  /** Chỉ số KÊNH trong kỹ năng của nguồn (trần `maxLayers` tính riêng cho từng (nguồn, kênh)). */
+  channel: number;
+  /** Lượng máu hồi mỗi lượt. */
+  amount: number;
+  /** Lượt cuối còn hiệu lực (tính theo số vòng). */
+  expiresRound: number;
+}
+
+/**
  * Một lớp Khiên (SKILLS.md mục 16): hấp thụ sát thương nhận vào TRƯỚC HP thực tế, hết hạn sau vài lượt.
  * Lượng khiên tính theo % HP tối đa của tướng NHẬN khiên. Trần cộng dồn tính theo TỪNG (nguồn, kênh).
  */
@@ -260,9 +282,10 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         cleanseBps: 0,
         hitBps: pvpHitBps(u.level),
         dodgeBps: pvpDodgeBps(u.level),
-        defBps: PVP_DEF_BPS,
+        defBps: pvpDefBps(u.level),
         defPenBps: PVP_DEF_PEN_BPS,
         lifestealBps: 0,
+        teamLifestealBps: 0,
         reviveUsed: false,
         damageMulBps: BPS_SCALE,
         lc: pvpLc(profile.style, u.level),
@@ -271,6 +294,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         buffs: [],
         debuffs: [],
         burns: [],
+        hots: [],
         shields: [],
       });
     }
@@ -312,8 +336,15 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     u.stunBps = pvpPerLevelEffectBps(u.def.stunPerLevelBps, u.level) + (passiveEffect.stat === 'stun' ? passiveEffect.pointsBps : 0);
     // Hút máu: chốt ở cấp 10 (mục 13), quy theo cấp.
     u.lifestealBps = pvpPerLevelEffectBps(u.profile.lifestealPerLevelBps, u.level);
-    // Giải choáng: chốt ở cấp 10 = 75%, quy theo cấp (cấp 1 = 65%).
-    u.cleanseBps = u.def.cleanse ? pvpEffectBps(PVP_CLEANSE_CHAMP_BPS, u.level) : 0;
+    // Hút máu ĐỘI: cũng chốt ở cấp 10, quy theo cấp (hồi cho cả bản thân lẫn đồng minh).
+    u.teamLifestealBps = pvpPerLevelEffectBps(u.profile.teamLifestealPerLevelBps, u.level);
+    // Giải choáng: chốt ở cấp 10 = 75%, quy theo cấp (cấp 1 = 65%). Tướng có override riêng
+    // (Hoa Đà: 55% → 100%) dùng span min→max theo cấp thay cho mặc định.
+    u.cleanseBps = u.def.cleanse
+      ? u.def.cleanseMinBps !== undefined && u.def.cleanseMaxBps !== undefined
+        ? pvpLevelSpanBps(u.def.cleanseMinBps, u.def.cleanseMaxBps, u.level)
+        : pvpEffectBps(PVP_CLEANSE_CHAMP_BPS, u.level)
+      : 0;
   }
 
   // Ảnh chụp đầu trận để client dựng giao diện.
@@ -350,6 +381,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         critDamageBps: u.critDamageBps,
         stunBps: u.stunBps,
         lifestealBps: u.lifestealBps,
+        teamLifestealBps: u.teamLifestealBps,
         hitBps: u.hitBps,
         dodgeBps: u.dodgeBps,
         defBps: u.defBps,
@@ -755,6 +787,9 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
 
     const targets = pickTargets(u, def.targeting);
     events.push({ t: 'act', idx: u.idx, skill: u.profile.skill, targets: targets.map((t) => t.idx) });
+    // Phạm vi hưởng hiệu ứng HỖ TRỢ (thanh tẩy/giải choáng): đúng mục tiêu kỹ năng nếu kỹ năng nhắm
+    // đồng minh (lowest_ally → người được hồi; front_allies → hàng trước), ngược lại toàn bộ đồng minh.
+    const allySkillTargets = isAllyTargeting(def.targeting) ? targets : alliesOf(u);
 
     // Buff tăng sức mạnh (mục 1): mỗi lần tới lượt phát MỘT lớp cho mỗi KÊNH buff của kỹ năng
     // (một số kỹ năng vừa tự buff vừa buff đồng minh nên có nhiều kênh). Các lớp cộng dồn tối đa
@@ -844,6 +879,17 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
           }
           events.push({ t: 'shield', from: u.idx, idx: a.idx, channel, amount, expiresRound, maxLayers: b.maxLayers });
         }
+        // Hồi máu theo lượt (HoT — mục 3): lượng hồi mỗi lượt = % sát thương nền của NGƯỜI THI TRIỂN
+        // (snapshot lúc phát). Trần lớp theo TỪNG (nguồn, kênh), dùng chung `rounds`/`maxLayers`.
+        if (b.hotBps > 0) {
+          const amount = Math.round((u.damage * b.hotBps) / BPS_SCALE);
+          a.hots.push({ sourceIdx: u.idx, channel, amount, expiresRound });
+          const mine = a.hots.filter((x) => x.sourceIdx === u.idx && x.channel === channel);
+          if (mine.length > b.maxLayers) {
+            const at = a.hots.indexOf(mine[0]!);
+            if (at >= 0) a.hots.splice(at, 1);
+          }
+        }
       }
     }
 
@@ -882,6 +928,18 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
       healUnit(u, u, heal, crit, true);
     }
 
+    // Hút máu ĐỘI: mỗi đồng minh còn sống (kể cả bản thân) hồi TRỌN `% × TỔNG sát thương` vừa gây ra.
+    // Khác hút máu cá nhân ở trên: không phụ thuộc việc đồng minh có tự ra đòn hay không.
+    if (u.teamLifestealBps > 0 && dealt > 0) {
+      const per = Math.round((dealt * u.teamLifestealBps) / BPS_SCALE);
+      if (per > 0) {
+        for (const a of units) {
+          if (a.side !== u.side || !a.alive) continue;
+          healUnit(u, a, per, false, true);
+        }
+      }
+    }
+
     // Hồi máu đồng minh (mục 3): không vượt HP tối đa, có thể chí mạng theo tỉ lệ chí mạng người thi triển.
     if (def.healBps > 0) {
       for (const t of targets) {
@@ -916,7 +974,8 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     // Giải thành công thì gỡ cả choáng lẫn mọi lớp thiêu đốt đang chịu. Khi gỡ Thiêu đốt, phần
     // sát thương CÒN LẠI nổ ngay 50% lập tức (mục 8) trừ thẳng vào Khiên/Máu.
     if (def.cleanse) {
-      for (const a of alliesOf(u)) {
+      // Chỉ giải cho ĐÚNG mục tiêu của kỹ năng: lowest_ally → người được hồi; all_allies → cả đội.
+      for (const a of allySkillTargets) {
         const hasStun = a.stunnedByIdx !== null;
         const hasBurn = a.burns.length > 0;
         if (!hasStun && !hasBurn) continue;
@@ -1037,7 +1096,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     // GIẢM MÁU TỐI ĐA (trần HP hồi lại qua `syncMaxHp`) — nhưng GIỮ LẠI choáng và thiêu đốt
     // (hai hiệu ứng này không bị thanh tẩy).
     if (def.purify) {
-      for (const a of alliesOf(u)) {
+      for (const a of allySkillTargets) {
         if (!a.debuffs.length) continue;
         a.debuffs = [];
         syncMaxHp(a);
@@ -1085,6 +1144,12 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         const kept = u.shields.filter((s) => s.expiresRound >= r);
         if (kept.length !== u.shields.length) u.shields = kept;
       }
+      // Hết hạn lớp Hồi máu theo lượt (HoT).
+      for (const u of units) {
+        if (!u.hots.length) continue;
+        const kept = u.hots.filter((h) => h.expiresRound >= r);
+        if (kept.length !== u.hots.length) u.hots = kept;
+      }
       // Choáng của tướng đã gục không bao giờ được giải (nguồn không còn ra skill) → gỡ ở đầu lượt.
       for (const x of units) {
         if (x.stunnedByIdx === null) continue;
@@ -1092,6 +1157,15 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         if (!src || !src.alive) x.stunnedByIdx = null;
       }
       events.push({ t: 'round', round: r });
+      // Hồi máu theo lượt (HoT — mục 3): hồi vào ĐẦU mỗi lượt cho từng tướng còn sống đang có lớp HoT.
+      // Lượng hồi snapshot lúc phát; vẫn chịu giảm 50% nếu mục tiêu đang bị Thiêu đốt (xử lý trong `healUnit`).
+      for (const u of units) {
+        if (!u.alive || !u.hots.length) continue;
+        for (const h of u.hots) {
+          const src = units.find((x) => x.idx === h.sourceIdx) ?? u;
+          healUnit(src, u, h.amount, false);
+        }
+      }
       // Thiêu đốt: gây sát thương vào ĐẦU mỗi lượt (sát thương gián tiếp — KHÔNG kích phản kích).
       for (const u of units) {
         if (!u.alive) continue;
