@@ -26,6 +26,10 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
   - **Phòng thủ** (LC thấp nhất): Tăng **25% máu cơ bản** cho bản thân.
   - **Hỗ trợ**: Tăng **10% máu cơ bản** và **10% sát thương cơ bản** cho **toàn đội** (Aura toàn đội, **cộng dồn tối đa 3 lớp = +30% Máu & +30% ST** nếu sử dụng nhiều tướng Hỗ trợ). Aura áp ngay khi vào trận và **máu vẫn đầy 100%** theo trần mới (không bị tính là hồi máu).
 - **Thứ tự hành động**: Hai đội **luân phiên nhau theo vị trí**. Vào trận, bên có **tổng LC cả đội cao hơn** ra đòn trước ở **vị trí 1**, rồi tới **vị trí 1 của bên kia**, **vị trí 2 của bên đi trước**, **vị trí 2 của bên kia**… cứ thế tới vị trí 6 (bằng tổng LC thì bên khiêu chiến A đi trước).
+- **Chọn mục tiêu theo đội hình**: 6 ô gồm **2 hàng dọc** (vị trí `1-2-3` và `4-5-6`) × **3 hàng ngang** (cặp `1-4`, `2-5`, `3-6`).
+  - Kỹ năng ghi *"tấn công **hàng trước**"* (`front_enemies`) luôn nhắm **hàng dọc TRƯỚC của địch (vị trí 1-2-3)**, **không phụ thuộc** người thi triển đứng ở hàng nào; nếu **hàng trước đã hết tướng thì đánh sang hàng sau** (giống hệt cơ chế của *"tấn công hàng sau"*). Vì vậy một tướng Hỗ trợ xếp ở hàng sau vẫn đánh vào hàng trước của địch.
+  - Kỹ năng ghi *"tấn công **hàng ngang**"* (`lane`) đánh đúng hàng ngang (`1-4` / `2-5` / `3-6`) mà người thi triển đang đứng.
+  - Kỹ năng ghi *"**hàng sau**"* (`back_row`) đánh hàng dọc sau của địch (vị trí 4-5-6); hết hàng sau thì quay ra đánh hàng trước.
 
 ### Danh mục 15 Hiệu ứng được phép sử dụng
 
@@ -98,14 +102,14 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 | 8 | **Trương Liêu** | Tấn công | ⭐ | **Uy chấn Tiêu Dao**: Tấn công hàng ngang 225%, Giảm sát thương địch 10%, Hút máu theo cấp (cấp×3%, max 30%) và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Giảm ST địch, Hút máu, Phản kích đơn |
 | 9 | **Nhạc Tiến** | Tấn công | | **Tiên phong phá địch**: Tấn công đơn 300%, Hút máu đặc biệt theo cấp (cấp×8.5%, max 85%) và Tăng máu tối đa 10% bản thân. | Hút máu 85% (Signature Ngụy), Tăng HP max |
 | 10 | **Vu Cấm** | Phòng thủ | | **Nghiêm trận**: Hồi máu 20% HP tối đa cho bản thân, Giảm sát thương nhận vào 20% và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Hồi máu, Giảm ST nhận, Phản kích đơn |
-| 11 | **Trương Cáp** | Tấn công | | **Kỳ binh đột kích**: Tấn công hàng sau 200%, gây Choáng mục tiêu (tỷ lệ cấp×3%, max 30%). | Choáng |
+| 11 | **Trương Cáp** | Tấn công | | **Kỳ binh đột kích**: Tấn công hàng trước 200%, gây Choáng mục tiêu (tỷ lệ cấp×3%, max 30%). | Choáng |
 | 12 | **Từ Hoảng** | Tấn công | ⭐ | **Khai sơn phủ**: Tấn công đơn 305%, Giảm sát thương của mục tiêu 20% và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Giảm ST địch, Phản kích đơn, +30% ST lên mục tiêu đang debuff |
 | 13 | **Điển Vi** | Phòng thủ | ⭐ | **Ác Lai hộ vệ**: Tăng máu tối đa 20%, Hồi máu 15% HP tối đa mỗi lượt ra đòn và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Tăng HP max, Hồi máu, Phản kích đơn |
 | 14 | **Hứa Chử** | Phòng thủ | ⭐ | **Hổ si cuồng kích**: Tấn công đơn 295%, Hút máu theo cấp (cấp×2.5%, max 25%) và Buff sát thương bản thân 20% (3 lượt). | Hút máu, Buff ST |
 | 15 | **Quách Gia** | Hỗ trợ | ⭐ | **Diệu kế thiên cơ**: Tấn công toàn bộ địch 85%, Tăng 15% HP tối đa cho toàn đội và Giảm sát thương nhận vào của toàn bộ địch 10% (3 lượt). | Tăng HP max toàn đội, Giảm ST địch |
 | 16 | **Tuân Úc** | Hỗ trợ | | **Vương tá chi sách**: Buff sát thương 15% toàn đội (3 lượt), Giảm sát thương nhận vào cho toàn đội 10% (3 lượt) và Ban hút máu 15% cho toàn đội (2 lượt). | Buff ST, Giảm ST nhận, Ban hút máu |
-| 17 | **Tuân Du** | Hỗ trợ | | **Liên hoàn kế**: Tấn công hàng dọc 180%, gây Choáng (tỷ lệ cấp×3%, max 30%). | Choáng |
-| 18 | **Giả Hủ** | Hỗ trợ | | **Độc kế**: Tấn công hàng dọc 150%, gây Choáng các mục tiêu (tỷ lệ cấp×3%, max 30%) và Giảm sát thương địch 20%. | Choáng, Giảm ST địch |
+| 17 | **Tuân Du** | Hỗ trợ | | **Liên hoàn kế**: Tấn công hàng trước 180%, gây Choáng (tỷ lệ cấp×3%, max 30%). | Choáng |
+| 18 | **Giả Hủ** | Hỗ trợ | | **Độc kế**: Tấn công hàng trước 150%, gây Choáng các mục tiêu (tỷ lệ cấp×3%, max 30%) và Giảm sát thương địch 20%. | Choáng, Giảm ST địch |
 | 19 | **Tư Mã Ý** | Hỗ trợ | ⭐ | **Ẩn nhẫn phản kích**: Tấn công toàn bộ địch 125%, Giảm sát thương toàn bộ địch 15%, Giảm tỷ lệ chí mạng 15% VÀ Giảm 20% ST chí mạng toàn bộ địch (3 lượt). | Giảm ST địch, Giảm chí mạng, Giảm ST chí mạng |
 | 20 | **Bàng Đức** | Phòng thủ | | **Quan tài quyết chiến**: Tấn công đơn 280%, Hút máu theo cấp (cấp×2%, max 20%), Tăng tỷ lệ chí mạng bản thân 25% và Tăng 25% ST chí mạng bản thân (3 lượt). | Hút máu, Tăng chí mạng, Tăng ST chí mạng |
 | 21 | **Chân Cơ** | Hỗ trợ | | **Lạc Thần**: Hồi máu toàn đội (110% ST cơ bản) và Giảm sát thương nhận vào cho toàn đội 10% (3 lượt). | Hồi máu, Giảm ST nhận |
@@ -129,7 +133,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 | 5 | **Triệu Vân** | Tấn công | ⭐ | **Thất Tiến Thất Xuất**: Tấn công hàng ngang 200%, Tăng tỷ lệ chí mạng 20%, Giảm sát thương nhận vào 20% (3 lượt), Hút máu theo cấp (cấp×3%, max 30%) và Hồi sinh (1 lần/trận). | Tăng chí mạng, Giảm ST nhận, Hút máu, Hồi sinh |
 | 6 | **Mã Siêu** | Tấn công | ⭐ | **Cẩm Mã Siêu**: Tấn công đơn 280%, Hút máu theo cấp đặc biệt (cấp×10%, max 100%) và Tăng máu tối đa 10% bản thân. | Hút máu 100%, Tăng HP max |
 | 7 | **Hoàng Trung** | Tấn công | ⭐ | **Lão Đương Ích Tráng**: Tấn công hàng sau 210%, Tăng tỷ lệ chí mạng 35% cho phát bắn này. | Tăng chí mạng |
-| 8 | **Ngụy Diên** | Tấn công | ⭐ | **Kỳ phong đột kích**: Tấn công hàng dọc 220%, Buff sát thương bản thân 20% và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Buff ST, Phản kích đơn |
+| 8 | **Ngụy Diên** | Tấn công | ⭐ | **Kỳ phong đột kích**: Tấn công hàng trước 220%, Buff sát thương bản thân 20% và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Buff ST, Phản kích đơn |
 | 9 | **Khương Duy** | Tấn công | ⭐ | **Kế thừa Khổng Minh**: Tấn công đơn 260%, Buff sát thương bản thân 15% và gây Choáng (tỷ lệ cấp×4%, max 40%). | Choáng, Buff ST |
 | 10 | **Bàng Thống** | Hỗ trợ | ⭐ | **Phượng Sồ liên hoàn**: Tấn công toàn bộ địch 85%, Buff sát thương toàn đội 15% (3 lượt). | Buff ST |
 | 11 | **Pháp Chính** | Hỗ trợ | | **Tiên liệu chiến cơ**: Buff sát thương toàn đội 15%, Tăng tỷ lệ chí mạng toàn đội 15% và Tăng 20% ST chí mạng toàn đội (3 lượt). | Buff ST, Tăng chí mạng, Tăng ST chí mạng |
@@ -137,7 +141,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 | 13 | **Hoàng Nguyệt Anh** | Hỗ trợ | | **Cơ quan bát quái**: Tấn công toàn bộ địch 75%, Tăng tỷ lệ chí mạng toàn đội 10% (3 lượt). | Tăng chí mạng |
 | 14 | **Quan Bình** | Tấn công | | **Thanh Long kế thừa**: Tấn công đơn 260%, Hút máu theo cấp (cấp×2%, max 20%), Buff sát thương bản thân 15% và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Hút máu, Buff ST, Phản kích đơn |
 | 15 | **Quan Hưng** | Tấn công | | **Hưng binh trảm tướng**: Tấn công hàng ngang 200%, Tăng tỷ lệ chí mạng 15% (3 lượt). | Tăng chí mạng |
-| 16 | **Mã Đại** | Tấn công | | **Truy kích Tây Lương**: Tấn công hàng sau 200%, Buff sát thương bản thân 15% và Giảm 15% Tỷ lệ chí mạng hàng sau địch (3 lượt). | Buff ST, Giảm chí mạng địch, +30% ST lên mục tiêu đang debuff |
+| 16 | **Mã Đại** | Tấn công | | **Truy kích Tây Lương**: Tấn công hàng trước 200%, Buff sát thương bản thân 15% và Giảm 15% Tỷ lệ chí mạng hàng trước địch (3 lượt). | Buff ST, Giảm chí mạng địch, +30% ST lên mục tiêu đang debuff |
 | 17 | **Vương Bình** | Phòng thủ | | **Kiên thủ Hán Trung**: Giảm sát thương nhận vào 25%, Hồi máu 15% HP tối đa mỗi lượt ra đòn và Giảm 10% sát thương nhận vào cho đồng minh cùng hàng (3 lượt). | Giảm ST nhận, Hồi máu, Giảm ST đồng minh |
 | 18 | **Liêu Hóa** | Phòng thủ | | **Lão tướng tiên phong**: Tấn công đơn 270%, Tăng máu tối đa bản thân 15% và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Tăng HP max, Phản kích đơn |
 | 19 | **Giản Ung** | Hỗ trợ | | **Du thuyết**: Buff sát thương toàn đội 10% và Xóa hiệu ứng bất lợi của bản thân/đồng minh (bao gồm Thiêu đốt). | Buff ST, Xóa debuff đồng minh |
@@ -160,7 +164,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 | 2 | **Tôn Sách** | Phòng thủ | ⭐ | **Tiểu Bá Vương**: Tấn công toàn bộ địch 123.5%, Buff sát thương bản thân 20%, Hút máu theo cấp (cấp×2.5%, max 25%) và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Buff ST, Hút máu, Phản kích đơn |
 | 3 | **Tôn Quyền** | Hỗ trợ | ⭐ | **Đế nghiệp Giang Đông**: Buff sát thương toàn đội 15% và Giảm sát thương nhận vào cho toàn đội 10% (3 lượt). | Buff ST, Giảm ST nhận |
 | 4 | **Chu Du** | Tấn công | ⭐ | **Hỏa thiêu Xích Bích**: Tấn công toàn bộ địch 117%, gây Thiêu đốt toàn bộ địch (duy trì 4 lượt, dồn max 3 lớp). Đòn Thiêu đốt: tăng thêm 30% tỷ lệ chí mạng và 30% ST chí mạng. | Thiêu đốt (4 lượt, dồn 3), Thiêu đốt +30% chí mạng |
-| 5 | **Lục Tốn** | Tấn công | ⭐ | **Hỏa kế liên doanh**: Tấn công hàng dọc 180%, gây Thiêu đốt hàng dọc địch (duy trì 4 lượt, dồn max 3 lớp), Giảm HP tối đa địch 10%. Hút máu 50% hiệu suất áp dụng cho cả đòn Thiêu đốt. | Thiêu đốt (4 lượt, dồn 3), Giảm HP max, Hút máu thiêu đốt |
+| 5 | **Lục Tốn** | Tấn công | ⭐ | **Hỏa kế liên doanh**: Tấn công hàng trước 180%, gây Thiêu đốt hàng trước địch (duy trì 4 lượt, dồn max 3 lớp), Giảm HP tối đa địch 10%. Hút máu 50% hiệu suất áp dụng cho cả đòn Thiêu đốt. | Thiêu đốt (4 lượt, dồn 3), Giảm HP max, Hút máu thiêu đốt |
 | 6 | **Lữ Mông** | Phòng thủ | ⭐ | **Bạch y độ giang**: Tấn công đơn 290% và Tăng 10% HP tối đa cho toàn đội (3 lượt). | Tăng HP max toàn đội |
 | 7 | **Hoàng Cái** | Phòng thủ | ⭐ | **Khổ nhục kế**: Tự gây Thiêu đốt bản thân (duy trì 4 lượt, dồn 3 lớp) để Buff sát thương bản thân 30%, Hồi máu 10% HP tối đa, Hút máu theo cấp (cấp×2%, max 20%), Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%) và Hồi sinh (1 lần/trận). | Thiêu đốt bản thân, Buff ST, Hồi máu, Hút máu, Phản kích đơn, Hồi sinh |
 | 8 | **Trình Phổ** | Phòng thủ | | **Lão tướng trấn quân**: Giảm sát thương nhận vào 20%, Hồi máu bản thân 15% HP tối đa và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Giảm ST nhận, Hồi máu, Phản kích đơn |
@@ -198,7 +202,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 | 6 | **Công Tôn Toản** | Tấn công | ⭐ | **Bạch mã nghĩa tùng**: Tấn công hàng sau 220%, Tăng tỷ lệ chí mạng 20% và Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%). | Tăng chí mạng, Phản kích đơn |
 | 7 | **Trương Giác** | Hỗ trợ | ⭐ | **Thái Bình đạo**: Tấn công toàn bộ địch 115%, gây Choáng (tỷ lệ cấp×2%, max 20%), Giảm tỷ lệ chí mạng toàn bộ địch 15% và Thiêu đốt nhẹ (4 lượt). | Choáng, Giảm chí mạng địch, Thiêu đốt |
 | 8 | **Trương Bảo** | Tấn công | | **Địa công tướng quân**: Tấn công hàng ngang 190%, Giảm tỷ lệ chí mạng địch 15% và Giảm 20% ST chí mạng địch (3 lượt). | Giảm chí mạng, Giảm ST chí mạng, +30% ST lên mục tiêu đang debuff |
-| 9 | **Trương Lương** | Tấn công | | **Nhân công tướng quân**: Tấn công hàng dọc 190%, Giảm sát thương địch 15% (3 lượt). | Giảm ST địch |
+| 9 | **Trương Lương** | Tấn công | | **Nhân công tướng quân**: Tấn công hàng trước 190%, Giảm sát thương địch 15% (3 lượt). | Giảm ST địch |
 | 10 | **Hoa Hùng** | Tấn công | ⭐ | **Uy chấn Hổ Lao**: Tấn công đơn 290%, Hút máu đặc biệt theo cấp (cấp×9%, max 90%) và Tăng máu tối đa 10% bản thân. | Hút máu 90% (Signature Quần), Tăng HP max |
 | 11 | **Cao Thuận** | Phòng thủ | | **Hãm Trận Doanh**: Giảm sát thương nhận vào 25%, Tăng máu tối đa 15% cho bản thân và Phản kích toàn bộ địch (Nội tại: cấp×3%, max 30%, ST 30%). | Giảm ST nhận, Tăng HP max, Phản kích diện rộng |
 | 12 | **Trần Cung** | Hỗ trợ | ⭐ | **Mưu định**: Buff sát thương toàn đội 15%, Tăng tỷ lệ chí mạng toàn đội 15%, Tăng 15% ST chí mạng toàn đội VÀ Giải choáng/thiêu đốt cho đồng minh (tỷ lệ 30%-75%). | Buff ST, Tăng chí mạng, Tăng ST chí mạng, Giải choáng & thiêu đốt |
@@ -206,7 +210,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 | 14 | **Văn Sú** | Tấn công | ⭐ | **Mãnh tướng Hà Bắc**: Tấn công hàng ngang 220%, Buff sát thương bản thân 20%, Phản kích đơn mục tiêu (Nội tại: cấp×3%, max 30%, ST 50%) và Hồi sinh (1 lần/trận). | Buff ST, Phản kích đơn, Hồi sinh |
 | 15 | **Điền Phong** | Hỗ trợ | | **Trực gián**: Tấn công hàng ngang 140%, Xóa hiệu ứng có lợi của đối thủ. | Xóa buff địch |
 | 16 | **Mạnh Hoạch** | Phòng thủ | | **Viễn mưu**: Tấn công toàn bộ địch 104%, Tăng máu tối đa cho bản thân và đồng minh cùng hàng 15%, Hồi máu 20% HP tối đa cho bản thân. | Tăng HP max đồng minh, Hồi máu |
-| 17 | **Mã Đằng** | Tấn công | | **Tây Lương thiết kỵ**: Tấn công hàng sau 200%, Buff sát thương bản thân 15% (3 lượt). | Buff ST |
+| 17 | **Mã Đằng** | Tấn công | | **Tây Lương thiết kỵ**: Tấn công hàng trước 200%, Buff sát thương bản thân 15% (3 lượt). | Buff ST |
 | 18 | **Hàn Toại** | Hỗ trợ | | **Liên hoành**: Giảm sát thương nhận vào cho toàn đội 10% và Xóa hiệu ứng bất lợi của bản thân/đồng minh (bao gồm Thiêu đốt). | Giảm ST nhận, Xóa debuff đồng minh |
 | 19 | **Đào Khiêm** | Hỗ trợ | | **Nhân nghĩa Từ Châu**: Hồi máu toàn đội (110% ST cơ bản) và Tăng máu tối đa toàn đội 10%. | Hồi máu, Tăng HP max |
 | 20 | **Trương Lỗ** | Hỗ trợ | | **Ngũ Đấu Mễ Đạo**: Hồi máu hàng trước (220% ST cơ bản), Tăng 15% Giảm sát thương cho hàng trước và Xóa hiệu ứng bất lợi. | Hồi máu, Giảm ST hàng trước, Xóa debuff |

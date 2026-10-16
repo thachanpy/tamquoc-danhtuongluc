@@ -356,7 +356,7 @@ export interface PvpSkillDef {
   healBps: number;
   /** Hồi máu cho bản thân theo HP tối đa (bps). 0 = không tự hồi. */
   selfHealBps: number;
-  /** Choáng: 'single' dùng bảng đơn mục tiêu, 'row' dùng bảng hàng ngang/dọc/diện rộng. */
+  /** Choáng: 'single' dùng bảng đơn mục tiêu, 'row' dùng bảng hàng ngang/hàng trước-hàng sau/diện rộng. */
   stun: 'none' | 'single' | 'row';
   /** Tỉ lệ choáng mỗi cấp (bps; 0 = kỹ năng không choáng). Trần = perLevel × MAX_LEVEL. */
   stunPerLevelBps: number;
@@ -508,14 +508,14 @@ const WEI_PVP: RosterPvpRow[] = [
   { id: 'zhang-liao', skillName: 'Uy chấn Tiêu Dao', style: 'attack', skill: 'DEBUFF', targeting: 'lane', damageBps: 22500, debuff: { damageDownBps: 1000 }, lifestealPerLevelBps: PVP_LIFESTEAL_HIGH_BPS_PER_LEVEL, counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'single' } },
   { id: 'yue-jin', skillName: 'Tiên phong phá địch', style: 'attack', skill: 'ATTACK', targeting: 'single', damageBps: 30000, lifestealPerLevelBps: PVP_LIFESTEAL_SIGNATURE_LOW_BPS_PER_LEVEL, buffs: [{ buffScope: 'self', buff: { hpBps: 1000 } }] },
   { id: 'yu-jin', skillName: 'Nghiêm trận', style: 'defense', skill: 'BUFF', targeting: 'all_allies', selfHealBps: 2000, buffs: [{ buffScope: 'self', buff: { takenDownBps: 2000 } }], counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'single' } },
-  { id: 'zhang-he', skillName: 'Kỳ binh đột kích', style: 'attack', skill: 'STUN', targeting: 'back_row', damageBps: 20000, stun: 'single', stunPerLevelBps: 300 },
+  { id: 'zhang-he', skillName: 'Kỳ binh đột kích', style: 'attack', skill: 'STUN', targeting: 'front_enemies', damageBps: 20000, stun: 'single', stunPerLevelBps: 300 },
   { id: 'xu-huang', skillName: 'Khai sơn phủ', style: 'attack', skill: 'DEBUFF', targeting: 'single', damageBps: 30500, debuff: { damageDownBps: 2000 }, vsDebuffBonusBps: PVP_VS_DEBUFF_BONUS_BPS, counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'single' } },
   { id: 'dian-wei', skillName: 'Ác Lai hộ vệ', style: 'defense', skill: 'BUFF', targeting: 'all_allies', buffs: [{ buffScope: 'self', buff: { hpBps: 2000 } }], selfHealBps: 1500, counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'single' } },
   { id: 'xu-chu', skillName: 'Hổ si cuồng kích', style: 'defense', skill: 'BUFF', targeting: 'single', damageBps: 29500, buffs: [{ buffScope: 'self', buff: { damageBps: 2000 } }], lifestealPerLevelBps: PVP_LIFESTEAL_MID_BPS_PER_LEVEL },
   { id: 'guo-jia', skillName: 'Diệu kế thiên cơ', style: 'support', skill: 'BUFF', targeting: 'all_enemies', damageBps: 8500, debuff: { damageDownBps: 1000 }, buffs: [{ buffScope: 'all_allies', buff: { hpBps: 1500 } }] },
   { id: 'xun-yu', skillName: 'Vương tá chi sách', style: 'support', skill: 'BUFF', targeting: 'all_allies', buffs: [{ buffScope: 'all_allies', buff: { damageBps: 1500, takenDownBps: 1000 } }, { buffScope: 'all_allies', buff: { lifestealBps: PVP_SKILL_BUFF_LIFESTEAL_BPS, rounds: PVP_SKILL_BUFF_LIFESTEAL_ROUNDS, maxLayers: PVP_SKILL_BUFF_LIFESTEAL_MAX_LAYERS } }] },
-  { id: 'xun-you', skillName: 'Liên hoàn kế', style: 'support', skill: 'STUN', targeting: 'row', damageBps: 18000, stun: 'row', stunPerLevelBps: 300 },
-  { id: 'jia-xu', skillName: 'Độc kế', style: 'support', skill: 'STUN', targeting: 'row', damageBps: 15000, stun: 'row', stunPerLevelBps: 300, debuff: { damageDownBps: 2000 } },
+  { id: 'xun-you', skillName: 'Liên hoàn kế', style: 'support', skill: 'STUN', targeting: 'front_enemies', damageBps: 18000, stun: 'row', stunPerLevelBps: 300 },
+  { id: 'jia-xu', skillName: 'Độc kế', style: 'support', skill: 'STUN', targeting: 'front_enemies', damageBps: 15000, stun: 'row', stunPerLevelBps: 300, debuff: { damageDownBps: 2000 } },
   { id: 'sima-yi', skillName: 'Ẩn nhẫn phản kích', style: 'support', skill: 'DEBUFF', targeting: 'all_enemies', damageBps: 12500, debuff: { damageDownBps: 1500, critDownBps: 1500, critDamageDownBps: 2000 } },
   { id: 'pang-de', skillName: 'Quan tài quyết chiến', style: 'defense', skill: 'BUFF', targeting: 'single', damageBps: 28000, lifestealPerLevelBps: PVP_LIFESTEAL_BPS_PER_LEVEL, buffs: [{ buffScope: 'self', buff: { critBps: 2500, critDamageBps: 2500 } }] },
   { id: 'zhen-ji', skillName: 'Lạc Thần', style: 'support', skill: 'HEAL', targeting: 'all_allies', healBps: 11000, buffs: [{ buffScope: 'all_allies', buff: { takenDownBps: 1000 } }] },
@@ -535,7 +535,7 @@ const SHU_PVP: RosterPvpRow[] = [
   { id: 'zhao-yun', skillName: 'Thất Tiến Thất Xuất', style: 'attack', skill: 'ATTACK', targeting: 'lane', damageBps: 20000, buffs: [{ buffScope: 'self', buff: { critBps: 2000, takenDownBps: 2000 } }], lifestealPerLevelBps: PVP_LIFESTEAL_HIGH_BPS_PER_LEVEL, revive: true },
   { id: 'ma-chao', skillName: 'Cẩm Mã Siêu', style: 'attack', skill: 'ATTACK', targeting: 'single', damageBps: 28000, lifestealPerLevelBps: PVP_LIFESTEAL_BURST_BPS_PER_LEVEL, buffs: [{ buffScope: 'self', buff: { hpBps: 1000 } }] },
   { id: 'huang-zhong', skillName: 'Lão Đương Ích Tráng', style: 'attack', skill: 'ATTACK', targeting: 'back_row', damageBps: 21000, buffs: [{ buffScope: 'self', buff: { critBps: 3500 } }] },
-  { id: 'wei-yan', skillName: 'Kỳ phong đột kích', style: 'attack', skill: 'BUFF', targeting: 'row', damageBps: 22000, buffs: [{ buffScope: 'self', buff: { damageBps: 2000 } }], counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'single' } },
+  { id: 'wei-yan', skillName: 'Kỳ phong đột kích', style: 'attack', skill: 'BUFF', targeting: 'front_enemies', damageBps: 22000, buffs: [{ buffScope: 'self', buff: { damageBps: 2000 } }], counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'single' } },
   { id: 'jiang-wei', skillName: 'Kế thừa Khổng Minh', style: 'attack', skill: 'STUN', targeting: 'single', damageBps: 26000, stun: 'single', stunPerLevelBps: 400, buffs: [{ buffScope: 'self', buff: { damageBps: 1500 } }] },
   { id: 'pang-tong', skillName: 'Phượng Sồ liên hoàn', style: 'support', skill: 'BUFF', targeting: 'all_enemies', damageBps: 8500, buffs: [{ buffScope: 'all_allies', buff: { damageBps: 1500 } }] },
   { id: 'fa-zheng', skillName: 'Tiên liệu chiến cơ', style: 'support', skill: 'BUFF', targeting: 'all_allies', buffs: [{ buffScope: 'all_allies', buff: { damageBps: 1500, critBps: 1500, critDamageBps: 2000 } }] },
@@ -543,7 +543,7 @@ const SHU_PVP: RosterPvpRow[] = [
   { id: 'huang-yueying', skillName: 'Cơ quan bát quái', style: 'support', skill: 'BUFF', targeting: 'all_enemies', damageBps: 7500, buffs: [{ buffScope: 'all_allies', buff: { critBps: 1000 } }] },
   { id: 'guan-ping', skillName: 'Thanh Long kế thừa', style: 'attack', skill: 'BUFF', targeting: 'single', damageBps: 26000, buffs: [{ buffScope: 'self', buff: { damageBps: 1500 } }], lifestealPerLevelBps: PVP_LIFESTEAL_BPS_PER_LEVEL, counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'single' } },
   { id: 'guan-xing', skillName: 'Hưng binh trảm tướng', style: 'attack', skill: 'ATTACK', targeting: 'lane', damageBps: 20000, buffs: [{ buffScope: 'self', buff: { critBps: 1500 } }] },
-  { id: 'ma-dai', skillName: 'Truy kích Tây Lương', style: 'attack', skill: 'BUFF', targeting: 'back_row', damageBps: 20000, debuff: { critDownBps: 1500 }, vsDebuffBonusBps: PVP_VS_DEBUFF_BONUS_BPS, buffs: [{ buffScope: 'self', buff: { damageBps: 1500 } }] },
+  { id: 'ma-dai', skillName: 'Truy kích Tây Lương', style: 'attack', skill: 'BUFF', targeting: 'front_enemies', damageBps: 20000, debuff: { critDownBps: 1500 }, vsDebuffBonusBps: PVP_VS_DEBUFF_BONUS_BPS, buffs: [{ buffScope: 'self', buff: { damageBps: 1500 } }] },
   { id: 'wang-ping', skillName: 'Kiên thủ Hán Trung', style: 'defense', skill: 'BUFF', targeting: 'all_allies', selfHealBps: 1500, buffs: [{ buffScope: 'self', buff: { takenDownBps: 2500 } }, { buffScope: 'same_row_allies', buff: { takenDownBps: 1000 } }] },
   { id: 'liao-hua', skillName: 'Lão tướng tiên phong', style: 'defense', skill: 'BUFF', targeting: 'single', damageBps: 27000, buffs: [{ buffScope: 'self', buff: { hpBps: 1500 } }], counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'single' } },
   { id: 'jian-yong', skillName: 'Du thuyết', style: 'support', skill: 'PURIFY', targeting: 'all_allies', buffs: [{ buffScope: 'all_allies', buff: { damageBps: 1000 } }], purify: true },
@@ -562,7 +562,7 @@ const WU_PVP: RosterPvpRow[] = [
   { id: 'sun-ce', skillName: 'Tiểu Bá Vương', style: 'defense', skill: 'BUFF', targeting: 'all_enemies', damageBps: 12350, buffs: [{ buffScope: 'self', buff: { damageBps: 2000 } }], lifestealPerLevelBps: PVP_LIFESTEAL_MID_BPS_PER_LEVEL, counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'single' } },
   { id: 'sun-quan', skillName: 'Đế nghiệp Giang Đông', style: 'support', skill: 'BUFF', targeting: 'all_allies', buffs: [{ buffScope: 'all_allies', buff: { damageBps: 1500, takenDownBps: 1000 } }] },
   { id: 'zhou-yu', skillName: 'Hỏa thiêu Xích Bích', style: 'attack', skill: 'BURN', targeting: 'all_enemies', damageBps: 11700, debuff: { burnBps: PVP_BURN_BPS, burnRounds: PVP_BURN_ROUNDS_LONG, burnMaxLayers: PVP_BURN_MAX_LAYERS_LONG }, burnCritMulBps: PVP_BURN_CRIT_MUL_BPS },
-  { id: 'lu-xun', skillName: 'Hỏa kế liên doanh', style: 'attack', skill: 'BURN', targeting: 'row', damageBps: 18000, debuff: { burnBps: PVP_BURN_BPS, burnRounds: PVP_BURN_ROUNDS_LONG, burnMaxLayers: PVP_BURN_MAX_LAYERS_LONG, hpDownBps: 1000 }, lifestealPerLevelBps: PVP_LIFESTEAL_BPS_PER_LEVEL, burnLifesteal: true },
+  { id: 'lu-xun', skillName: 'Hỏa kế liên doanh', style: 'attack', skill: 'BURN', targeting: 'front_enemies', damageBps: 18000, debuff: { burnBps: PVP_BURN_BPS, burnRounds: PVP_BURN_ROUNDS_LONG, burnMaxLayers: PVP_BURN_MAX_LAYERS_LONG, hpDownBps: 1000 }, lifestealPerLevelBps: PVP_LIFESTEAL_BPS_PER_LEVEL, burnLifesteal: true },
   { id: 'lu-meng', skillName: 'Bạch y độ giang', style: 'defense', skill: 'BUFF', targeting: 'single', damageBps: 29000, buffs: [{ buffScope: 'all_allies', buff: { hpBps: 1000 } }] },
   { id: 'huang-gai', skillName: 'Khổ nhục kế', style: 'defense', skill: 'BURN', targeting: 'all_allies', buffs: [{ buffScope: 'self', buff: { damageBps: 3000 } }], selfHealBps: 1000, lifestealPerLevelBps: PVP_LIFESTEAL_BPS_PER_LEVEL, revive: true, counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'single' }, selfBurn: true, selfBurnRounds: PVP_BURN_ROUNDS_LONG },
   { id: 'cheng-pu', skillName: 'Lão tướng trấn quân', style: 'defense', skill: 'BUFF', targeting: 'all_allies', buffs: [{ buffScope: 'self', buff: { takenDownBps: 2000 } }], selfHealBps: 1500, counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'single' } },
@@ -597,7 +597,7 @@ const QUN_PVP: RosterPvpRow[] = [
   { id: 'gongsun-zan', skillName: 'Bạch mã nghĩa tùng', style: 'attack', skill: 'ATTACK', targeting: 'back_row', damageBps: 22000, buffs: [{ buffScope: 'self', buff: { critBps: 2000 } }], counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'single' } },
   { id: 'zhang-jiao', skillName: 'Thái Bình đạo', style: 'support', skill: 'STUN', targeting: 'all_enemies', damageBps: 11500, stun: 'row', stunPerLevelBps: 200, debuff: { burnBps: PVP_BURN_BPS, burnRounds: PVP_BURN_ROUNDS, critDownBps: 1500 } },
   { id: 'zhang-bao', skillName: 'Địa công tướng quân', style: 'attack', skill: 'DEBUFF', targeting: 'lane', damageBps: 19000, debuff: { critDownBps: 1500, critDamageDownBps: 2000 }, vsDebuffBonusBps: PVP_VS_DEBUFF_BONUS_BPS },
-  { id: 'zhang-liang', skillName: 'Nhân công tướng quân', style: 'attack', skill: 'DEBUFF', targeting: 'row', damageBps: 19000, debuff: { damageDownBps: 1500 } },
+  { id: 'zhang-liang', skillName: 'Nhân công tướng quân', style: 'attack', skill: 'DEBUFF', targeting: 'front_enemies', damageBps: 19000, debuff: { damageDownBps: 1500 } },
   { id: 'hua-xiong', skillName: 'Uy chấn Hổ Lao', style: 'attack', skill: 'ATTACK', targeting: 'single', damageBps: 29000, lifestealPerLevelBps: PVP_LIFESTEAL_SIGNATURE_MID_BPS_PER_LEVEL, buffs: [{ buffScope: 'self', buff: { hpBps: 1000 } }] },
   { id: 'gao-shun', skillName: 'Hãm Trận Doanh', style: 'defense', skill: 'BUFF', targeting: 'all_allies', buffs: [{ buffScope: 'self', buff: { takenDownBps: 2500, hpBps: 1500 } }], counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_ALL_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'all' } },
   { id: 'chen-gong', skillName: 'Mưu định', style: 'support', skill: 'CLEANSE', targeting: 'all_allies', buffs: [{ buffScope: 'all_allies', buff: { damageBps: 1500, critBps: 1500, critDamageBps: 1500 } }], cleanse: true },
@@ -605,7 +605,7 @@ const QUN_PVP: RosterPvpRow[] = [
   { id: 'wen-chou', skillName: 'Mãnh tướng Hà Bắc', style: 'attack', skill: 'BUFF', targeting: 'lane', damageBps: 22000, buffs: [{ buffScope: 'self', buff: { damageBps: 2000 } }], revive: true, counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'single' } },
   { id: 'tian-feng', skillName: 'Trực gián', style: 'support', skill: 'DISPEL', targeting: 'lane', damageBps: 14000, dispel: true },
   { id: 'meng-huo', skillName: 'Viễn mưu', style: 'defense', skill: 'BUFF', targeting: 'all_enemies', damageBps: 10400, buffs: [{ buffScope: 'same_row_allies', buff: { hpBps: 1500 } }], selfHealBps: 2000 },
-  { id: 'ma-teng', skillName: 'Tây Lương thiết kỵ', style: 'attack', skill: 'BUFF', targeting: 'back_row', damageBps: 20000, buffs: [{ buffScope: 'self', buff: { damageBps: 1500 } }] },
+  { id: 'ma-teng', skillName: 'Tây Lương thiết kỵ', style: 'attack', skill: 'BUFF', targeting: 'front_enemies', damageBps: 20000, buffs: [{ buffScope: 'self', buff: { damageBps: 1500 } }] },
   { id: 'han-sui', skillName: 'Liên hoành', style: 'support', skill: 'PURIFY', targeting: 'all_allies', purify: true, buffs: [{ buffScope: 'all_allies', buff: { takenDownBps: 1000 } }] },
   { id: 'tao-qian', skillName: 'Nhân nghĩa Từ Châu', style: 'support', skill: 'HEAL', targeting: 'all_allies', healBps: 11000, buffs: [{ buffScope: 'all_allies', buff: { hpBps: 1000 } }] },
   { id: 'zhang-lu', skillName: 'Ngũ Đấu Mễ Đạo', style: 'support', skill: 'PURIFY', targeting: 'front_allies', healBps: 22000, purify: true, buffs: [{ buffScope: 'front_allies', buff: { takenDownBps: 1500 } }] },
@@ -620,7 +620,7 @@ const QUN_PVP: RosterPvpRow[] = [
 export const PVP_ROSTER_ROWS: readonly RosterPvpRow[] = [...WEI_PVP, ...SHU_PVP, ...WU_PVP, ...QUN_PVP];
 
 /** Targeting nhắm vào ĐỊCH (cho hiệu ứng bất lợi/thiêu đốt/xóa buff). */
-const ENEMY_TARGETINGS: readonly PvpTargeting[] = ['single', 'lane', 'row', 'back_row', 'back_single', 'highest_damage_enemy', 'front_enemies', 'all_enemies'];
+const ENEMY_TARGETINGS: readonly PvpTargeting[] = ['single', 'lane', 'back_row', 'back_single', 'highest_damage_enemy', 'front_enemies', 'all_enemies'];
 /** Targeting nhắm vào ĐỒNG MINH (cho hồi máu/thanh tẩy/buff đồng minh). */
 const ALLY_TARGETINGS: readonly PvpTargeting[] = ['all_allies', 'lowest_ally', 'front_allies', 'back_allies'];
 export const isEnemyTargeting = (t: PvpTargeting) => ENEMY_TARGETINGS.includes(t);

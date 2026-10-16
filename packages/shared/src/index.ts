@@ -796,17 +796,16 @@ export const PVP_SKILL_LABELS: Record<PvpSkill, string> = {
 };
 
 /** Cách chọn mục tiêu của kỹ năng (PVP.md mục 2.4). */
-export const PVP_TARGETINGS = ['single', 'lane', 'row', 'back_row', 'back_single', 'highest_damage_enemy', 'front_enemies', 'all_enemies', 'all_allies', 'lowest_ally', 'front_allies', 'back_allies'] as const;
+export const PVP_TARGETINGS = ['single', 'lane', 'back_row', 'back_single', 'highest_damage_enemy', 'front_enemies', 'all_enemies', 'all_allies', 'lowest_ally', 'front_allies', 'back_allies'] as const;
 export type PvpTargeting = (typeof PVP_TARGETINGS)[number];
 
 export const PVP_TARGETING_LABELS: Record<PvpTargeting, string> = {
   single: 'một mục tiêu (ưu tiên cùng hàng ngang)',
   lane: 'toàn bộ hàng ngang',
-  row: 'toàn bộ hàng dọc',
   back_row: 'các tướng ở hàng sau',
   back_single: 'một tướng ở hàng sau',
   highest_damage_enemy: 'tướng địch có sát thương cao nhất',
-  front_enemies: 'các tướng hàng trước của địch',
+  front_enemies: 'các tướng ở hàng trước (hết hàng trước thì đánh hàng sau)',
   all_enemies: 'toàn bộ tướng địch',
   all_allies: 'toàn bộ đồng minh',
   lowest_ally: 'đồng minh thấp máu nhất',

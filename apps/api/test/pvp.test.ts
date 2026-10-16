@@ -504,8 +504,26 @@ test('engine: buff chỉ số cộng dồn, giữ tối đa PVP_BUFF_MAX_LAYERS 
   assert.ok(buffOfAlly >= 3, 'đồng minh nhận lớp buff mới qua các lượt');
 });
 
-test('engine: Lục Tốn đánh hàng DỌC (row) chứ không phải hàng ngang (mục 13.2)', () => {
-  assert.equal(skillDef('lu-xun').targeting, 'row');
+test('engine: Lục Tốn đánh hàng TRƯỚC (front_enemies) chứ không phải hàng ngang (mục 13.2)', () => {
+  assert.equal(skillDef('lu-xun').targeting, 'front_enemies');
+});
+
+test('engine: đánh "hàng trước" luôn nhắm 3 tướng hàng trước của địch, không phụ thuộc vị trí người thi triển (mục 2.4)', () => {
+  // Giả Hủ đứng ở hàng SAU (slot 4) nhưng kỹ năng chỉ đánh 3 tướng ở hàng TRƯỚC của địch (idx 6-8).
+  const res = simulatePvp(
+    [
+      one('a', [{ slot: 4, generalId: 'jia-xu', level: 10 }]),
+      one('b', [
+        { slot: 1, generalId: 'da-qiao', level: 10 },
+        { slot: 2, generalId: 'zhu-huan', level: 10 },
+        { slot: 3, generalId: 'taishi-ci', level: 10 },
+        { slot: 4, generalId: 'yuan-shu', level: 10 },
+      ]),
+    ],
+    never,
+  );
+  const act = res.events.find((e): e is Extract<PvpEventDto, { t: 'act' }> => e.t === 'act' && e.idx === 3)!;
+  assert.deepEqual(act.targets, [6, 7, 8], 'chỉ đánh 3 tướng ở cột trước của địch');
 });
 
 test('engine: hàng mục tiêu trống thì quay sang hàng còn lại (mục 2.4)', () => {

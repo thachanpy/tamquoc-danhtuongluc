@@ -314,12 +314,6 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         const sameLane = enemies.filter((e) => e.lane === u.lane);
         return sameLane.length ? sameLane : enemies;
       }
-      case 'row': {
-        // Hàng dọc: đánh hàng của bản thân; nếu hàng đó đã sạch thì quay sang hàng còn lại.
-        const sameRow = enemies.filter((e) => e.row === u.row);
-        if (sameRow.length) return sameRow;
-        return u.row === 'front' ? back : front;
-      }
       case 'back_row':
         // Đánh hàng sau: nếu hàng sau chết hết thì quay ra đánh hàng trước.
         return back.length ? back : front;
