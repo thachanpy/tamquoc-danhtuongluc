@@ -1,6 +1,7 @@
 import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import type { Faction, PvpSide, PvpSkill, PvpStyle } from '@tq/shared';
 import { FACTION_STYLE, initials, levelTier, portraitUrl, prefersReducedMotion } from '../art.ts';
+import { iconSvg, iconViewBox, type IconId } from '../icons.ts';
 import { castKindOf, spawnSkillFx, type Fx, type FxKind } from './skillsfx.ts';
 
 /**
@@ -18,11 +19,11 @@ const DIV_W = 28;
 const SIDE_GAP = 10;
 const SIDE_W = (W - DIV_W) / 2 - SIDE_GAP;
 const PAD = 6;
-const COL_GAP = 8;
+const COL_GAP = 14;
 const COL_W = (SIDE_W - PAD * 2 - COL_GAP) / 2;
 const TILE_H = 130;
-const ROW_GAP = 6;
-const ROW_Y0 = 26;
+const ROW_GAP = 12;
+const ROW_Y0 = 20;
 /** Vòng chân dung trong ô (56px, khớp ô tướng ở trang chuẩn bị chiến). */
 const ART_R = 28;
 const ART_CY = 16 + ART_R;
@@ -32,6 +33,9 @@ const HP_Y = 96;
 const HP_H = 6;
 const NUM_Y = 108;
 const INFO_Y = 120;
+/** Dòng chỉ số trong ô: cỡ chữ và bộ icon theo thứ tự hiển thị (sát thương · chí mạng · ST chí mạng). */
+const INFO_FONT = 10.5;
+const INFO_ITEMS: readonly IconId[] = ['attack', 'crit-rate', 'crit-dmg'];
 /** Tên tướng nằm ngay dưới chân dung (khớp font/màu ô tướng ở trang chuẩn bị chiến). */
 const NAME_Y = 82;
 /** Chip hiệu ứng trên ô: cỡ chữ tối đa/tối thiểu, khoảng cách, số hàng tối đa khi phải xuống dòng. */
@@ -53,10 +57,14 @@ const C = {
   ok: 0x3fbf7f,
   bad: 0xef5b5b,
   muted: 0x9aa0ab,
-  hpMine: 0x3fbf7f,
-  hpFoe: 0xd9534f,
-  numMine: 0xb9e8cd,
-  numFoe: 0xf3b6b2,
+  /** Thanh máu phe TA — xanh lá. */
+  hp: 0x3fbf7f,
+  /** Thanh máu phe ĐỊCH — đỏ, nhìn là biết ngay bên nào. */
+  hpEnemy: 0xef5b5b,
+  /** Màu số máu trên đầu thanh máu phe ta. */
+  numHp: 0xb9e8cd,
+  /** Màu số máu phe địch (hồng nhạt cho khớp thanh máu đỏ). */
+  numHpEnemy: 0xf2c0ba,
   numLow: 0xffd75e,
   info: 0xffcf8a,
   infoUp: 0x9df3c2,
@@ -64,9 +72,23 @@ const C = {
   heal: 0x6ef0a6,
   crit: 0xffd75e,
   stun: 0xffd75e,
-  debuff: 0xc08bff,
+  /** Hiệu ứng bất lợi — ĐỎ (không dùng tím). */
+  debuff: 0xef5b5b,
   burn: 0xff9a4d,
 };
+
+/** Mã màu hex cho bộ nạp SVG của PixiJS (nó không hiểu `currentColor`). */
+const hex = (color: number) => `#${color.toString(16).padStart(6, '0')}`;
+
+/**
+ * Vẽ icon hiệu ứng chiến đấu (bộ icon trong `icons.ts`) với gốc ở góc trên-trái khung `size`×`size`.
+ * Dùng `Graphics#svg` của PixiJS v8 nên hình dạng luôn khớp đúng icon ở giao diện DOM.
+ */
+function drawIcon(g: Graphics, id: IconId, size: number, color: number): void {
+  g.clear().svg(iconSvg(id, hex(color)));
+  // PixiJS bỏ qua viewBox nên tự quy đổi theo khung gốc của từng icon (mặc định 24).
+  g.scale.set(size / iconViewBox(id));
+}
 
 /** Màu nhãn phong cách chiến đấu (khớp .pvp-style ở trang chuẩn bị chiến). */
 const STYLE_TONE: Record<PvpStyle, number> = {
@@ -128,11 +150,13 @@ export interface ArenaUnit {
 export interface ArenaView {
   hp: number;
   maxHp: number;
+  /** Tổng lượng khiên đang hấp thụ (mọi lớp) — hiện thành thanh trắng nhạt trên thanh máu. */
+  shield: number;
   alive: boolean;
   stunned: boolean;
   /** Đang được tăng sức mạnh → dòng chỉ số sáng xanh. */
   buffed: boolean;
-  /** Đang bị giảm sức mạnh → dòng chỉ số đổi màu tím. */
+  /** Đang bị giảm sức mạnh → dòng chỉ số đổi màu đỏ. */
   debuffed: boolean;
   /** Sát thương hiện tại = nền + buff − debuff (chỉ để hiển thị). */
   damage: number;
@@ -140,8 +164,8 @@ export interface ArenaView {
   critBps: number;
   /** Sát thương chí mạng hiện tại (bps) = nền + buff − debuff. */
   critDamageBps: number;
-  /** Hiệu ứng đang có trên tướng — hiển thị RÕ tăng/giảm chỉ số nào và bao nhiêu (chip trên ô). */
-  effects: { text: string; tone: 'buff' | 'debuff' | 'burn' }[];
+  /** Hiệu ứng đang có trên tướng — mỗi chip là MỘT icon chỉ số kèm giá trị tăng/giảm cụ thể. */
+  effects: { icon?: IconId; text: string; tone: 'buff' | 'debuff' | 'burn' }[];
 }
 
 export interface ArenaSnapshot {
@@ -153,8 +177,8 @@ export interface ArenaSnapshot {
 
 export interface ArenaHandle {
   sync(s: ArenaSnapshot): void;
-  /** Số sát thương/hồi máu/buff bay lên trên ô tướng. */
-  float(idx: number, text: string, crit: boolean, heal?: boolean): void;
+  /** Số sát thương/hồi máu/buff bay lên trên ô tướng (mỗi mảnh có thể kèm icon hiệu ứng). */
+  float(idx: number, parts: FloatPart[], crit: boolean, heal?: boolean): void;
   /** Hiệu ứng niệm chiêu ở ô tướng thi triển, kiểu theo nhóm kỹ năng + phe + sắc thái riêng tướng. */
   cast(idx: number, skill: PvpSkill): void;
   /** Hiệu ứng va chạm trên ô mục tiêu, kiểu theo sự kiện (sát thương, hồi máu, buff, debuff…). */
@@ -199,33 +223,56 @@ async function loadPortraits(keys: string[]): Promise<void> {
   );
 }
 
+/** Một mảnh của số bay lên trên ô tướng: icon hiệu ứng (tuỳ chọn) + chữ. */
+export interface FloatPart {
+  icon?: IconId;
+  text: string;
+}
+
 /** Số sát thương/hồi máu bay lên rồi tan. Luôn rõ nét: chỉ mờ ở 20% cuối của hoạt ảnh. */
 class FloatFx {
-  readonly text: Text;
+  readonly c = new Container();
   private readonly y0: number;
   private readonly crit: boolean;
   private readonly reduce: boolean;
   private readonly ms: number;
   private t = 0;
 
-  constructor(parent: Container, x: number, y: number, label: string, crit: boolean, heal: boolean, reduce: boolean) {
+  constructor(parent: Container, x: number, y: number, parts: FloatPart[], crit: boolean, heal: boolean, reduce: boolean) {
     this.crit = crit;
     this.reduce = reduce;
     this.y0 = y;
     this.ms = reduce ? 500 : crit ? 1050 : 950;
-    this.text = new Text({
-      text: label,
-      style: {
-        fontFamily: NUM_FONT,
-        fontSize: crit ? 40 : 26,
-        fontWeight: '900',
-        fill: crit ? C.crit : heal ? C.heal : C.dmg,
-        stroke: { color: 0x000000, width: crit ? 5 : 4 },
-      },
+    const size = crit ? 40 : 26;
+    const fill = crit ? C.crit : heal ? C.heal : C.dmg;
+    // Mỗi mảnh là một dòng chữ; mảnh có icon thì icon đứng ngay trước số (cùng cỡ, cùng màu).
+    const texts = parts.map((p) => {
+      const t = new Text({
+        text: p.text,
+        style: { fontFamily: NUM_FONT, fontSize: size, fontWeight: '900', fill, stroke: { color: 0x000000, width: crit ? 5 : 4 } },
+      });
+      t.anchor.set(0, 0.5);
+      return t;
     });
-    this.text.anchor.set(0.5);
-    this.text.position.set(x, y);
-    parent.addChild(this.text);
+    const gap = size * 0.18;
+    const icoSize = size * 0.78;
+    const total = parts.reduce((a, p, i) => a + (i ? gap : 0) + (p.icon ? icoSize + gap * 0.4 : 0) + texts[i]!.width, 0);
+    let x0 = -total / 2;
+    for (let i = 0; i < parts.length; i++) {
+      if (i) x0 += gap;
+      if (parts[i]!.icon) {
+        const g = new Graphics();
+        drawIcon(g, parts[i]!.icon!, icoSize, fill);
+        g.position.set(x0, -icoSize / 2);
+        this.c.addChild(g);
+        x0 += icoSize + gap * 0.4;
+      }
+      texts[i]!.position.set(x0, 0);
+      this.c.addChild(texts[i]!);
+      x0 += texts[i]!.width;
+    }
+    this.c.position.set(x, y);
+    parent.addChild(this.c);
   }
 
   tick(dt: number): boolean {
@@ -233,9 +280,9 @@ class FloatFx {
     const p = Math.min(1, this.t / this.ms);
     const e = easeOut(p);
     const grow = easeOut(Math.min(1, p / 0.25));
-    this.text.y = this.y0 - (this.reduce ? 0 : e * (this.crit ? 36 : 26));
-    this.text.scale.set(this.crit ? 0.75 + 0.25 * grow : 0.9 + 0.1 * grow);
-    this.text.alpha = p < 0.8 ? 1 : 1 - (p - 0.8) / 0.2;
+    this.c.y = this.y0 - (this.reduce ? 0 : e * (this.crit ? 36 : 26));
+    this.c.scale.set(this.crit ? 0.75 + 0.25 * grow : 0.9 + 0.1 * grow);
+    this.c.alpha = p < 0.8 ? 1 : 1 - (p - 0.8) / 0.2;
     return p >= 1;
   }
 }
@@ -244,18 +291,27 @@ class FloatFx {
 class Tile {
   readonly root = new Container();
   private readonly u: ArenaUnit;
+  /** Ô của phe TA hay phe ĐỊCH — quyết định màu thanh máu (xanh / đỏ). */
+  private readonly mine: boolean;
   private readonly baseY: number;
-  private readonly color: number;
   private readonly artC = new Container();
   /** Chữ viết tắt phe/tên hiện khi CHƯA có ảnh chân dung; có ảnh thì ẩn để không lộ qua ảnh trong suốt. */
   private readonly iniT: Text;
   private readonly hpFill = new Graphics();
+  /** Thanh khiên (trắng nhạt) neo ở mép phải của thanh máu ĐANG CÓ rồi mọc dài về bên trái. */
+  private readonly shieldFill = new Graphics();
   private readonly hpT: Text;
-  private readonly infoT: Text;
+  /** Dòng chỉ số kèm icon: [kiếm] sát thương · [tia sét] chí mạng · [vụ nổ] ST chí mạng. */
+  private readonly infoC = new Container();
+  private readonly infoIcons: Graphics[] = [];
+  private readonly infoVals: Text[] = [];
+  private readonly infoSeps: Text[] = [];
+  /** Màu đang dùng cho dòng chỉ số (đổi theo buff/debuff) — chỉ vẽ lại icon khi màu đổi. */
+  private infoTone = -1;
   private readonly buffFx: Graphics;
-  /** Hàng chip hiệu ứng trạng thái ở góc trên phải ô: ▲ buff, ▼ suy yếu, 🔥 thiêu đốt, PK phản kích. */
+  /** Hàng chip hiệu ứng trạng thái ở góc trên phải ô: icon chỉ số + giá trị tăng/giảm. */
   private readonly fxC = new Container();
-  private readonly chips: { c: Container; bg: Graphics; t: Text; w: number }[] = [];
+  private readonly chips: { c: Container; bg: Graphics; ico: Graphics; t: Text; w: number; icoKey: string }[] = [];
   private readonly stunFx = new Container();
   private readonly stunRing = new Graphics();
   private readonly stars: Text[] = [];
@@ -266,13 +322,15 @@ class Tile {
   private readonly turnT: Text;
   private hpShown = 0;
   private hpTarget = 1;
+  private shieldShown = 0;
+  private shieldTarget = 0;
 
   constructor(u: ArenaUnit, mySide: PvpSide) {
     this.u = u;
     const mine = u.side === mySide;
+    this.mine = mine;
     const { x, y } = tilePos(u.side, u.slot, mySide);
     this.baseY = y;
-    this.color = mine ? C.hpMine : C.hpFoe;
     this.root.position.set(x, y);
 
     const body = new Graphics().roundRect(0, 0, COL_W, TILE_H, 10).fill({ color: 0x0a0604, alpha: 0.45 });
@@ -325,15 +383,29 @@ class Tile {
     const hpBg = new Graphics().roundRect(8, HP_Y, HP_W, HP_H, 3).fill({ color: 0xffffff, alpha: 0.1 });
     this.hpT = new Text({
       text: '',
-      style: { fontFamily: NUM_FONT, fontSize: 11, fontWeight: '700', fill: mine ? C.numMine : C.numFoe },
+      style: { fontFamily: NUM_FONT, fontSize: 11, fontWeight: '700', fill: C.numHp },
     });
     this.hpT.anchor.set(0.5);
     this.hpT.position.set(COL_W / 2, NUM_Y);
 
-    // Dòng chỉ số: cùng font/cỡ với .pvp-cell-stat (600 10.5px), chữ màu --text như số liệu ở trang chuẩn bị chiến
-    this.infoT = new Text({ text: '', style: { fontFamily: NUM_FONT, fontSize: 10.5, fontWeight: '600', fill: C.text } });
-    this.infoT.anchor.set(0.5);
-    this.infoT.position.set(COL_W / 2, INFO_Y);
+    // Dòng chỉ số (cùng font/cỡ với .pvp-cell-stat: 600 10.5px) có ICON thay ký hiệu chữ:
+    // [kiếm] sát thương · [tia sét] tỉ lệ chí mạng · [vụ nổ] sát thương chí mạng.
+    this.infoC.position.set(0, INFO_Y);
+    for (let i = 0; i < INFO_ITEMS.length; i++) {
+      if (i) {
+        const sep = new Text({ text: '·', style: { fontFamily: NUM_FONT, fontSize: INFO_FONT, fontWeight: '600', fill: C.text } });
+        sep.anchor.set(0.5);
+        this.infoSeps.push(sep);
+        this.infoC.addChild(sep);
+      }
+      const ico = new Graphics();
+      const val = new Text({ text: '', style: { fontFamily: NUM_FONT, fontSize: INFO_FONT, fontWeight: '600', fill: C.text } });
+      val.anchor.set(0, 0.5);
+      this.infoIcons.push(ico);
+      this.infoVals.push(val);
+      this.infoC.addChild(ico, val);
+    }
+    this.root.addChild(this.infoC);
 
     // Hàng chip hiệu ứng trạng thái ở góc trên phải ô (chip tạo lười khi cần).
     this.fxC.position.set(0, 5);
@@ -379,8 +451,9 @@ class Tile {
       name,
       hpBg,
       this.hpFill,
+      this.shieldFill,
       this.hpT,
-      this.infoT,
+      this.infoC,
       this.stunFx,
       this.fxC,
       this.turnC,
@@ -415,27 +488,24 @@ class Tile {
 
   apply(v: ArenaView, acting: boolean, targeted: boolean): void {
     this.hpTarget = v.maxHp > 0 ? Math.max(0, Math.min(1, v.hp / v.maxHp)) : 0;
+    this.shieldTarget = v.maxHp > 0 ? Math.max(0, Math.min(1, v.shield / v.maxHp)) : 0;
     const pctv = Math.round(this.hpTarget * 100);
     const low = v.alive && this.hpTarget <= 0.25;
     this.hpT.text = v.alive ? `${num(v.hp)} · ${pctv}%` : 'Đã hạ';
-    this.hpT.style.fill = v.alive ? (low ? C.numLow : this.color === C.hpMine ? C.numMine : C.numFoe) : C.muted;
+    this.hpT.style.fill = v.alive ? (low ? C.numLow : this.mine ? C.numHp : C.numHpEnemy) : C.muted;
     this.hpT.visible = true;
 
-    // Dòng chỉ số sống theo buff/debuff: sát thương · tỉ lệ chí mạng · sát thương chí mạng.
-    // Đang được buff thì sáng xanh, đang bị debuff thì tím, bình thường dùng màu chữ --text.
-    this.infoT.text = `⚔ ${num(v.damage)} · CM ${(v.critBps / 100).toFixed(0)}% · STCM ${(v.critDamageBps / 100).toFixed(0)}%`;
-    this.infoT.style.fill = v.buffed ? C.infoUp : v.debuffed ? C.debuff : C.text;
-    // Chỉ số dài (số lớn / buff nhiều) có thể tràn ô: thu nhỏ vừa bề rộng ô.
-    this.infoT.scale.set(1);
-    if (this.infoT.width > COL_W - 8) this.infoT.scale.set((COL_W - 8) / this.infoT.width);
-    this.infoT.visible = v.alive;
+    // Dòng chỉ số sống theo buff/debuff: [kiếm] sát thương · [tia sét] chí mạng · [vụ nổ] ST chí mạng.
+    // Đang được buff thì sáng xanh, đang bị debuff thì đỏ, bình thường dùng màu chữ --text.
+    const tone = v.buffed ? C.infoUp : v.debuffed ? C.debuff : C.text;
+    this.setInfoLine(v.damage, v.critBps, v.critDamageBps, tone, v.alive);
 
     this.buffFx.visible = v.buffed;
-    // Chip hiệu ứng: nhìn vào ô là biết tướng đang được tăng / bị giảm chỉ số nào và bao nhiêu
-    // (không dùng ký hiệu chung chung) + chip "PK" cho nội tại Phản kích.
+    // Chip hiệu ứng: mỗi chip là MỘT icon chỉ số kèm giá trị tăng/giảm cụ thể
+    // + chip "PK" cho nội tại Phản kích.
     const toneColor = { buff: C.ok, debuff: C.debuff, burn: C.burn } as const;
-    const chips = v.effects.map((e) => ({ text: e.text, color: toneColor[e.tone] }));
-    if (this.u.counter) chips.push({ text: 'PK', color: C.gold2 });
+    const chips = v.effects.map((e) => ({ icon: e.icon, text: e.text, color: toneColor[e.tone] }));
+    if (this.u.counter) chips.push({ icon: undefined, text: 'PK', color: C.gold2 });
     this.setChips(v.alive ? chips : []);
     this.stunFx.visible = v.stunned;
     this.tgtFx.visible = targeted;
@@ -449,18 +519,56 @@ class Tile {
   }
 
   /**
-   * Cập nhật hàng chip hiệu ứng (tạo lười, canh phải ở góc trên ô).
-   * Nội dung chip là chỉ số cụ thể nên có thể dài: tự thu nhỏ cỡ chữ rồi xuống dòng (tối đa 2 hàng)
-   * để không bao giờ tràn ra ngoài ô.
+   * Dòng chỉ số có ICON: [kiếm] sát thương · [tia sét] tỉ lệ chí mạng · [vụ nổ] ST chí mạng.
+   * Icon chỉ vẽ lại khi MÀU đổi (theo buff/debuff) để không phải nạp lại SVG mỗi sự kiện.
    */
-  private setChips(items: { text: string; color: number }[]): void {
+  private setInfoLine(damage: number, critBps: number, critDamageBps: number, tone: number, alive: boolean): void {
+    this.infoVals[0]!.text = num(damage);
+    this.infoVals[1]!.text = `${(critBps / 100).toFixed(0)}%`;
+    this.infoVals[2]!.text = `${(critDamageBps / 100).toFixed(0)}%`;
+    for (const t of this.infoVals) t.style.fill = tone;
+    if (this.infoTone !== tone) {
+      this.infoTone = tone;
+      for (let i = 0; i < INFO_ITEMS.length; i++) drawIcon(this.infoIcons[i]!, INFO_ITEMS[i]!, INFO_FONT + 2, tone);
+    }
+    const size = INFO_FONT + 2;
+    const gap = 2;
+    const sepW = this.infoSeps[0]!.width;
+    let total = INFO_ITEMS.length * (size + gap) + this.infoSeps.length * (sepW + gap * 2);
+    for (const t of this.infoVals) total += t.width;
+    // Chỉ số dài (số lớn / nhiều chữ số) thu nhỏ vừa bề rộng ô thay vì tràn ra ngoài.
+    const scale = total > COL_W - 8 ? (COL_W - 8) / total : 1;
+    this.infoC.scale.set(scale);
+    this.infoC.x = (COL_W - total * scale) / 2;
+    let x = 0;
+    for (let i = 0; i < INFO_ITEMS.length; i++) {
+      if (i) {
+        const sep = this.infoSeps[i - 1]!;
+        sep.position.set(x + gap + sepW / 2, 0);
+        x += gap + sepW + gap;
+      }
+      this.infoIcons[i]!.position.set(x, -size / 2);
+      x += size + gap;
+      this.infoVals[i]!.position.set(x, 0);
+      x += this.infoVals[i]!.width;
+    }
+    this.infoC.visible = alive;
+  }
+
+  /**
+   * Cập nhật hàng chip hiệu ứng (tạo lười, canh phải ở góc trên ô).
+   * Mỗi chip = icon chỉ số + giá trị tăng/giảm; nội dung có thể dài nên tự thu nhỏ cỡ chữ
+   * rồi xuống dòng (tối đa 2 hàng) để không bao giờ tràn ra ngoài ô.
+   */
+  private setChips(items: { icon?: IconId; text: string; color: number }[]): void {
     while (this.chips.length < items.length) {
       const bg = new Graphics();
+      const ico = new Graphics();
       const t = new Text({ text: '', style: { fontFamily: NUM_FONT, fontSize: CHIP_FONT, fontWeight: '800', fill: 0xffffff } });
       t.anchor.set(0.5);
       const c = new Container();
-      c.addChild(bg, t);
-      this.chips.push({ c, bg, t, w: 0 });
+      c.addChild(bg, ico, t);
+      this.chips.push({ c, bg, ico, t, w: 0, icoKey: '' });
       this.fxC.addChild(c);
     }
     for (const chip of this.chips) chip.c.visible = false;
@@ -470,6 +578,8 @@ class Tile {
     }
 
     const avail = COL_W - 12;
+    const pad = 5;
+    const gap = 3;
     let font = CHIP_FONT;
     let widths: number[] = [];
     let rows: number[][] = [];
@@ -480,7 +590,7 @@ class Tile {
         t.text = it.text;
         t.style.fill = it.color;
         t.style.fontSize = font;
-        return t.width + 10;
+        return t.width + pad * 2 + (it.icon ? font + 2 + gap : 0);
       });
       rows = [];
       let cur: number[] = [];
@@ -507,13 +617,27 @@ class Tile {
       const total = row.reduce((a, i, k) => a + widths[i]! + (k ? CHIP_GAP : 0), 0);
       let x = COL_W - 6 - total;
       for (const i of row) {
+        const item = items[i]!;
         const chip = this.chips[i]!;
         const w = widths[i]!;
+        const icoSize = font + 2;
+        const textW = chip.t.width;
         chip.bg
           .clear()
           .roundRect(-w / 2, -8, w, 16, 8)
           .fill({ color: 0x0a0604, alpha: 0.9 })
-          .stroke({ width: 1, color: items[i]!.color, alpha: 0.85 });
+          .stroke({ width: 1, color: item.color, alpha: 0.85 });
+        // Icon chỉ vẽ lại khi đổi hình hoặc đổi màu (nạp chuỗi SVG khá tốn).
+        const key = item.icon ? `${item.icon}:${item.color}` : '';
+        if (chip.icoKey !== key) {
+          chip.icoKey = key;
+          if (item.icon) drawIcon(chip.ico, item.icon, icoSize, item.color);
+          else chip.ico.clear();
+        }
+        chip.ico.visible = !!item.icon;
+        const left = -w / 2 + pad;
+        if (item.icon) chip.ico.position.set(left, -icoSize / 2);
+        chip.t.position.set(left + (item.icon ? icoSize + gap : 0) + textW / 2, 0);
         chip.c.position.set(x + w / 2, r * 16);
         chip.c.visible = true;
         x += w + CHIP_GAP;
@@ -522,16 +646,40 @@ class Tile {
     this.fxC.visible = true;
   }
 
+  /**
+   * Vẽ lại thanh máu + thanh khiên.
+   * Thanh khiên neo ở MÉP PHẢI CỦA THANH MÁU ĐANG CÓ (đi theo máu, không cố định ở cuối ô)
+   * rồi mọc dài về bên trái, nên khi máu tụt thì khiên trôi theo và luôn dính liền thanh máu.
+   */
+  private drawBars(): void {
+    this.hpFill
+      .clear()
+      .roundRect(8, HP_Y, Math.max(0.5, HP_W * this.hpShown), HP_H, 3)
+      .fill({ color: this.mine ? C.hp : C.hpEnemy });
+    this.shieldFill.clear();
+    if (this.shieldShown > 0.001) {
+      const w = Math.max(0.5, HP_W * this.shieldShown);
+      this.shieldFill
+        .roundRect(8 + HP_W * this.hpShown - w, HP_Y, w, HP_H, 3)
+        .fill({ color: 0xe8edf2, alpha: 0.92 });
+    }
+  }
+
   update(dt: number, time: number): void {
+    let moved = false;
     // Thanh máu chạy mượt về giá trị thật
     if (Math.abs(this.hpShown - this.hpTarget) > 0.002) {
       this.hpShown += (this.hpTarget - this.hpShown) * Math.min(1, dt / 90);
       if (Math.abs(this.hpShown - this.hpTarget) <= 0.002) this.hpShown = this.hpTarget;
-      this.hpFill
-        .clear()
-        .roundRect(8, HP_Y, Math.max(0.5, HP_W * this.hpShown), HP_H, 3)
-        .fill({ color: this.color });
+      moved = true;
     }
+    // Thanh khiên (trắng nhạt) chạy mượt và tự ẩn khi hết khiên.
+    if (Math.abs(this.shieldShown - this.shieldTarget) > 0.002) {
+      this.shieldShown += (this.shieldTarget - this.shieldShown) * Math.min(1, dt / 120);
+      if (Math.abs(this.shieldShown - this.shieldTarget) <= 0.002) this.shieldShown = this.shieldTarget;
+      moved = true;
+    }
+    if (moved) this.drawBars();
     // Ô của tướng đang ra đòn nhô lên nhẹ
     const ty = this.baseY - (this.actFx.visible ? 3 : 0);
     this.root.y = Math.abs(this.root.y - ty) > 0.05 ? this.root.y + (ty - this.root.y) * Math.min(1, dt / 70) : ty;
@@ -697,11 +845,11 @@ class Arena implements ArenaHandle {
     this.skillC.position.set(x, tile.topY - 8);
   }
 
-  float(idx: number, text: string, crit: boolean, heal = false): void {
+  float(idx: number, parts: FloatPart[], crit: boolean, heal = false): void {
     if (this.dead) return;
     const t = this.tiles.get(idx);
     if (!t) return;
-    this.fx.push(new FloatFx(this.fxLayer, t.centerX, t.topY + 34, text, crit, heal, this.reduce));
+    this.fx.push(new FloatFx(this.fxLayer, t.centerX, t.topY + 34, parts, crit, heal, this.reduce));
   }
 
   /** Hiệu ứng niệm chiêu ở người thi triển (kiểu theo nhóm kỹ năng; màu + sắc thái theo tướng). */
@@ -740,7 +888,7 @@ class Arena implements ArenaHandle {
     for (let i = this.fx.length - 1; i >= 0; i--) {
       const f = this.fx[i]!;
       if (f.tick(dt)) {
-        f.text.destroy();
+        f.c.destroy({ children: true });
         this.fx.splice(i, 1);
       }
     }

@@ -889,6 +889,14 @@ export interface PvpUnitStateDto {
   stunBps: number;
   /** Hút máu ở cấp hiện tại: hồi bản thân theo % sát thương thực tế gây ra (bps; 0 = không hút máu). */
   lifestealBps: number;
+  /** Chính xác khi vào trận (bps; mặc định 10000 = 100%, trần 13000 — SKILLS.md mục 18). */
+  hitBps: number;
+  /** Né tránh khi vào trận (bps; mặc định 500 = 5%, trần 3000 — SKILLS.md mục 18). */
+  dodgeBps: number;
+  /** Phòng thủ khi vào trận: % giảm sát thương nhận vào (mặc định 1000 = 10%, trần 5000 — mục 18). */
+  defBps: number;
+  /** Xuyên giáp khi vào trận: % bỏ qua Phòng thủ của địch (mặc định 0, trần 5000 — mục 18). */
+  defPenBps: number;
   /** Các kênh buff có lợi mà kỹ năng của tướng phát (client mô tả khi thi triển). Rỗng = không buff. */
   buffs?: PvpBuffEntryDto[];
   /** Hiệu ứng bất lợi mà kỹ năng của tướng áp lên địch (client mô tả khi thi triển). */
@@ -904,11 +912,20 @@ export type PvpEventDto =
   | { t: 'round'; round: number }
   | { t: 'act'; idx: number; skill: PvpSkill; targets: number[] }
   | { t: 'skip'; idx: number }
-  | { t: 'damage'; from: number; idx: number; amount: number; crit: boolean; hp: number }
+  /**
+   * Trượt (SKILLS.md mục 18 — BƯỚC 1): đòn bị Né, KHÔNG gây sát thương, giữ nguyên Khiên & Máu,
+   * không kích phản kích. `from` = người ra đòn, `idx` = người né được.
+   */
+  | { t: 'miss'; from: number; idx: number }
+  /**
+   * Sát thương trực tiếp. `amount` = sát thương sau khi Phòng thủ đã cản (`mitigated` = phần bị Phòng
+   * thủ giảm đi, mục 18 BƯỚC 2), TRƯỚC khi trừ Khiên; `absorbed` = phần Khiên đã hấp thụ (BƯỚC 3).
+   */
+  | { t: 'damage'; from: number; idx: number; amount: number; crit: boolean; hp: number; mitigated?: number; absorbed?: number }
   /** Hồi máu. `lifesteal` = hồi nhờ Hút máu (từ đòn đánh hoặc từ Thiêu đốt) để client chọn âm thanh đúng. */
   | { t: 'heal'; from: number; idx: number; amount: number; crit: boolean; hp: number; lifesteal?: boolean }
   /** Phản kích: `from` đánh trả `idx` (kẻ vừa gây sát thương cho `from`). Có thể Chí mạng. */
-  | { t: 'counter'; from: number; idx: number; amount: number; crit: boolean; hp: number }
+  | { t: 'counter'; from: number; idx: number; amount: number; crit: boolean; hp: number; mitigated?: number; absorbed?: number }
   /**
    * Choáng: mục tiêu bỏ lượt cho tới khi TƯỚNG GÂY CHOÁNG ra skill ở lượt kế tiếp (`byIdx` = idx
    * của tướng đó). Choáng đè/nối tiếp được: nguồn mới nhất ghi vào `byIdx`.
@@ -923,16 +940,24 @@ export type PvpEventDto =
    * riêng theo từng (nguồn, kênh)). `maxLayers` = số lớp cộng dồn tối đa THEO TỪNG (nguồn, kênh) (client
    * bỏ lớp cũ nhất cùng `from` + `channel` khi vượt trần; nguồn/kênh khác vẫn cộng dồn).
    */
-  | { t: 'buff'; from: number; channel: number; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; lifestealBps: number; crit: boolean; expiresRound: number; maxLayers: number }
+  | { t: 'buff'; from: number; channel: number; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; lifestealBps: number; hitBps?: number; dodgeBps?: number; defBps?: number; defPenBps?: number; crit: boolean; expiresRound: number; maxLayers: number }
   /**
    * Áp một lớp hiệu ứng bất lợi lên mục tiêu địch: giảm sát thương gây ra (`damageFlat`),
-   * giảm trần HP (`hpFlat`), giảm chí mạng (`critBps`), giảm ST chí mạng (`critDamageBps`)
+   * giảm trần HP (`hpFlat`), giảm chí mạng (`critBps`), giảm ST chí mạng (`critDamageBps`),
+   * giảm Chính xác/Né tránh/Phòng thủ/Xuyên giáp (`hitDownBps`/`dodgeDownBps`/`defDownBps`/`defPenDownBps`)
    * và/hoặc thiêu đốt mỗi lượt (`burnFlat`). `from` = idx người thi triển;
    * `maxLayers` = số lớp cộng dồn tối đa THEO TỪNG nguồn.
    */
-  | { t: 'debuff'; from: number; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; burnFlat: number; expiresRound: number; maxLayers: number }
+  | { t: 'debuff'; from: number; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; hitDownBps?: number; dodgeDownBps?: number; defDownBps?: number; defPenDownBps?: number; burnFlat: number; expiresRound: number; maxLayers: number }
   /** Thiêu đốt: gây sát thương vào đầu mỗi lượt cho tướng đang bị thiêu đốt (có thể ăn chí mạng). */
-  | { t: 'burn'; idx: number; amount: number; crit: boolean; hp: number }
+  | { t: 'burn'; idx: number; amount: number; crit: boolean; hp: number; absorbed?: number }
+  /**
+   * Tạo Khiên (SKILLS.md mục 16): cộng MỘT lớp khiên hấp thụ sát thương cho `idx`. `amount` = lượng
+   * hấp thụ của lớp này (theo % HP tối đa của chính tướng nhận). Client cộng dồn các lớp còn hiệu lực.
+   */
+  | { t: 'shield'; from: number; idx: number; channel: number; amount: number; expiresRound: number; maxLayers: number }
+  /** Xóa Khiên (SKILLS.md mục 17): bẻ gãy và loại bỏ TOÀN BỘ lớp khiên hiện có của `idx`. */
+  | { t: 'shieldBreak'; from: number; idx: number }
   /** Xóa toàn bộ hiệu ứng có lợi (lớp buff) của mục tiêu. */
   | { t: 'dispel'; idx: number }
   /** Thanh tẩy hiệu ứng bất lợi của đồng minh (trừ choáng và thiêu đốt). */
@@ -1017,6 +1042,16 @@ export interface PvpBuffDto {
   takenDownBps: number;
   /** % hút máu cộng mỗi lớp (hồi bản thân theo sát thương gây ra; 2000 = +20%). */
   lifestealBps: number;
+  /** % HP tối đa tạo Khiên mỗi lớp (SKILLS.md mục 16). 0 = không tạo khiên. */
+  shieldBps: number;
+  /** % Chính xác cộng mỗi lớp (mặc định 100%, trần 130% — SKILLS.md mục 18). */
+  hitBps: number;
+  /** % Né tránh cộng mỗi lớp (mặc định 5%, trần 30% — SKILLS.md mục 18). */
+  dodgeBps: number;
+  /** % Phòng thủ cộng mỗi lớp: giảm sát thương nhận vào (mặc định 10%, trần 50% — mục 18). */
+  defBps: number;
+  /** % Xuyên giáp cộng mỗi lớp: bỏ qua Phòng thủ của địch (trần 50% — mục 18). */
+  defPenBps: number;
   /** Số lượt mỗi lớp còn hiệu lực. */
   rounds: number;
   /** Số lớp cộng dồn tối đa. */
@@ -1045,14 +1080,28 @@ export interface PvpDebuffDto {
   critDownBps: number;
   /** Giảm % sát thương chí mạng của mục tiêu. */
   critDamageDownBps: number;
+  /** Giảm % Chính xác của mục tiêu (mục 18). */
+  hitDownBps: number;
+  /** Giảm % Né tránh của mục tiêu (mục 18). */
+  dodgeDownBps: number;
+  /** Giảm % Phòng thủ của mục tiêu (mục 18) — sát thương nhận vào tăng lên. */
+  defDownBps: number;
+  /** Giảm % Xuyên giáp của mục tiêu (mục 18). */
+  defPenDownBps: number;
   /** Thiêu đốt: mỗi lượt gây thêm % sát thương cơ bản của người thi triển (bps). */
   burnBps: number;
   /** Số lượt thiêu đốt còn hiệu lực. */
   burnRounds: number;
+  /** Số lớp thiêu đốt cộng dồn tối đa từ chính tướng thi triển. */
+  burnMaxLayers: number;
   /** Số lượt mỗi lớp còn hiệu lực. */
   rounds: number;
   /** Số lớp cộng dồn tối đa. */
   maxLayers: number;
+  /** Xóa toàn bộ hiệu ứng có lợi (lớp buff) của mục tiêu. */
+  dispel: boolean;
+  /** Tỉ lệ Xóa Khiên MỖI CẤP (bps; cấp × 5% → 50% ở cấp 10). 0 = không xóa khiên (SKILLS.md mục 17). */
+  shieldBreakPerLevelBps: number;
 }
 
 /** Phản kích (SKILLS.md #12). Tất cả bằng 0 = kỹ năng không phản kích. */
@@ -1136,7 +1185,7 @@ export interface PvpCombatDto {
   /** Chỉ số nền theo cấp — chưa tính hiệu ứng kỹ năng, nội tại, vị trí. */
   base: { maxHp: number; damage: number };
   /** Chỉ số của riêng tướng sau khi áp nội tại. */
-  self: { maxHp: number; damage: number; lc: number; critBps: number; critDamageBps: number; stunBps: number; cleanseBps: number; heal: number; lifestealBps: number };
+  self: { maxHp: number; damage: number; lc: number; critBps: number; critDamageBps: number; stunBps: number; cleanseBps: number; heal: number; lifestealBps: number; hitBps: number; dodgeBps: number; defBps: number; defPenBps: number };
   passiveEffect: PvpPassiveEffectDto;
   skillDef: PvpSkillDefDto;
   /** Các kênh buff tăng sức mạnh kỹ năng phát mỗi lượt; rỗng = kỹ năng không buff. */

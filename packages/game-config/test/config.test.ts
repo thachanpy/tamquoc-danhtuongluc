@@ -124,13 +124,11 @@ test('rollWeighted từ chối tổng 0', () => {
   assert.throws(() => rollWeighted([1, 2], () => 0, () => 0));
 });
 
-test('chân dung tướng: 100 tướng gốc có ảnh theo artKey, tướng mở rộng tạm dùng placeholder', async () => {
+test('chân dung tướng: toàn bộ 140 tướng đã có ảnh theo artKey', async () => {
   const { existsSync } = await import('node:fs');
   const { resolve } = await import('node:path');
   const dir = resolve(import.meta.dirname, '../../../apps/web/public/generals');
-  // 40 tướng mở rộng (STT 26–35 mỗi phe) chưa có artwork — chủ dự án cập nhật sau.
   // art.ts tự rơi về placeholder (glyph phe + chữ viết tắt) khi thiếu file chân dung.
-  const CORE_GENERALS = 100;
   const missing = ROSTER.filter((g) => !existsSync(resolve(dir, `${g.artKey}.jpg`))).map((g) => g.id);
-  assert.equal(missing.length, ROSTER.length - CORE_GENERALS);
+  assert.equal(missing.length, 0);
 });

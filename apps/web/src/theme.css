@@ -809,6 +809,8 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-t-num.dmg { color: #ff9d8f; }
 .rp-t-num.taken { color: #ffc9b0; }
 .rp-t-num.heal { color: #7fe0a8; }
+/* Cột Khiên dùng đúng tông trắng nhạt của thanh khiên trong sân đấu (mục 16) */
+.rp-t-num.shield { color: #dfe6ee; }
 .rp-t-sep td { padding-top: 12px; font-weight: 700; letter-spacing: .04em; color: var(--gold-2); border-bottom: none; }
 /* Avatar nhỏ trong bảng kết quả (cả bảng tổng kết lẫn diễn biến) */
 .rp-mini { position: relative; flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; overflow: hidden; background: linear-gradient(160deg, #2a2112, var(--panel-2)); border: 1px solid var(--line); }
@@ -829,9 +831,12 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-drow.stun { background: rgba(255, 215, 94, .07); }
 .rp-drow.cleanse { background: rgba(90, 162, 255, .07); }
 .rp-drow.buff { background: rgba(63, 191, 127, .05); }
-.rp-drow.debuff { background: rgba(150, 90, 200, .08); }
+.rp-drow.debuff { background: rgba(217, 83, 79, .08); }
 .rp-drow.burn { background: rgba(255, 138, 58, .09); }
 .rp-drow.dispel { background: rgba(90, 162, 255, .06); }
+/* Khiên (mục 16) tông trắng xám nhạt; Xóa Khiên (mục 17) tông lam như giải/kết giới */
+.rp-drow.shield { background: rgba(232, 237, 242, .07); }
+.rp-drow.shieldBreak { background: rgba(90, 162, 255, .08); }
 .rp-drow.purify { background: rgba(63, 191, 200, .08); }
 .rp-drow.down { background: rgba(217, 83, 79, .14); font-weight: 700; }
 .rp-drow-text { flex: 1 1 auto; min-width: 0; }

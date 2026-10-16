@@ -5,7 +5,11 @@ import {
   PVP_CLEANSE_CHAMP_BPS,
   PVP_CRIT_BPS_PER_LEVEL,
   PVP_CRIT_DAMAGE_BPS,
+  PVP_DEF_BPS,
+  PVP_DEF_PEN_BPS,
+  PVP_DODGE_BPS,
   PVP_FRONT_HP_BPS,
+  PVP_HIT_BPS,
   PVP_MAX_ROUNDS,
   PVP_PASSIVE_EFFECT,
   PVP_TEAM_SIZE,
@@ -232,6 +236,11 @@ export function getCombatStats(generalId: string, level: number): PvpCombatDto {
       heal,
       // Hút máu ở cấp hiện tại (khớp engine): chốt ở cấp 10, quy theo cấp.
       lifestealBps: pvpPerLevelEffectBps(profile.lifestealPerLevelBps, level),
+      // Bộ chỉ số Trao đổi đòn (mục 18): giá trị NỀN khi vào trận (mặc định), buff/debuff cộng trừ thêm trong trận.
+      hitBps: PVP_HIT_BPS,
+      dodgeBps: PVP_DODGE_BPS,
+      defBps: PVP_DEF_BPS,
+      defPenBps: PVP_DEF_PEN_BPS,
     },
     passiveEffect: { ...passive },
     // Hệ số kỹ năng ở đây là của riêng tướng (đã nhân hot) — khớp với engine khi vào trận.

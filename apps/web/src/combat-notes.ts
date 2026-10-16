@@ -18,6 +18,11 @@ export function teamBuffNote(c: PvpCombatDto): string {
         b.critDamageBps ? `+${pct(b.critDamageBps)} ST chí mạng` : '',
         b.takenDownBps ? `−${pct(b.takenDownBps)} sát thương gánh chịu` : '',
         b.lifestealBps ? `+${pct(b.lifestealBps)} hút máu` : '',
+        b.hitBps ? `+${pct(b.hitBps)} chính xác` : '',
+        b.dodgeBps ? `+${pct(b.dodgeBps)} né tránh` : '',
+        b.defBps ? `+${pct(b.defBps)} phòng thủ` : '',
+        b.defPenBps ? `+${pct(b.defPenBps)} xuyên giáp` : '',
+        b.shieldBps ? `tạo khiên ${pct(b.shieldBps)} HP tối đa` : '',
       ]
         .filter(Boolean)
         .join(', ');
@@ -36,7 +41,12 @@ export function debuffNote(c: PvpCombatDto): string {
     d.hpDownBps ? `−${pct(d.hpDownBps)} HP tối đa` : '',
     d.critDownBps ? `−${d.critDownBps / 100} điểm chí mạng` : '',
     d.critDamageDownBps ? `−${pct(d.critDamageDownBps)} ST chí mạng` : '',
+    d.hitDownBps ? `−${pct(d.hitDownBps)} chính xác` : '',
+    d.dodgeDownBps ? `−${pct(d.dodgeDownBps)} né tránh` : '',
+    d.defDownBps ? `−${pct(d.defDownBps)} phòng thủ` : '',
+    d.defPenDownBps ? `−${pct(d.defPenDownBps)} xuyên giáp` : '',
     d.burnBps ? `thiêu đốt ${pct(d.burnBps)} sát thương mỗi lượt (${d.burnRounds} lượt)` : '',
+    d.shieldBreakPerLevelBps ? `xóa khiên ${pct(d.shieldBreakPerLevelBps)} mỗi cấp` : '',
   ]
     .filter(Boolean)
     .join(', ');

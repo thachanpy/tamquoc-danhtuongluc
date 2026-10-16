@@ -4,12 +4,22 @@ import {
   PVP_BACK_DAMAGE_BPS,
   PVP_BURN_BPS,
   PVP_BURN_LIFESTEAL_BPS,
+  PVP_BURN_HEAL_DOWN_BPS,
   PVP_BURN_MAX_LAYERS_LONG,
   PVP_CLEANSE_CHAMP_BPS,
   PVP_COUNTER_MAX_BPS,
   PVP_CRIT_BPS_PER_LEVEL,
   PVP_CRIT_DAMAGE_BPS,
+  PVP_DEF_BPS,
+  PVP_DEF_MAX_BPS,
+  PVP_DEF_PEN_BPS,
+  PVP_DEF_PEN_MAX_BPS,
+  PVP_DODGE_BPS,
+  PVP_DODGE_MAX_BPS,
   PVP_FRONT_HP_BPS,
+  PVP_HIT_BPS,
+  PVP_HIT_MAX_BPS,
+  PVP_HIT_REAL_MAX_BPS,
   PVP_MAXHP_GAIN_HEAL_BPS,
   PVP_MAX_ROUNDS,
   PVP_PASSIVE_EFFECT,
@@ -83,6 +93,14 @@ interface Unit {
   critDamageBps: number;
   stunBps: number;
   cleanseBps: number;
+  /**
+   * Bộ chỉ số Trao đổi đòn (SKILLS.md mục 18): Chính xác / Né tránh / Phòng thủ (% giảm ST nhận) /
+   * Xuyên giáp (% bỏ qua Phòng thủ địch). Giá trị nền cố định, buff/debuff cộng trừ thêm khi vào trận.
+   */
+  hitBps: number;
+  dodgeBps: number;
+  defBps: number;
+  defPenBps: number;
   /** Hút máu: hồi bản thân theo % sát thương gây ra ở cấp hiện tại (bps; 0 = không hút máu). */
   lifestealBps: number;
   /** Đã dùng lượt Hồi sinh chưa (chỉ 1 lần/trận). */
@@ -102,6 +120,8 @@ interface Unit {
   debuffs: DebuffInstance[];
   /** Các lớp Thiêu đốt đang chịu — trần cộng dồn tính riêng theo TỪNG nguồn, không có trần toàn hệ thống (mục 8). */
   burns: BurnInstance[];
+  /** Các lớp Khiên đang có — hấp thụ sát thương nhận vào trước HP (SKILLS.md mục 16). */
+  shields: ShieldInstance[];
 }
 
 /**
@@ -129,6 +149,11 @@ interface BuffInstance {
   takenDownBps: number;
   /** % hút máu cộng thêm (bps): hồi bản thân theo sát thương gây ra (đoàn buff hỗ trợ). */
   lifestealBps: number;
+  /** Chính xác / Né tránh / Phòng thủ / Xuyên giáp cộng thêm (bps — SKILLS.md mục 18). */
+  hitBps: number;
+  dodgeBps: number;
+  defBps: number;
+  defPenBps: number;
   /** Lượt cuối còn hiệu lực (tính theo số vòng). */
   expiresRound: number;
 }
@@ -148,6 +173,11 @@ interface DebuffInstance {
   critDownBps: number;
   /** ST chí mạng bị giảm (bps). */
   critDamageDownBps: number;
+  /** Chính xác / Né tránh / Phòng thủ / Xuyên giáp bị giảm (bps — SKILLS.md mục 18). */
+  hitDownBps: number;
+  dodgeDownBps: number;
+  defDownBps: number;
+  defPenDownBps: number;
   /** Lượt cuối còn hiệu lực (tính theo số vòng). */
   expiresRound: number;
 }
@@ -157,6 +187,21 @@ interface BurnInstance {
   /** idx của tướng gây thiêu đốt — dùng để giới hạn số lớp cộng dồn theo TỪNG nguồn. */
   sourceIdx: number;
   /** Sát thương mỗi lượt (cộng thẳng). */
+  amount: number;
+  /** Lượt cuối còn hiệu lực (tính theo số vòng). */
+  expiresRound: number;
+}
+
+/**
+ * Một lớp Khiên (SKILLS.md mục 16): hấp thụ sát thương nhận vào TRƯỚC HP thực tế, hết hạn sau vài lượt.
+ * Lượng khiên tính theo % HP tối đa của tướng NHẬN khiên. Trần cộng dồn tính theo TỪNG (nguồn, kênh).
+ */
+interface ShieldInstance {
+  /** idx của tướng tạo lớp khiên — dùng để giới hạn số lớp cộng dồn theo TỪNG nguồn. */
+  sourceIdx: number;
+  /** Chỉ số KÊNH trong kỹ năng của nguồn (trần `maxLayers` tính riêng cho từng (nguồn, kênh)). */
+  channel: number;
+  /** Lượng sát thương còn hấp thụ được của lớp này. */
   amount: number;
   /** Lượt cuối còn hiệu lực (tính theo số vòng). */
   expiresRound: number;
@@ -196,6 +241,10 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         critDamageBps: PVP_CRIT_DAMAGE_BPS,
         stunBps: 0,
         cleanseBps: 0,
+        hitBps: PVP_HIT_BPS,
+        dodgeBps: PVP_DODGE_BPS,
+        defBps: PVP_DEF_BPS,
+        defPenBps: PVP_DEF_PEN_BPS,
         lifestealBps: 0,
         reviveUsed: false,
         damageMulBps: BPS_SCALE,
@@ -205,6 +254,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         buffs: [],
         debuffs: [],
         burns: [],
+        shields: [],
       });
     }
   }
@@ -247,7 +297,14 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
       const def = u.def;
       const db = def.debuff;
       const hasBuff = def.buffs.length > 0;
-      const hasDebuff = db.damageDownBps > 0 || db.hpDownBps > 0 || db.critDownBps > 0 || db.critDamageDownBps > 0 || db.burnBps > 0;
+      const hasDebuff =
+        db.damageDownBps > 0 ||
+        db.hpDownBps > 0 ||
+        db.critDownBps > 0 ||
+        db.critDamageDownBps > 0 ||
+        db.burnBps > 0 ||
+        db.dispel ||
+        db.shieldBreakPerLevelBps > 0;
       return {
         idx: u.idx,
         side: u.side,
@@ -266,6 +323,10 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         critDamageBps: u.critDamageBps,
         stunBps: u.stunBps,
         lifestealBps: u.lifestealBps,
+        hitBps: u.hitBps,
+        dodgeBps: u.dodgeBps,
+        defBps: u.defBps,
+        defPenBps: u.defPenBps,
         // Hiệu ứng có lợi / bất lợi / phản kích / tự thiêu đốt của kỹ năng (client mô tả khi thi triển).
         buffs: hasBuff ? def.buffs : undefined,
         debuff: hasDebuff ? db : undefined,
@@ -432,6 +493,53 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
    */
   const lifestealBpsOf = (u: Unit) => Math.max(0, u.lifestealBps + buffLifesteal(u));
 
+  // ===== Bộ chỉ số Trao đổi đòn (SKILLS.md mục 18) =====
+  /** Chính xác cộng thêm từ các lớp buff đang hiệu lực. */
+  const buffHit = (u: Unit) => u.buffs.reduce((s, b) => s + b.hitBps, 0);
+  /** Né tránh cộng thêm từ các lớp buff đang hiệu lực. */
+  const buffDodge = (u: Unit) => u.buffs.reduce((s, b) => s + b.dodgeBps, 0);
+  /** Phòng thủ cộng thêm từ các lớp buff đang hiệu lực. */
+  const buffDef = (u: Unit) => u.buffs.reduce((s, b) => s + b.defBps, 0);
+  /** Xuyên giáp cộng thêm từ các lớp buff đang hiệu lực. */
+  const buffDefPen = (u: Unit) => u.buffs.reduce((s, b) => s + b.defPenBps, 0);
+  /** Chính xác bị giảm bởi các lớp suy yếu đang chịu. */
+  const debuffHitDown = (u: Unit) => u.debuffs.reduce((s, d) => s + d.hitDownBps, 0);
+  /** Né tránh bị giảm bởi các lớp suy yếu đang chịu. */
+  const debuffDodgeDown = (u: Unit) => u.debuffs.reduce((s, d) => s + d.dodgeDownBps, 0);
+  /** Phòng thủ bị giảm bởi các lớp suy yếu đang chịu. */
+  const debuffDefDown = (u: Unit) => u.debuffs.reduce((s, d) => s + d.defDownBps, 0);
+  /** Xuyên giáp bị giảm bởi các lớp suy yếu đang chịu. */
+  const debuffDefPenDown = (u: Unit) => u.debuffs.reduce((s, d) => s + d.defPenDownBps, 0);
+
+  /** Chính xác hiệu dụng = nền + buff − suy yếu, kẹp trong [0, trần 130%]. */
+  const hitBpsOf = (u: Unit) => Math.max(0, Math.min(PVP_HIT_MAX_BPS, u.hitBps + buffHit(u) - debuffHitDown(u)));
+  /** Né tránh hiệu dụng = nền + buff − suy yếu, kẹp trong [0, trần 30%]. */
+  const dodgeBpsOf = (u: Unit) => Math.max(0, Math.min(PVP_DODGE_MAX_BPS, u.dodgeBps + buffDodge(u) - debuffDodgeDown(u)));
+  /** Phòng thủ hiệu dụng = nền + buff − suy yếu, kẹp trong [0, trần 50%]. */
+  const defBpsOf = (u: Unit) => Math.max(0, Math.min(PVP_DEF_MAX_BPS, u.defBps + buffDef(u) - debuffDefDown(u)));
+  /** Xuyên giáp hiệu dụng = nền + buff − suy yếu, kẹp trong [0, trần 50%]. */
+  const defPenBpsOf = (u: Unit) => Math.max(0, Math.min(PVP_DEF_PEN_MAX_BPS, u.defPenBps + buffDefPen(u) - debuffDefPenDown(u)));
+
+  /**
+   * BƯỚC 1 — Kiểm tra Trúng/Trượt (mục 18): Hit_Real = MIN(99%, Chính xác − Né tránh của địch).
+   * Trả về true nếu TRÚNG; false nếu TRƯỢT (Né thành công). Luôn chừa tối thiểu 1% Né.
+   */
+  function rollHit(attacker: Unit, defender: Unit): boolean {
+    const chance = Math.max(0, Math.min(PVP_HIT_REAL_MAX_BPS, hitBpsOf(attacker) - dodgeBpsOf(defender)));
+    return rand(BPS_SCALE) < chance;
+  }
+
+  /**
+   * BƯỚC 2 — Áp Phòng thủ sau khi trừ Xuyên giáp (mục 18): Damage_Final = Raw × (1 − Def_Final),
+   * với Def_Effective = MAX(0, Def_địch − Xuyên giáp_ta) và Def_Final = MIN(50%, Def_Effective).
+   * Trả về sát thương sau giáp và phần bị Phòng thủ cản lại (`mitigated`) để client hiển thị.
+   */
+  function mitigate(attacker: Unit, defender: Unit, raw: number): { amount: number; mitigated: number } {
+    const defFinal = Math.min(PVP_DEF_MAX_BPS, Math.max(0, defBpsOf(defender) - defPenBpsOf(attacker)));
+    const amount = Math.round((raw * (BPS_SCALE - defFinal)) / BPS_SCALE);
+    return { amount, mitigated: raw - amount };
+  }
+
   /**
    * Mục tiêu có đang chịu hiệu ứng bất lợi hay không (mục 1.17): có lớp SUY YẾU, đang bị THIÊU ĐỐT,
    * hoặc đang bị CHOÁNG. Dùng cho cơ chế cộng thêm sát thương của một số tướng (đao phủ).
@@ -494,28 +602,61 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     const base = Math.round((effectiveDamage(victim) * c.damageBps) / BPS_SCALE);
     for (const v of victims) {
       if (!v.alive) continue;
+      // BƯỚC 1: đòn phản kích cũng có thể bị Né (mục 18).
+      if (!rollHit(victim, v)) {
+        events.push({ t: 'miss', from: victim.idx, idx: v.idx });
+        continue;
+      }
       let amount = base;
       const crit = rand(BPS_SCALE) < critBpsOf(victim);
       if (crit) amount = Math.round((amount * (BPS_SCALE + critDamageBpsOf(victim))) / BPS_SCALE);
       amount = Math.round((amount * takenMulBps(v)) / BPS_SCALE);
-      v.hp = Math.max(0, v.hp - amount);
-      events.push({ t: 'counter', from: victim.idx, idx: v.idx, amount, crit, hp: v.hp });
+      // BƯỚC 2: áp Phòng thủ của mục tiêu sau khi trừ Xuyên giáp của người phản kích.
+      const { amount: final, mitigated } = mitigate(victim, v, amount);
+      // BƯỚC 3: Khiên (mục 16) hấp thụ sát thương phản kích trước HP.
+      const { absorbed, rest } = absorbShield(v, final);
+      v.hp = Math.max(0, v.hp - rest);
+      events.push({ t: 'counter', from: victim.idx, idx: v.idx, amount: final, crit, hp: v.hp, ...(mitigated > 0 ? { mitigated } : {}), ...(absorbed > 0 ? { absorbed } : {}) });
       fell(v);
     }
   }
 
+  /**
+   * Hấp thụ sát thương bằng các lớp Khiên (mục 16): trừ dần vào lớp CŨ NHẤT trước (FIFO), lớp cạn thì gỡ.
+   * Trả về `absorbed` = lượng khiên đã chặn và `rest` = phần còn lại phải trừ vào HP thực tế.
+   */
+  function absorbShield(u: Unit, amount: number): { absorbed: number; rest: number } {
+    let rest = amount;
+    let absorbed = 0;
+    while (rest > 0 && u.shields.length) {
+      const s = u.shields[0]!;
+      const take = Math.min(s.amount, rest);
+      s.amount -= take;
+      rest -= take;
+      absorbed += take;
+      if (s.amount <= 0) u.shields.shift();
+    }
+    return { absorbed, rest };
+  }
+
   /** Gây sát thương TRỰC TIẾP (đánh thường/kỹ năng) — cập nhật HP, đẩy sự kiện, xử lý gục/hồi sinh, kích phản kích. */
-  function damageDirect(from: Unit, to: Unit, amount: number, crit: boolean): void {
-    to.hp = Math.max(0, to.hp - amount);
-    events.push({ t: 'damage', from: from.idx, idx: to.idx, amount, crit, hp: to.hp });
+  function damageDirect(from: Unit, to: Unit, amount: number, crit: boolean, mitigated = 0): void {
+    // Khiên (mục 16) hấp thụ trước, phần còn lại mới trừ vào HP thực tế.
+    const { absorbed, rest } = absorbShield(to, amount);
+    to.hp = Math.max(0, to.hp - rest);
+    events.push({ t: 'damage', from: from.idx, idx: to.idx, amount, crit, hp: to.hp, ...(mitigated > 0 ? { mitigated } : {}), ...(absorbed > 0 ? { absorbed } : {}) });
     if (fell(to)) return;
     tryCounter(to, from);
   }
 
-  /** Hồi máu (không vượt trần); đẩy sự kiện khi có hồi thực tế. */
+  /**
+   * Hồi máu (không vượt trần); đẩy sự kiện khi có hồi thực tế.
+   * Mục tiêu đang bị THIÊU ĐỐT chỉ hồi được 70% (mục 8 — thiêu đốt giảm 30% khả năng hồi máu).
+   */
   function healUnit(from: Unit, to: Unit, amount: number, crit: boolean, lifesteal = false): void {
+    const heal = to.burns.length > 0 ? Math.round((amount * (BPS_SCALE - PVP_BURN_HEAL_DOWN_BPS)) / BPS_SCALE) : amount;
     const before = to.hp;
-    to.hp = Math.min(to.maxHp, to.hp + amount);
+    to.hp = Math.min(to.maxHp, to.hp + heal);
     if (to.hp > before) events.push({ t: 'heal', from: from.idx, idx: to.idx, amount: to.hp - before, crit, hp: to.hp, ...(lifesteal ? { lifesteal: true } : {}) });
   }
 
@@ -566,50 +707,85 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
       const b = entry.buff;
       const targets = buffTargetsOf(u, entry.scope);
       if (!targets.length) continue;
-      const crit = rand(BPS_SCALE) < critBpsOf(u);
+      // Lớp buff có hiệu ứng CHỈ SỐ thật (khiên được quản lý riêng ở danh sách `shields` — mục 16).
+      const statBuff =
+        b.damageBps > 0 ||
+        b.hpBps > 0 ||
+        b.critBps > 0 ||
+        b.critDamageBps > 0 ||
+        b.takenDownBps > 0 ||
+        b.lifestealBps > 0 ||
+        b.hitBps > 0 ||
+        b.dodgeBps > 0 ||
+        b.defBps > 0 ||
+        b.defPenBps > 0;
+      const crit = statBuff ? rand(BPS_SCALE) < critBpsOf(u) : false;
       const critMul = crit ? (BPS_SCALE + critDamageBpsOf(u)) / BPS_SCALE : 1;
       const damageBps = Math.round(b.damageBps * critMul);
       const hpBps = Math.round(b.hpBps * critMul);
       const expiresRound = round + b.rounds - 1;
       for (const a of targets) {
-        // Lượng cộng thẳng tính theo chỉ số nền của CHÍNH tướng được buff.
-        const damageFlat = Math.round((a.damage * damageBps) / BPS_SCALE);
-        const hpFlat = Math.round((a.maxHpStatic * hpBps) / BPS_SCALE);
-        a.buffs.push({
-          sourceIdx: u.idx,
-          channel,
-          damageFlat,
-          hpFlat,
-          critBps: b.critBps,
-          critDamageBps: b.critDamageBps,
-          takenDownBps: b.takenDownBps,
-          // Hút máu không ăn chí mạng (chỉ % sát thương/HP của lớp buff mới nhân ST chí mạng).
-          lifestealBps: b.lifestealBps,
-          expiresRound,
-        });
-        // Trần `maxLayers` tính theo TỪNG (nguồn, kênh): mỗi kênh buff của tướng tối đa `maxLayers` lớp,
-        // nhiều tướng/kênh khác nhau vẫn cộng dồn.
-        const mine = a.buffs.filter((x) => x.sourceIdx === u.idx && x.channel === channel);
-        if (mine.length > b.maxLayers) {
-          const at = a.buffs.indexOf(mine[0]!);
-          if (at >= 0) a.buffs.splice(at, 1);
+        if (statBuff) {
+          // Lượng cộng thẳng tính theo chỉ số nền của CHÍNH tướng được buff.
+          const damageFlat = Math.round((a.damage * damageBps) / BPS_SCALE);
+          const hpFlat = Math.round((a.maxHpStatic * hpBps) / BPS_SCALE);
+          a.buffs.push({
+            sourceIdx: u.idx,
+            channel,
+            damageFlat,
+            hpFlat,
+            critBps: b.critBps,
+            critDamageBps: b.critDamageBps,
+            takenDownBps: b.takenDownBps,
+            // Hút máu không ăn chí mạng (chỉ % sát thương/HP của lớp buff mới nhân ST chí mạng).
+            lifestealBps: b.lifestealBps,
+            // Bộ chỉ số Trao đổi đòn (mục 18) cộng thẳng theo bps của lớp buff.
+            hitBps: b.hitBps,
+            dodgeBps: b.dodgeBps,
+            defBps: b.defBps,
+            defPenBps: b.defPenBps,
+            expiresRound,
+          });
+          // Trần `maxLayers` tính theo TỪNG (nguồn, kênh): mỗi kênh buff của tướng tối đa `maxLayers` lớp,
+          // nhiều tướng/kênh khác nhau vẫn cộng dồn.
+          const mine = a.buffs.filter((x) => x.sourceIdx === u.idx && x.channel === channel);
+          if (mine.length > b.maxLayers) {
+            const at = a.buffs.indexOf(mine[0]!);
+            if (at >= 0) a.buffs.splice(at, 1);
+          }
+          syncMaxHp(a);
+          events.push({
+            t: 'buff',
+            from: u.idx,
+            channel,
+            idx: a.idx,
+            damageFlat,
+            hpFlat,
+            critBps: b.critBps,
+            critDamageBps: b.critDamageBps,
+            takenDownBps: b.takenDownBps,
+            lifestealBps: b.lifestealBps,
+            hitBps: b.hitBps,
+            dodgeBps: b.dodgeBps,
+            defBps: b.defBps,
+            defPenBps: b.defPenBps,
+            crit,
+            expiresRound,
+            maxLayers: b.maxLayers,
+          });
         }
-        syncMaxHp(a);
-        events.push({
-          t: 'buff',
-          from: u.idx,
-          channel,
-          idx: a.idx,
-          damageFlat,
-          hpFlat,
-          critBps: b.critBps,
-          critDamageBps: b.critDamageBps,
-          takenDownBps: b.takenDownBps,
-          lifestealBps: b.lifestealBps,
-          crit,
-          expiresRound,
-          maxLayers: b.maxLayers,
-        });
+        // Tạo Khiên (mục 16): lượng khiên = % HP tối đa của chính tướng nhận, cộng dồn tối đa
+        // `maxLayers` lớp theo TỪNG (nguồn, kênh) — giống trần lớp buff.
+        if (b.shieldBps > 0) {
+          const amount = Math.round((a.maxHpStatic * b.shieldBps) / BPS_SCALE);
+          a.shields.push({ sourceIdx: u.idx, channel, amount, expiresRound });
+          const mine = a.shields.filter((x) => x.sourceIdx === u.idx && x.channel === channel);
+          if (mine.length > b.maxLayers) {
+            const at = a.shields.indexOf(mine[0]!);
+            if (at >= 0) a.shields.splice(at, 1);
+          }
+          events.push({ t: 'shield', from: u.idx, idx: a.idx, channel, amount, expiresRound, maxLayers: b.maxLayers });
+        }
       }
     }
 
@@ -619,15 +795,23 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     if (def.damageBps > 0) {
       for (const t of targets) {
         if (!u.alive) break;
+        // BƯỚC 1: kiểm tra Trúng/Trượt (mục 18) — Né thành công thì 0 sát thương, giữ nguyên Khiên & Máu.
+        if (!rollHit(u, t)) {
+          events.push({ t: 'miss', from: u.idx, idx: t.idx });
+          continue;
+        }
         const { amount: raw, crit } = rollDamage(u, def.damageBps, t);
         // Cộng thêm % sát thương khi đánh trúng mục tiêu đang chịu hiệu ứng bất lợi (mục 1.17).
         const boosted =
           def.vsDebuffBonusBps > 0 && hasDebuff(t)
             ? Math.round((raw * (BPS_SCALE + def.vsDebuffBonusBps)) / BPS_SCALE)
             : raw;
-        const amount = Math.round((boosted * takenMulBps(t)) / BPS_SCALE);
+        const before = Math.round((boosted * takenMulBps(t)) / BPS_SCALE);
+        // BƯỚC 2: áp Phòng thủ của mục tiêu sau khi trừ Xuyên giáp của người tấn công (mục 18).
+        const { amount, mitigated } = mitigate(u, t, before);
         dealt += amount;
-        damageDirect(u, t, amount, crit);
+        // BƯỚC 3: Khiên hấp thụ trước, phần dư mới trừ vào Máu.
+        damageDirect(u, t, amount, crit, mitigated);
       }
     }
 
@@ -698,9 +882,32 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
       }
     }
 
+    // Xóa Khiên (mục 17): bẻ gãy và loại bỏ TOÀN BỘ lớp Khiên hiện có của mục tiêu bị trúng đòn.
+    // Tỉ lệ hiệu dụng = cấp × hệ số mỗi cấp (mặc định 5%/cấp; Lữ Bố 3%/cấp, Trương Xuân Hoa 8%/cấp).
+    // Tướng vừa buff đồng minh vừa xóa khiên (Gia Cát Chiêm, Chu Phường, Gia Cát Cẩn) nhắm vào toàn bộ ĐỊCH.
+    const sbPerLevel = def.debuff.shieldBreakPerLevelBps;
+    if (sbPerLevel > 0) {
+      const chance = Math.min(BPS_SCALE, u.level * sbPerLevel);
+      const sbTargets = isAllyTargeting(def.targeting) ? enemiesOf(u) : targets;
+      for (const t of sbTargets) {
+        if (!t.alive || !t.shields.length) continue;
+        if (rand(BPS_SCALE) >= chance) continue;
+        t.shields = [];
+        events.push({ t: 'shieldBreak', from: u.idx, idx: t.idx });
+      }
+    }
+
     // Hiệu ứng bất lợi lên địch: suy yếu (mục 2/5/10/11) và Thiêu đốt (mục 8) tính RIÊNG vòng đời.
     const db = def.debuff;
-    const weaken = db.damageDownBps > 0 || db.hpDownBps > 0 || db.critDownBps > 0 || db.critDamageDownBps > 0;
+    const weaken =
+      db.damageDownBps > 0 ||
+      db.hpDownBps > 0 ||
+      db.critDownBps > 0 ||
+      db.critDamageDownBps > 0 ||
+      db.hitDownBps > 0 ||
+      db.dodgeDownBps > 0 ||
+      db.defDownBps > 0 ||
+      db.defPenDownBps > 0;
     if (weaken || db.burnBps > 0) {
       const expiresRound = round + db.rounds - 1;
       for (const t of targets) {
@@ -710,7 +917,18 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         if (weaken) {
           damageDownFlat = Math.round((t.damage * db.damageDownBps) / BPS_SCALE);
           hpDownFlat = Math.round((t.baseHp * db.hpDownBps) / BPS_SCALE);
-          t.debuffs.push({ sourceIdx: u.idx, damageDownFlat, hpDownFlat, critDownBps: db.critDownBps, critDamageDownBps: db.critDamageDownBps, expiresRound });
+          t.debuffs.push({
+            sourceIdx: u.idx,
+            damageDownFlat,
+            hpDownFlat,
+            critDownBps: db.critDownBps,
+            critDamageDownBps: db.critDamageDownBps,
+            hitDownBps: db.hitDownBps,
+            dodgeDownBps: db.dodgeDownBps,
+            defDownBps: db.defDownBps,
+            defPenDownBps: db.defPenDownBps,
+            expiresRound,
+          });
           // Trần `maxLayers` tính theo TỪNG nguồn: mỗi tướng tối đa `maxLayers` lớp, nhiều tướng vẫn cộng dồn.
           const mine = t.debuffs.filter((x) => x.sourceIdx === u.idx);
           if (mine.length > db.maxLayers) {
@@ -724,7 +942,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
           burnFlat = Math.round((effectiveDamage(u) * db.burnBps) / BPS_SCALE);
           addBurn(t, u, burnFlat, db.burnRounds, db.burnMaxLayers > 0 ? db.burnMaxLayers : 1);
         }
-        events.push({ t: 'debuff', from: u.idx, idx: t.idx, damageFlat: damageDownFlat, hpFlat: hpDownFlat, critBps: db.critDownBps, critDamageBps: db.critDamageDownBps, burnFlat, expiresRound, maxLayers: db.maxLayers });
+        events.push({ t: 'debuff', from: u.idx, idx: t.idx, damageFlat: damageDownFlat, hpFlat: hpDownFlat, critBps: db.critDownBps, critDamageBps: db.critDamageDownBps, hitDownBps: db.hitDownBps, dodgeDownBps: db.dodgeDownBps, defDownBps: db.defDownBps, defPenDownBps: db.defPenDownBps, burnFlat, expiresRound, maxLayers: db.maxLayers });
       }
     }
 
@@ -732,7 +950,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     if (def.selfBurn) {
       const burnFlat = Math.round((effectiveDamage(u) * PVP_BURN_BPS) / BPS_SCALE);
       addBurn(u, u, burnFlat, def.selfBurnRounds, PVP_BURN_MAX_LAYERS_LONG);
-      events.push({ t: 'debuff', from: u.idx, idx: u.idx, damageFlat: 0, hpFlat: 0, critBps: 0, critDamageBps: 0, burnFlat, expiresRound: round + def.selfBurnRounds - 1, maxLayers: PVP_BURN_MAX_LAYERS_LONG });
+      events.push({ t: 'debuff', from: u.idx, idx: u.idx, damageFlat: 0, hpFlat: 0, critBps: 0, critDamageBps: 0, hitDownBps: 0, dodgeDownBps: 0, defDownBps: 0, defPenDownBps: 0, burnFlat, expiresRound: round + def.selfBurnRounds - 1, maxLayers: PVP_BURN_MAX_LAYERS_LONG });
     }
 
     // Thanh tẩy hiệu ứng bất lợi cho đồng minh (mục 15): gỡ toàn bộ lớp suy yếu nhưng GIỮ LẠI
@@ -780,6 +998,12 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         const kept = u.burns.filter((b) => b.expiresRound >= r);
         if (kept.length !== u.burns.length) u.burns = kept;
       }
+      // Hết hạn lớp Khiên (mục 16).
+      for (const u of units) {
+        if (!u.shields.length) continue;
+        const kept = u.shields.filter((s) => s.expiresRound >= r);
+        if (kept.length !== u.shields.length) u.shields = kept;
+      }
       // Choáng của tướng đã gục không bao giờ được giải (nguồn không còn ra skill) → gỡ ở đầu lượt.
       for (const x of units) {
         if (x.stunnedByIdx === null) continue;
@@ -792,8 +1016,10 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         if (!u.alive) continue;
         const burn = rollBurnTotal(u);
         if (burn.amount <= 0) continue;
-        u.hp = Math.max(0, u.hp - burn.amount);
-        events.push({ t: 'burn', idx: u.idx, amount: burn.amount, crit: burn.crit, hp: u.hp });
+        // Khiên (mục 16) hấp thụ cả sát thương Thiêu đốt.
+        const { absorbed, rest } = absorbShield(u, burn.amount);
+        u.hp = Math.max(0, u.hp - rest);
+        events.push({ t: 'burn', idx: u.idx, amount: burn.amount, crit: burn.crit, hp: u.hp, ...(absorbed > 0 ? { absorbed } : {}) });
         // Hút máu từ chính sát thương THIÊU ĐỐT (Lục Tốn): hồi cho nguồn theo % ST gây ra, ăn chí mạng
         // của đòn thiêu đốt đó. Chỉ áp cho tướng có `burnLifesteal` và CHỈ đạt 50% hiệu suất hút máu gốc.
         for (const p of burn.parts) {
