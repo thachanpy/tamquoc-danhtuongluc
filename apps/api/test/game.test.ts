@@ -65,13 +65,13 @@ const errCode = (code: string) => (e: unknown) => e instanceof AppError && e.cod
 
 // ================= Database =================
 
-test('migration + seed chạy lặp an toàn, đúng 100 tướng', () => {
+test('migration + seed chạy lặp an toàn, đúng 140 tướng', () => {
   const { ctx } = makeCtx();
   runMigrations(ctx.db);
   seedGenerals(ctx.db);
   seedGenerals(ctx.db);
   const n = (ctx.db.prepare('SELECT COUNT(*) AS n FROM generals').get() as { n: number }).n;
-  assert.equal(n, 100);
+  assert.equal(n, 140);
   const fk = ctx.db.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number };
   assert.equal(fk.foreign_keys, 1);
 });
@@ -89,7 +89,7 @@ test('seed xóa tướng bị bỏ khỏi roster nếu không còn tham chiếu,
   const ids = new Set((ctx.db.prepare('SELECT id FROM generals').all() as { id: string }[]).map((r) => r.id));
   assert.ok(!ids.has('old-free'));
   assert.ok(ids.has('old-used'));
-  assert.equal(ids.size, 101);
+  assert.equal(ids.size, 141);
 });
 
 test('foreign key & check constraint hoạt động', () => {
@@ -552,32 +552,32 @@ test('quay: tiêu đúng 1 vé, tạo 1 thẻ, ledger khớp; retry cùng key tr
   assert.throws(() => draw(h.ctx, h.userId, 'shu', 'key-00000001'), errCode('IDEMPOTENCY_KEY_REUSED'));
 });
 
-test('vé phe (Thục/Ngụy/Ngô/Quần) chỉ ra tướng đúng phe; vé thường phủ 100 tướng', () => {
-  const h = userWithTickets(500, [
-    ...Array(100).fill(2500), // 100 vé Thục
-    ...Array(100).fill(5000), // 100 vé Ngụy
-    ...Array(100).fill(7500), // 100 vé Ngô
-    ...Array(100).fill(9000), // 100 vé Quần
-    ...Array(100).fill(0), // 100 vé thường
+test('vé phe (Thục/Ngụy/Ngô/Quần) chỉ ra tướng đúng phe; vé thường phủ 140 tướng', () => {
+  const h = userWithTickets(700, [
+    ...Array(140).fill(2500), // 140 vé Thục
+    ...Array(140).fill(5000), // 140 vé Ngụy
+    ...Array(140).fill(7500), // 140 vé Ngô
+    ...Array(140).fill(9000), // 140 vé Quần
+    ...Array(140).fill(0), // 140 vé thường
   ]);
   const factionOf = new Map(
     (h.ctx.db.prepare('SELECT id, faction FROM generals').all() as { id: string; faction: string }[]).map((r) => [r.id, r.faction]),
   );
   let k = 0;
   for (const t of ['shu', 'wei', 'wu', 'qun'] as const) {
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 140; i++) {
       const { card } = draw(h.ctx, h.userId, t, `key-${String(k++).padStart(8, '0')}`).results[0]!;
       assert.equal(factionOf.get(card.generalId), t);
       assert.ok(card.level >= 1 && card.level <= 9, 'quay thẻ chỉ ra level 1–9');
     }
   }
-  // Vé thường: điều khiển RNG để chọn index 0..99 => phủ đủ 100 tướng
+  // Vé thường: điều khiển RNG để chọn index 0..139 => phủ đủ 140 tướng
   const seen = new Set<string>();
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < 140; i++) {
     h.pushRand(i, 0);
     seen.add(draw(h.ctx, h.userId, 'normal', `key-${String(k++).padStart(8, '0')}`).results[0]!.card.generalId);
   }
-  assert.equal(seen.size, 100);
+  assert.equal(seen.size, 140);
 });
 
 test('có thể sở hữu nhiều bản sao cùng tướng', () => {

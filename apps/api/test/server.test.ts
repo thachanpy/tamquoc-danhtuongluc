@@ -88,7 +88,7 @@ test('HTTP: Vé Quần có trong config, quay ra đúng tướng phe Quần', as
   const cfg = (await app.inject({ method: 'GET', url: '/api/gacha/config' })).json();
   const qun = (cfg.ticketTypes as { id: string; label: string; pool: string[] }[]).find((t) => t.id === 'qun')!;
   assert.equal(qun.label, 'Vé Quần');
-  assert.equal(qun.pool.length, 25);
+  assert.equal(qun.pool.length, 35);
   assert.ok(qun.pool.includes('lu-bu'));
   // Cộng vé tới khi có Vé Quần rồi quay
   let i = 0;

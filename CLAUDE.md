@@ -51,7 +51,7 @@ Công nghệ mục tiêu:
 - Backend: Fastify REST API.
 - Database: SQLite.
 - Shared package: types, schema validation, DTO và enum dùng chung.
-- Game config package: roster 100 tướng, loại vé, tỷ lệ gacha, tỷ lệ nâng cấp và cấu hình game.
+- Game config package: roster 140 tướng, loại vé, tỷ lệ gacha, tỷ lệ nâng cấp và cấu hình game.
 - pnpm workspace nếu repository chưa có package manager hoặc cấu trúc tương đương.
 
 Cấu trúc gợi ý:
@@ -59,7 +59,7 @@ Cấu trúc gợi ý:
 - `apps/web`: frontend, UI và hiệu ứng (SolidJS + CSS).
 - `apps/api`: Fastify, authentication, game logic và persistence.
 - `packages/shared`: types, schemas, DTO và constants.
-- `packages/game-config`: roster 100 tướng và các cấu hình game.
+- `packages/game-config`: roster 140 tướng và các cấu hình game.
 - Triển khai server (hướng dẫn ở `README.md`, mục "Triển khai lên server"): `nginx.conf` ở gốc repo (phục vụ `apps/web/dist`, proxy `/api/` sang `127.0.0.1:3000`), `pm2.config.json` ở gốc repo (chạy API `apps/api/src/index.ts` bằng `node`, fork 1 instance). API đặt `trustProxy` (biến `TRUST_PROXY`, mặc định tin 127.0.0.1) để rate limit theo IP thật sau nginx.
 
 Cấu trúc frontend (SolidJS, `apps/web/src`):
@@ -86,12 +86,12 @@ Quy ước:
 
 ### 3.1. Các phe và danh mục tướng
 
-Game có chính xác 100 tướng, chia đều thành 4 phe, mỗi phe 25 tướng (trước đây 80 tướng / 20 mỗi phe; chủ dự án đã mở rộng roster, bỏ Chu Trị khỏi phe Ngô và thay Thư Thụ bằng Mạnh Hoạch ở phe Quần):
+Game có chính xác 140 tướng, chia đều thành 4 phe, mỗi phe 35 tướng (trước đây 80 tướng / 20 mỗi phe, rồi 100 tướng / 25 mỗi phe; chủ dự án đã mở rộng roster, bỏ Chu Trị khỏi phe Ngô và thay Thư Thụ bằng Mạnh Hoạch ở phe Quần; mở rộng gần nhất bổ sung thêm 10 tướng mỗi phe — 40 tướng mới STT 26–35, chân dung cắt từ 4 bảng 2×5 chủ dự án cung cấp):
 
-- Ngụy (`wei`): 25 tướng.
-- Thục (`shu`): 25 tướng.
-- Ngô (`wu`): 25 tướng.
-- Quần (`qun`): 25 tướng.
+- Ngụy (`wei`): 35 tướng.
+- Thục (`shu`): 35 tướng.
+- Ngô (`wu`): 35 tướng.
+- Quần (`qun`): 35 tướng.
 
 #### Phe Ngụy — `wei`
 
@@ -120,6 +120,16 @@ Game có chính xác 100 tướng, chia đều thành 4 phe, mỗi phe 25 tướ
 23. Tào Hoa
 24. Tào Tiết
 25. Tân Hiến Anh
+26. Tào Thực
+27. Tào Chương
+28. Mãn Sủng
+29. Lưu Diệp
+30. Vương Dị
+31. Vương Tường
+32. Đặng Ngãi
+33. Quách Hoài
+34. Trần Quần
+35. Chung Hội
 
 #### Phe Thục — `shu`
 
@@ -148,6 +158,16 @@ Game có chính xác 100 tướng, chia đều thành 4 phe, mỗi phe 25 tướ
 23. Gia Cát Quả
 24. Bao Tam Nương
 25. Ngô Ý
+26. Đặng Chi
+27. Trương Tinh Thái
+28. Mã Trung
+29. Phí Y
+30. Tưởng Uyển
+31. Mã Lương
+32. La Hiến
+33. Lưu Phong
+34. Trương Dực
+35. Gia Cát Chiêm
 
 #### Phe Ngô — `wu`
 
@@ -176,6 +196,16 @@ Game có chính xác 100 tướng, chia đều thành 4 phe, mỗi phe 25 tướ
 23. Bộ Luyện Sư
 24. Tôn Lỗ Dục
 25. Tôn Lỗ Ban
+26. Chu Phường
+27. Cố Ung
+28. Toàn Tông
+29. Lữ Đại
+30. Tôn Hoàn
+31. Gia Cát Cẩn
+32. Tôn Phấn
+33. Đặng Đương
+34. Chu Cứ
+35. Lục Kháng
 
 #### Phe Quần — `qun`
 
@@ -204,6 +234,16 @@ Game có chính xác 100 tướng, chia đều thành 4 phe, mỗi phe 25 tướ
 23. Chúc Dung
 24. Đổng Bạch
 25. Trương Xuân Hoa
+26. Lý Thôi
+27. Quách Dĩ
+28. Cát Huyền
+29. Thẩm Phối
+30. Hứa Du
+31. Tả Từ
+32. Thủy Kính
+33. Hoa Đà
+34. Kỷ Linh
+35. Nghiêm Bạch Hổ
 
 #### Quy tắc dữ liệu tướng
 
@@ -215,8 +255,8 @@ Game có chính xác 100 tướng, chia đều thành 4 phe, mỗi phe 25 tướ
 - Không dùng tên hiển thị làm khóa chính.
 - Roster được khai báo trong package cấu hình game và seed vào bảng `generals`.
 - Seed phải chạy lặp an toàn, không tạo tướng trùng và không ghi đè dữ liệu người chơi.
-- Vé thường quay trong toàn bộ 100 tướng.
-- Vé Thục, Ngụy, Ngô và Quần chỉ quay trong 25 tướng của phe tương ứng.
+- Vé thường quay trong toàn bộ 140 tướng.
+- Vé Thục, Ngụy, Ngô và Quần chỉ quay trong 35 tướng của phe tương ứng.
 - Trong pool hợp lệ, xác suất chọn mỗi tướng bằng nhau.
 - Level thẻ được roll độc lập theo cấu hình gacha.
 - Nếu chưa có artwork chính thức, dùng placeholder nhất quán, có thể thay thế sau.
@@ -253,16 +293,16 @@ Game có đúng 5 loại vé:
 
 | Loại vé | ID | Pool tướng |
 |---|---|---|
-| Vé thường | `normal` | Toàn bộ 100 tướng |
-| Vé Thục | `shu` | 25 tướng Thục |
-| Vé Ngụy | `wei` | 25 tướng Ngụy |
-| Vé Ngô | `wu` | 25 tướng Ngô |
-| Vé Quần | `qun` | 25 tướng Quần |
+| Vé thường | `normal` | Toàn bộ 140 tướng |
+| Vé Thục | `shu` | 35 tướng Thục |
+| Vé Ngụy | `wei` | 35 tướng Ngụy |
+| Vé Ngô | `wu` | 35 tướng Ngô |
+| Vé Quần | `qun` | 35 tướng Quần |
 
 Quy tắc:
 
 - Tất cả vé đều miễn phí.
-- Có vé Quần (`qun`), quay trong 25 tướng Quần. (Trước đây MVP không có vé Quần; chủ dự án đã yêu cầu bổ sung.)
+- Có vé Quần (`qun`), quay trong 35 tướng Quần. (Trước đây MVP không có vé Quần; chủ dự án đã yêu cầu bổ sung.)
 - Không có hệ thống mua vé.
 - Mỗi vé chỉ sử dụng một lần.
 - Vé thường không bị giới hạn theo phe.
@@ -549,11 +589,11 @@ Nếu người chơi gửi lại cùng idempotency key sau khi request đã thà
 
 ### 4.2. Tỷ lệ chọn tướng
 
-- Vé thường: chọn ngẫu nhiên đồng đều trong 100 tướng.
-- Vé Thục: chọn ngẫu nhiên đồng đều trong 25 tướng Thục.
-- Vé Ngụy: chọn ngẫu nhiên đồng đều trong 25 tướng Ngụy.
-- Vé Ngô: chọn ngẫu nhiên đồng đều trong 25 tướng Ngô.
-- Vé Quần: chọn ngẫu nhiên đồng đều trong 25 tướng Quần.
+- Vé thường: chọn ngẫu nhiên đồng đều trong 140 tướng.
+- Vé Thục: chọn ngẫu nhiên đồng đều trong 35 tướng Thục.
+- Vé Ngụy: chọn ngẫu nhiên đồng đều trong 35 tướng Ngụy.
+- Vé Ngô: chọn ngẫu nhiên đồng đều trong 35 tướng Ngô.
+- Vé Quần: chọn ngẫu nhiên đồng đều trong 35 tướng Quần.
 - Người chơi có thể nhận nhiều bản sao của cùng một tướng.
 - Không có pity system.
 - Không loại tướng đã sở hữu ra khỏi pool.
@@ -846,7 +886,7 @@ Hiển thị lịch sử phân trang:
 - Thân thẻ (avatar + tên) luôn cùng kích thước ở mọi cấp trong cùng một ô: thẻ Lv.6–10 cần chừa chỗ khung lớn hơn nên được phóng to (≈1,171×) kèm lề âm để thân thẻ trùng đúng vị trí/kích thước thân thẻ Lv.1–5; khung Lv.6+ tràn ra ngoài ô, ô chứa thẻ Lv.6+ được nới rộng. Thẻ luôn căn giữa ô; các ô nhóm level trong cùng một tướng cao bằng nhau và dùng chung đệm (nhóm có thẻ Lv.6+ thì mọi ô cùng nới), nên thân thẻ các cấp thẳng hàng. Kích thước ô đặt bằng biến CSS `--cw` (`style.css`).
 - Ảnh khung nằm ở `apps/web/public/frames/lv1.png` … `lv10.png` (PNG nền trong suốt, tách từ bộ khung tham chiếu bản 3 bằng color-to-alpha nên giữ được hào quang mờ; thân thẻ rộng 240px trong ảnh khung). Vị trí đặt khung so với thân thẻ khai báo ở `FRAME_LAYOUT` trong `apps/web/src/art.ts`; dùng chung cho thẻ trong lưới và thẻ trên sân khấu (animation mở thẻ, ghép thẻ). Thay khung = thay file PNG cùng tên (nếu tỉ lệ khung đổi thì cập nhật `FRAME_LAYOUT`).
 - Màu chữ level và chấm màu ở bảng tỷ lệ dùng màu của bậc khung tương ứng.
-- Chân dung tướng nằm ở `apps/web/public/generals/{artKey}.jpg` (cắt từ 4 bảng ảnh độ phân giải cao chủ dự án cung cấp, mỗi phe một bảng 5×5, bỏ khung và bảng tên; mỗi ảnh 286×378). Dùng chung cho thẻ trong lưới và thẻ trên sân khấu. Ô chân dung là **chữ nhật đúng tỉ lệ ảnh gốc 286:378** (chủ dự án yêu cầu; `.tq-art` `aspect-ratio: 286/378`), tên + phe/Lv **nằm đè phần dưới chân dung** trên nền tối dần (như bảng tên ảnh gốc) với cỡ chữ nhỏ (tên 12px, phe/Lv 10,5px; mobile 11/9,5px), có đệm theo bậc khung để thanh khung/đá Lv.6+ không che chữ; nhờ vậy thân thẻ giữ đúng tỉ lệ khung, ảnh khung không bị kéo giãn. Thay artwork = thay file cùng tên rồi tăng `PORTRAIT_VERSION` trong `art.ts` (URL có `?v=`, vì nginx cache `/generals/` 7 ngày). Bộ hiện tại (v4) cắt lại từ 4 bảng mới của chủ dự án, giữ nguyên bố cục ảnh gốc (chủ dự án yêu cầu bỏ việc đẩy người xuống + vùng mờ phía trên của v3); bảng Ngụy ghi "Tào Thuần" ở ô thứ 5, ảnh này dùng cho `cao-zhen` (Tào Chân) vì roster chưa đổi.
+- Chân dung tướng nằm ở `apps/web/public/generals/{artKey}.jpg` (cắt từ 4 bảng ảnh độ phân giải cao chủ dự án cung cấp, mỗi phe một bảng 5×5, bỏ khung và bảng tên; mỗi ảnh 286×378). Dùng chung cho thẻ trong lưới và thẻ trên sân khấu. Ô chân dung là **chữ nhật đúng tỉ lệ ảnh gốc 286:378** (chủ dự án yêu cầu; `.tq-art` `aspect-ratio: 286/378`), tên + phe/Lv **nằm đè phần dưới chân dung** trên nền tối dần (như bảng tên ảnh gốc) với cỡ chữ nhỏ (tên 12px, phe/Lv 10,5px; mobile 11/9,5px), có đệm theo bậc khung để thanh khung/đá Lv.6+ không che chữ; nhờ vậy thân thẻ giữ đúng tỉ lệ khung, ảnh khung không bị kéo giãn. Thay artwork = thay file cùng tên rồi tăng `PORTRAIT_VERSION` trong `art.ts` (URL có `?v=`, vì nginx cache `/generals/` 7 ngày). Bộ 100 tướng gốc (v4) cắt lại từ 4 bảng mới của chủ dự án, giữ nguyên bố cục ảnh gốc (chủ dự án yêu cầu bỏ việc đẩy người xuống + vùng mờ phía trên của v3); bảng Ngụy ghi "Tào Thuần" ở ô thứ 5, ảnh này dùng cho `cao-zhen` (Tào Chân) vì roster chưa đổi. 40 tướng STT 26–35 (v5) cắt từ 4 bảng 2×5 mới (mỗi phe 10 tướng, thứ tự trùng roster), cùng cách cắt 286×378. Chu Du (`zhou-yu`, v6) thay bằng ảnh riêng chủ dự án cung cấp.
 - Tướng thiếu ảnh chân dung tự rơi về placeholder (biểu tượng phe + chữ viết tắt).
 - Mặt sau thẻ trong animation quay thẻ là ảnh `apps/web/public/theme/card-back.jpg` (chủ dự án cung cấp: khung đồng, rồng, bát quái; 360×568, ~40 KB). Thay mặt sau = thay file cùng tên; thiếu ảnh thì dùng mặt sau vẽ dự phòng.
 - Nhạc nền (chủ dự án cung cấp): 4 bài `apps/web/public/audio/b1.mp3`, `b2.mp3`, `b3.mp3`, `b4.mp3` (MP3 64 kbps, ~1,4 MB/bài), khai báo trong `TRACKS` ở `apps/web/src/music.ts`; phát kiểu xào bài: trộn ngẫu nhiên cả danh sách, nghe hết các bài rồi mới trộn lại; bài vừa nghe được nhớ trong localStorage (`tq.music.last`) nên lần mở game sau không bắt đầu bằng bài đó. Thanh trên có nút bật/tắt hình trống trận (SVG; khi tắt có vạch son chéo) và thanh âm lượng (`components/MusicControl.tsx`); lựa chọn lưu trong localStorage của trình duyệt (mặc định bật, 40%). Do trình duyệt chặn tự phát, nhạc chỉ bắt đầu sau lần chạm/bấm đầu tiên.
@@ -876,7 +916,7 @@ Do chủ dự án yêu cầu, theo GDD `PVP.md`. Tab **Đấu trường** (`#pvp
 - **Chuẩn bị khiêu chiến**: khi chọn đối thủ (từ bảng xếp hạng hoặc `#pvp/<id>`), một **modal** tự mở hiển thị 2 đội **2 bên trái/phải** (mình bên trái, đối thủ bên phải) để so sánh trực tiếp; sửa đội mình ngay trong modal (bấm ô để đổi, kéo-thả để đổi vị trí — tự lưu như trên) rồi bấm **Khiêu chiến** tại chỗ (màn hẹp tự xếp dọc). Trang Đấu trường chỉ còn dòng tóm tắt đối thủ + nút mở lại modal.
 - **Vào trận**: chọn đối thủ bằng cách bấm vào người chơi trên **bảng xếp hạng** (mục 6.6) hoặc mở từ Đấu trường (`#pvp/<id>`); không được tự khiêu chiến chính mình. Trận giữa hai người được ghi lại và **xem lại được** từ cả hai phía (dữ liệu đối xứng). Sau khi bấm **Khiêu chiến** (hoặc **Khiêu chiến lại**), **danh sách lịch sử trận đấu chưa nạp lại ngay** — chỉ nạp khi người chơi **đóng màn xem lại trận** (`closeBattle` trong `Pvp.tsx`), để lịch sử không đổi sau lưng trong lúc đang xem; thành tích Thắng/Thua/Hòa ở đầu trang thì cập nhật ngay.
 - **Mô phỏng ở server**: `simulatePvp(sides, rand)` trong `apps/api/src/managers/pvp.engine.ts` là hàm thuần, chạy hết trận ngay khi khiêu chiến (client không gửi kết quả). Engine tất định theo seed nên lưu seed là tái dựng được (không cần lưu từng bước — SKILLS.md). **Thứ tự hành động** (LC do phong cách + cấp quyết định, `pvpLc`): hai đội **luân phiên nhau**, bên có **tổng lực chiến cả đội cao hơn** đi trước — vòng đầu đủ 6 vs 6 là **vị trí 1 của bên đi trước**, rồi **vị trí 1 của bên kia**, rồi **vị trí 2 của bên đi trước**, **vị trí 2 của bên kia**… cứ thế tới vị trí 6 (bằng tổng LC thì bên khiêu chiến A đi trước); không xếp theo LC từng tướng. Tướng đã gục bị bỏ qua nhưng **bên đi trước vẫn giữ quyền mở màn mỗi vòng**: nếu vị trí 1 của bên đó chết thì vòng sau bắt đầu bằng **vị trí còn sống gần nhất của bên đó** (A2) rồi mới tới vị trí 1 của đối thủ (B1), tiếp tục A3, B2… Chí mạng ×1,5 áp cho cả **sát thương lẫn hồi máu**. Hồi máu chủ động chọn mục tiêu theo kỹ năng: **toàn đội**, **1 đồng minh thấp máu nhất**, **hàng trước** hoặc **hàng sau** (SKILLS.md). Kỹ năng **tự hồi máu** (`SELF_HP`, mô tả cũ "*Bản thân +25% HP tối đa*") nay là **hồi 25% HP tối đa mỗi lượt ra đòn**, không cộng trần HP. Một số tướng được chỉ định có **hút máu**: hồi bản thân `cấp × 2%` sát thương gây ra (cấp 1 = 2% … cấp 10 = 20%), bù lại hệ số sát thương kỹ năng **giảm 10%** (áp trước khi nhân hot). Ngoài ra **mỗi phe có đúng 1 tướng signature** hút máu vượt trội, mốc khác nhau cho đa dạng (đều đánh đơn, kèm tăng 10% HP tối đa bản thân): **Mã Siêu** (Thục, `cấp × 10%` max 100%), **Cam Ninh** (Ngô, `cấp × 9.5%` max 95%), **Hoa Hùng** (Quần, `cấp × 9%` max 90%), **Nhạc Tiến** (Ngụy, `cấp × 8.5%` max 85%). Ngoài các kiểu chọn mục tiêu thường (đơn/hàng ngang/hàng trước/hàng sau/toàn bộ…), có kiểu **`highest_damage_enemy`** — nhắm **tướng địch có sát thương hiệu dụng cao nhất** (đã tính buff/debuff đang hiệu lực, bằng nhau thì chọn vị trí nhỏ hơn), dùng cho **Quan Vũ** và **Điêu Thuyền** (Điêu Thuyền choáng thẳng tướng địch mạnh nhất thay vì đánh theo hàng ngang). **Hàng trước** (`front_enemies`) nhắm **3 tướng hàng trước của địch (vị trí 1-2-3)** bất kể người thi triển đứng ở đâu; **hết hàng trước thì đánh sang hàng sau** (giống hệt cơ chế của *"hàng sau"*) — dùng cho **Viên Thuật** (Quần · Hỗ trợ, giảm HP tối đa) và 6 tướng **Tấn công** đánh hàng trước: **Trương Cáp** (Ngụy · kỳ binh đột kích), **Ngụy Diên**, **Mã Đại** (Thục · kỵ binh Tây Lương), **Lục Tốn** (Ngô), **Trương Lương**, **Mã Đằng** (Quần · thiết kỵ), cùng 2 tướng **Hỗ trợ** Tuân Du và Giả Hủ (Ngụy); vì vậy một tướng Hỗ trợ xếp ở hàng sau vẫn đánh vào hàng trước của địch. Mỗi phe cũng có đúng 1 tướng **Hỗ trợ ban hút máu cho đồng đội**: buff **+15% hút máu cho toàn đội, kéo dài 2 lượt** làm **kênh buff phụ** cộng thêm vào bộ buff sẵn có (không đổi hệ số hiện tại), giữ **tối đa 1 lớp** nên hút máu ban luôn ≤ 15% — **Lưu Bị** (Thục), **Tuân Úc** (Ngụy), **Lỗ Túc** (Ngô), **Viên Thiệu** (Quần). Trần `maxLayers` của buff tính riêng theo **từng (nguồn, kênh)** nên kênh hút máu không đè kênh buff chỉ số của cùng một tướng. Một số tướng (cả **Tấn công** lẫn **Phòng thủ**) có **Hồi sinh** (`def.revive`): khi HP về 0 **lần đầu** trong trận thì **không gục** mà hồi lại `cấp × 5%` HP tối đa (cấp 1 = 5% → cấp 10 = 50%), đổi lại **giảm 50% sát thương gây ra VĨNH VIỄN tới hết trận** (`damageMulBps`); chỉ hiệu lực **một lần mỗi trận**, lần chết thứ hai gục thật — engine phát sự kiện `revive` (`hp`, `damageDownBps`) thay cho `down`. Danh sách: **Triệu Vân** (Thục · Tấn công), **Tào Nhân** (Ngụy · Phòng thủ), **Hoàng Cái** (Ngô · Phòng thủ), **Văn Sú** (Quần · Tấn công). Một số tướng còn có **nội tại "đao phủ"** (`def.vsDebuffBonusBps`): khi đòn đánh kỹ năng trúng mục tiêu **đang chịu hiệu ứng bất lợi** (lớp Suy yếu, đang Thiêu đốt, hoặc đang Choáng — `hasDebuff`) thì **cộng thêm +30% sát thương** cho đòn đó. Danh sách (3 Ngụy + 1 mỗi phe khác): **Tào Phi**, **Tào Chân**, **Từ Hoảng** (Ngụy), **Mã Đại** (Thục), **Đinh Phụng** (Ngô), **Trương Bảo** (Quần).
-- **Phát lại ở client**: server trả `units` (snapshot đầu trận) + `events` (danh sách sự kiện có thứ tự) + `rounds`/`winner`; client dựng bàn đấu từ `units` rồi áp `events` tuần tự, có chỉnh tốc độ và thanh tiến trình. 2 đội nằm **2 bên trái/phải** ngăn bằng dải phân cách; tên kỹ năng thật (lấy từ `SKILLS.md`, ví dụ *"Hiệu lệnh thiên hạ"*) **bay lên trên ô tướng đang ra đòn** — nhãn này nằm trên **lớp trên cùng** (nền nâu đậm + viền vàng kép, chữ 18px đậm có quầng sáng) nên **luôn rõ nét**, không bị ô tướng choáng/gục làm mờ hay ô khác che, tự **bật nảy** khi xuất chiêu và tự ghim trong sân nếu tên quá dài; kèm bảng tên chiêu phía trên sân (thanh `.rp-cast`, chữ đậm có quầng vàng, tự bật nảy mỗi lần ra chiêu); số sát thương/hồi máu/buff nhảy trên đầu tướng **cỡ lớn, có viền + quầng sáng** cho dễ đọc, **luôn rõ nét** (giữ nguyên độ đậm suốt hoạt ảnh, không bị ô tướng choáng/gục làm nhạt; z-index cao nên không bị ảnh tướng che; chí mạng thì số to hơn hẳn, màu vàng); tướng bị choáng hiện **vòng sao xoay tròn** quanh ô để thấy rõ đang bị khống chế. Mỗi lần ra đòn và mỗi lần trúng hiệu ứng đều có **hiệu ứng kỹ năng vẽ bằng PixiJS** (`pixi/skillsfx.ts`): kiểu hình khối theo **nhóm kỹ năng** (vòng niệm + lưỡi chém cho sát thương, ấn phù xoay + hạt rơi cho suy yếu, ấn phù + vòng cho choáng, hạt bay lên cho hồi máu/tăng cường, luồng sáng cho thanh tẩy/giải), **pha màu theo phe** (Ngụy lam, Thục lục, Ngô đỏ, Quần tím) và **sắc thái riêng từng tướng** (số lưỡi/hạt, hoạ tiết phụ, accent và góc xoay băm từ `artKey`) nên 100 tướng đều khác nhau; hiệu ứng niệm chiêu hiện ở **ô người thi triển** (`cast()`), hiệu ứng va chạm hiện ở **ô mục tiêu** (`impact()`), tự dọn khi xong và bỏ qua khi tua nhanh / bật giảm chuyển động. Ô tướng hiện **thanh máu kèm số HP thật và %** (`1.500 · 62%`, sắp hết máu thì nhấp nháy vàng) và dòng **⚔ sát thương hiện tại · CM % · STCM %** — thay cho LC; cả ba chỉ số này **tự cộng/trừ theo các lớp buff–debuff đang hiệu lực** (sát thương, chí mạng, ST chí mạng; đổi màu sáng xanh khi đang được buff, tím khi đang bị debuff, và tự thu nhỏ chữ nếu tràn ô), lớp buff hết hạn bị bỏ đúng như engine nhờ `expiresRound` trong sự kiện `buff`. **Diễn biến chi tiết hiện ngay trong lúc đang đánh** (cùng nội dung với tab *Diễn biến chi tiết* ở bảng kết quả, tự cuộn xuống dòng mới nhất). Kết quả **Thắng/Hòa/Thua** hiển thị **cỡ lớn có quầng sáng** cho dễ thấy. Nút **Kết quả** nhảy tới cuối trận và mở bảng kết quả (trận kết thúc tự nhiên cũng tự mở). Ở màn kết quả có nút **Khiêu chiến lại** để đánh lại chính đối thủ đó ngay.
+- **Phát lại ở client**: server trả `units` (snapshot đầu trận) + `events` (danh sách sự kiện có thứ tự) + `rounds`/`winner`; client dựng bàn đấu từ `units` rồi áp `events` tuần tự, có chỉnh tốc độ và thanh tiến trình. 2 đội nằm **2 bên trái/phải** ngăn bằng dải phân cách; tên kỹ năng thật (lấy từ `SKILLS.md`, ví dụ *"Hiệu lệnh thiên hạ"*) **bay lên trên ô tướng đang ra đòn** — nhãn này nằm trên **lớp trên cùng** (nền nâu đậm + viền vàng kép, chữ 18px đậm có quầng sáng) nên **luôn rõ nét**, không bị ô tướng choáng/gục làm mờ hay ô khác che, tự **bật nảy** khi xuất chiêu và tự ghim trong sân nếu tên quá dài; kèm bảng tên chiêu phía trên sân (thanh `.rp-cast`, chữ đậm có quầng vàng, tự bật nảy mỗi lần ra chiêu); số sát thương/hồi máu/buff nhảy trên đầu tướng **cỡ lớn, có viền + quầng sáng** cho dễ đọc, **luôn rõ nét** (giữ nguyên độ đậm suốt hoạt ảnh, không bị ô tướng choáng/gục làm nhạt; z-index cao nên không bị ảnh tướng che; chí mạng thì số to hơn hẳn, màu vàng); tướng bị choáng hiện **vòng sao xoay tròn** quanh ô để thấy rõ đang bị khống chế. Mỗi lần ra đòn và mỗi lần trúng hiệu ứng đều có **hiệu ứng kỹ năng vẽ bằng PixiJS** (`pixi/skillsfx.ts`): kiểu hình khối theo **nhóm kỹ năng** (vòng niệm + lưỡi chém cho sát thương, ấn phù xoay + hạt rơi cho suy yếu, ấn phù + vòng cho choáng, hạt bay lên cho hồi máu/tăng cường, luồng sáng cho thanh tẩy/giải), **pha màu theo phe** (Ngụy lam, Thục lục, Ngô đỏ, Quần tím) và **sắc thái riêng từng tướng** (số lưỡi/hạt, hoạ tiết phụ, accent và góc xoay băm từ `artKey`) nên 140 tướng đều khác nhau; hiệu ứng niệm chiêu hiện ở **ô người thi triển** (`cast()`), hiệu ứng va chạm hiện ở **ô mục tiêu** (`impact()`), tự dọn khi xong và bỏ qua khi tua nhanh / bật giảm chuyển động. Ô tướng hiện **thanh máu kèm số HP thật và %** (`1.500 · 62%`, sắp hết máu thì nhấp nháy vàng) và dòng **⚔ sát thương hiện tại · CM % · STCM %** — thay cho LC; cả ba chỉ số này **tự cộng/trừ theo các lớp buff–debuff đang hiệu lực** (sát thương, chí mạng, ST chí mạng; đổi màu sáng xanh khi đang được buff, tím khi đang bị debuff, và tự thu nhỏ chữ nếu tràn ô), lớp buff hết hạn bị bỏ đúng như engine nhờ `expiresRound` trong sự kiện `buff`. **Diễn biến chi tiết hiện ngay trong lúc đang đánh** (cùng nội dung với tab *Diễn biến chi tiết* ở bảng kết quả, tự cuộn xuống dòng mới nhất). Kết quả **Thắng/Hòa/Thua** hiển thị **cỡ lớn có quầng sáng** cho dễ thấy. Nút **Kết quả** nhảy tới cuối trận và mở bảng kết quả (trận kết thúc tự nhiên cũng tự mở). Ở màn kết quả có nút **Khiêu chiến lại** để đánh lại chính đối thủ đó ngay.
 - **Bảng kết quả trận**: 2 tab — *Tổng kết chỉ số* (mỗi tướng: sát thương gây ra, sát thương đã chịu, tổng hồi máu cho bản thân + đồng đội, số lần hạ/choáng/giải/buff) và *Diễn biến chi tiết* (từng lượt/hành động kèm avatar người thi triển → mục tiêu, **nhãn "Ta"/"Địch"** để biết dòng của bên nào, lượng sát thương/hồi máu, nhãn CHÍ MẠNG; hành động **tự hồi máu** hiện kèm lượng hồi cụ thể, ví dụ *"Điển Vi dùng Ác Lai hộ vệ (tự hồi 25% HP tối đa)"*, và hành động **buff** hiện lượng tăng cụ thể `+X% sát thương · +Y% HP tối đa · +Z điểm chí mạng` kèm nhãn **CHÍ MẠNG** khi lớp buff đó chí mạng). Tên hiệu ứng/chiêu hiển thị là **tên kỹ năng thật** (trường `skillName` theo `SKILLS.md`), không dùng nhãn chung. Tướng có **hút máu** hiện thêm *"hút máu X%"* ở ô tướng. Dữ liệu phân tích trọn từ `events`, không phụ thuộc tốc độ phát lại. Không gửi lại server trong lúc phát.
 - **Cân bằng**: `packages/game-config/src/pvp.ts` (`PVP_MAX_ROUNDS` = 50, `pvpBaseHp`/`pvpBaseDamage` — **HP nền luôn gấp 10 lần sát thương nền**, cấp 1: 2000 HP ↔ 200 sát thương, mỗi cấp ×1.25 (`PVP_LEVEL_GROWTH`) nên cấp 10 gấp ~7,5 lần cấp 1); `PVP_SKILL_DEF` — mỗi kỹ năng kèm `teamBuff` (nhóm `TEAM_*`/`BUFF_ALLIES`), `PVP_CRIT_*`, `pvpProfile` — hệ số đã nhân hot ×1.1); nguồn cân bằng là `SKILLS.md`. Sát thương theo số mục tiêu (đơn 250%, hàng 180%/mục tiêu, toàn bộ 100%/mục tiêu); hồi máu cân theo số mục tiêu (toàn đội 110%, hàng 220%, thấp máu nhất 330%). Tướng có **hút máu** (`PVP_LIFESTEAL_BPS_PER_LEVEL` = 2%/cấp, `PVP_LIFESTEAL_DAMAGE_PENALTY_BPS` = −10% sát thương kỹ năng); **4 tướng signature mỗi phe 1 tướng** dùng các mốc cao `PVP_LIFESTEAL_BURST_BPS_PER_LEVEL` (Mã Siêu — Thục, 10%/cấp max 100%), `PVP_LIFESTEAL_SIGNATURE_HIGH_BPS_PER_LEVEL` (Cam Ninh — Ngô, 9.5%/cấp max 95%), `PVP_LIFESTEAL_SIGNATURE_MID_BPS_PER_LEVEL` (Hoa Hùng — Quần, 9%/cấp max 90%), `PVP_LIFESTEAL_SIGNATURE_LOW_BPS_PER_LEVEL` (Nhạc Tiến — Ngụy, 8.5%/cấp max 85%); `pvpProfile` trả thêm `skillName` (tên chiêu theo `SKILLS.md`) và `lifestealPerLevelBps`. Ngoài ra **mỗi phe 1 tướng Hỗ trợ ban hút máu cho đồng đội** (`PVP_SKILL_BUFF_LIFESTEAL_BPS` = 15%/lớp, `PVP_SKILL_BUFF_LIFESTEAL_ROUNDS` = 2 lượt, `PVP_SKILL_BUFF_LIFESTEAL_MAX_LAYERS` = 1 nên trần 15%) như **kênh buff phụ**; trần `maxLayers` tính theo **từng (nguồn, kênh)** nên kênh hút máu không đè kênh buff chỉ số. Hồi sinh (`PVP_REVIVE_HP_BPS_PER_LEVEL` = 5%/cấp, trần 50%; `PVP_REVIVE_DAMAGE_DOWN_BPS` = −50% sát thương gây ra vĩnh viễn) áp cho 4 tướng Triệu Vân/Tào Nhân/Hoàng Cái/Văn Sú. Nội tại "đao phủ" (`PVP_VS_DEBUFF_BONUS_BPS` = +30% sát thương kỹ năng khi mục tiêu đang Suy yếu/Thiêu đốt/Choáng) áp cho 6 tướng Tào Phi/Tào Chân/Từ Hoảng (Ngụy) · Mã Đại (Thục) · Đinh Phụng (Ngô) · Trương Bảo (Quần). Choáng đơn mục tiêu `cấp × 7%` (tối đa 70%), hàng/diện rộng `cấp × 3%`; choáng **chỉ kéo dài 2 lượt** (`PVP_STUN_ROUNDS` — gây ở lượt r thì mục tiêu bỏ lượt tới hết lượt r+1, đầu lượt r+2 tự hết; đang choáng thì không choáng chồng); giải choáng `30% + 5%×(cấp−1)` (30%→75%); tướng **sở hữu kỹ năng giải choáng miễn nhiễm choáng**. Buff tăng sức mạnh theo kỹ năng (`teamBuff`, nhóm `TEAM_*`/`BUFF_ALLIES`) **cộng dồn tối đa 3 lớp** (`PVP_SKILL_BUFF_MAX_LAYERS`), mỗi lớp hiệu lực **4 lượt** (`PVP_SKILL_BUFF_ROUNDS`); mỗi lớp **+10% HP tối đa** (`PVP_SKILL_BUFF_HP_BPS`, tăng trần HP và **hồi ngay đúng lượng trần tăng**), **+10% sát thương** (`PVP_SKILL_BUFF_DAMAGE_BPS`) và **+5 điểm chí mạng** (`PVP_SKILL_BUFF_CRIT_POINTS_BPS`); **%HP và %sát thương ăn chí mạng (×1,5)** theo **một lần roll chung cho cả lớp**. Validate khi khởi động qua `validate.ts` (`validatePvpConfig(assert)` — mỗi phe đúng 10 tướng hot). Hết 50 vòng không phân thắng bại → hoà.
 - **Hiệu ứng kỹ năng quy theo CẤP**: mọi hệ số HIỆU ỨNG trong `SKILLS.md`/`PVP_ROSTER_ROWS` là **giá trị chốt ở cấp 10**; engine tự quy về cấp thực tế qua `pvpEffectBps(baseBps, level)` (`packages/game-config/src/pvp.ts`): **cấp 1 = giá trị chốt − 10 điểm %**, **cấp 10 = giá trị chốt**, nội suy tuyến tính (làm tròn, không xuống dưới 0). `PVP_EFFECT_LEVEL_SPAN_BPS` = 1000. Áp cho buff có lợi (ST, HP tối đa, chí mạng, ST chí mạng, giảm ST nhận, ban hút máu), hồi máu/tự hồi máu, debuff lên địch (giảm ST/HP tối đa/chí mạng/ST chí mạng, thiêu đốt), phản kích, "đao phủ". Tỉ lệ khai báo dạng **"mỗi cấp"** (Choáng `cấp×X%`, Hút máu `cấp×X%`, Phản kích `cấp×3%`, Chí mạng `cấp×3%`) dùng `pvpPerLevelEffectBps(perLevelBps, level)` = cùng công thức với giá trị chốt `perLevelBps × 10`. `pvpSkillDefAtLevel(def, level)` trả định nghĩa kỹ năng đã quy cấp — engine dùng qua `unit.def` và `getCombatStats` đẩy ra `PvpCombatDto`/snapshot nên client hiển thị đúng số theo cấp. **KHÔNG** quy theo cấp: hệ số sát thương kỹ năng (`250%–320%` — đã tự lớn theo chỉ số nền), ST chí mạng nền 150%, `rounds`/`maxLayers`, Aura/Chỉ số nội tại Phong cách. Giải choáng dùng trần `PVP_CLEANSE_CHAMP_BPS` = 75% (cấp 10).
@@ -914,7 +954,7 @@ Tên bảng có thể điều chỉnh, nhưng phải giữ nguyên các quy tắ
 - `art_key`
 - Metadata tùy chọn.
 
-Seed đúng 100 tướng đã định nghĩa tại mục 3.1. Tướng bị bỏ khỏi roster chỉ bị xóa khỏi bảng `generals` khi không còn thẻ/lịch sử tham chiếu.
+Seed đúng 140 tướng đã định nghĩa tại mục 3.1. Tướng bị bỏ khỏi roster chỉ bị xóa khỏi bảng `generals` khi không còn thẻ/lịch sử tham chiếu.
 
 ### 7.3. `user_cards`
 
@@ -1107,7 +1147,7 @@ Tất cả API phải có schema validation, authentication phù hợp và đị
 ### 8.1. Tài khoản và bộ sưu tập
 
 - `GET /api/me`: thông tin người chơi, số dư từng loại vé và trạng thái hồi vé.
-- `GET /api/generals`: danh mục 100 tướng + `styles` (phong cách chiến đấu `attack`/`defense`/`support` của từng tướng — client hiện nhãn Tấn công/Phòng thủ/Hỗ trợ trên mọi thẻ tướng) + `skills` (kỹ năng chiến đấu của từng tướng — client hiện kỹ năng khi chọn tướng vào đội hình; mục 6.7).
+- `GET /api/generals`: danh mục 140 tướng + `styles` (phong cách chiến đấu `attack`/`defense`/`support` của từng tướng — client hiện nhãn Tấn công/Phòng thủ/Hỗ trợ trên mọi thẻ tướng) + `skills` (kỹ năng chiến đấu của từng tướng — client hiện kỹ năng khi chọn tướng vào đội hình; mục 6.7).
 - `GET /api/cards`: bộ sưu tập, filter và pagination.
 
 ### 8.2. Vé
@@ -1263,13 +1303,13 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 
 ### 10.1. Roster
 
-- Có đúng 100 tướng.
-- Mỗi phe có chính xác 25 tướng.
+- Có đúng 140 tướng.
+- Mỗi phe có chính xác 35 tướng.
 - ID duy nhất.
 - Phe hợp lệ.
 - Seed chạy lặp an toàn.
-- Pool vé thường có 100 tướng.
-- Pool vé Thục, Ngụy, Ngô và Quần có đúng 25 tướng tương ứng.
+- Pool vé thường có 140 tướng.
+- Pool vé Thục, Ngụy, Ngô và Quần có đúng 35 tướng tương ứng.
 
 ### 10.2. Cấp vé ngẫu nhiên
 
@@ -1303,7 +1343,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 
 ### 10.4. Gacha
 
-- Vé thường chọn trong 100 tướng.
+- Vé thường chọn trong 140 tướng.
 - Vé phe chỉ chọn tướng thuộc phe tương ứng.
 - Xác suất level bằng cấu hình.
 - Quay thẻ không bao giờ tạo level ngoài 1–9; RNG ra giá trị cao nhất cho đúng level 9.
@@ -1482,7 +1522,7 @@ Thứ tự ưu tiên:
 
 ## 12. Phạm vi MVP đã chốt
 
-- 100 tướng, 25 tướng mỗi phe.
+- 140 tướng, 35 tướng mỗi phe.
 - 5 loại vé: thường, Thục, Ngụy, Ngô, Quần.
 - Vé miễn phí hồi 1 vé mỗi 5 phút theo mốc đồng hồ server.
 - Duyệt tài khoản bật/tắt trên trang Quản trị (mặc định tắt: đăng ký là vào game ngay); tài khoản mới nhận 100 vé quà đăng ký một lần lúc được duyệt (loại vé random theo mục 3.5).
@@ -1493,10 +1533,10 @@ Thứ tự ưu tiên:
 - Nhiệm vụ hằng ngày (chung + phe), thưởng reset 05:00 (25 vé, chỉ ngày hiện tại), điểm danh theo tháng, thành tựu; bấm Nhận, nhiệm vụ ngày cũ tự nhận khi sang ngày.
 - Mỗi vé được cấp sẽ random loại với xác suất mặc định 20% cho mỗi loại.
 - Vé hồi theo thời gian dừng ở trần: Vé thường 1000, mỗi vé phe 500; nhiệm vụ/giftcode/admin… vẫn cộng vượt trần (giữ nguyên số dư vượt).
-- Có vé Quần, quay trong 25 tướng Quần.
+- Có vé Quần, quay trong 35 tướng Quần.
 - Không có nạp tiền, mua vé bằng Vàng, thanh toán thật hoặc cửa hàng vé.
-- Vé thường quay trong toàn bộ 100 tướng.
-- Vé Thục, Ngụy, Ngô và Quần quay trong pool 25 tướng của phe tương ứng.
+- Vé thường quay trong toàn bộ 140 tướng.
+- Vé Thục, Ngụy, Ngô và Quần quay trong pool 35 tướng của phe tương ứng.
 - Level thẻ từ 1 đến 10.
 - Gacha roll level theo bảng xác suất đã định nghĩa, tối đa level 9; level 10 chỉ có qua ghép thẻ.
 - Trang Nâng cấp gom thẻ cùng tướng nằm liền nhau.

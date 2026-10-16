@@ -1,12 +1,12 @@
 import type { Faction, GeneralDto } from '@tq/shared';
 
 /**
- * Roster chính thức MVP — 100 tướng, 25 tướng mỗi phe (CLAUDE.md mục 3.1).
+ * Roster chính thức — 140 tướng, 35 tướng mỗi phe (CLAUDE.md mục 3.1).
  * ID là slug ASCII ổn định, KHÔNG đổi ID khi sửa metadata.
  * artKey hiện trỏ tới placeholder; thay artwork bằng cách map artKey -> ảnh.
  */
 /** Số tướng mỗi phe và tổng roster — dùng cho validate, test và UI. */
-export const GENERALS_PER_FACTION = 25;
+export const GENERALS_PER_FACTION = 35;
 export const ROSTER_SIZE = GENERALS_PER_FACTION * 4;
 
 type RosterRow = readonly [id: string, name: string];
@@ -37,6 +37,16 @@ const WEI: RosterRow[] = [
   ['cao-hua', 'Tào Hoa'],
   ['cao-jie', 'Tào Tiết'],
   ['xin-xianying', 'Tân Hiến Anh'],
+  ['cao-zhi', 'Tào Thực'],
+  ['cao-zhang', 'Tào Chương'],
+  ['man-chong', 'Mãn Sủng'],
+  ['liu-ye', 'Lưu Diệp'],
+  ['wang-yi', 'Vương Dị'],
+  ['wang-xiang', 'Vương Tường'],
+  ['deng-ai', 'Đặng Ngãi'],
+  ['guo-huai', 'Quách Hoài'],
+  ['chen-qun', 'Trần Quần'],
+  ['zhong-hui', 'Chung Hội'],
 ];
 
 const SHU: RosterRow[] = [
@@ -65,6 +75,16 @@ const SHU: RosterRow[] = [
   ['zhuge-guo', 'Gia Cát Quả'],
   ['bao-sanniang', 'Bao Tam Nương'],
   ['wu-yi', 'Ngô Ý'],
+  ['deng-zhi', 'Đặng Chi'],
+  ['zhang-xingcai', 'Trương Tinh Thái'],
+  ['ma-zhong', 'Mã Trung'],
+  ['fei-yi', 'Phí Y'],
+  ['jiang-wan', 'Tưởng Uyển'],
+  ['ma-liang', 'Mã Lương'],
+  ['luo-xian', 'La Hiến'],
+  ['liu-feng', 'Lưu Phong'],
+  ['zhang-yi', 'Trương Dực'],
+  ['zhuge-zhan', 'Gia Cát Chiêm'],
 ];
 
 const WU: RosterRow[] = [
@@ -93,6 +113,16 @@ const WU: RosterRow[] = [
   ['bu-lianshi', 'Bộ Luyện Sư'],
   ['sun-luyu', 'Tôn Lỗ Dục'],
   ['sun-luban', 'Tôn Lỗ Ban'],
+  ['zhu-fang', 'Chu Phường'],
+  ['gu-yong', 'Cố Ung'],
+  ['quan-zong', 'Toàn Tông'],
+  ['lu-dai', 'Lữ Đại'],
+  ['sun-huan', 'Tôn Hoàn'],
+  ['zhuge-jin', 'Gia Cát Cẩn'],
+  ['sun-fen', 'Tôn Phấn'],
+  ['deng-dang', 'Đặng Đương'],
+  ['zhu-ju', 'Chu Cứ'],
+  ['lu-kang', 'Lục Kháng'],
 ];
 
 const QUN: RosterRow[] = [
@@ -121,6 +151,16 @@ const QUN: RosterRow[] = [
   ['zhurong', 'Chúc Dung'],
   ['dong-bai', 'Đổng Bạch'],
   ['zhang-chunhua', 'Trương Xuân Hoa'],
+  ['li-jue', 'Lý Thôi'],
+  ['guo-si', 'Quách Dĩ'],
+  ['ge-xuan', 'Cát Huyền'],
+  ['shen-pei', 'Thẩm Phối'],
+  ['xu-you', 'Hứa Du'],
+  ['zuo-ci', 'Tả Từ'],
+  ['shui-jing', 'Thủy Kính'],
+  ['hua-tuo', 'Hoa Đà'],
+  ['ji-ling', 'Kỷ Linh'],
+  ['yan-baihu', 'Nghiêm Bạch Hổ'],
 ];
 
 function build(faction: Faction, rows: RosterRow[]): GeneralDto[] {

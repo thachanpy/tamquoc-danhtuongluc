@@ -22,11 +22,11 @@ test('cấu hình hợp lệ', () => {
   assert.doesNotThrow(() => validateGameConfig());
 });
 
-test('roster: 100 tướng, 25 mỗi phe, ID duy nhất', () => {
-  assert.equal(ROSTER.length, 100);
-  assert.equal(new Set(ROSTER.map((g) => g.id)).size, 100);
+test('roster: 140 tướng, 35 mỗi phe, ID duy nhất', () => {
+  assert.equal(ROSTER.length, 140);
+  assert.equal(new Set(ROSTER.map((g) => g.id)).size, 140);
   for (const f of ['wei', 'shu', 'wu', 'qun']) {
-    assert.equal(ROSTER.filter((g) => g.faction === f).length, 25);
+    assert.equal(ROSTER.filter((g) => g.faction === f).length, 35);
   }
   assert.equal(ROSTER.find((g) => g.id === 'cao-cao')?.name, 'Tào Tháo');
   assert.equal(ROSTER.find((g) => g.id === 'lu-bu')?.faction, 'qun');
@@ -37,11 +37,11 @@ test('roster: 100 tướng, 25 mỗi phe, ID duy nhất', () => {
   assert.equal(ROSTER.find((g) => g.id === 'zhu-zhi'), undefined, 'Chu Trị đã bị bỏ khỏi roster');
 });
 
-test('pool vé: thường 100, mỗi vé phe (Thục/Ngụy/Ngô/Quần) đúng 25 tướng của phe đó', () => {
-  assert.equal(poolForTicket('normal').length, 100);
+test('pool vé: thường 140, mỗi vé phe (Thục/Ngụy/Ngô/Quần) đúng 35 tướng của phe đó', () => {
+  assert.equal(poolForTicket('normal').length, 140);
   for (const t of ['shu', 'wei', 'wu', 'qun'] as const) {
     const p = poolForTicket(t);
-    assert.equal(p.length, 25);
+    assert.equal(p.length, 35);
     assert.ok(p.every((g) => g.faction === t));
   }
   assert.deepEqual(Object.keys(TICKET_GRANT_WEIGHTS).sort(), ['normal', 'qun', 'shu', 'wei', 'wu']);
@@ -124,10 +124,13 @@ test('rollWeighted từ chối tổng 0', () => {
   assert.throws(() => rollWeighted([1, 2], () => 0, () => 0));
 });
 
-test('mỗi tướng có ảnh chân dung theo artKey', async () => {
+test('chân dung tướng: 100 tướng gốc có ảnh theo artKey, tướng mở rộng tạm dùng placeholder', async () => {
   const { existsSync } = await import('node:fs');
   const { resolve } = await import('node:path');
   const dir = resolve(import.meta.dirname, '../../../apps/web/public/generals');
+  // 40 tướng mở rộng (STT 26–35 mỗi phe) chưa có artwork — chủ dự án cập nhật sau.
+  // art.ts tự rơi về placeholder (glyph phe + chữ viết tắt) khi thiếu file chân dung.
+  const CORE_GENERALS = 100;
   const missing = ROSTER.filter((g) => !existsSync(resolve(dir, `${g.artKey}.jpg`))).map((g) => g.id);
-  assert.deepEqual(missing, []);
+  assert.equal(missing.length, ROSTER.length - CORE_GENERALS);
 });
