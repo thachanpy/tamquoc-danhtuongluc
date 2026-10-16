@@ -1664,7 +1664,8 @@ export function PvpPage() {
       setChallengeOpen(false); // đóng modal chuẩn bị để xem trận đấu
       setBattle(b);
       void loadOverview(); // cập nhật thành tích Thắng/Thua/Hòa
-      void loadHistory();
+      // KHÔNG nạp lại lịch sử ở đây: trận vừa đánh sẽ được đưa vào lịch sử khi người chơi
+      // đóng màn xem lại trận (xem `closeBattle`), để lịch sử không đổi sau lưng lúc đang xem.
     } catch (e) {
       if (alive) toast((e as Error).message, 5000);
     } finally {
@@ -1681,12 +1682,17 @@ export function PvpPage() {
       if (!alive) return;
       setBattle(b);
       void loadOverview();
-      void loadHistory();
     } catch (e) {
       if (alive) toast((e as Error).message, 5000);
     } finally {
       if (alive) setBusy(false);
     }
+  }
+
+  /** Đóng màn xem lại trận — lúc này mới nạp lại lịch sử trận đấu (đã gồm trận vừa đánh). */
+  function closeBattle() {
+    setBattle(null);
+    void loadHistory();
   }
 
   async function openHistoryBattle(id: number) {
@@ -1860,7 +1866,7 @@ export function PvpPage() {
         )}
       </Show>
 
-      <Show keyed when={battle()}>{(b) => <BattleReplay battle={b} onClose={() => setBattle(null)} onRematch={(id) => void rematch(id)} />}</Show>
+      <Show keyed when={battle()}>{(b) => <BattleReplay battle={b} onClose={closeBattle} onRematch={(id) => void rematch(id)} />}</Show>
     </>
   );
 }
