@@ -888,6 +888,12 @@ const EVENT_MS: Record<PvpEventDto['t'], number> = {
   end: 500,
 };
 
+/**
+ * Khoảng nghỉ nhỏ trước mỗi lượt ra chiêu (`act`) để tách rõ từng tướng.
+ * Không có nó thì hết hiệu ứng của tướng này là tướng kế tiếp niệm chiêu ngay, khó theo dõi lượt.
+ */
+const CAST_GAP_MS = 420;
+
 /** Tổng hợp chỉ số của một tướng sau trận. */
 interface Tally {
   dealt: number;
@@ -1615,9 +1621,11 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
 
   function schedule() {
     clearTimeout(timer);
-    const ev = props.battle.events[cursor()];
-    if (!ev || !playing()) return;
-    const ms = EVENT_MS[ev.t] ?? 250;
+    const evs = props.battle.events;
+    const c = cursor();
+    if (!evs[c] || !playing()) return;
+    // Chờ thêm một khoảng nhỏ TRƯỚC mỗi lượt ra chiêu để tách rõ từng tướng (trừ lượt đầu trận).
+    const ms = (EVENT_MS[evs[c]!.t] ?? 250) + (c > 0 && evs[c]!.t === 'act' ? CAST_GAP_MS : 0);
     timer = window.setTimeout(() => {
       if (!playing()) return;
       step();
