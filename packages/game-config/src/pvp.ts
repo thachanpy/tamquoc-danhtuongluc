@@ -58,6 +58,16 @@ export function pvpPerLevelEffectBps(perLevelBps: number, level: number): number
 }
 
 /**
+ * Quy đổi CHỈ SỐ NỀN theo CẤP: cấp 1 = `minBps`, cấp MAX_LEVEL = `maxBps`, nội suy đều ở cấp giữa.
+ * Dùng cho Chính xác / Né tránh / ST chí mạng — nâng cấp tướng làm các chỉ số này mạnh lên rõ rệt
+ * (khác `pvpEffectBps`: khoảng cách cấp 1 → cấp 10 ở đây do từng chỉ số quy định, không cố định 10 điểm %).
+ */
+export function pvpLevelSpanBps(minBps: number, maxBps: number, level: number): number {
+  const lv = Math.min(Math.max(level, 1), MAX_LEVEL);
+  return Math.round(minBps + ((maxBps - minBps) * (lv - 1)) / (MAX_LEVEL - 1));
+}
+
+/**
  * Định nghĩa kỹ năng của MỘT tướng TẠI MỘT CẤP: mọi hệ số HIỆU ỨNG (buff/hồi máu/debuff/phản kích/đao phủ)
  * được quy theo cấp bằng `pvpEffectBps` — cấp 1 = giá trị chốt − 10 điểm %, cấp 10 = giá trị chốt.
  * Riêng hệ số SÁT THƯƠNG kỹ năng (`damageBps`) giữ nguyên vì đã tự lớn theo cấp qua chỉ số nền;
@@ -389,19 +399,36 @@ export const PVP_BACK_DAMAGE_BPS = 1000;
 // Thứ tự xử lý một đòn đánh: (1) kiểm tra Trúng/Trượt → (2) trừ Phòng thủ sau khi trừ Xuyên giáp
 // → (3) trừ vào Khiên trước, phần dư mới trừ vào Máu. Toàn bộ chỉ số dùng bps (10000 = 100%).
 
-/** Chính xác mặc định của mọi tướng: 100%. */
+/** Chính xác tại cấp 1: 80%. */
+export const PVP_HIT_BPS_MIN = 8000;
+/** Chính xác tại cấp MAX_LEVEL (chốt): 100%. Xem `pvpHitBps`. */
 export const PVP_HIT_BPS = 10000;
-/** Trần Chính xác: 130%. */
-export const PVP_HIT_MAX_BPS = 13000;
-/** Né tránh mặc định của mọi tướng: 5%. */
-export const PVP_DODGE_BPS = 500;
-/** Trần Né tránh: 30%. */
-export const PVP_DODGE_MAX_BPS = 3000;
+/** Trần Chính xác: 150%. */
+export const PVP_HIT_MAX_BPS = 15000;
+/** Né tránh tại cấp 1: 1%. */
+export const PVP_DODGE_BPS_MIN = 100;
+/** Né tránh tại cấp MAX_LEVEL (chốt): 10%. Xem `pvpDodgeBps`. */
+export const PVP_DODGE_BPS = 1000;
+/** Trần Né tránh: 50%. */
+export const PVP_DODGE_MAX_BPS = 5000;
 /**
- * Trần tỉ lệ TRÚNG thực tế: 99% — luôn chừa lại tối thiểu 1% Né/Trượt làm yếu tố may mắn,
- * kể cả khi Chính xác (tối đa 130%) áp đảo Né tránh (tối đa 30%).
+ * Trần tỉ lệ TRÚNG thực tế: 99% — luôn chừa lại tối thiểu 1% Né/Trượt làm yếu tố may mắn.
+ * Công thức chia trọng số nhân sẵn hệ số này nên kết quả không bao giờ vượt 99%.
  */
 export const PVP_HIT_REAL_MAX_BPS = 9900;
+/** Hệ số ưu tiên Chính xác (K) trong công thức chia trọng số — Chính xác nặng gấp 3 lần Né tránh. */
+export const PVP_HIT_WEIGHT = 3;
+/**
+ * Tỉ lệ TRÚNG thực tế (bps) theo công thức chia trọng số (mục 18):
+ * `Hit_Real = (Chính xác × K) / (Chính xác × K + Né tránh) × Trần Trúng (99%)`.
+ * Chính xác (K = 3) lấn át Né tránh nên Né chỉ là yếu tố may rủi nhỏ (1%–15%), không vô hiệu hoá combo.
+ */
+export function pvpRealHitBps(hitBps: number, dodgeBps: number): number {
+  const weighted = Math.max(0, hitBps) * PVP_HIT_WEIGHT;
+  const denom = weighted + Math.max(0, dodgeBps);
+  if (denom <= 0) return PVP_HIT_REAL_MAX_BPS;
+  return Math.round((weighted / denom) * PVP_HIT_REAL_MAX_BPS);
+}
 /** Phòng thủ mặc định của mọi tướng: giảm 10% sát thương nhận vào. */
 export const PVP_DEF_BPS = 1000;
 /** Trần Phòng thủ (giảm sát thương nhận vào): 50%. */
@@ -410,6 +437,11 @@ export const PVP_DEF_MAX_BPS = 5000;
 export const PVP_DEF_PEN_BPS = 0;
 /** Trần Xuyên giáp: 50%. */
 export const PVP_DEF_PEN_MAX_BPS = 5000;
+
+/** Chính xác của một tướng ở cấp hiện tại: 80% (cấp 1) → 100% (cấp 10). */
+export const pvpHitBps = (level: number) => pvpLevelSpanBps(PVP_HIT_BPS_MIN, PVP_HIT_BPS, level);
+/** Né tránh của một tướng ở cấp hiện tại: 1% (cấp 1) → 10% (cấp 10). */
+export const pvpDodgeBps = (level: number) => pvpLevelSpanBps(PVP_DODGE_BPS_MIN, PVP_DODGE_BPS, level);
 
 // ===== Nội tại tướng =====
 
@@ -505,8 +537,15 @@ export const PVP_CRIT_BPS_PER_LEVEL = 300;
  */
 export const PVP_CLEANSE_CHAMP_BPS = 7500;
 
-/** Mặc định ST chí mạng = 150% (tức cộng thêm 50% khi chí mạng). Buff/debuff điều chỉnh quanh mốc này. */
-export const PVP_CRIT_DAMAGE_BPS = 5000;
+/** ST chí mạng tại cấp 1: +30% (hệ số ×1,30). */
+export const PVP_CRIT_DAMAGE_BPS_MIN = 3000;
+/**
+ * ST chí mạng tại cấp MAX_LEVEL (chốt): +60% (hệ số ×1,60). Xem `pvpCritDamageBps`.
+ * Buff/debuff điều chỉnh quanh mốc theo cấp này.
+ */
+export const PVP_CRIT_DAMAGE_BPS = 6000;
+/** ST chí mạng của một tướng ở cấp hiện tại: +30% (cấp 1) → +60% (cấp 10). */
+export const pvpCritDamageBps = (level: number) => pvpLevelSpanBps(PVP_CRIT_DAMAGE_BPS_MIN, PVP_CRIT_DAMAGE_BPS, level);
 
 // ===== Hút máu (SKILLS.md mục 1.13) =====
 

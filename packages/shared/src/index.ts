@@ -883,15 +883,15 @@ export interface PvpUnitStateDto {
   lc: number;
   /** Tỉ lệ chí mạng cuối cùng (bps, 10000 = 100%). */
   critBps: number;
-  /** Sát thương chí mạng nền (bps; 5000 = ×1,5). Client hiện ở ô tướng khi phát lại. */
+  /** ST chí mạng nền theo cấp (bps; cấp 1 = 3000 → ×1,30, cấp 10 = 6000 → ×1,60). Client hiện ở ô tướng khi phát lại. */
   critDamageBps: number;
   /** Tỉ lệ choáng cuối cùng của kỹ năng (bps). */
   stunBps: number;
   /** Hút máu ở cấp hiện tại: hồi bản thân theo % sát thương thực tế gây ra (bps; 0 = không hút máu). */
   lifestealBps: number;
-  /** Chính xác khi vào trận (bps; mặc định 10000 = 100%, trần 13000 — SKILLS.md mục 18). */
+  /** Chính xác khi vào trận theo cấp (bps; cấp 1 = 8000 = 80% → cấp 10 = 10000 = 100%, trần 15000 — SKILLS.md mục 18). */
   hitBps: number;
-  /** Né tránh khi vào trận (bps; mặc định 500 = 5%, trần 3000 — SKILLS.md mục 18). */
+  /** Né tránh khi vào trận theo cấp (bps; cấp 1 = 100 = 1% → cấp 10 = 1000 = 10%, trần 5000 — SKILLS.md mục 18). */
   dodgeBps: number;
   /** Phòng thủ khi vào trận: % giảm sát thương nhận vào (mặc định 1000 = 10%, trần 5000 — mục 18). */
   defBps: number;
@@ -1036,7 +1036,7 @@ export interface PvpBuffDto {
   hpBps: number;
   /** Điểm chí mạng cộng mỗi lớp (bps: 500 = +5 điểm phần trăm). */
   critBps: number;
-  /** % sát thương chí mạng cộng mỗi lớp (mặc định ST chí mạng là 150%). */
+  /** % sát thương chí mạng cộng mỗi lớp (ST chí mạng nền theo cấp: cấp 1 = 130%, cấp 10 = 160%). */
   critDamageBps: number;
   /** % sát thương gánh chịu được giảm mỗi lớp. */
   takenDownBps: number;
@@ -1044,9 +1044,9 @@ export interface PvpBuffDto {
   lifestealBps: number;
   /** % HP tối đa tạo Khiên mỗi lớp (SKILLS.md mục 16). 0 = không tạo khiên. */
   shieldBps: number;
-  /** % Chính xác cộng mỗi lớp (mặc định 100%, trần 130% — SKILLS.md mục 18). */
+  /** % Chính xác cộng mỗi lớp (nền theo cấp cấp 1 = 80% → cấp 10 = 100%, trần 150% — SKILLS.md mục 18). */
   hitBps: number;
-  /** % Né tránh cộng mỗi lớp (mặc định 5%, trần 30% — SKILLS.md mục 18). */
+  /** % Né tránh cộng mỗi lớp (nền theo cấp cấp 1 = 1% → cấp 10 = 10%, trần 50% — SKILLS.md mục 18). */
   dodgeBps: number;
   /** % Phòng thủ cộng mỗi lớp: giảm sát thương nhận vào (mặc định 10%, trần 50% — mục 18). */
   defBps: number;

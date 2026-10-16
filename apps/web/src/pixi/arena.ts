@@ -33,9 +33,9 @@ const HP_Y = 96;
 const HP_H = 6;
 const NUM_Y = 108;
 const INFO_Y = 120;
-/** Dòng chỉ số trong ô: cỡ chữ và bộ icon theo thứ tự hiển thị (sát thương · chí mạng · ST chí mạng). */
+/** Dòng chỉ số trong ô: cỡ chữ và bộ icon theo thứ tự hiển thị (sát thương · chí mạng · ST chí mạng · chính xác · né tránh). */
 const INFO_FONT = 10.5;
-const INFO_ITEMS: readonly IconId[] = ['attack', 'crit-rate', 'crit-dmg'];
+const INFO_ITEMS: readonly IconId[] = ['attack', 'crit-rate', 'crit-dmg', 'eye', 'dodge'];
 /** Tên tướng nằm ngay dưới chân dung (khớp font/màu ô tướng ở trang chuẩn bị chiến). */
 const NAME_Y = 82;
 /** Chip hiệu ứng trên ô: cỡ chữ tối đa/tối thiểu, khoảng cách, số hàng tối đa khi phải xuống dòng. */
@@ -43,6 +43,8 @@ const CHIP_FONT = 10;
 const CHIP_FONT_MIN = 8;
 const CHIP_GAP = 4;
 const CHIP_MAX_ROWS = 2;
+/** Lề an toàn (px) khi kẹp số bay lên trong khung sân — chừa chỗ cho viền chữ đậm. */
+const FLOAT_PAD = 6;
 
 const NUM_FONT = "'Oswald', 'Arial Narrow', system-ui, sans-serif";
 const UI_FONT = 'system-ui, sans-serif';
@@ -70,7 +72,7 @@ const C = {
   infoUp: 0x9df3c2,
   dmg: 0xff7a66,
   heal: 0x6ef0a6,
-  crit: 0xffd75e,
+  crit: 0xc08cff,
   stun: 0xffd75e,
   /** Hiệu ứng bất lợi — ĐỎ (không dùng tím). */
   debuff: 0xef5b5b,
@@ -164,6 +166,10 @@ export interface ArenaView {
   critBps: number;
   /** Sát thương chí mạng hiện tại (bps) = nền + buff − debuff. */
   critDamageBps: number;
+  /** Chính xác hiện tại (bps) = nền + buff − debuff (chỉ để hiển thị). */
+  hitBps: number;
+  /** Né tránh hiện tại (bps) = nền + buff − debuff (chỉ để hiển thị). */
+  dodgeBps: number;
   /** Hiệu ứng đang có trên tướng — mỗi chip là MỘT icon chỉ số kèm giá trị tăng/giảm cụ thể. */
   effects: { icon?: IconId; text: string; tone: 'buff' | 'debuff' | 'burn' }[];
 }
@@ -236,6 +242,10 @@ class FloatFx {
   private readonly crit: boolean;
   private readonly reduce: boolean;
   private readonly ms: number;
+  /** Nửa chiều cao chữ (ở cỡ lớn nhất) — chặn số bay lên khỏi mép trên khung sân. */
+  private readonly halfH: number;
+  /** Quãng bay lên tối đa; 0 khi là hiệu ứng giảm chỉ số (đứng yên tại chỗ). */
+  private readonly climb: number;
   private t = 0;
 
   constructor(parent: Container, x: number, y: number, parts: FloatPart[], crit: boolean, heal: boolean, reduce: boolean) {
@@ -243,7 +253,7 @@ class FloatFx {
     this.reduce = reduce;
     this.y0 = y;
     this.ms = reduce ? 500 : crit ? 1050 : 950;
-    const size = crit ? 40 : 26;
+    const size = crit ? 54 : 36;
     const fill = crit ? C.crit : heal ? C.heal : C.dmg;
     // Mỗi mảnh là một dòng chữ; mảnh có icon thì icon đứng ngay trước số (cùng cỡ, cùng màu).
     const texts = parts.map((p) => {
@@ -271,7 +281,13 @@ class FloatFx {
       this.c.addChild(texts[i]!);
       x0 += texts[i]!.width;
     }
-    this.c.position.set(x, y);
+    this.climb = reduce ? 0 : crit ? 36 : 26;
+    this.halfH = size / 2;
+    // Kẹp NGANG: canh giữa quanh ô tướng nhưng không cho số tràn ra ngoài khung sân
+    // (cỡ chữ lớn + tên dài như "HỒI SINH +5000" rất dễ vượt mép trái/phải).
+    const halfW = total / 2;
+    const cx = total + FLOAT_PAD * 2 <= W ? Math.min(Math.max(x, halfW + FLOAT_PAD), W - halfW - FLOAT_PAD) : W / 2;
+    this.c.position.set(cx, y);
     parent.addChild(this.c);
   }
 
@@ -280,7 +296,8 @@ class FloatFx {
     const p = Math.min(1, this.t / this.ms);
     const e = easeOut(p);
     const grow = easeOut(Math.min(1, p / 0.25));
-    this.c.y = this.y0 - (this.reduce ? 0 : e * (this.crit ? 36 : 26));
+    // Kẹp DỌC: bay lên nhưng không vượt khỏi mép trên khung sân (hàng tướng trên cùng rất sát mép).
+    this.c.y = Math.max(this.halfH + FLOAT_PAD, this.y0 - this.climb * e);
     this.c.scale.set(this.crit ? 0.75 + 0.25 * grow : 0.9 + 0.1 * grow);
     this.c.alpha = p < 0.8 ? 1 : 1 - (p - 0.8) / 0.2;
     return p >= 1;
@@ -495,10 +512,10 @@ class Tile {
     this.hpT.style.fill = v.alive ? (low ? C.numLow : this.mine ? C.numHp : C.numHpEnemy) : C.muted;
     this.hpT.visible = true;
 
-    // Dòng chỉ số sống theo buff/debuff: [kiếm] sát thương · [tia sét] chí mạng · [vụ nổ] ST chí mạng.
-    // Đang được buff thì sáng xanh, đang bị debuff thì đỏ, bình thường dùng màu chữ --text.
+    // Dòng chỉ số sống theo buff/debuff: [kiếm] sát thương · [tia sét] chí mạng · [vụ nổ] ST chí mạng
+    // · [mắt] chính xác · [gió] né tránh. Đang được buff thì sáng xanh, đang bị debuff thì đỏ.
     const tone = v.buffed ? C.infoUp : v.debuffed ? C.debuff : C.text;
-    this.setInfoLine(v.damage, v.critBps, v.critDamageBps, tone, v.alive);
+    this.setInfoLine(v.damage, v.critBps, v.critDamageBps, v.hitBps, v.dodgeBps, tone, v.alive);
 
     this.buffFx.visible = v.buffed;
     // Chip hiệu ứng: mỗi chip là MỘT icon chỉ số kèm giá trị tăng/giảm cụ thể
@@ -519,13 +536,16 @@ class Tile {
   }
 
   /**
-   * Dòng chỉ số có ICON: [kiếm] sát thương · [tia sét] tỉ lệ chí mạng · [vụ nổ] ST chí mạng.
+   * Dòng chỉ số có ICON: [kiếm] sát thương · [tia sét] tỉ lệ chí mạng · [vụ nổ] ST chí mạng ·
+   * [mắt] chính xác · [gió] né tránh.
    * Icon chỉ vẽ lại khi MÀU đổi (theo buff/debuff) để không phải nạp lại SVG mỗi sự kiện.
    */
-  private setInfoLine(damage: number, critBps: number, critDamageBps: number, tone: number, alive: boolean): void {
+  private setInfoLine(damage: number, critBps: number, critDamageBps: number, hitBps: number, dodgeBps: number, tone: number, alive: boolean): void {
     this.infoVals[0]!.text = num(damage);
     this.infoVals[1]!.text = `${(critBps / 100).toFixed(0)}%`;
     this.infoVals[2]!.text = `${(critDamageBps / 100).toFixed(0)}%`;
+    this.infoVals[3]!.text = `${(hitBps / 100).toFixed(0)}%`;
+    this.infoVals[4]!.text = `${(dodgeBps / 100).toFixed(0)}%`;
     for (const t of this.infoVals) t.style.fill = tone;
     if (this.infoTone !== tone) {
       this.infoTone = tone;
@@ -719,7 +739,7 @@ class Arena implements ArenaHandle {
     text: '',
     style: {
       fontFamily: NUM_FONT,
-      fontSize: 18,
+      fontSize: 20,
       fontWeight: '900',
       letterSpacing: 0.4,
       fill: 0xfff4d2,
@@ -729,6 +749,7 @@ class Arena implements ArenaHandle {
   });
   private skillKey = '';
   private skillW = 200;
+  private skillH = 31;
   private skillAge = 0;
   private time = 0;
   private dead = false;
@@ -828,21 +849,26 @@ class Arena implements ArenaHandle {
       this.skillAge = 0;
       this.skillT.text = name;
       // Khung nền ôm theo tên chiêu: nền nâu đậm + viền vàng kép (viền ngoài mờ làm quầng sáng)
-      const w = Math.ceil(this.skillT.width) + 34;
-      const h = 27;
+      const w = Math.ceil(this.skillT.width) + 36;
+      const h = 31;
       this.skillW = w;
+      this.skillH = h;
       this.skillBg
         .clear()
-        .roundRect(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6, 16)
+        .roundRect(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6, 19)
         .stroke({ width: 5, color: C.gold2, alpha: 0.28 })
-        .roundRect(-w / 2, -h / 2, w, h, 14)
+        .roundRect(-w / 2, -h / 2, w, h, 17)
         .fill({ color: 0x1c0f05, alpha: 0.96 })
         .stroke({ width: 2, color: C.gold2, alpha: 0.95 });
     }
     // Ghim trong sân: tên chiêu dài không được tràn ra ngoài khung canvas
     const x = Math.min(Math.max(tile.centerX, this.skillW / 2 + 4), W - this.skillW / 2 - 4);
+    // Kẹp DỌC: hàng tướng trên cùng (slot 1/4) không có chỗ phía trên nên nhãn sẽ bị cắt mất;
+    // đẩy xuống vừa đủ để cả khung (kể cả quầng sáng và lúc phóng to) nằm trong sân.
+    const halfH = (this.skillH / 2 + 6) * 1.14;
+    const y = Math.min(Math.max(tile.topY - 8, halfH), H - halfH);
     this.skillC.visible = true;
-    this.skillC.position.set(x, tile.topY - 8);
+    this.skillC.position.set(x, y);
   }
 
   float(idx: number, parts: FloatPart[], crit: boolean, heal = false): void {

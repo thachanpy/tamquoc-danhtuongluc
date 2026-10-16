@@ -37,6 +37,7 @@ const CLIPS = {
   counter: '/audio/sfx/sfx_counter.wav',
   death: '/audio/sfx/sfx_death.wav',
   dispel: '/audio/sfx/sfx_dispel.wav',
+  dodge: '/audio/sfx/sfx_dodge.wav',
   heal: '/audio/sfx/sfx_heal.wav',
   lifesteal: '/audio/sfx/sfx_lifesteal.wav',
   stun: '/audio/sfx/sfx_stun.wav',

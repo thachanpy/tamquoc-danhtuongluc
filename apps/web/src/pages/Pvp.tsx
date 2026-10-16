@@ -58,6 +58,8 @@ function sfxOf(ev: PvpEventDto): SfxName | null {
       return ev.damageFlat > 0 ? 'buff' : 'heal';
     case 'burn':
       return 'burn';
+    case 'miss':
+      return 'dodge';
     case 'shield':
       return 'buff';
     case 'shieldBreak':
@@ -82,8 +84,24 @@ interface UnitStat {
   /** Sát thương cơ bản của tướng (đã gồm hiệu ứng nền + nội tại của chính tướng). */
   damage: number;
   maxHp: number;
+  /** Tỉ lệ chí mạng khi vào trận (bps, 10000 = 100%). */
+  critBps: number;
+  /** Sát thương chí mạng (bps; 5000 = ×1,5). */
+  critDamageBps: number;
+  /** Chính xác khi vào trận (bps). */
+  hitBps: number;
+  /** Né tránh khi vào trận (bps). */
+  dodgeBps: number;
 }
-const statOf = (c: PvpCombatDto): UnitStat => ({ style: c.style, damage: c.self.damage, maxHp: c.self.maxHp });
+const statOf = (c: PvpCombatDto): UnitStat => ({
+  style: c.style,
+  damage: c.self.damage,
+  maxHp: c.self.maxHp,
+  critBps: c.self.critBps,
+  critDamageBps: c.self.critDamageBps,
+  hitBps: c.self.hitBps,
+  dodgeBps: c.self.dodgeBps,
+});
 const statKey = (u: PvpUnitDto) => `${u.generalId}|${u.level}`;
 
 /**
@@ -153,6 +171,22 @@ function StatLine(props: { stat?: UnitStat }) {
           </span>
           <span class="pvp-cell-num">
             <StatIcon id="attack" size={11} /> {num(s().damage)} · <StatIcon id="heart" size={11} /> {num(s().maxHp)}
+          </span>
+          {/* Hàng 2: chí mạng · ST chí mạng · chính xác · né tránh (giống dòng chỉ số trên sân đấu).
+              Mỗi chỉ số là một khối riêng nên tự xuống dòng khi ô hẹp, không tràn ra ngoài ô tướng. */}
+          <span class="pvp-cell-num row2">
+            <span class="pvp-stat">
+              <StatIcon id="crit-rate" size={11} /> {pct(s().critBps)}
+            </span>
+            <span class="pvp-stat">
+              <StatIcon id="crit-dmg" size={11} /> {pct(s().critDamageBps)}
+            </span>
+            <span class="pvp-stat">
+              <StatIcon id="eye" size={11} /> {pct(s().hitBps)}
+            </span>
+            <span class="pvp-stat">
+              <StatIcon id="dodge" size={11} /> {pct(s().dodgeBps)}
+            </span>
           </span>
         </span>
       )}
@@ -518,9 +552,17 @@ function Picker(props: {
                           </span>
                           <Show when={c()}>
                             {(x) => (
-                              <span class="pvp-pick-stat-num">
-                                <StatIcon id="attack" size={11} /> {num(x().self.damage)} · <StatIcon id="heart" size={11} /> {num(x().self.maxHp)}
-                              </span>
+                              <>
+                                <span class="pvp-pick-stat-num">
+                                  <StatIcon id="attack" size={11} /> {num(x().self.damage)} · <StatIcon id="heart" size={11} /> {num(x().self.maxHp)}
+                                </span>
+                                {/* Chính xác / Né tránh / ST chí mạng cũng scale theo cấp nên hiện luôn ở đây. */}
+                                <span class="pvp-pick-stat-num">
+                                  <StatIcon id="crit-rate" size={11} /> {pct(x().self.critBps)} · <StatIcon id="crit-dmg" size={11} />{' '}
+                                  {pct(x().self.critDamageBps)} · <StatIcon id="eye" size={11} /> {pct(x().self.hitBps)} ·{' '}
+                                  <StatIcon id="dodge" size={11} /> {pct(x().self.dodgeBps)}
+                                </span>
+                              </>
                             )}
                           </Show>
                         </span>
@@ -621,9 +663,9 @@ const syncHp = (s: CV, patch?: Partial<CV>): CV => {
  * cái gì, bao nhiêu. Mỗi chip là MỘT icon hiệu ứng (bộ icon ở `icons.ts`) kèm giá trị cụ thể.
  * Thứ tự: buff trước, rồi tới debuff/thiêu đốt.
  */
-function effectChips(s: CV): { icon: IconId; text: string; tone: 'buff' | 'debuff' | 'burn' }[] {
+function effectChips(s: CV): { icon?: IconId; text: string; tone: 'buff' | 'debuff' | 'burn' }[] {
   const sum = <T,>(arr: T[], pick: (x: T) => number) => arr.reduce((a, x) => a + pick(x), 0);
-  const out: { icon: IconId; text: string; tone: 'buff' | 'debuff' | 'burn' }[] = [];
+  const out: { icon?: IconId; text: string; tone: 'buff' | 'debuff' | 'burn' }[] = [];
   // Buff tăng sức mạnh (xanh): sát thương, HP tối đa, chí mạng, ST chí mạng, giảm ST gánh chịu
   const bDmg = sum(s.buffs, (b) => b.flat);
   const bHp = sum(s.buffs, (b) => b.hpFlat);
@@ -1116,6 +1158,9 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
           0,
           u.critDamageBps + s.buffs.reduce((acc, b) => acc + b.critDamageBps, 0) - s.debuffs.reduce((acc, d) => acc + d.critDamageBps, 0),
         ),
+        // Chính xác / Né tránh hiện tại = chỉ số nền (theo cấp) + lớp buff − lớp debuff (khớp engine)
+        hitBps: Math.max(0, u.hitBps + s.buffs.reduce((acc, b) => acc + b.hitBps, 0) - s.debuffs.reduce((acc, d) => acc + d.hitDownBps, 0)),
+        dodgeBps: Math.max(0, u.dodgeBps + s.buffs.reduce((acc, b) => acc + b.dodgeBps, 0) - s.debuffs.reduce((acc, d) => acc + d.dodgeDownBps, 0)),
         // Tổng lượng khiên đang hấp thụ (vẽ thanh trắng nhạt dưới thanh máu — mục 16)
         shield: s.shields.reduce((acc, x) => acc + x.amount, 0),
         // Hiệu ứng đang có, hiển thị rõ tăng/giảm cái gì và bao nhiêu (chip trên ô tướng)
@@ -1195,26 +1240,26 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
       case 'miss':
         // Né đòn (mục 18 — BƯỚC 1): không gây sát thương, Khiên & Máu giữ nguyên.
         setActing(ev.from);
-        addFloat(ev.idx, [{ icon: 'dodge', text: 'NÉ' }], false, true);
+        addFloat(ev.idx, [{ text: 'NÉ' }], false, true);
         break;
       case 'damage':
         setActing(ev.from);
         // Khiên hấp thụ bớt phần sát thương `absorbed` (mục 16): trừ khiên rồi mới cập nhật HP.
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp, shields: absorbedOf(s, ev.absorbed) }));
-        addFloat(ev.idx, [{ icon: 'attack', text: `-${num(ev.amount)}` }], ev.crit);
+        addFloat(ev.idx, [{ text: `-${num(ev.amount)}` }], ev.crit);
         addFx(ev.idx, 'damage');
         break;
       case 'counter':
         // Phản kích: `from` đánh trả `idx` (kẻ vừa gây sát thương chủ động cho `from`).
         setActing(ev.from);
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp, shields: absorbedOf(s, ev.absorbed) }));
-        addFloat(ev.idx, [{ icon: 'attack', text: `-${num(ev.amount)}` }], ev.crit);
+        addFloat(ev.idx, [{ text: `-${num(ev.amount)}` }], ev.crit);
         addFx(ev.idx, 'damage');
         break;
       case 'heal':
         setActing(ev.from);
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp }));
-        addFloat(ev.idx, [{ icon: 'heart', text: `+${num(ev.amount)}` }], ev.crit, true);
+        addFloat(ev.idx, [{ text: `+${num(ev.amount)}` }], ev.crit, true);
         addFx(ev.idx, 'heal');
         break;
       case 'stun':
@@ -1255,8 +1300,8 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
           return syncHp({ ...s, buffed: true, buffs });
         });
         const gains: FloatPart[] = [
-          ...(ev.damageFlat > 0 ? [{ icon: 'attack' as const, text: `+${num(ev.damageFlat)}` }] : []),
-          ...(ev.hpFlat > 0 ? [{ icon: 'heart' as const, text: `+${num(ev.hpFlat)}` }] : []),
+          ...(ev.damageFlat > 0 ? [{ text: `+${num(ev.damageFlat)}` }] : []),
+          ...(ev.hpFlat > 0 ? [{ text: `+${num(ev.hpFlat)}` }] : []),
           ...(ev.lifestealBps > 0 ? [{ icon: 'blood' as const, text: `+${pct(ev.lifestealBps)}` }] : []),
         ];
         if (gains.length) addFloat(ev.idx, gains, ev.crit, true);
@@ -1335,7 +1380,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
       case 'revive':
         // Hồi sinh (mục 1.14): tướng sống lại với `hp` máu và giảm sát thương vĩnh viễn → cập nhật hệ số nhân.
         upd(ev.idx, (s) => ({ ...s, alive: true, hp: ev.hp, damageMulBps: Math.max(0, BPS_SCALE - ev.damageDownBps) }));
-        addFloat(ev.idx, [{ icon: 'heart', text: `HỒI SINH +${num(ev.hp)}` }], false, true);
+        addFloat(ev.idx, [{ text: `HỒI SINH +${num(ev.hp)}` }], false, true);
         addFx(ev.idx, 'heal');
         break;
       case 'down':

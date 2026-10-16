@@ -9,17 +9,13 @@ import {
   PVP_CLEANSE_CHAMP_BPS,
   PVP_COUNTER_MAX_BPS,
   PVP_CRIT_BPS_PER_LEVEL,
-  PVP_CRIT_DAMAGE_BPS,
   PVP_DEF_BPS,
   PVP_DEF_MAX_BPS,
   PVP_DEF_PEN_BPS,
   PVP_DEF_PEN_MAX_BPS,
-  PVP_DODGE_BPS,
   PVP_DODGE_MAX_BPS,
   PVP_FRONT_HP_BPS,
-  PVP_HIT_BPS,
   PVP_HIT_MAX_BPS,
-  PVP_HIT_REAL_MAX_BPS,
   PVP_MAXHP_GAIN_HEAL_BPS,
   PVP_MAX_ROUNDS,
   PVP_PASSIVE_EFFECT,
@@ -28,10 +24,14 @@ import {
   isAllyTargeting,
   pvpBaseDamage,
   pvpBaseHp,
+  pvpCritDamageBps,
+  pvpDodgeBps,
   pvpEffectBps,
+  pvpHitBps,
   pvpLc,
   pvpPerLevelEffectBps,
   pvpProfile,
+  pvpRealHitBps,
   pvpSkillDefAtLevel,
   pvpStyleBonus,
   type PvpProfile,
@@ -238,11 +238,11 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         hp: baseHp,
         damage: baseDamage,
         critBps: 0,
-        critDamageBps: PVP_CRIT_DAMAGE_BPS,
+        critDamageBps: pvpCritDamageBps(u.level),
         stunBps: 0,
         cleanseBps: 0,
-        hitBps: PVP_HIT_BPS,
-        dodgeBps: PVP_DODGE_BPS,
+        hitBps: pvpHitBps(u.level),
+        dodgeBps: pvpDodgeBps(u.level),
         defBps: PVP_DEF_BPS,
         defPenBps: PVP_DEF_PEN_BPS,
         lifestealBps: 0,
@@ -511,9 +511,9 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
   /** Xuyên giáp bị giảm bởi các lớp suy yếu đang chịu. */
   const debuffDefPenDown = (u: Unit) => u.debuffs.reduce((s, d) => s + d.defPenDownBps, 0);
 
-  /** Chính xác hiệu dụng = nền + buff − suy yếu, kẹp trong [0, trần 130%]. */
+  /** Chính xác hiệu dụng = nền + buff − suy yếu, kẹp trong [0, trần 150%]. */
   const hitBpsOf = (u: Unit) => Math.max(0, Math.min(PVP_HIT_MAX_BPS, u.hitBps + buffHit(u) - debuffHitDown(u)));
-  /** Né tránh hiệu dụng = nền + buff − suy yếu, kẹp trong [0, trần 30%]. */
+  /** Né tránh hiệu dụng = nền + buff − suy yếu, kẹp trong [0, trần 50%]. */
   const dodgeBpsOf = (u: Unit) => Math.max(0, Math.min(PVP_DODGE_MAX_BPS, u.dodgeBps + buffDodge(u) - debuffDodgeDown(u)));
   /** Phòng thủ hiệu dụng = nền + buff − suy yếu, kẹp trong [0, trần 50%]. */
   const defBpsOf = (u: Unit) => Math.max(0, Math.min(PVP_DEF_MAX_BPS, u.defBps + buffDef(u) - debuffDefDown(u)));
@@ -521,11 +521,12 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
   const defPenBpsOf = (u: Unit) => Math.max(0, Math.min(PVP_DEF_PEN_MAX_BPS, u.defPenBps + buffDefPen(u) - debuffDefPenDown(u)));
 
   /**
-   * BƯỚC 1 — Kiểm tra Trúng/Trượt (mục 18): Hit_Real = MIN(99%, Chính xác − Né tránh của địch).
+   * BƯỚC 1 — Kiểm tra Trúng/Trượt (mục 18): chia trọng số K = 3,
+   * `Hit_Real = (Chính xác × 3) / (Chính xác × 3 + Né tránh) × 99%`.
    * Trả về true nếu TRÚNG; false nếu TRƯỢT (Né thành công). Luôn chừa tối thiểu 1% Né.
    */
   function rollHit(attacker: Unit, defender: Unit): boolean {
-    const chance = Math.max(0, Math.min(PVP_HIT_REAL_MAX_BPS, hitBpsOf(attacker) - dodgeBpsOf(defender)));
+    const chance = pvpRealHitBps(hitBpsOf(attacker), dodgeBpsOf(defender));
     return rand(BPS_SCALE) < chance;
   }
 
