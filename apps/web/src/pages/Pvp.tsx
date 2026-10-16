@@ -196,18 +196,26 @@ function StatLine(props: { stat?: UnitStat }) {
           <span class={`pvp-style ${s().style}`} title={PVP_STYLE_LABELS[s().style]}>
             <StyleIcon style={s().style} size={11} />
           </span>
-          <span class="pvp-cell-num">
-            <StatIcon id="attack" size={11} /> {num(s().damage)}
-            <Show when={s().pre && s().pre!.damagePlus > 0}>
-              <em class="pvp-pre" title={s().pre!.damageNote}>{`(+${num(s().pre!.damagePlus)})`}</em>
-            </Show>
-            {' · '}
-            <StatIcon id="heart" size={11} /> {num(s().maxHp)}
-            <Show when={s().pre && s().pre!.hpPlus > 0}>
-              <em class="pvp-pre" title={s().pre!.hpNote}>{`(+${num(s().pre!.hpPlus)})`}</em>
-            </Show>
+          {/* Hàng 1: sát thương · HP tối đa · phòng thủ (kèm badge phần cộng thêm của Chỉ số Nền Ra Trận).
+              Mỗi chỉ số là một khối riêng nên tự xuống dòng khi ô hẹp, không tràn/cắt mất chữ. */}
+          <span class="pvp-cell-num row1">
+            <span class="pvp-stat">
+              <StatIcon id="attack" size={11} /> {num(s().damage)}
+              <Show when={s().pre && s().pre!.damagePlus > 0}>
+                <em class="pvp-pre" title={s().pre!.damageNote}>{`(+${num(s().pre!.damagePlus)})`}</em>
+              </Show>
+            </span>
+            <span class="pvp-stat">
+              <StatIcon id="heart" size={11} /> {num(s().maxHp)}
+              <Show when={s().pre && s().pre!.hpPlus > 0}>
+                <em class="pvp-pre" title={s().pre!.hpNote}>{`(+${num(s().pre!.hpPlus)})`}</em>
+              </Show>
+            </span>
+            <span class="pvp-stat">
+              <StatIcon id="armor" size={11} /> {pct(s().defBps)}
+            </span>
           </span>
-          {/* Hàng 2: chí mạng · ST chí mạng · chính xác · né tránh · phòng thủ (giống dòng chỉ số trên sân đấu).
+          {/* Hàng 2: chí mạng · ST chí mạng · chính xác · né tránh (giống dòng chỉ số trên sân đấu).
               Mỗi chỉ số là một khối riêng nên tự xuống dòng khi ô hẹp, không tràn ra ngoài ô tướng. */}
           <span class="pvp-cell-num row2">
             <span class="pvp-stat">
@@ -222,13 +230,90 @@ function StatLine(props: { stat?: UnitStat }) {
             <span class="pvp-stat">
               <StatIcon id="dodge" size={11} /> {pct(s().dodgeBps)}
             </span>
-            <span class="pvp-stat">
-              <StatIcon id="armor" size={11} /> {pct(s().defBps)}
-            </span>
           </span>
         </span>
       )}
     </Show>
+  );
+}
+
+/**
+ * Bảng "Quy tắc đội hình" — gộp Vị trí đội hình · Phong cách · Cùng phe của Chỉ số Nền Ra Trận
+ * (SKILLS.md mục 1, 6.7) vào một popup sau nút icon để màn chuẩn bị chiến gọn hơn.
+ */
+const FORMATION_STYLE_RULES: readonly { style: PvpStyle; note: string }[] = [
+  { style: 'attack', note: '+8% Sát thương cơ bản' },
+  { style: 'defense', note: '+8% Máu cơ bản' },
+  { style: 'support', note: '+2% Máu và +2% Sát thương cho toàn đội mỗi tướng Hỗ trợ (tối đa 6 lớp = +12%/+12%)' },
+];
+/** Thưởng Cùng phe theo số tướng cùng phe với tướng đó trong đội (`PVP_FACTION_*` trong game-config). */
+const FORMATION_FACTION_RULES: readonly { count: number; note: string }[] = [
+  { count: 2, note: '+2% Máu' },
+  { count: 3, note: '+4% Máu · +2% Sát thương' },
+  { count: 4, note: '+6% Máu · +4% Sát thương' },
+  { count: 5, note: '+8% Máu · +6% Sát thương' },
+  { count: 6, note: '+10% Máu · +8% Sát thương' },
+];
+
+/** Nút icon thông tin: bấm để mở/đóng bảng quy tắc đội hình + chỉ số nền ra trận. */
+function FormationRules(props: { up?: boolean }) {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <div class="pvp-rules" classList={{ up: props.up }}>
+      <button
+        type="button"
+        class="pvp-rules-btn"
+        classList={{ on: open() }}
+        aria-expanded={open() ? 'true' : 'false'}
+        onClick={() => setOpen((v) => !v)}
+        title="Quy tắc đội hình & chỉ số nền ra trận"
+      >
+        <StatIcon id="info" size={13} />
+        <span>Quy tắc đội hình</span>
+      </button>
+      <Show when={open()}>
+        <div class="pvp-rules-pop">
+          <p class="pvp-rules-sec">Vị trí đội hình</p>
+          <ul class="pvp-rules-list">
+            <li>
+              Xếp tối đa <b>6 tướng</b> — 3 hàng trước (vị trí 1-2-3) và 3 hàng sau (vị trí 4-5-6), mỗi tướng đứng 1 vị trí.
+            </li>
+            <li>
+              <b>Hàng trước</b> +5% Máu cơ bản.
+            </li>
+            <li>
+              <b>Hàng sau</b> +5% Sát thương cơ bản.
+            </li>
+          </ul>
+
+          <p class="pvp-rules-sec">Phong cách</p>
+          <ul class="pvp-rules-list">
+            <For each={FORMATION_STYLE_RULES}>
+              {(r) => (
+                <li>
+                  <StyleIcon style={r.style} size={11} /> <b>{PVP_STYLE_LABELS[r.style]}</b>: {r.note}
+                </li>
+              )}
+            </For>
+          </ul>
+
+          <p class="pvp-rules-sec">Cùng phe</p>
+          <ul class="pvp-rules-list">
+            <For each={FORMATION_FACTION_RULES}>
+              {(r) => (
+                <li>
+                  <b>{`${r.count} tướng cùng phe`}</b>: {r.note}
+                </li>
+              )}
+            </For>
+          </ul>
+          <p class="muted small pvp-rules-note">
+            Thưởng Phe tính theo phe của chính tướng đó ({FACTIONS.map((f) => FACTION_LABELS[f]).join(' · ')}). Toàn bộ
+            cộng thẳng vào Máu/Sát thương gốc khi ra trận — không phải buff trong trận nên không bị Xóa Buff.
+          </p>
+        </div>
+      </Show>
+    </div>
   );
 }
 
@@ -469,18 +554,20 @@ function Picker(props: {
   onClose: () => void;
 }) {
   const [q, setQ] = createSignal('');
-  /** Bộ lọc nhanh: theo phe và theo phong cách chiến đấu (mục 6.7). */
-  const [fac, setFac] = createSignal<Faction | 'all'>('all');
-  const [st, setSt] = createSignal<PvpStyle | 'all'>('all');
-  /** Số tướng đang sở hữu theo từng phe / từng phong cách — hiện trên nhãn lọc. */
-  const countFac = (f: Faction) => props.options.filter((o) => o.faction === f).length;
-  const countSt = (s: PvpStyle) => props.options.filter((o) => o.style === s).length;
+  /** Bộ lọc nhanh: theo phe và theo phong cách chiến đấu (mục 6.7). Chọn được NHIỀU phe / nhiều lối đánh. */
+  const [fac, setFac] = createSignal<Faction[]>([]);
+  const [st, setSt] = createSignal<PvpStyle[]>([]);
+  /** Bật/tắt một mục trong bộ lọc nhiều lựa chọn (rỗng = không lọc). */
+  const toggle = <T,>(list: T[], v: T): T[] => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+  const inFac = (f: Faction) => !fac().length || fac().includes(f);
+  const inSt = (s: PvpStyle) => !st().length || st().includes(s);
+  // Số trên nhãn lọc là số GIAO của hai bộ lọc (đang lọc phe nào thì chỉ đếm tướng phe đó, và ngược lại).
+  const countFac = (f: Faction) => props.options.filter((o) => o.faction === f && inSt(o.style)).length;
+  const countSt = (s: PvpStyle) => props.options.filter((o) => o.style === s && inFac(o.faction)).length;
   const fold = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
   const filtered = createMemo(() => {
     const fq = fold(q().trim());
-    return props.options.filter(
-      (o) => (!fq || fold(o.name).includes(fq)) && (fac() === 'all' || o.faction === fac()) && (st() === 'all' || o.style === st()),
-    );
+    return props.options.filter((o) => (!fq || fold(o.name).includes(fq)) && inFac(o.faction) && inSt(o.style));
   });
   /** Tướng đang mở xem chi tiết (bấm vào ảnh đại diện) — null là không mở. */
   const [detailId, setDetailId] = createSignal<string | null>(null);
@@ -507,19 +594,24 @@ function Picker(props: {
             Bỏ trống vị trí
           </button>
         </div>
-        {/* Lọc theo phe và theo phong cách chiến đấu */}
+        {/* Lọc theo phe và theo phong cách chiến đấu — chọn được nhiều mục, số trên nhãn là số giao của hai bộ lọc */}
         <div class="pvp-filters">
           <div class="pvp-filter-row">
-            <button class="pvp-chip" classList={{ on: fac() === 'all' }} onClick={() => setFac('all')}>
-              {`Tất cả phe (${props.options.length})`}
+            <button
+              class="pvp-chip"
+              classList={{ on: !fac().length }}
+              title="Bỏ lọc phe"
+              onClick={() => setFac([])}
+            >
+              {`Tất cả phe (${props.options.filter((o) => inSt(o.style)).length})`}
             </button>
             <For each={FACTIONS}>
               {(f) => (
                 <button
                   class="pvp-chip"
-                  classList={{ on: fac() === f }}
+                  classList={{ on: fac().includes(f) }}
                   style={{ '--chip': FACTION_STYLE[f].css }}
-                  onClick={() => setFac(fac() === f ? 'all' : f)}
+                  onClick={() => setFac(toggle(fac(), f))}
                 >
                   {`${FACTION_LABELS[f]} (${countFac(f)})`}
                 </button>
@@ -527,12 +619,17 @@ function Picker(props: {
             </For>
           </div>
           <div class="pvp-filter-row">
-            <button class="pvp-chip" classList={{ on: st() === 'all' }} onClick={() => setSt('all')}>
-              Mọi lối đánh
+            <button
+              class="pvp-chip"
+              classList={{ on: !st().length }}
+              title="Bỏ lọc lối đánh"
+              onClick={() => setSt([])}
+            >
+              {`Mọi lối đánh (${props.options.filter((o) => inFac(o.faction)).length})`}
             </button>
             <For each={PVP_STYLES}>
               {(s) => (
-                <button class={`pvp-chip ${s}`} classList={{ on: st() === s }} onClick={() => setSt(st() === s ? 'all' : s)}>
+                <button class={`pvp-chip ${s}`} classList={{ on: st().includes(s) }} onClick={() => setSt(toggle(st(), s))}>
                   {`${PVP_STYLE_LABELS[s]} (${countSt(s)})`}
                 </button>
               )}
@@ -598,14 +695,14 @@ function Picker(props: {
                             {(x) => (
                               <>
                                 <span class="pvp-pick-stat-num">
-                                  <StatIcon id="attack" size={11} /> {num(x().self.damage)} · <StatIcon id="heart" size={11} /> {num(x().self.maxHp)}
+                                  <StatIcon id="attack" size={11} /> {num(x().self.damage)} · <StatIcon id="heart" size={11} /> {num(x().self.maxHp)} ·{' '}
+                                  <StatIcon id="armor" size={11} /> {pct(x().self.defBps)}
                                 </span>
-                                {/* Chính xác / Né tránh / Phòng thủ / ST chí mạng cũng scale theo cấp nên hiện luôn ở đây. */}
+                                {/* Chính xác / Né tránh / ST chí mạng cũng scale theo cấp nên hiện luôn ở đây. */}
                                 <span class="pvp-pick-stat-num">
                                   <StatIcon id="crit-rate" size={11} /> {pct(x().self.critBps)} · <StatIcon id="crit-dmg" size={11} />{' '}
                                   {pct(x().self.critDamageBps)} · <StatIcon id="eye" size={11} /> {pct(x().self.hitBps)} ·{' '}
-                                  <StatIcon id="dodge" size={11} /> {pct(x().self.dodgeBps)} · <StatIcon id="armor" size={11} />{' '}
-                                  {pct(x().self.defBps)}
+                                  <StatIcon id="dodge" size={11} /> {pct(x().self.dodgeBps)}
                                 </span>
                               </>
                             )}
@@ -1199,13 +1296,11 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
       snap[u.idx] = {
         hp: s.hp,
         maxHp: s.maxHp,
+        // Trần HP cơ bản khi vào trận = chỉ số đã cộng hết buff nền (cùng phe, hàng trước/sau, phong cách).
+        maxHpBase: u.maxHp,
         alive: s.alive,
         stunned: s.stunned,
         buffed: s.buffed,
-        // Đang bị debuff (giảm sát thương/HP/chí mạng/ST chí mạng/phòng thủ) → dòng chỉ số đổi màu đỏ.
-        debuffed: s.debuffs.some(
-          (d) => d.damageFlat > 0 || d.hpFlat > 0 || d.critBps > 0 || d.critDamageBps > 0 || d.defDownBps > 0,
-        ),
         // Sát thương hiện tại = sát thương nền + lớp buff đang hiệu lực − lớp debuff giảm sát thương,
         // nhân hệ số Hồi sinh (giảm 50% vĩnh viễn sau khi sống lại — mục 1.14)
         damage: Math.round(
@@ -1223,6 +1318,9 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         // Chính xác / Né tránh hiện tại = chỉ số nền (theo cấp) + lớp buff − lớp debuff (khớp engine)
         hitBps: Math.max(0, u.hitBps + s.buffs.reduce((acc, b) => acc + b.hitBps, 0) - s.debuffs.reduce((acc, d) => acc + d.hitDownBps, 0)),
         dodgeBps: Math.max(0, u.dodgeBps + s.buffs.reduce((acc, b) => acc + b.dodgeBps, 0) - s.debuffs.reduce((acc, d) => acc + d.dodgeDownBps, 0)),
+        // Chỉ số CƠ BẢN (đã cộng hết buff nền: cùng phe, hàng trước/sau, phong cách — nhưng chưa
+        // tính lớp buff/debuff trong trận) theo đúng thứ tự icon trên ô, để arena tô màu từng chỉ số.
+        statBases: [u.damage, u.defBps, u.critBps, u.critDamageBps, u.hitBps, u.dodgeBps],
         // Tổng lượng khiên đang hấp thụ (vẽ thanh trắng nhạt dưới thanh máu — mục 16)
         shield: s.shields.reduce((acc, x) => acc + x.amount, 0),
         // Hiệu ứng đang có, hiển thị rõ tăng/giảm cái gì và bao nhiêu (chip trên ô tướng)
@@ -2013,9 +2111,9 @@ export function PvpPage() {
             )}
           </Show>
         </div>
-        <p class="muted small pvp-rule">
-          Xếp tối đa 6 tướng (3 hàng trước + 3 hàng sau), mỗi tướng đứng 1 vị trí. Hàng trước +5% HP, hàng sau +5% sát thương.
-        </p>
+        <div class="pvp-rulebar">
+          <FormationRules />
+        </div>
 
         <Show when={error()}>
           <div class="state-msg error">{error()}</div>
@@ -2129,7 +2227,10 @@ export function PvpPage() {
                   <TeamBoard units={o().team.units} combat={combat()} foe />
                 </div>
               </div>
-              <p class="muted small pvp-challenge-hint">Bấm vào ô tướng để đổi, hoặc kéo-thả để thay đổi vị trí. Hàng trước +5% HP, hàng sau +5% sát thương.</p>
+              <div class="pvp-rulebar">
+                <p class="muted small pvp-challenge-hint">Bấm vào ô tướng để đổi, hoặc kéo-thả để thay đổi vị trí.</p>
+                <FormationRules up />
+              </div>
               <div class="pvp-team-actions">
                 <span class="muted small">{saveHint()}</span>
                 <button class="btn primary" disabled={busy() || team().length === 0} onClick={() => void challenge()}>

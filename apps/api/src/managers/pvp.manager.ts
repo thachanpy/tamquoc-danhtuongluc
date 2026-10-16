@@ -221,7 +221,7 @@ export function getCombatStats(generalId: string, level: number, squad?: string[
     (def.healBps > 0 ? Math.round((damage * def.healBps) / BPS_SCALE) : 0) +
     (def.selfHealBps > 0 ? Math.round((maxHp * def.selfHealBps) / BPS_SCALE) : 0);
   // Chỉ số cộng thêm theo phong cách của CHÍNH tướng (mục 1): Tấn công +8% ST, Phòng thủ +8% HP,
-  // Hỗ trợ là aura +3% HP & +3% ST — ở đây tính 1 lớp của chính tướng; khi vào trận cộng dồn theo đội.
+  // Hỗ trợ là aura +2% HP & +2% ST — ở đây tính 1 lớp của chính tướng; khi vào trận cộng dồn theo đội.
   const styleBonus = pvpStyleBonus(profile.style, profile.style === 'support' ? 1 : 0);
   // Chỉ số Nền Ra Trận (mục 1): chỉ tính khi biết đội — đếm số lớp aura Hỗ trợ và số tướng CÙNG PHE.
   const preBattle = squad?.length ? buildPreBattle(generalId, squad, profile.style, baseHp, baseDamage, hpBps, damageBps) : null;

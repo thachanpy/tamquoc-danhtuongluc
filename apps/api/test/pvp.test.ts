@@ -180,18 +180,18 @@ test('config: pvpPreBattleBonus tổng hợp Vị trí + Phong cách + Cổng Đ
     hpBps: 800,
     damageBps: 500,
   });
-  // Hỗ trợ 2 lớp + 4 tướng cùng phe, hàng trước: 5% vị trí + 3%×2 Hỗ trợ (600) + mốc 4 (600 HP / 400 ST).
+  // Hỗ trợ 2 lớp + 4 tướng cùng phe, hàng trước: 5% vị trí + 2%×2 Hỗ trợ (400) + mốc 4 (600 HP / 400 ST).
   const b = pvpPreBattleBonus('support', 2, 4, 'front');
   assert.equal(b.rowHpBps, 500);
-  assert.equal(b.supportHpBps, 600);
-  assert.equal(b.supportDamageBps, 600);
+  assert.equal(b.supportHpBps, 400);
+  assert.equal(b.supportDamageBps, 400);
   assert.equal(b.factionHpBps, 600);
   assert.equal(b.factionDamageBps, 400);
-  assert.equal(b.hpBps, 1700);
-  assert.equal(b.damageBps, 1000);
-  // Trần aura Hỗ trợ 6 lớp = +18% (1800 bps).
-  assert.equal(pvpPreBattleBonus('support', 9, 0, 'back').supportHpBps, 1800);
-  assert.equal(pvpPreBattleBonus('support', 9, 0, 'back').supportDamageBps, 1800);
+  assert.equal(b.hpBps, 1500);
+  assert.equal(b.damageBps, 800);
+  // Trần aura Hỗ trợ 6 lớp = +12% (1200 bps).
+  assert.equal(pvpPreBattleBonus('support', 9, 0, 'back').supportHpBps, 1200);
+  assert.equal(pvpPreBattleBonus('support', 9, 0, 'back').supportDamageBps, 1200);
 });
 
 test('engine: Vị trí đội hình +5% Máu (hàng trước) / +5% Sát thương (hàng sau) (mục 1)', () => {
@@ -690,6 +690,38 @@ test('engine: hàng mục tiêu trống thì quay sang hàng còn lại (mục 2
   assert.ok(frontDebuff.events.some((e) => e.t === 'debuff' && e.hpFlat > 0), 'hàng trước địch trống → áp hiệu ứng sang hàng sau');
 });
 
+test('engine: đánh hàng ngang quét theo thứ tự gần mình nhất (ô 1 → 1 2 3, ô 2 → 2 1 3, ô 3 → 3 2 1), luôn ưu tiên hàng TRƯỚC (mục 2.4)', () => {
+  const firstActOf = (res: ReturnType<typeof simulatePvp>, idx: number) =>
+    res.events.find((e): e is Extract<PvpEventDto, { t: 'act' }> => e.t === 'act' && e.idx === idx)!;
+  /** Triệu Vân (kỹ năng hàng ngang) đứng ở `slot` đánh đội địch chỉ còn hàng trước ở `frontSlots`. */
+  const actOf = (slot: number, frontSlots: number[]) =>
+    firstActOf(
+      simulatePvp(
+        [
+          one('a', [{ slot, generalId: 'zhao-yun', level: 10 }]),
+          one('b', [
+            ...frontSlots.map((s) => ({ slot: s, generalId: 'da-qiao', level: 1 })),
+            { slot: 4, generalId: 'yuan-shu', level: 1 },
+            { slot: 5, generalId: 'taishi-ci', level: 1 },
+            { slot: 6, generalId: 'jia-xu', level: 1 },
+          ]),
+        ],
+        never,
+      ),
+      slot - 1,
+    );
+  // Ô 1 → quét 1 2 3: thiếu ô 1 thì dạt sang 2-5 (KHÔNG đánh trơ ô 4), đủ ô 1 thì đánh 1-4.
+  assert.deepEqual(actOf(1, [2, 3]).targets, [7, 10], 'ô 1: thiếu ô 1 → dạt sang hàng ngang 2-5');
+  assert.deepEqual(actOf(1, [1, 2, 3]).targets, [6, 9], 'ô 1: còn ô 1 → đánh đúng hàng ngang 1-4');
+  // Ô 2 → quét 2 1 3: thiếu ô 2 thì ưu tiên ô 1 (gần bằng nhau, chọn hàng nhỏ hơn).
+  assert.deepEqual(actOf(2, [1, 3]).targets, [6, 9], 'ô 2: thiếu ô 2 → dạt sang hàng ngang 1-4');
+  assert.deepEqual(actOf(2, [2, 3]).targets, [7, 10], 'ô 2: còn ô 2 → đánh đúng hàng ngang 2-5');
+  // Ô 3 → quét 3 2 1: thiếu ô 3 thì ưu tiên ô 2 (gần hơn ô 1).
+  assert.deepEqual(actOf(3, [1, 2]).targets, [7, 10], 'ô 3: thiếu ô 3 → dạt sang hàng ngang 2-5 (gần hơn ô 1)');
+  // Hàng trước địch sạch hoàn toàn → mới đánh hàng sau: hàng ngang của mình (ô 1 → còn mỗi ô 4).
+  assert.deepEqual(actOf(1, []).targets, [9], 'hàng trước sạch → quay về hàng ngang của mình (chỉ còn ô 4)');
+});
+
 test('engine: Thiêu đốt vẫn ăn chí mạng (mục 8)', () => {
   const res = simulatePvp(
     [one('a', [{ slot: 1, generalId: 'zhu-huan', level: 5 }]), one('b', [{ slot: 1, generalId: 'da-qiao', level: 10 }])],
@@ -1117,16 +1149,20 @@ test('engine: BƯỚC 2 — Xuyên giáp triệt tiêu Phòng thủ; Phòng th�
   assert.equal(lu.hit.mitigated, lu.raw - lu.hit.amount, 'hiệu số ghi vào sự kiện đúng bằng phần bị cản lại');
 });
 
-test('engine: BƯỚC 1 — Trúng/Né theo công thức chia trọng số K = 3, luôn chừa ≥1% Né (mục 18)', () => {
-  // Bảng tham chiếu: Hit_Real = (Chính xác × 3) / (Chính xác × 3 + Né tránh) × 99%.
-  assert.equal(pvpRealHitBps(8000, 200), 9818, 'cấp 1 cơ bản: 80% vs 2% → Trúng 98.18%');
-  assert.equal(pvpRealHitBps(10000, 2000), 9281, 'cấp 10 bình thường: 100% vs 20% → Trúng 92.81%');
-  assert.equal(pvpRealHitBps(15000, 2000), 9479, 'DPS max Chính xác vs Né thường → Trúng 94.79%');
-  assert.equal(pvpRealHitBps(15000, 5000), 8910, 'đối đầu cực hạn max vs max → Trúng 89.10%');
-  assert.equal(pvpRealHitBps(10000, 5000), 8486, 'max Né trừng phạt kẻ không build Chính xác → Trúng 84.86%');
+test('engine: BƯỚC 1 — Trúng/Né theo công thức chia trọng số K = 1.85, kẹp biên [69%, 99%] (mục 18)', () => {
+  // Bảng tham chiếu: Hit_Real = clamp((Chính xác × 1.85) / (Chính xác × 1.85 + Né tránh) × 99%, 69%, 99%).
+  assert.equal(pvpRealHitBps(8000, 200), 9768, 'cấp 1 cơ bản: 80% vs 2% → Trúng 97.68%');
+  assert.equal(pvpRealHitBps(10000, 2000), 8934, 'cấp 10 bình thường: 100% vs 20% → Trúng 89.34%');
+  assert.equal(pvpRealHitBps(10000, 3000), 8519, 'Hit Chuẩn vs Né Vừa: 100% vs 30% → Trúng 85.19%');
+  assert.equal(pvpRealHitBps(12000, 5000), 8080, 'Hit Vừa vs Max Né: 120% vs 50% → Trúng 80.80%');
+  assert.equal(pvpRealHitBps(15000, 200), 9829, 'Max Chính xác vs Né thường: 150% vs 2% → Trúng 98.29%');
+  assert.equal(pvpRealHitBps(15000, 5000), 8389, 'Max Hit khắc chế Max Né: 150% vs 50% → Trúng 83.89%');
+  assert.equal(pvpRealHitBps(10000, 5000), 7794, 'Max Né trừng phạt kẻ không build Chính xác: 100% vs 50% → Trúng 77.94%');
   assert.equal(pvpRealHitBps(10000, 0), 9900, 'Né 0 → trần Trúng 99%, vẫn luôn chừa 1% Né may mắn');
+  assert.equal(pvpRealHitBps(4000, 5000), 6900, 'Chính xác bị Suy yếu nặng → chạm sàn Trúng 69% (Né thực tế ≤ 31%)');
+  assert.equal(pvpRealHitBps(0, 0), 9900, 'cả hai bằng 0 → mặc định trần Trúng');
 
-  // Engine thật: Lữ Mông (Chính xác 100%) vs Đại Kiều (Né 20%) ở cấp 10 → ngưỡng 9281 bps.
+  // Engine thật: Lữ Mông (Chính xác 100%) vs Đại Kiều (Né 20%) ở cấp 10 → ngưỡng 8934 bps.
   const run = (r: number) =>
     dealtDamage(
       simulatePvp(
@@ -1135,8 +1171,8 @@ test('engine: BƯỚC 1 — Trúng/Né theo công thức chia trọng số K = 3
       ),
       0,
     );
-  assert.equal(run(9280), true, '9280 < 9281 → TRÚNG');
-  assert.equal(run(9281), false, '9281 ≥ 9281 → TRƯỢT (rơi vào vùng Né)');
+  assert.equal(run(8933), true, '8933 < 8934 → TRÚNG');
+  assert.equal(run(8934), false, '8934 ≥ 8934 → TRƯỢT (rơi vào vùng Né)');
 });
 
 // ===================== HTTP =====================

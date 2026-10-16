@@ -623,6 +623,31 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .pvp-record .rec.draw { color: var(--muted); }
 .pvp-rule { margin: 0; }
 
+/* ---------- Nút "Quy tắc đội hình": gom quy tắc Vị trí · Phong cách · Cùng phe vào popup cho gọn ---------- */
+.pvp-rulebar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.pvp-rules { position: relative; }
+.pvp-rules-btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+  border: 1px solid rgba(212, 168, 74, .35); border-radius: 999px;
+  background: rgba(212, 168, 74, .08); color: var(--gold-2);
+  font: 600 11.5px/1.5 var(--num, sans-serif); cursor: pointer;
+}
+.pvp-rules-btn:hover, .pvp-rules-btn.on { background: rgba(212, 168, 74, .2); border-color: var(--gold); }
+.pvp-rules-pop {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30;
+  width: min(390px, 88vw); padding: 10px 12px;
+  border: 1px solid rgba(212, 168, 74, .35); border-radius: 6px;
+  background: var(--panel-2); box-shadow: 0 12px 30px rgba(0, 0, 0, .55);
+}
+/* Trong modal khiêu chiến (nút nằm sát đáy) thì bung ngược lên cho khỏi bị cắt */
+.pvp-rules.up .pvp-rules-pop { top: auto; bottom: calc(100% + 6px); }
+.pvp-rules-sec { margin: 0; color: var(--gold-2); font: 600 12px/1.6 var(--num, sans-serif); }
+.pvp-rules-sec:not(:first-child) { margin-top: 8px; }
+.pvp-rules-list { margin: 2px 0 0; padding-left: 17px; font-size: 12.5px; line-height: 1.55; }
+.pvp-rules-list li + li { margin-top: 2px; }
+.pvp-rules-list svg { vertical-align: -1px; }
+.pvp-rules-note { margin: 8px 0 0; }
+
 /* Mỗi khối (đội mình / đối thủ / lịch sử) ngăn cách bằng đường kẻ vàng mảnh */
 .pvp-myteam, .pvp-opp, .pvp-hist { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid rgba(212, 168, 74, .18); }
 .pvp-myteam h3, .pvp-opp h3, .pvp-hist h3 { margin: 0; }
@@ -630,9 +655,11 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .pvp-power { font: 600 15px/1 var(--num, sans-serif); color: var(--gold-2); }
 .pvp-team-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
-/* Bàn đội hình 3×2: cột "Hàng sau | Hàng trước"; đội địch hiển thị lật cột cho đối xứng */
-.pvp-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.pvp-col { display: grid; gap: 6px; }
+/* Bàn đội hình 3×2: cột "Hàng sau | Hàng trước"; đội địch hiển thị lật cột cho đối xứng.
+   Hai cột dùng `subgrid` cho HÀNG nên ô vị trí 1-2-3 của hàng trước luôn thẳng hàng với ô 4-5-6
+   của hàng sau, dù tên tướng / số chỉ số dài ngắn khác nhau (không bị lệch hàng). */
+.pvp-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto repeat(3, auto); gap: 6px 10px; }
+.pvp-col { display: grid; grid-template-rows: subgrid; grid-row: 1 / -1; gap: 6px; }
 .pvp-col-title { font: 600 12px/1 var(--num, sans-serif); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); text-align: center; }
 .pvp-cell { position: relative; display: grid; grid-template-rows: 1fr auto auto auto; gap: 2px; align-items: center; justify-items: center; min-height: 104px; padding: 8px 6px 6px; border: 1px solid var(--line); border-radius: 10px; background: rgba(10, 6, 4, .4); color: var(--text); font: inherit; cursor: pointer; overflow: hidden; transition: border-color .15s, background .15s; }
 .pvp-cell.empty { border-style: dashed; background: rgba(10, 6, 4, .22); color: var(--muted); }
@@ -659,12 +686,15 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 /* Chỉ số cơ bản của tướng hiện dưới mỗi ô (bước chuẩn bị khiêu chiến) */
 .pvp-cell-stat { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 6px; max-width: 100%; font: 600 10.5px/1.35 var(--num, sans-serif); color: var(--muted); }
 .pvp-cell-stat.loading { opacity: .55; }
-.pvp-cell-num { color: var(--text); white-space: nowrap; }
+.pvp-cell-num { color: var(--text); }
 /* Huy hiệu Chỉ số Nền Ra Trận: phần (+X) cộng thêm so với chỉ số gốc, tooltip hiện chi tiết % nguồn cộng. */
 .pvp-cell-num .pvp-pre { margin-left: 2px; font-style: normal; font-weight: 700; color: #7fd6a6; cursor: help; }
-/* Hàng chỉ số thứ hai (chí mạng · ST chí mạng · chính xác · né tránh) chiếm trọn một dòng riêng.
-   Mỗi chỉ số là một khối riêng nên ô hẹp thì tự xuống dòng thay vì tràn ra ngoài ô tướng. */
-.pvp-cell-stat .row2 { flex: 1 1 100%; display: flex; flex-wrap: wrap; justify-content: center; gap: 1px 7px; font-size: 10px; white-space: normal; }
+/* Hai hàng chỉ số trong ô: hàng 1 (sát thương · HP · phòng thủ) và hàng 2 (chí mạng · ST chí mạng ·
+   chính xác · né tránh). Mỗi chỉ số là một khối riêng nên ô hẹp thì tự xuống dòng,
+   không tràn/cắt mất chữ và không làm ô cao thấp khác nhau giữa hàng trước và hàng sau. */
+.pvp-cell-stat .row1, .pvp-cell-stat .row2 { display: flex; flex-wrap: wrap; justify-content: center; gap: 1px 7px; white-space: normal; }
+.pvp-cell-stat .row1 { flex: 1 1 auto; min-width: 0; }
+.pvp-cell-stat .row2 { flex: 1 1 100%; font-size: 10px; }
 .pvp-cell-stat .pvp-stat { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
 /* Huy hiệu phong cách: icon kiếm/khiên/sách (nhãn chữ ở tooltip) — màu theo phong cách. */
 .pvp-style { display: inline-flex; align-items: center; padding: 1px 4px; border: 1px solid currentColor; border-radius: 999px; line-height: 0; opacity: .95; }

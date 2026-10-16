@@ -1,5 +1,5 @@
 /**
- * Bộ icon hiệu ứng chiến đấu: 14 biểu tượng đơn sắc vẽ trong khung 24×24 (mục 18 — Trao đổi đòn).
+ * Bộ icon hiệu ứng chiến đấu: 15 biểu tượng đơn sắc vẽ trong khung 24×24 (mục 18 — Trao đổi đòn).
  *
  * Là NGUỒN HÌNH DẠNG DUY NHẤT cho cả hai tầng hiển thị:
  * - Giao diện DOM (`StatIcon` — chèn thẳng chuỗi SVG qua `innerHTML`),
@@ -37,7 +37,9 @@ export type IconId =
   /** Khiên lượng hấp thụ. */
   | 'sphere-shield'
   /** Thiêu đốt. */
-  | 'burn';
+  | 'burn'
+  /** Chú thích / hướng dẫn. */
+  | 'info';
 
 /** Thân hình icon (không gồm thẻ `<svg>`) — `{c}` = chỗ điền màu. */
 const BODY: Record<IconId, string> = {
@@ -70,6 +72,8 @@ const BODY: Record<IconId, string> = {
   'sphere-shield': '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5" stroke-dasharray="2 2"/><circle cx="12" cy="12" r="2" fill="{c}" stroke="none"/>',
   // Ngọn lửa (tô kín)
   burn: '<path d="M12 23c6.075 0 10-3.358 10-8.5c0-3.125-2.25-6.25-4-7.5c.25 2.5-1.25 3.5-2.5 3.5c-2.5 0-3-2.5-3-5c0-2 1-3.5 2-4.5c-4.25 1-6.5 4.5-6.5 7.5c0 1.5.5 3 1.5 4c-1.25-.5-2.5-1.75-2.5-3.5c-2.5 2.25-3 5.5-3 6.5c0 5.142 3.925 8.5 10 8.5z"/>',
+  // Vòng tròn chữ i — nút mở bảng chú thích
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11.6v5.4"/><circle cx="12" cy="7.8" r="1.1" fill="{c}" stroke="none"/>',
 };
 
 /** Icon tô kín ruột (không vẽ nét); các icon còn lại vẽ nét. */

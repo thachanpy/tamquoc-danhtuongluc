@@ -132,11 +132,11 @@ export const pvpLc = (style: PvpStyle, level: number) => PVP_LC_BY_STYLE[style] 
 export const PVP_STYLE_ATTACK_DAMAGE_BPS = 800;
 /** Phòng thủ: +8% máu cơ bản cho BẢN THÂN. */
 export const PVP_STYLE_DEFENSE_HP_BPS = 800;
-/** Hỗ trợ: aura +3% máu cơ bản cho TOÀN ĐỘI (kể cả bản thân). */
-export const PVP_STYLE_SUPPORT_HP_BPS = 300;
-/** Hỗ trợ: aura +3% sát thương cơ bản cho TOÀN ĐỘI (kể cả bản thân). */
-export const PVP_STYLE_SUPPORT_DAMAGE_BPS = 300;
-/** Aura Hỗ trợ cộng dồn tối đa 6 lớp (= +18% máu & +18% ST nếu có 6 tướng Hỗ trợ). */
+/** Hỗ trợ: aura +2% máu cơ bản cho TOÀN ĐỘI (kể cả bản thân). */
+export const PVP_STYLE_SUPPORT_HP_BPS = 200;
+/** Hỗ trợ: aura +2% sát thương cơ bản cho TOÀN ĐỘI (kể cả bản thân). */
+export const PVP_STYLE_SUPPORT_DAMAGE_BPS = 200;
+/** Aura Hỗ trợ cộng dồn tối đa 6 lớp (= +12% máu & +12% ST nếu có 6 tướng Hỗ trợ). */
 export const PVP_STYLE_SUPPORT_MAX_LAYERS = 6;
 
 /**
@@ -501,18 +501,26 @@ export const PVP_DODGE_MAX_BPS = 5000;
  * Công thức chia trọng số nhân sẵn hệ số này nên kết quả không bao giờ vượt 99%.
  */
 export const PVP_HIT_REAL_MAX_BPS = 9900;
-/** Hệ số ưu tiên Chính xác (K) trong công thức chia trọng số — Chính xác nặng gấp 3 lần Né tránh. */
-export const PVP_HIT_WEIGHT = 3;
+/**
+ * Sàn tỉ lệ TRÚNG thực tế: 69% — chặn Né thực tế vượt ~31% dù chỉ số hai bên lệch nhau
+ * (nhất là khi bên tấn công bị Suy yếu giảm Chính xác), tránh Né vô hiệu hoá cả trận.
+ */
+export const PVP_HIT_REAL_MIN_BPS = 6900;
+/** Trần Né tránh THỰC TẾ theo thiết kế cân bằng: 30% (mốc đối chiếu với sàn Trúng 69%). */
+export const PVP_DODGE_REAL_MAX_BPS = 3000;
+/** Hệ số ưu tiên Chính xác (K) trong công thức chia trọng số — Chính xác nặng gấp 1.85 lần Né tránh. */
+export const PVP_HIT_WEIGHT = 1.85;
 /**
  * Tỉ lệ TRÚNG thực tế (bps) theo công thức chia trọng số (mục 18):
- * `Hit_Real = (Chính xác × K) / (Chính xác × K + Né tránh) × Trần Trúng (99%)`.
- * Chính xác (K = 3) lấn át Né tránh nên Né chỉ là yếu tố may rủi nhỏ (~2%–15%), không vô hiệu hoá combo.
+ * `Hit_Real = clamp((Chính xác × K) / (Chính xác × K + Né tránh) × 99%, 69%, 99%)` với `K = 1.85`.
+ * Kẹp biên [69%, 99%] để Trần Né thực tế ≤ ~31% và Trần Trúng thực tế = 99%.
  */
 export function pvpRealHitBps(hitBps: number, dodgeBps: number): number {
   const weighted = Math.max(0, hitBps) * PVP_HIT_WEIGHT;
   const denom = weighted + Math.max(0, dodgeBps);
   if (denom <= 0) return PVP_HIT_REAL_MAX_BPS;
-  return Math.round((weighted / denom) * PVP_HIT_REAL_MAX_BPS);
+  const real = Math.round((weighted / denom) * PVP_HIT_REAL_MAX_BPS);
+  return Math.min(PVP_HIT_REAL_MAX_BPS, Math.max(PVP_HIT_REAL_MIN_BPS, real));
 }
 /** Phòng thủ mặc định của mọi tướng: giảm 10% sát thương nhận vào. */
 export const PVP_DEF_BPS = 1000;

@@ -75,11 +75,6 @@ const C = {
   hp: 0x3fbf7f,
   /** Thanh máu phe ĐỊCH — đỏ, nhìn là biết ngay bên nào. */
   hpEnemy: 0xef5b5b,
-  /** Màu số máu trên đầu thanh máu phe ta. */
-  numHp: 0xb9e8cd,
-  /** Màu số máu phe địch (hồng nhạt cho khớp thanh máu đỏ). */
-  numHpEnemy: 0xf2c0ba,
-  numLow: 0xffd75e,
   info: 0xffcf8a,
   infoUp: 0x9df3c2,
   dmg: 0xff7a66,
@@ -164,14 +159,17 @@ export interface ArenaUnit {
 export interface ArenaView {
   hp: number;
   maxHp: number;
+  /**
+   * Trần HP CƠ BẢN khi vào trận (đã gồm mọi buff nền: cùng phe, hàng trước/sau, phong cách)
+   * — mốc so sánh để tô màu số máu như các chỉ số khác.
+   */
+  maxHpBase: number;
   /** Tổng lượng khiên đang hấp thụ (mọi lớp) — hiện thành thanh trắng nhạt trên thanh máu. */
   shield: number;
   alive: boolean;
   stunned: boolean;
-  /** Đang được tăng sức mạnh → dòng chỉ số sáng xanh. */
+  /** Đang được tăng sức mạnh → hiện vầng sáng quanh ô. */
   buffed: boolean;
-  /** Đang bị giảm sức mạnh → dòng chỉ số đổi màu đỏ. */
-  debuffed: boolean;
   /** Sát thương hiện tại = nền + buff − debuff (chỉ để hiển thị). */
   damage: number;
   /** Phòng thủ hiện tại (bps) = nền + buff − debuff (chỉ để hiển thị). */
@@ -184,6 +182,11 @@ export interface ArenaView {
   hitBps: number;
   /** Né tránh hiện tại (bps) = nền + buff − debuff (chỉ để hiển thị). */
   dodgeBps: number;
+  /**
+   * Chỉ số NỀN (chưa cộng buff / trừ debuff) theo đúng thứ tự `INFO_ITEMS`
+   * — dùng để tô màu từng chỉ số: cao hơn nền → xanh, thấp hơn → đỏ, bằng → trắng.
+   */
+  statBases: number[];
   /** Hiệu ứng đang có trên tướng — mỗi chip là MỘT icon chỉ số kèm giá trị tăng/giảm cụ thể. */
   effects: { icon?: IconId; text: string; tone: 'buff' | 'debuff' | 'burn' }[];
 }
@@ -341,8 +344,8 @@ class Tile {
   private readonly infoRows: { c: Container; icons: Graphics[]; vals: Text[]; seps: Text[] }[] = [];
   /** Icon theo thứ tự phẳng khớp `INFO_ITEMS` — dùng khi vẽ lại theo màu buff/debuff. */
   private readonly infoIcons: Graphics[] = [];
-  /** Màu đang dùng cho dòng chỉ số (đổi theo buff/debuff) — chỉ vẽ lại icon khi màu đổi. */
-  private infoTone = -1;
+  /** Màu đang dùng của TỪNG icon chỉ số (khớp `INFO_ITEMS`) — chỉ vẽ lại icon nào đổi màu. */
+  private readonly infoTones: number[] = INFO_ITEMS.map(() => -1);
   private readonly buffFx: Graphics;
   /** Hàng chip hiệu ứng trạng thái ở góc trên phải ô: icon chỉ số + giá trị tăng/giảm. */
   private readonly fxC = new Container();
@@ -418,7 +421,7 @@ class Tile {
     const hpBg = new Graphics().roundRect(8, HP_Y, HP_W, HP_H, 3).fill({ color: 0xffffff, alpha: 0.1 });
     this.hpT = new Text({
       text: '',
-      style: { fontFamily: NUM_FONT, fontSize: 11, fontWeight: '700', fill: C.numHp },
+      style: { fontFamily: NUM_FONT, fontSize: 11, fontWeight: '700', fill: C.text },
     });
     // Canh trái để icon trái tim + con số luôn được canh giữa cùng nhau (đặt vị trí trong `apply`).
     this.hpT.anchor.set(0, 0.5);
@@ -536,9 +539,10 @@ class Tile {
     this.hpTarget = v.maxHp > 0 ? Math.max(0, Math.min(1, v.hp / v.maxHp)) : 0;
     this.shieldTarget = v.maxHp > 0 ? Math.max(0, Math.min(1, v.shield / v.maxHp)) : 0;
     const pctv = Math.round(this.hpTarget * 100);
-    const low = v.alive && this.hpTarget <= 0.25;
     this.hpT.text = v.alive ? `${num(v.hp)} · ${pctv}%` : 'Đã hạ';
-    const hpTone = v.alive ? (low ? C.numLow : this.mine ? C.numHp : C.numHpEnemy) : C.muted;
+    // Số máu tô màu như mọi chỉ số khác, so trần HP HIỆN TẠI với trần HP CƠ BẢN khi vào trận:
+    // trần cao hơn (được buff) → xanh, thấp hơn (bị giảm) → đỏ, bằng → trắng.
+    const hpTone = !v.alive ? C.muted : v.maxHp > v.maxHpBase ? C.infoUp : v.maxHp < v.maxHpBase ? C.debuff : C.text;
     this.hpT.style.fill = hpTone;
     this.hpT.visible = true;
     // Icon trái tim đứng trước số máu, cùng màu với con số; tướng đã gục thì ẩn icon cho gọn.
@@ -552,11 +556,13 @@ class Tile {
     this.hpIco.visible = v.alive;
     this.hpT.position.set(hpX + HP_ICO + HP_ICO_GAP, NUM_Y);
 
-    // Dòng chỉ số sống theo buff/debuff: [kiếm] sát thương · [giáp] phòng thủ
-    // · [tia sét] chí mạng · [vụ nổ] ST chí mạng · [mắt] chính xác · [gió] né tránh.
-    // Đang được buff thì sáng xanh, đang bị debuff thì đỏ.
-    const tone = v.buffed ? C.infoUp : v.debuffed ? C.debuff : C.text;
-    this.setInfoLine(v.damage, v.defBps, v.critBps, v.critDamageBps, v.hitBps, v.dodgeBps, tone, v.alive);
+    // Dòng chỉ số: [kiếm] sát thương · [giáp] phòng thủ · [tia sét] chí mạng · [vụ nổ] ST chí mạng
+    // · [mắt] chính xác · [gió] né tránh. Từng chỉ số tự tô màu theo so sánh với chỉ số nền.
+    this.setInfoLine(
+      [v.damage, v.defBps, v.critBps, v.critDamageBps, v.hitBps, v.dodgeBps],
+      v.statBases,
+      v.alive,
+    );
 
     this.buffFx.visible = v.buffed;
     // Chip hiệu ứng: mỗi chip là MỘT icon chỉ số kèm giá trị tăng/giảm cụ thể
@@ -579,30 +585,25 @@ class Tile {
   /**
    * Hai hàng chỉ số có ICON: hàng 1 = [kiếm] sát thương · [giáp] phòng thủ; hàng 2 = [tia sét] chí mạng ·
    * [vụ nổ] ST chí mạng · [mắt] chính xác · [gió] né tránh. Mỗi hàng tự canh giữa và tự thu nhỏ khi tràn ô.
-   * Icon chỉ vẽ lại khi MÀU đổi (theo buff/debuff) để không phải nạp lại SVG mỗi sự kiện.
+   * Màu tô theo TỪNG chỉ số: hiện tại cao hơn chỉ số nền → xanh, thấp hơn → đỏ, bằng → trắng.
+   * Icon chỉ vẽ lại khi MÀU của chính nó đổi để không phải nạp lại SVG mỗi sự kiện.
    */
-  private setInfoLine(
-    damage: number,
-    defBps: number,
-    critBps: number,
-    critDamageBps: number,
-    hitBps: number,
-    dodgeBps: number,
-    tone: number,
-    alive: boolean,
-  ): void {
-    const texts = [num(damage), `${(defBps / 100).toFixed(0)}%`, `${(critBps / 100).toFixed(0)}%`, `${(critDamageBps / 100).toFixed(0)}%`, `${(hitBps / 100).toFixed(0)}%`, `${(dodgeBps / 100).toFixed(0)}%`];
+  private setInfoLine(values: number[], bases: number[], alive: boolean): void {
+    const texts = values.map((v) => num(v));
+    // Chỉ số % (mọi chỉ số trừ sát thương ở vị trí đầu) hiển thị theo đơn vị phần trăm.
+    for (let i = 1; i < texts.length; i++) texts[i] = `${(values[i]! / 100).toFixed(0)}%`;
     let k = 0;
     for (const row of this.infoRows) {
       for (const t of row.vals) {
+        const tone = values[k]! > bases[k]! ? C.infoUp : values[k]! < bases[k]! ? C.debuff : C.text;
         t.text = texts[k]!;
         t.style.fill = tone;
+        if (this.infoTones[k] !== tone) {
+          this.infoTones[k] = tone;
+          drawIcon(this.infoIcons[k]!, INFO_ITEMS[k]!, INFO_FONT + 2, tone);
+        }
         k += 1;
       }
-    }
-    if (this.infoTone !== tone) {
-      this.infoTone = tone;
-      for (let i = 0; i < INFO_ITEMS.length; i++) drawIcon(this.infoIcons[i]!, INFO_ITEMS[i]!, INFO_FONT + 2, tone);
     }
     const size = INFO_FONT + 2;
     const gap = 2;

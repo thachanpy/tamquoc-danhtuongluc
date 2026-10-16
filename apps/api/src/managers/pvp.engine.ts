@@ -220,6 +220,14 @@ interface ShieldInstance {
 const idxOf = (side: PvpSide, slot: number) => (side === 'a' ? slot - 1 : 6 + slot - 1);
 const rowOf = (slot: number): 'front' | 'back' => (slot <= 3 ? 'front' : 'back');
 const laneOf = (slot: number) => ((slot - 1) % 3) + 1;
+/** Số hàng ngang của sân đấu (cặp ô trước-sau: 1-4 / 2-5 / 3-6). */
+const LANE_COUNT = 3;
+/**
+ * Thứ tự quét hàng ngang khi nhắm "hàng ngang": **hàng của mình trước**, rồi loang dần ra hai bên;
+ * cùng khoảng cách thì chọn hàng nhỏ hơn. Vì vậy: ô 1 → `1 2 3`, ô 2 → `2 1 3`, ô 3 → `3 2 1`.
+ */
+const laneScanOrder = (lane: number): number[] =>
+  Array.from({ length: LANE_COUNT }, (_, i) => i + 1).sort((a, b) => Math.abs(a - lane) - Math.abs(b - lane) || a - b);
 
 export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResult {
   const units: Unit[] = [];
@@ -270,7 +278,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
 
   // 2) Chỉ số cố định khi vào trận: hàng trước +HP, hàng sau +damage (mục 2.3); nội tại tướng (mục 10.1);
   //    Chỉ số Nền Ra Trận (mục 1): Tấn công +8% ST bản thân, Phòng thủ +8% HP bản thân,
-  //    Hỗ trợ phát aura +3% HP & +3% ST cho TOÀN ĐỘI mỗi tướng Hỗ trợ (trần 6 lớp),
+  //    Hỗ trợ phát aura +2% HP & +2% ST cho TOÀN ĐỘI mỗi tướng Hỗ trợ (trần 6 lớp),
   //    Cổng Đồng Phe cộng %Máu/%ST theo số tướng CÙNG PHE trong đội (2–6 tướng).
   //    Buff tăng sức mạnh theo kỹ năng KHÔNG áp trước trận mà phát dần mỗi lượt trong act().
   const supportLayersOf = (side: PvpSide) =>
@@ -390,9 +398,18 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         return sameLane.length ? [sameLane[0]!] : enemies.length ? [enemies[0]!] : [];
       }
       case 'lane': {
-        // Hàng ngang: đánh đúng hàng ngang (cặp 1-4 / 2-5 / 3-6) người thi triển đang đứng.
-        // Nếu hàng ngang đối diện đã ngã hết thì tự động chuyển sang hàng ngang có ĐÔNG quân địch
-        // còn sống nhất (hoà thì chọn lane nhỏ hơn cho tất định).
+        // Hàng ngang: đánh cặp ô (trước, sau) cùng hàng nhìn — 1-4 / 2-5 / 3-6.
+        // LUÔN ưu tiên đánh hàng TRƯỚC: quét theo thứ tự gần hàng của mình nhất (ô 1 → 1 2 3,
+        // ô 2 → 2 1 3, ô 3 → 3 2 1) và chọn hàng ngang ĐẦU TIÊN còn tướng ở hàng trước. Vì vậy
+        // tướng ô 1 mà ô 1 địch trống/đã chết sẽ đánh ô 2 + ô 5 chứ KHÔNG đánh trơ ô 4.
+        if (front.length) {
+          for (const lane of laneScanOrder(u.lane)) {
+            const pair = enemies.filter((e) => e.lane === lane);
+            if (pair.some((e) => e.row === 'front')) return pair;
+          }
+        }
+        // Hàng trước đã sạch: đánh hàng ngang của mình, nếu hàng đó cũng trống thì chuyển sang
+        // hàng ngang có ĐÔNG quân địch còn sống nhất (hoà thì chọn lane nhỏ hơn cho tất định).
         const sameLane = enemies.filter((e) => e.lane === u.lane);
         if (sameLane.length) return sameLane;
         let bestLane = -1;
@@ -552,9 +569,10 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
   const defPenBpsOf = (u: Unit) => Math.max(0, Math.min(PVP_DEF_PEN_MAX_BPS, u.defPenBps + buffDefPen(u) - debuffDefPenDown(u)));
 
   /**
-   * BƯỚC 1 — Kiểm tra Trúng/Trượt (mục 18): chia trọng số K = 3,
-   * `Hit_Real = (Chính xác × 3) / (Chính xác × 3 + Né tránh) × 99%`.
-   * Trả về true nếu TRÚNG; false nếu TRƯỢT (Né thành công). Luôn chừa tối thiểu 1% Né.
+   * BƯỚC 1 — Kiểm tra Trúng/Trượt (mục 18): chia trọng số K = 1.85,
+   * `Hit_Real = clamp((Chính xác × 1.85) / (Chính xác × 1.85 + Né tránh) × 99%, 69%, 99%)`.
+   * Trả về true nếu TRÚNG; false nếu TRƯỢT (Né thành công). Luôn chừa tối thiểu 1% Né,
+   * và Né thực tế không bao giờ vượt ~31% nhờ sàn Trúng 69%.
    */
   function rollHit(attacker: Unit, defender: Unit): boolean {
     const chance = pvpRealHitBps(hitBpsOf(attacker), dodgeBpsOf(defender));

@@ -27,7 +27,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 - **Phong cách**: Chỉ quyết định **lực chiến (LC)**, nhãn hiển thị và **Chỉ số Nền Ra Trận cộng thêm** (xem mục **Chỉ số Nền Ra Trận** bên dưới):
   - **Tấn công** (LC cao nhất): Tăng **8% sát thương cơ bản** cho bản thân.
   - **Phòng thủ** (LC thấp nhất): Tăng **8% máu cơ bản** cho bản thân.
-  - **Hỗ trợ**: Tăng **3% máu cơ bản** và **3% sát thương cơ bản** cho **toàn đội** (Aura toàn đội, **cộng dồn tối đa 6 lớp = +18% Máu & +18% ST** nếu sử dụng nhiều tướng Hỗ trợ). Aura áp ngay khi vào trận và **máu vẫn đầy 100%** theo trần mới (không bị tính là hồi máu).
+  - **Hỗ trợ**: Tăng **2% máu cơ bản** và **2% sát thương cơ bản** cho **toàn đội** (Aura toàn đội, **cộng dồn tối đa 6 lớp = +12% Máu & +12% ST** nếu sử dụng nhiều tướng Hỗ trợ). Aura áp ngay khi vào trận và **máu vẫn đầy 100%** theo trần mới (không bị tính là hồi máu).
 
 ### Chỉ số Nền Ra Trận (Pre-Battle Base Stats)
 
@@ -35,7 +35,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 
 - **Theo Vị trí đội hình (Formation Row)**: **Hàng trước** (vị trí 1-2-3) `+5% Máu cơ bản`; **Hàng sau** (vị trí 4-5-6) `+5% Sát thương cơ bản`.
 - **Theo Phong cách (bản thân)**: Tấn công `+8% ST cơ bản`; Phòng thủ `+8% Máu cơ bản` (xem bảng Phong cách ở trên).
-- **Aura Hỗ trợ (toàn đội)**: `+3% Máu & +3% ST cơ bản` cho toàn đội, **cộng dồn tối đa 6 lớp** (số lớp = số tướng Hỗ trợ trong đội) — trần `+18% Máu & +18% ST`.
+- **Aura Hỗ trợ (toàn đội)**: `+2% Máu & +2% ST cơ bản` cho toàn đội, **cộng dồn tối đa 6 lớp** (số lớp = số tướng Hỗ trợ trong đội) — trần `+12% Máu & +12% ST`.
 - **Cổng Đồng Phe (Faction Synergy)**: đếm số tướng **CÙNG PHE** trong đội; **mỗi tướng nhận mốc theo đúng số tướng cùng phe của chính nó** (tướng phe khác có mốc riêng, KHÔNG dùng mốc phe đông nhất):
 
 | Số tướng cùng phe | % Máu | % Sát thương |
@@ -51,7 +51,7 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 - **Phạm vi nhắm mục tiêu (Targeting)**: 6 ô gồm **2 hàng dọc** (hàng dọc trước `1-2-3` và hàng dọc sau `4-5-6`) × **3 hàng ngang** (cặp `1-4`, `2-5`, `3-6`).
   - `front_row` (Hàng dọc trước): Đánh cả 3 tướng ô `1-2-3` của địch. Nếu hàng dọc trước đã ngã hết thì tự động chuyển sang đánh hàng dọc sau `4-5-6`.
   - `back_row` (Hàng dọc sau): Đánh cả 3 tướng ô `4-5-6` của địch. Nếu hàng dọc sau đã ngã hết thì chuyển sang đánh hàng dọc trước.
-  - `lane` (Hàng ngang): Đánh đúng hàng ngang (`1-4` / `2-5` / `3-6`) mà người thi triển đang đứng. Nếu hàng ngang đối diện đã ngã hết thì tự động chuyển sang nhắm **hàng ngang có đông quân địch còn sống nhất** (hòa thì chọn hàng ngang gần nhất về phía trước).
+  - `lane` (Hàng ngang): Đánh **cặp ô trước-sau cùng hàng nhìn** (`1-4` / `2-5` / `3-6`). **Luôn ưu tiên đánh hàng trước**: quét các hàng ngang theo **thứ tự gần hàng của mình nhất** — ô `1` → `1 2 3`, ô `2` → `2 1 3`, ô `3` → `3 2 1` (cùng khoảng cách thì chọn hàng nhỏ hơn) — và chọn **hàng ngang đầu tiên còn tướng ở hàng trước**. Vì vậy tướng ô `1` khi ô `1` địch đã chết/trống sẽ đánh **ô `2` + ô `5`**, **không** đánh trơ trọi cột sau (ô `4`). Khi **hàng trước địch đã sạch** mới đánh hàng sau: hàng ngang của mình, nếu hàng đó cũng trống thì chuyển sang **hàng ngang có đông quân địch còn sống nhất** (hòa thì chọn hàng ngang nhỏ hơn cho tất định).
 
 ### Danh mục 19 Hiệu ứng được phép sử dụng
 
@@ -106,17 +106,19 @@ Toàn bộ chỉ số dùng đơn vị **bps** (`10000 = 100%`). Mọi tính to�
 | Chính xác (Hit Rate) | **80% → 100%** theo cấp (`pvpHitBps`) | **150%** (`PVP_HIT_MAX_BPS`) | Cấp 1 = 80%, cấp 10 = 100% (nội suy `pvpLevelSpanBps`). |
 | Né tránh (Dodge Rate) | **2% → 20%** theo cấp (`pvpDodgeBps`) | **50%** (`PVP_DODGE_MAX_BPS`) | Cấp 1 = 2%, cấp 10 = 20%. |
 | Trần Trúng Tối Đa (Max Hit Cap) | — | **99%** (`PVP_HIT_REAL_MAX_BPS`) | Luôn chừa lại **1% Né/Trượt tối thiểu** làm yếu tố may mắn. |
-| Trọng số Chính xác (Attack Weight) | **K = 3** (`PVP_HIT_WEIGHT`) | — | Chính xác nặng gấp 3 lần Né tránh trong công thức chia trọng số. |
+| Sàn Trúng Tối Thiểu (Min Hit Cap) | — | **69%** (`PVP_HIT_REAL_MIN_BPS`) | Kẹp sàn để Né thực tế **không bao giờ vượt ~31%**, kể cả khi Chính xác bị Suy yếu nặng. |
+| Trần Né Thực Tế (Max Dodge Real) | — | **30%** (`PVP_DODGE_REAL_MAX_BPS`) | Mốc đối chiếu với sàn Trúng 69%; Né cao không vô hiệu hoá đối thủ. |
+| Trọng số Chính xác (Attack Weight) | **K = 1.85** (`PVP_HIT_WEIGHT`) | — | Chính xác nặng gấp 1.85 lần Né tránh trong công thức chia trọng số. |
 | Phòng thủ (Def) | **10%** (`PVP_DEF_BPS`) | **50%** (`PVP_DEF_MAX_BPS`) | Tỷ lệ % giảm sát thương nhận vào. |
 | Xuyên giáp (Def Pen) | **0%** (`PVP_DEF_PEN_BPS`) | **50%** (`PVP_DEF_PEN_MAX_BPS`) | Tỷ lệ % bỏ qua Phòng thủ của đối phương. |
 
-**Triết lý thiết kế**: Chính xác cao phối hợp với RNG có kiểm soát — Né tránh là yếu tố may rủi nhỏ (thực tế 2%–15%), **không** là chiến thuật vô hiệu hoá toàn bộ sát thương. Đòn đánh luôn có xác suất trúng ≥ 84% trong mọi cặp chỉ số.
+**Triết lý thiết kế**: Chính xác cao phối hợp với RNG có kiểm soát — Né tránh là yếu tố may rủi (thực tế ~1%–31%), **không** là chiến thuật vô hiệu hoá toàn bộ sát thương. Nhờ kẹp biên `[69%, 99%]`, đòn đánh **luôn có xác suất trúng ≥ 69%** trong mọi cặp chỉ số.
 
 **Thứ tự xử lý một đòn đánh (Combat Flow)**
 
-- **BƯỚC 1 — Trúng / Trượt** (công thức chia trọng số, `pvpRealHitBps`):
-  - `Hit_Real = (Chính xác × K) / (Chính xác × K + Né tránh) × 99%` với `K = 3`.
-  - `Né_Real = 100% − Hit_Real` (**luôn >= 1%** nhờ hệ số ×99%).
+- **BƯỚC 1 — Trúng / Trượt** (công thức chia trọng số + kẹp biên, `pvpRealHitBps`):
+  - `Hit_Real = clamp((Chính xác × K) / (Chính xác × K + Né tránh) × 99%, 69%, 99%)` với `K = 1.85`.
+  - `Né_Real = 100% − Hit_Real` (**luôn >= 1%** nhờ hệ số ×99%, và **tối đa ~31%** nhờ sàn 69%).
   - Random: rơi vùng Né → **MISS** (0 sát thương, **giữ nguyên Khiên & Máu**, không phản kích, không hút máu); rơi vùng Hit_Real → **HIT**, sang BƯỚC 2.
 - **BƯỚC 2 — Xuyên giáp & Phòng thủ** (Xuyên giáp tính theo **% của Giáp đối phương**, KHÔNG trừ thẳng điểm %):
   - `Def_Effective = Defender_Def × (1 − Attacker_Def_Pen)` (làm tròn)
@@ -133,17 +135,20 @@ Thứ tự trong engine: `rollHit` (bước 1) → `mitigate` (bước 2, sinh r
 
 | Tình huống | Chính xác (tấn công) | Né tránh (phòng thủ) | Tỷ lệ Trúng | Tỷ lệ Né (Miss) |
 | --- | --- | --- | --- | --- |
-| Cấp 1 cơ bản | 80% | 2% | **98.18%** | 1.82% |
-| Cấp 10 bình thường | 100% | 20% | **92.81%** | 7.19% |
-| DPS Max Chính xác vs Né thường | 150% | 20% | **94.79%** | 5.21% |
-| Đối đầu cực hạn (Max vs Max) | 150% | 50% | **89.10%** | 10.90% |
-| Max Né trừng phạt kẻ không build Chính xác | 100% | 50% | **84.86%** | 15.14% |
+| Cấp 1 mặc định (Min vs Min) | 80% | 2% | **97.68%** | 2.32% |
+| Cấp 10 mặc định (Base vs Base) | 100% | 20% | **89.34%** | 10.66% |
+| Hit Chuẩn vs Né Vừa | 100% | 30% | **85.19%** | 14.81% |
+| Hit Vừa vs Max Né | 120% | 50% | **80.80%** | 19.20% |
+| Max Chính xác vs Né thường | 150% | 2% | **98.29%** | 1.71% |
+| Max Né trừng phạt kẻ không build Chính xác | 100% | 50% | **77.94%** | 22.06% |
+| Max Hit khắc chế Max Né | 150% | 50% | **83.89%** | 16.11% |
+| Chính xác bị Suy yếu nặng vs Max Né | 40% | 50% | **69.00%** *(chạm sàn)* | 31.00% *(chạm trần)* |
 
-- **Case P1** (mặc định cấp 10 vs mặc định cấp 10): Hit 100% vs Dodge 20% → `Hit_Real = 92.81%`; Def 10% vs Def Pen 0% → `Damage_Final = 90% Raw`.
-- **Case P2** (Hit 150% vs Dodge 50%): `Hit_Real = 89.10%` (Chính xác tối đa ghìm Né tối đa xuống ≈10.9% Né thực tế).
+- **Case P1** (mặc định cấp 10 vs mặc định cấp 10): Hit 100% vs Dodge 20% → `Hit_Real = 89.34%`; Def 10% vs Def Pen 0% → `Damage_Final = 90% Raw`.
+- **Case P2** (Hit 150% vs Dodge 50%): `Hit_Real = 83.89%` (Chính xác tối đa bẻ gãy Né tối đa xuống ≈16.1% Né thực tế).
 - **Case 3** (Def 10% vs Def Pen 10%): giáp thực tế `10% × 0.9 = 9%` → nhận `91% Raw`.
 - **Case 4** (Def 50% vs Def Pen 50%): giáp thực tế `50% × 0.5 = 25%` → nhận `75% Raw`.
-- **Case 5** (toàn diện): Attacker Raw 10.000, Hit 120%, Def Pen 20% vs Defender HP 20.000, Shield 3.000, Dodge 15%, Def 50% → `Hit_Real = 98.59%`; `Def_Effective = 50% × 0.8 = 40%` → `Damage_Final = 6.000`; phá 3.000 Khiên, dư 3.000 trừ vào Máu → **HP còn 17.000**.
+- **Case 5** (toàn diện): Attacker Raw 10.000, Hit 120%, Def Pen 20% vs Defender HP 20.000, Shield 3.000, Dodge 15%, Def 50% → `Hit_Real = 92.73%`; `Def_Effective = 50% × 0.8 = 40%` → `Damage_Final = 6.000`; phá 3.000 Khiên, dư 3.000 trừ vào Máu → **HP còn 17.000**.
 
 **Tướng mang hiệu ứng chỉ số mới (bổ sung qua kỹ năng)**
 
