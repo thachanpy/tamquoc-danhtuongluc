@@ -54,8 +54,9 @@ export const FRAME_LAYOUT: Record<number, { left: number; top: number; width: nu
 export const frameUrl = (level: number) => `/frames/lv${Math.min(Math.max(level, 1), 10)}.png`;
 
 /**
- * Viên Ngọc Ngũ Hành: /gem/{artKey}_{cấp}.jpg (bộ ảnh chủ dự án cung cấp).
- * Thay artwork = thay file cùng tên. Thiếu ảnh thì chỗ hiển thị tự rơi về viên Ngọc vẽ bằng CSS/PixiJS.
+ * Viên Ngọc Ngũ Hành: /gem/{artKey}_{cấp:2}.webp (bộ ảnh chủ dự án cung cấp).
+ * Cấp ghi 2 chữ số (01→10). Thay artwork = thay file cùng tên. Thiếu ảnh thì chỗ hiển thị
+ * tự rơi về viên Ngọc vẽ bằng CSS/PixiJS.
  */
 const GEM_ART_KEY: Record<GemElement, string> = {
   kim: 'metal',
@@ -65,9 +66,11 @@ const GEM_ART_KEY: Record<GemElement, string> = {
   tho: 'earth',
 };
 /** Tăng khi thay bộ ảnh Ngọc để trình duyệt bỏ bản cũ (nginx cache /gem/ 7 ngày). */
-const GEM_ART_VERSION = 1;
-export const gemUrl = (element: GemElement, level: number) =>
-  `/gem/${GEM_ART_KEY[element]}_${Math.min(Math.max(level, 1), 10)}.jpg?v=${GEM_ART_VERSION}`;
+const GEM_ART_VERSION = 2;
+export const gemUrl = (element: GemElement, level: number) => {
+  const lv = String(Math.min(Math.max(level, 1), 10)).padStart(2, '0');
+  return `/gem/${GEM_ART_KEY[element]}_${lv}.webp?v=${GEM_ART_VERSION}`;
+};
 
 /**
  * Huy hiệu hạng ở bảng xếp hạng (mục 6.6): /theme/rank/r{n}.png cho các hạng đầu.

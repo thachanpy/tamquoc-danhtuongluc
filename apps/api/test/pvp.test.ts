@@ -963,9 +963,9 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(zy.def.buffs[0]!.buff.critBps, 2000);
   assert.equal(zy.def.buffs[0]!.buff.takenDownBps, 2000);
   assert.equal(zy.def.counter.damageBps, 0, 'Triệu Vân không còn phản kích');
-  // Tôn Sách: AoE 125%, hút máu ĐỘI 2%/cấp, tự giảm ST nhận 15%, phản kích đơn.
+  // Tôn Sách: AoE 105%, hút máu ĐỘI 1.5%/cấp (max 15%), tự giảm ST nhận 15%, phản kích đơn.
   const sc = pvpProfile('sun-ce');
-  assert.equal(sc.def.damageBps, 12500);
+  assert.equal(sc.def.damageBps, 10500);
   assert.equal(sc.def.targeting, 'all_enemies');
   assert.equal(sc.lifestealPerLevelBps, 0, 'Tôn Sách không còn hút máu cá nhân');
   assert.equal(sc.teamLifestealPerLevelBps, PVP_TEAM_LIFESTEAL_BPS_PER_LEVEL);
@@ -1092,18 +1092,18 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
     ['cao-cao', 7500],
     ['sima-yi', 12500],
     ['xin-xianying', 5500],
-    ['zhuge-liang', 10400],
-    ['sun-ce', 12500],
+    ['zhuge-liang', 11000],
+    ['sun-ce', 10500],
     ['zhou-yu', 11700],
     ['lu-bu', 12700],
-    ['zhang-jiao', 11500],
+    ['zhang-jiao', 10500],
     ['meng-huo', 10400],
     ['guo-jia', 8500],
     ['pang-tong', 8500],
     ['huang-yueying', 7500],
-    ['zhong-hui', 11000],
-    ['jiang-wei', 12200],
-    ['ji-ling', 12000],
+    ['zhong-hui', 10200],
+    ['jiang-wei', 10200],
+    ['ji-ling', 10000],
   ];
   for (const [id, bps] of aoes) {
     const d = skillDef(id);

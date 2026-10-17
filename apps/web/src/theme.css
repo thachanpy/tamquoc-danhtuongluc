@@ -699,8 +699,9 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .pvp-cell-num { color: var(--text); }
 /* Huy hiệu Chỉ số Nền Ra Trận: phần (+X) cộng thêm so với chỉ số gốc, tooltip hiện chi tiết % nguồn cộng. */
 .pvp-cell-num .pvp-pre { margin-left: 2px; font-style: normal; font-weight: 700; color: #7fd6a6; cursor: help; }
-/* Hai hàng chỉ số trong ô: hàng 1 (sát thương · HP · phòng thủ) và hàng 2 (chí mạng · ST chí mạng ·
-   chính xác · né tránh). Mỗi chỉ số là một khối riêng nên ô hẹp thì tự xuống dòng,
+/* Hai hàng chỉ số trong ô, mỗi hàng đúng 5 chỉ số để luôn ngang hàng nhau: hàng 1 (sát thương ·
+   HP · phòng thủ · xuyên giáp · giảm ST nhận) và hàng 2 (chí mạng · ST chí mạng · chính xác ·
+   né tránh · hút máu). Mỗi chỉ số là một khối riêng nên ô hẹp thì tự xuống dòng,
    không tràn/cắt mất chữ và không làm ô cao thấp khác nhau giữa hàng trước và hàng sau. */
 .pvp-cell-stat .row1, .pvp-cell-stat .row2 { display: flex; flex-wrap: wrap; justify-content: center; gap: 1px 7px; white-space: normal; }
 .pvp-cell-stat .row1 { flex: 1 1 auto; min-width: 0; }
@@ -723,12 +724,21 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 /* Modal rộng hơn để ô tướng đủ chỗ cho hàng chỉ số (chí mạng · ST chí mạng · chính xác · né tránh) */
 .pvp-challenge { display: flex; flex-direction: column; gap: 12px; width: min(1040px, 100%); max-height: 90dvh; overflow-y: auto; }
 .pvp-challenge-hint { margin: 0; }
-.pvp-duel { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: start; }
-.pvp-duel-side { display: grid; gap: 8px; padding: 10px; border: 1px solid rgba(212, 168, 74, .18); border-radius: 12px; background: rgba(10, 6, 4, .3); }
+/* Modal chuẩn bị khiêu chiến: hai khối đội (mình · địch) cao BẰNG NHAU và mọi hàng trong ô tướng
+   (avatar · cấp · phe · phong cách · LC · chỉ số) thẳng hàng nhau. Cách làm: khối đội là flex dọc,
+   phần đầu cao cố định, bàn đội và ô tướng giữ nguyên chiều cao tự nhiên (KHÔNG giãn), phần chênh
+   lệch chiều cao dồn hết thành khoảng trống NGAY TRÊN dải Ngọc (`margin-top: auto`) → dải Ngọc hai
+   bên neo cùng đáy, còn đáy ô tướng bên nào không có chỉ số thì để trống cho gọn. */
+.pvp-duel { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: stretch; }
+.pvp-duel-side { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid rgba(212, 168, 74, .18); border-radius: 12px; background: rgba(10, 6, 4, .3); }
 .pvp-duel-side.foe { border-color: rgba(217, 83, 79, .28); }
-.pvp-duel-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+/* Phần tử cuối khối đội (dải Ngọc) neo đáy; khoảng trống dư nằm ở trên nó. */
+.pvp-duel-side > :last-child { margin-top: auto; }
+/* Phần đầu khối đội cao cố định để hai bên chia đều khoảng trống cho bàn đội như nhau
+   (tên đội địch có thêm hậu tố "· đội gợi ý" nên phải cắt bằng ellipsis, không được xuống dòng). */
+.pvp-duel-head { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 48px; }
 .pvp-duel-head > div { min-width: 0; }
-.pvp-duel-head b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pvp-duel-head b, .pvp-duel-head .muted { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pvp-duel-vs { align-self: center; font: 800 15px/1 var(--num, sans-serif); letter-spacing: .06em; color: var(--gold-2); }
 .pvp-opp-avatar { width: 48px; height: 48px; font-size: 18px; }
 
@@ -918,14 +928,31 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 /* Nút "Chi tiết" ở đầu khung nhóm Ngọc (Bộ sưu tập) đẩy về cuối hàng. */
 .gen-head .btn { margin-left: auto; }
 .gem-cards { display: flex; flex-wrap: wrap; gap: 10px; }
-/* Chip nhỏ hiển thị một loại Ngọc đã gắn (đội hình) — ảnh viên Ngọc bo tròn. */
-.gem-pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px 2px 4px; border: 1px solid var(--line); border-radius: 999px; background: rgba(10, 6, 4, .55); font: 700 12px/1.5 var(--num, sans-serif); color: var(--text); }
-.gem-dot { width: 18px; height: 18px; border-radius: 50%; flex: none; object-fit: cover; border: 1px solid rgba(255, 255, 255, .28); }
-/* Chip Ngọc bấm được (gắn/bỏ gắn cho đội hình ở Đấu trường). */
-.gem-pill.on { border-color: var(--gold); box-shadow: 0 0 10px rgba(212, 168, 74, .5); }
-.gem-pill:disabled { opacity: .35; cursor: not-allowed; }
+/* Dải Ngọc ở khối đội hình (Đấu trường): ô Ngọc bấm được để gắn/bỏ gắn cho đội mình. */
+.gem-pill { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 4px 14px 4px 6px; border: 1px solid rgba(255, 255, 255, .34); border-radius: 999px; background: rgba(10, 6, 4, .55); font: 700 14px/1.5 var(--num, sans-serif); color: var(--text); cursor: pointer; transition: border-color .15s, background .15s, box-shadow .15s; }
+button.gem-pill:disabled { opacity: .4; cursor: not-allowed; }
+button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
+.gem-pill.on { border-color: var(--gold); background: rgba(212, 175, 55, .18); box-shadow: inset 0 0 0 1px var(--gold), 0 0 12px rgba(212, 175, 55, .3); }
+.gem-dot { width: 46px; height: 46px; border-radius: 50%; flex: none; object-fit: cover; border: 1px solid rgba(255, 255, 255, .28); }
 .gem-pill b { color: var(--gold-2); }
+/* Ô Ngọc trống (chưa sở hữu loại đó) — giữ đúng nhịp của các ô Ngọc. */
+.gem-slot-empty { width: 46px; height: 46px; border-radius: 50%; border: 1px dashed rgba(255, 255, 255, .22); flex: none; }
+/* Tooltip chỉ số Ngọc: hiện khi rê chuột lên viên Ngọc (chỉ hiển thị, không bấm được). */
+.gem-tip { display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 40; min-width: 160px; padding: 8px 10px; border: 1px solid var(--gold); border-radius: 10px; background: rgba(13, 8, 5, .97); box-shadow: 0 8px 24px rgba(0, 0, 0, .55); pointer-events: none; }
+.gem-pill:hover .gem-tip { display: block; }
+.gem-tip-head { margin-bottom: 4px; font: 700 12.5px/1.4 var(--num, sans-serif); color: var(--gold-2); white-space: nowrap; }
+.gem-tip-row { display: flex; justify-content: space-between; gap: 14px; font: 600 12.5px/1.6 var(--num, sans-serif); color: var(--muted); }
+.gem-tip-row b { color: #7fd6a6; }
 .pvp-gems { display: flex; flex-direction: column; gap: 6px; }
+/* Dải Ngọc ở khối đội hình (trang Đấu trường) căn giữa. */
+.pvp-myteam .pvp-gems, .pvp-opp .pvp-gems { align-items: center; }
+/* Dải Ngọc trong modal chuẩn bị khiêu chiến: một hàng ngang, không xuống dòng.
+   Chiều cao cố định để dải Ngọc hai bên luôn bằng nhau (bên mình 5 loại, bên địch 3 ô). */
+.pvp-duel .pvp-gems { align-items: center; justify-content: center; min-height: 48px; }
+.pvp-duel .gem-cards { flex-wrap: nowrap; gap: 6px; }
+.pvp-duel .gem-pill { padding: 3px 9px 3px 4px; font-size: 13px; }
+.pvp-duel .gem-dot { width: 40px; height: 40px; }
+.pvp-duel .gem-slot-empty { width: 40px; height: 40px; }
 
 @media (max-width: 640px) {
   .pvp-modal { padding: 10px; }

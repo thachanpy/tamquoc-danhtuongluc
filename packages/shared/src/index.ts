@@ -127,7 +127,7 @@ export const MAX_LEVEL = 10;
 export const PVP_TEAM_SIZE = 6;
 
 /** Số Ngọc Ngũ Hành tối đa gắn cho một đội hình PvP (không trùng loại). */
-export const PVP_TEAM_GEM_COUNT = 5;
+export const PVP_TEAM_GEM_COUNT = 3;
 
 export const FACTION_LABELS: Record<Faction, string> = {
   wei: 'Ngụy',

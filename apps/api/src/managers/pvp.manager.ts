@@ -288,7 +288,9 @@ export function getCombatStats(generalId: string, level: number, squad?: string[
     self: {
       maxHp,
       damage,
-      lc: pvpLc(profile.style, level, profile.passive),
+      // Lực chiến của riêng tướng: có Ngọc trong ngữ cảnh đội thì tính luôn phần Ngọc (mục 6.8) —
+      // khớp LC từng slot mà server trả cho đội hình và bảng xếp hạng.
+      lc: pvpLc(profile.style, level, profile.passive, gem),
       critBps,
       // ST chí mạng theo cấp — buff/debuff kỹ năng điều chỉnh quanh mốc này khi vào trận.
       critDamageBps: pvpCritDamageBps(level),

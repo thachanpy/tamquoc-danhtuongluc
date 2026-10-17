@@ -531,7 +531,7 @@ ALTER TABLE pvp_battles RENAME COLUMN defender_power TO defender_lc;
     // Ngọc Ngũ Hành (DESIGN PROMPT): vật phẩm rời theo (loại, cấp) ghép 2→1, cộng Chỉ số Nền Ra Trận toàn đội.
     // - user_gems: mỗi viên Ngọc là 1 dòng; 'consumed' = đã dùng làm nguyên liệu ghép (giống user_cards).
     // - gem_merge_history: lịch sử từng lần ghép (dùng chung công thức/tỷ lệ với thẻ Tướng).
-    // - pvp_team_gems: Ngọc gắn cho đội hình; tối đa 3 dòng khác loại mỗi người chơi.
+    // - pvp_team_gems: Ngọc gắn cho đội hình; tối đa PVP_TEAM_GEM_COUNT = 3 dòng khác loại mỗi người chơi.
     version: 16,
     name: 'gems',
     sql: `
@@ -568,6 +568,21 @@ CREATE TABLE gem_merge_history (
 );
 
 CREATE TABLE pvp_team_gems (
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  element    TEXT NOT NULL CHECK (element IN ('kim','moc','thuy','hoa','tho')),
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, element)
+);
+`,
+  },
+  {
+    // Khôi phục bảng Ngọc gắn cho đội hình (người chơi chọn tay tối đa PVP_TEAM_GEM_COUNT = 3 loại).
+    // Bản v17 từng drop bảng này khi thử nghiệm cơ chế tự động — nay tạo lại; IF NOT EXISTS để
+    // DB chưa từng chạy v17 (bảng còn nguyên từ v16) cũng chạy được.
+    version: 18,
+    name: 'restore_pvp_team_gems',
+    sql: `
+CREATE TABLE IF NOT EXISTS pvp_team_gems (
   user_id    INTEGER NOT NULL REFERENCES users(id),
   element    TEXT NOT NULL CHECK (element IN ('kim','moc','thuy','hoa','tho')),
   updated_at TEXT NOT NULL,

@@ -2,22 +2,25 @@ import { For, Show, batch, createEffect, createMemo, createSignal, onCleanup, on
 import type {
   CardDto,
   Faction,
+  GemConfigDto,
   GemElement,
   GemsDto,
   PvpBattleDto,
   PvpBattleSummaryDto,
   PvpCombatDto,
   PvpEventDto,
+  PvpGemStats,
   PvpOpponentDto,
   PvpOutcome,
   PvpOverviewDto,
   PvpSide,
   PvpSkill,
   PvpStyle,
+  PvpTeamGemDto,
   PvpUnitDto,
   PvpUnitStateDto,
 } from '@tq/shared';
-import { FACTIONS, FACTION_LABELS, GEM_ELEMENTS, GEM_ELEMENT_LABELS, PVP_BUFF_SCOPE_LABELS, PVP_PASSIVE_LABELS, PVP_SKILL_LABELS, PVP_STYLES, PVP_STYLE_LABELS, PVP_TEAM_GEM_COUNT } from '@tq/shared';
+import { FACTIONS, FACTION_LABELS, GEM_ELEMENTS, GEM_ELEMENT_LABELS, GEM_STAT_LABELS, PVP_BUFF_SCOPE_LABELS, PVP_PASSIVE_LABELS, PVP_SKILL_LABELS, PVP_STYLES, PVP_STYLE_LABELS, PVP_TEAM_GEM_COUNT } from '@tq/shared';
 import { api, fetchAllCards } from '../api.ts';
 import { gen, genStyle, pvpTarget, setPvpTarget } from '../state.ts';
 import { Avatar } from '../components/Avatar.tsx';
@@ -97,25 +100,41 @@ interface UnitStat {
   dodgeBps: number;
   /** Phòng thủ khi vào trận (bps): % giảm sát thương nhận vào. */
   defBps: number;
+  /** Xuyên giáp khi vào trận (bps): % bỏ qua Phòng thủ của mục tiêu. */
+  defPenBps: number;
+  /** Hút máu khi vào trận (bps): % sát thương gây ra được hồi lại cho bản thân. */
+  lifestealBps: number;
   /** Lực chiến (LC) của riêng tướng ở cấp này — chỉ số tổng hợp dùng xếp thứ tự ra đòn (mục 1). */
   lc: number;
   /**
    * Chỉ số Nền Ra Trận (màn chuẩn bị): phần cộng thêm so với chỉ số gốc + nhãn chi tiết % để hiện badge.
    * null = xem tự do (không có ngữ cảnh đội) nên không có badge.
    */
-  pre?: { hpPlus: number; damagePlus: number; hpNote: string; damageNote: string } | null;
+  pre?: {
+    hpPlus: number;
+    damagePlus: number;
+    hpNote: string;
+    damageNote: string;
+    /** Ngọc Ngũ Hành cộng cho CẢ ĐỘI (aura nền, mục 6.8) — hiện badge xanh "(+x%)" cạnh chỉ số tương ứng. */
+    gem: PvpGemStats;
+  } | null;
 }
 const statOf = (c: PvpCombatDto): UnitStat => {
   const pb = c.preBattle;
+  // Mọi chỉ số hiện ở ô tướng đều là GIÁ TRỊ CƠ BẢN của tướng; phần cộng thêm của Chỉ số Nền Ra Trận
+  // (vị trí/phong cách/cổng phe) và của Ngọc Ngũ Hành (aura nền cho cả đội, mục 6.8) hiện RIÊNG ở
+  // badge xanh "(+…)" nên không cộng dồn vào số chính.
   return {
     style: c.style,
-    damage: pb ? pb.damage : c.self.damage,
-    maxHp: pb ? pb.maxHp : c.self.maxHp,
+    damage: c.self.damage,
+    maxHp: c.self.maxHp,
     critBps: c.self.critBps,
     critDamageBps: c.self.critDamageBps,
     hitBps: c.self.hitBps,
     dodgeBps: c.self.dodgeBps,
     defBps: c.self.defBps,
+    defPenBps: c.self.defPenBps,
+    lifestealBps: c.self.lifestealBps,
     lc: c.self.lc,
     pre: pb
       ? {
@@ -123,6 +142,7 @@ const statOf = (c: PvpCombatDto): UnitStat => {
           damagePlus: pb.damage - c.self.damage,
           hpNote: preBattleNote(c, 'hp'),
           damageNote: preBattleNote(c, 'damage'),
+          gem: pb.bonus.gem,
         }
       : null,
   };
@@ -198,13 +218,21 @@ const artThumb = (name: string, artKey: string) => (
   </>
 );
 
+/** Badge xanh "(+x%)" cho phần Ngọc Ngũ Hành cộng thêm vào một chỉ số — cùng kiểu với badge (+) của HP. */
+const GemPlus = (props: { v?: number }) => (
+  <Show when={props.v}>
+    <em class="pvp-pre" title="Ngọc Ngũ Hành cộng thêm">{`(+${pct(props.v!)})`}</em>
+  </Show>
+);
+
 /** Dòng chỉ số cơ bản hiện dưới mỗi ô tướng trong đội hình (không hiện chi tiết kỹ năng cho gọn). */
 function StatLine(props: { stat?: UnitStat }) {
   return (
     <Show when={props.stat} fallback={<span class="pvp-cell-stat loading">…</span>}>
       {(s) => (
         <span class="pvp-cell-stat">
-          {/* Hàng 1: sát thương · HP tối đa · phòng thủ (kèm badge phần cộng thêm của Chỉ số Nền Ra Trận).
+          {/* Hàng 1 (5 chỉ số): sát thương · HP tối đa · phòng thủ · xuyên giáp · giảm ST nhận.
+              Hai hàng luôn ĐÚNG 5 chỉ số nên ngang hàng nhau, không hàng nào bị lẻ.
               Mỗi chỉ số là một khối riêng nên tự xuống dòng khi ô hẹp, không tràn/cắt mất chữ. */}
           <span class="pvp-cell-num row1">
             <span class="pvp-stat">
@@ -221,22 +249,39 @@ function StatLine(props: { stat?: UnitStat }) {
             </span>
             <span class="pvp-stat">
               <StatIcon id="armor" size={11} /> {pct(s().defBps)}
+              <GemPlus v={s().pre?.gem.defBps} />
+            </span>
+            <span class="pvp-stat" title="Xuyên giáp — % bỏ qua Phòng thủ của mục tiêu">
+              <StatIcon id="bow-pen" size={11} /> {pct(s().defPenBps)}
+              <GemPlus v={s().pre?.gem.defPenBps} />
+            </span>
+            <span class="pvp-stat" title="Giảm sát thương nhận vào (chỉ đến từ Ngọc/buff)">
+              <StatIcon id="shield-reduce" size={11} /> 0%
+              <GemPlus v={s().pre?.gem.takenDownBps} />
             </span>
           </span>
-          {/* Hàng 2: chí mạng · ST chí mạng · chính xác · né tránh (giống dòng chỉ số trên sân đấu).
-              Mỗi chỉ số là một khối riêng nên tự xuống dòng khi ô hẹp, không tràn ra ngoài ô tướng. */}
+          {/* Hàng 2 (5 chỉ số): chí mạng · ST chí mạng · chính xác · né tránh · hút máu.
+              Chỉ số không có nền (hút máu, giảm ST nhận) hiện 0%, phần Ngọc cộng thêm nằm ở badge xanh. */}
           <span class="pvp-cell-num row2">
             <span class="pvp-stat">
               <StatIcon id="crit-rate" size={11} /> {pct(s().critBps)}
+              <GemPlus v={s().pre?.gem.critBps} />
             </span>
             <span class="pvp-stat">
               <StatIcon id="crit-dmg" size={11} /> {pct(s().critDamageBps)}
+              <GemPlus v={s().pre?.gem.critDamageBps} />
             </span>
             <span class="pvp-stat">
               <StatIcon id="eye" size={11} /> {pct(s().hitBps)}
+              <GemPlus v={s().pre?.gem.hitBps} />
             </span>
             <span class="pvp-stat">
               <StatIcon id="dodge" size={11} /> {pct(s().dodgeBps)}
+              <GemPlus v={s().pre?.gem.dodgeBps} />
+            </span>
+            <span class="pvp-stat" title="Hút máu — % sát thương gây ra được hồi lại cho bản thân">
+              <StatIcon id="blood" size={11} /> {pct(s().lifestealBps)}
+              <GemPlus v={s().pre?.gem.lifestealBps} />
             </span>
           </span>
         </span>
@@ -732,7 +777,7 @@ function Picker(props: {
                       </span>
                       {/* Nhãn cho biết tướng đang nằm ở vị trí nào trong đội */}
                       <Show when={props.taken[o.id] !== undefined}>
-                        <span class="pvp-pick-inteam">{`Đang ở vị trí ${props.taken[o.id]}`}</span>
+                        <span class="pvp-pick-inteam">{`Vị trí ${props.taken[o.id]}`}</span>
                       </Show>
                     </button>
                   );
@@ -1365,9 +1410,16 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         // Chính xác / Né tránh hiện tại = chỉ số nền (theo cấp) + lớp buff − lớp debuff (khớp engine)
         hitBps: Math.max(0, u.hitBps + s.buffs.reduce((acc, b) => acc + b.hitBps, 0) - s.debuffs.reduce((acc, d) => acc + d.hitDownBps, 0)),
         dodgeBps: Math.max(0, u.dodgeBps + s.buffs.reduce((acc, b) => acc + b.dodgeBps, 0) - s.debuffs.reduce((acc, d) => acc + d.dodgeDownBps, 0)),
+        // Xuyên giáp hiện tại = chỉ số nền + lớp buff − lớp debuff giảm xuyên giáp (khớp engine)
+        defPenBps: Math.max(0, u.defPenBps + s.buffs.reduce((acc, b) => acc + b.defPenBps, 0) - s.debuffs.reduce((acc, d) => acc + d.defPenDownBps, 0)),
+        // Hút máu hiện tại = chỉ số nền + lớp buff (không có debuff giảm hút máu)
+        lifestealBps: Math.max(0, u.lifestealBps + s.buffs.reduce((acc, b) => acc + b.lifestealBps, 0)),
+        // Giảm sát thương nhận vào — chỉ đến từ buff trong trận nên nền luôn 0
+        takenDownBps: Math.max(0, s.buffs.reduce((acc, b) => acc + b.takenDownBps, 0)),
         // Chỉ số CƠ BẢN (đã cộng hết buff nền: cùng phe, hàng trước/sau, phong cách — nhưng chưa
-        // tính lớp buff/debuff trong trận) theo đúng thứ tự icon trên ô, để arena tô màu từng chỉ số.
-        statBases: [u.damage, u.defBps, u.critBps, u.critDamageBps, u.hitBps, u.dodgeBps],
+        // tính lớp buff/debuff trong trận) theo ĐÚNG thứ tự icon trên ô (INFO_ITEMS của arena.ts)
+        // để arena tô màu từng chỉ số. Giảm ST nhận không có chỉ số nền nên mốc so sánh là 0.
+        statBases: [u.damage, u.defBps, u.defPenBps, u.critBps, u.critDamageBps, u.hitBps, u.dodgeBps, u.lifestealBps, 0],
         // Tổng lượng khiên đang hấp thụ (vẽ thanh trắng nhạt dưới thanh máu — mục 16)
         shield: s.shields.reduce((acc, x) => acc + x.amount, 0),
         // Hiệu ứng đang có, hiển thị rõ tăng/giảm cái gì và bao nhiêu (chip trên ô tướng)
@@ -1863,17 +1915,83 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
 }
 
 /**
- * Dải chip chọn Ngọc Ngũ Hành gắn cho đội hình: bấm để gắn/bỏ gắn, tối đa PVP_TEAM_GEM_COUNT loại
- * khác nhau. Chỉ hiện bật được với loại Ngọc người chơi đang sở hữu (kèm cấp cao nhất).
+ * Bảng chỉ số một viên Ngọc ở ĐÚNG cấp đang xem — hiện khi rê chuột lên viên Ngọc trong dải.
+ * Mỗi loại Ngọc chỉ cộng 2 chỉ số (khác 0), suy ra từ cấp 1 (mục 6.8).
+ */
+function GemTip(props: { gem: PvpTeamGemDto; config: GemConfigDto | null }) {
+  const cfg = () => props.config;
+  const keys = () =>
+    cfg()
+      ? (Object.keys(GEM_STAT_LABELS) as (keyof PvpGemStats)[]).filter(
+          (k) => (cfg()!.table[props.gem.element][0]?.[k] ?? 0) !== 0,
+        )
+      : [];
+  const row = () => cfg()?.table[props.gem.element][props.gem.level - 1];
+  return (
+    <Show when={cfg()}>
+      <div class="gem-tip">
+        <div class="gem-tip-head">{`${GEM_ELEMENT_LABELS[props.gem.element]} · Cấp ${props.gem.level}`}</div>
+        <For each={keys()}>
+          {(k) => (
+            <div class="gem-tip-row">
+              <span>{GEM_STAT_LABELS[k]}</span>
+              <b>{pct(row()?.[k] ?? 0, cfg()!.bpsScale)}</b>
+            </div>
+          )}
+        </For>
+      </div>
+    </Show>
+  );
+}
+
+/**
+ * Dải Ngọc Ngũ Hành của một đội hình — CHỈ HIỂN THỊ (dùng cho đối thủ): luôn vẽ đủ `PVP_TEAM_GEM_COUNT`
+ * ô; ô chưa có Ngọc là vòng nét đứt để thấy ngay đội còn thiếu Ngọc. Rê chuột lên một viên để xem
+ * chỉ số cộng toàn đội. `compact` = bỏ tên loại (ảnh Ngọc đã thể hiện loại) — dùng cho vừa 1 hàng.
+ */
+function GemBar(props: { gems: PvpTeamGemDto[]; config: GemConfigDto | null; compact?: boolean }) {
+  const slots = () =>
+    Array.from({ length: PVP_TEAM_GEM_COUNT }, (_, i) => props.gems[i] ?? null);
+  return (
+    <div class="pvp-gems">
+      <div class="gem-cards">
+        <For each={slots()}>
+          {(g) =>
+            g ? (
+              <div class="gem-pill" classList={{ compact: !!props.compact }}>
+                <img class="gem-dot" src={gemUrl(g.element, g.level)} alt={GEM_ELEMENT_LABELS[g.element]} />
+                <Show when={!props.compact}>{GEM_ELEMENT_LABELS[g.element]}</Show>
+                <b>{` L${g.level}`}</b>
+                <GemTip gem={g} config={props.config} />
+              </div>
+            ) : (
+              <span class="gem-slot-empty" title="Chưa có Ngọc loại này" />
+            )
+          }
+        </For>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Dải Ngọc để CHỌN cho đội hình mình: hiện đủ 5 loại Ngũ Hành, bấm để gắn/bỏ gắn — tối đa
+ * `PVP_TEAM_GEM_COUNT` loại khác nhau. Loại chưa sở hữu (hoặc đã đủ số loại) bị khoá. Cấp dùng
+ * luôn là viên cao nhất đang sở hữu; rê chuột lên một viên để xem chỉ số cộng toàn đội.
+ * `compact` = bỏ tên loại — dùng ở modal chuẩn bị khiêu chiến cho vừa 1 hàng.
  */
 function GemPicker(props: {
   value: GemElement[];
   best: (el: GemElement) => number;
+  config: GemConfigDto | null;
+  compact?: boolean;
   onToggle: (el: GemElement) => void;
 }) {
   return (
     <div class="pvp-gems">
-      <span class="muted small">{`Ngọc đội hình — tối đa ${PVP_TEAM_GEM_COUNT} loại, chỉ loại đang sở hữu:`}</span>
+      <Show when={!props.compact}>
+        <span class="muted small">{`Ngọc đội hình — bấm chọn tối đa ${PVP_TEAM_GEM_COUNT} loại (chỉ loại đang sở hữu)`}</span>
+      </Show>
       <div class="gem-cards">
         <For each={GEM_ELEMENTS}>
           {(el) => {
@@ -1882,14 +2000,17 @@ function GemPicker(props: {
             return (
               <button
                 class="gem-pill"
-                classList={{ on: on() }}
+                classList={{ on: on(), compact: !!props.compact }}
                 disabled={!on() && (lv() === 0 || props.value.length >= PVP_TEAM_GEM_COUNT)}
                 onClick={() => props.onToggle(el)}
                 title={lv() ? `${GEM_ELEMENT_LABELS[el]} · cấp cao nhất đang sở hữu: ${lv()}` : `Chưa sở hữu Ngọc ${GEM_ELEMENT_LABELS[el]}`}
               >
-                <img class="gem-dot" src={gemUrl(el, lv() || 1)} alt="" />
-                {GEM_ELEMENT_LABELS[el]}
+                <img class="gem-dot" src={gemUrl(el, lv() || 1)} alt={GEM_ELEMENT_LABELS[el]} />
+                <Show when={!props.compact}>{GEM_ELEMENT_LABELS[el]}</Show>
                 <Show when={lv()}>{(l) => <b>{` L${l()}`}</b>}</Show>
+                <Show when={lv()}>
+                  <GemTip gem={{ element: el, level: lv() }} config={props.config} />
+                </Show>
               </button>
             );
           }}
@@ -1910,7 +2031,7 @@ export function PvpPage() {
   const [team, setTeam] = createSignal<PvpUnitDto[]>([]);
   /** Ngọc Ngũ Hành gắn cho đội hình mình (tối đa PVP_TEAM_GEM_COUNT loại khác nhau). */
   const [teamGems, setTeamGems] = createSignal<GemElement[]>([]);
-  /** Kho Ngọc đang sở hữu — dùng để biết loại nào gắn được và cấp cao nhất của mỗi loại. */
+  /** Kho Ngọc đang sở hữu — biết loại nào chọn được, cấp cao nhất mỗi loại, và bảng chỉ số cho tooltip. */
   const [gems, setGems] = createSignal<GemsDto | null>(null);
   const [dirty, setDirty] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
@@ -2250,7 +2371,7 @@ export function PvpPage() {
                   <span class="pvp-power" title="Tổng Lực chiến của đội">{`Lực chiến ${num(teamLc())}`}</span>
                 </div>
                 <TeamBoard units={team()} combat={combat()} gemSig={gemSigOf(teamGems())} onSlot={openPicker} onMove={moveSlot} />
-                <GemPicker value={teamGems()} best={gemBestLevel} onToggle={toggleGem} />
+                <GemPicker value={teamGems()} best={gemBestLevel} config={gems()?.config ?? null} onToggle={toggleGem} />
                 <div class="pvp-team-actions">
                   <span class="muted small">{saveHint()}</span>
                 </div>
@@ -2271,16 +2392,19 @@ export function PvpPage() {
                 </Show>
                 <Show when={!oppBusy() && opponent()}>
                   {(o) => (
-                    <div class="pvp-opp-row">
-                      <Avatar avatar={o().opponent.avatar} name={o().opponent.displayName} class="pvp-opp-avatar" />
-                      <div class="pvp-opp-row-info">
-                        <b>{o().opponent.displayName}</b>
-                        <span class="muted small">{`Lực chiến ${num(o().team.lc)}${o().saved ? '' : ' · đội gợi ý'}`}</span>
+                    <>
+                      <div class="pvp-opp-row">
+                        <Avatar avatar={o().opponent.avatar} name={o().opponent.displayName} class="pvp-opp-avatar" />
+                        <div class="pvp-opp-row-info">
+                          <b>{o().opponent.displayName}</b>
+                          <span class="muted small">{`Lực chiến ${num(o().team.lc)}${o().saved ? '' : ' · đội gợi ý'}`}</span>
+                        </div>
+                        <button class="btn primary small" onClick={() => setChallengeOpen(true)}>
+                          Chuẩn bị khiêu chiến
+                        </button>
                       </div>
-                      <button class="btn primary small" onClick={() => setChallengeOpen(true)}>
-                        Chuẩn bị khiêu chiến
-                      </button>
-                    </div>
+                      <GemBar gems={o().team.gems} config={gems()?.config ?? null} />
+                    </>
                   )}
                 </Show>
                 <Show when={!oppBusy() && !opponent() && !oppError()}>
@@ -2335,6 +2459,7 @@ export function PvpPage() {
                     </div>
                   </div>
                   <TeamBoard units={team()} combat={combat()} gemSig={gemSigOf(teamGems())} onSlot={openPicker} onMove={moveSlot} />
+                  <GemPicker compact value={teamGems()} best={gemBestLevel} config={gems()?.config ?? null} onToggle={toggleGem} />
                 </div>
                 <div class="pvp-duel-vs" aria-hidden="true">
                   VS
@@ -2348,6 +2473,7 @@ export function PvpPage() {
                     </div>
                   </div>
                   <TeamBoard units={o().team.units} combat={combat()} gemSig={gemSigOf(o().team.gems.map((g) => g.element))} foe />
+                  <GemBar compact gems={o().team.gems} config={gems()?.config ?? null} />
                 </div>
               </div>
               <div class="pvp-rulebar">

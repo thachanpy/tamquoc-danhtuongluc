@@ -20,12 +20,14 @@ export function preBattleNote(c: PvpCombatDto, kind: 'hp' | 'damage'): string {
     if (b.factionHpBps) parts.push(`+${pct(b.factionHpBps)} Phe`);
     if (b.defenseHpBps) parts.push(`+${pct(b.defenseHpBps)} Thủ`);
     if (b.supportHpBps) parts.push(`+${pct(b.supportHpBps)} Hỗ trợ`);
+    if (b.gem.hpBps) parts.push(`+${pct(b.gem.hpBps)} Ngọc`);
     if (passive.stat === 'maxHp' && passive.bps) parts.push(`+${pct(passive.bps)} Nội tại`);
   } else {
     if (b.rowDamageBps) parts.push(`+${pct(b.rowDamageBps)} Sau`);
     if (b.factionDamageBps) parts.push(`+${pct(b.factionDamageBps)} Phe`);
     if (b.attackDamageBps) parts.push(`+${pct(b.attackDamageBps)} Công`);
     if (b.supportDamageBps) parts.push(`+${pct(b.supportDamageBps)} Hỗ trợ`);
+    if (b.gem.damageBps) parts.push(`+${pct(b.gem.damageBps)} Ngọc`);
     if (passive.stat === 'damage' && passive.bps) parts.push(`+${pct(passive.bps)} Nội tại`);
   }
   return parts.join(', ');

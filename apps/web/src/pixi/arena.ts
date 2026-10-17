@@ -13,7 +13,7 @@ import { castKindOf, spawnSkillFx, type Fx, type FxKind } from './skillsfx.ts';
  */
 
 const W = 900;
-const H = 500;
+const H = 512;
 /** Bề rộng dải phân cách giữa hai đội. */
 const DIV_W = 28;
 const SIDE_GAP = 10;
@@ -22,12 +22,12 @@ const PAD = 6;
 const COL_GAP = 14;
 const COL_W = (SIDE_W - PAD * 2 - COL_GAP) / 2;
 /**
- * Ô tướng cao rộng rãi (152px) để chân dung, thanh máu, số máu và hai hàng chỉ số không còn
+ * Ô tướng cao rộng rãi (164px) để chân dung, thanh máu, số máu và BA hàng chỉ số không còn
  * chen chúc; 3 hàng ô cộng khoảng cách vẫn nằm gọn trong chiều cao sân `H`.
  */
-const TILE_H = 152;
-const ROW_GAP = 10;
-const ROW_Y0 = 16;
+const TILE_H = 164;
+const ROW_GAP = 6;
+const ROW_Y0 = 6;
 /** Vòng chân dung trong ô (56px, khớp ô tướng ở trang chuẩn bị chiến). */
 const ART_R = 28;
 const ART_CY = 14 + ART_R;
@@ -40,18 +40,20 @@ const NUM_Y = 108;
 const HP_ICO = 11;
 const HP_ICO_GAP = 3;
 /**
- * Hai hàng chỉ số trong ô: hàng 1 = sát thương · phòng thủ, hàng 2 = chí mạng · ST chí mạng ·
- * chính xác · né tránh. Mỗi hàng tự canh giữa và tự thu nhỏ nếu tràn bề rộng ô.
+ * BA hàng chỉ số trong ô, mỗi hàng ĐÚNG 3 chỉ số (dàn đều ngang hàng nhau, không có hàng nào lẻ):
+ * hàng 1 = sát thương · phòng thủ · xuyên giáp; hàng 2 = chí mạng · ST chí mạng · chính xác;
+ * hàng 3 = né tránh · hút máu · giảm ST nhận. Mỗi hàng tự canh giữa và tự thu nhỏ nếu tràn bề rộng ô.
  */
 const INFO_FONT = 10.5;
 const INFO_ROWS: readonly (readonly IconId[])[] = [
-  ['attack', 'armor'],
-  ['crit-rate', 'crit-dmg', 'eye', 'dodge'],
+  ['attack', 'armor', 'bow-pen'],
+  ['crit-rate', 'crit-dmg', 'eye'],
+  ['dodge', 'blood', 'shield-reduce'],
 ];
 /** Danh sách icon theo thứ tự phẳng (khớp `infoIcons`/`infoVals`). */
 const INFO_ITEMS: readonly IconId[] = INFO_ROWS.flat();
-/** Toạ độ y của từng hàng chỉ số (dưới số máu) — hàng dưới vẫn chừa lề đáy trong ô. */
-const INFO_ROW_Y: readonly number[] = [122, 136];
+/** Toạ độ y của từng hàng chỉ số (dưới số máu) — cách đều 15px, hàng dưới vẫn chừa lề đáy trong ô. */
+const INFO_ROW_Y: readonly number[] = [124, 139, 154];
 /** Tên tướng nằm ngay dưới chân dung (khớp font/màu ô tướng ở trang chuẩn bị chiến). */
 const NAME_Y = 82;
 /**
@@ -204,6 +206,12 @@ export interface ArenaView {
   hitBps: number;
   /** Né tránh hiện tại (bps) = nền + buff − debuff (chỉ để hiển thị). */
   dodgeBps: number;
+  /** Xuyên giáp hiện tại (bps) = nền + buff − debuff (chỉ để hiển thị). */
+  defPenBps: number;
+  /** Hút máu hiện tại (bps) = nền + buff (chỉ để hiển thị). */
+  lifestealBps: number;
+  /** Giảm sát thương nhận vào (bps) — chỉ đến từ buff/Ngọc nên nền luôn 0. */
+  takenDownBps: number;
   /**
    * Chỉ số NỀN (chưa cộng buff / trừ debuff) theo đúng thứ tự `INFO_ITEMS`
    * — dùng để tô màu từng chỉ số: cao hơn nền → xanh, thấp hơn → đỏ, bằng → trắng.
@@ -481,9 +489,10 @@ class Tile {
     // Canh trái để icon trái tim + con số luôn được canh giữa cùng nhau (đặt vị trí trong `apply`).
     this.hpT.anchor.set(0, 0.5);
 
-    // Hai hàng chỉ số (cùng font/cỡ với .pvp-cell-stat: 600 10.5px) có ICON thay ký hiệu chữ:
-    // hàng 1 = [kiếm] sát thương · [giáp] phòng thủ; hàng 2 = [tia sét] chí mạng · [vụ nổ] ST chí mạng ·
-    // [mắt] chính xác · [gió] né tránh. Mỗi hàng là một container riêng để tự canh giữa/thu nhỏ.
+    // Ba hàng chỉ số (cùng font/cỡ với .pvp-cell-stat: 600 10.5px) có ICON thay ký hiệu chữ:
+    // hàng 1 = [kiếm] sát thương · [giáp] phòng thủ · [xuyên] xuyên giáp; hàng 2 = [tia sét] chí mạng ·
+    // [vụ nổ] ST chí mạng · [mắt] chính xác; hàng 3 = [gió] né tránh · [giọt máu] hút máu · [khiên] giảm ST nhận.
+    // Mỗi hàng là một container riêng để tự canh giữa/thu nhỏ.
     for (let r = 0; r < INFO_ROWS.length; r++) {
       const items = INFO_ROWS[r]!;
       const c = new Container();
@@ -615,10 +624,11 @@ class Tile {
     this.hpIco.visible = v.alive;
     this.hpT.position.set(hpX + HP_ICO + HP_ICO_GAP, NUM_Y);
 
-    // Dòng chỉ số: [kiếm] sát thương · [giáp] phòng thủ · [tia sét] chí mạng · [vụ nổ] ST chí mạng
-    // · [mắt] chính xác · [gió] né tránh. Từng chỉ số tự tô màu theo so sánh với chỉ số nền.
+    // Ba hàng chỉ số: [kiếm] sát thương · [giáp] phòng thủ · [xuyên] xuyên giáp /
+    // [tia sét] chí mạng · [vụ nổ] ST chí mạng · [mắt] chính xác /
+    // [gió] né tránh · [giọt máu] hút máu · [khiên] giảm ST nhận. Từng chỉ số tự tô màu theo so sánh với nền.
     this.setInfoLine(
-      [v.damage, v.defBps, v.critBps, v.critDamageBps, v.hitBps, v.dodgeBps],
+      [v.damage, v.defBps, v.defPenBps, v.critBps, v.critDamageBps, v.hitBps, v.dodgeBps, v.lifestealBps, v.takenDownBps],
       v.statBases,
       v.alive,
     );
@@ -642,8 +652,10 @@ class Tile {
   }
 
   /**
-   * Hai hàng chỉ số có ICON: hàng 1 = [kiếm] sát thương · [giáp] phòng thủ; hàng 2 = [tia sét] chí mạng ·
-   * [vụ nổ] ST chí mạng · [mắt] chính xác · [gió] né tránh. Mỗi hàng tự canh giữa và tự thu nhỏ khi tràn ô.
+   * Ba hàng chỉ số có ICON: hàng 1 = [kiếm] sát thương · [giáp] phòng thủ · [xuyên] xuyên giáp;
+   * hàng 2 = [tia sét] chí mạng · [vụ nổ] ST chí mạng · [mắt] chính xác;
+   * hàng 3 = [gió] né tránh · [giọt máu] hút máu · [khiên] giảm ST nhận.
+   * Mỗi hàng đúng 3 chỉ số nên các hàng luôn ngang hàng nhau; tự canh giữa và tự thu nhỏ khi tràn ô.
    * Màu tô theo TỪNG chỉ số: hiện tại cao hơn chỉ số nền → xanh, thấp hơn → đỏ, bằng → trắng.
    * Icon chỉ vẽ lại khi MÀU của chính nó đổi để không phải nạp lại SVG mỗi sự kiện.
    */
