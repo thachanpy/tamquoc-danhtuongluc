@@ -65,6 +65,8 @@ const ART_CY = 14 + ART_R;
 const HP_W = COL_W - 16;
 const HP_Y = 94;
 const HP_H = 6;
+/** Bo góc thanh máu/khiên. Đầu NGOÀI của thanh thì bo, còn chỗ thanh khiên nối vào thanh máu thì vuông. */
+const BAR_R = 3;
 const NUM_Y = 108;
 /** Bán kính icon cạnh số máu (trái tim) và khoảng cách tới con số. */
 const HP_ICO = 11;
@@ -113,6 +115,13 @@ const FLOAT_PAD = 6;
 const NUM_FONT = "'Oswald', 'Arial Narrow', system-ui, sans-serif";
 const UI_FONT = 'system-ui, sans-serif';
 
+/**
+ * Bảng màu hiển thị Combat — QUY CHUẨN dùng chung cho mọi màn chiến đấu (sân đấu PixiJS, dòng diễn
+ * biến và bảng tổng kết chỉ số). Đổi màu ở đây thì phải đổi tương ứng ở `theme.css` (`.rp-drow-*`,
+ * `.rp-t-num.*`) và `skillsfx.ts` (`KIND_COLOR`) để không lệch tông:
+ * - Sát thương thường `#E0D8C3` (bạch ngân / trắng ngà) · Chí mạng `#FFB300` (hoàng kim) · Thiêu đốt `#E65100` (xích hỏa)
+ * - Buff có lợi / Hồi máu / Khiên `#6FBE73` (bích ngọc) · Debuff / Khống chế / Xóa buff `#C62828` (chu tước)
+ */
 const C = {
   line: 0x2c303b,
   panel: 0x171920,
@@ -120,7 +129,8 @@ const C = {
   text: 0xecebe6,
   gold: 0xd4a84a,
   gold2: 0xf3d58a,
-  ok: 0x3fbf7f,
+  /** Buff có lợi (quầng quanh chân dung + chip hiệu ứng). */
+  ok: 0x6FBE73,
   bad: 0xef5b5b,
   muted: 0x9aa0ab,
   /** Thanh máu phe TA — xanh lá. */
@@ -128,14 +138,20 @@ const C = {
   /** Thanh máu phe ĐỊCH — đỏ, nhìn là biết ngay bên nào. */
   hpEnemy: 0xef5b5b,
   info: 0xffcf8a,
-  infoUp: 0x9df3c2,
-  dmg: 0xff7a66,
-  heal: 0x6ef0a6,
-  crit: 0xc08cff,
-  stun: 0xffd75e,
-  /** Hiệu ứng bất lợi — ĐỎ (không dùng tím). */
-  debuff: 0xef5b5b,
-  burn: 0xff9a4d,
+  /** Chỉ số đang CAO hơn nền (được buff) → xanh lá. */
+  infoUp: 0x6FBE73,
+  /** Sát thương thường — bạch ngân / trắng ngà. */
+  dmg: 0xe0d8c3,
+  /** Hồi máu — bích ngọc (cùng nhóm "buff có lợi"). */
+  heal: 0x6FBE73,
+  /** Sát thương chí mạng — hoàng kim / vàng đế vương. */
+  crit: 0xffb300,
+  /** Khống chế (choáng) — chu tước, cùng nhóm với debuff. */
+  stun: 0xc62828,
+  /** Debuff / Xóa buff — chu tước (đỏ máu). */
+  debuff: 0xc62828,
+  /** Sát thương Thiêu đốt theo lượt (DoT) — xích hỏa / cam lửa trầm. */
+  burn: 0xe65100,
 };
 
 /** Mã màu hex cho bộ nạp SVG của PixiJS (nó không hiểu `currentColor`). */
@@ -261,7 +277,7 @@ export interface ArenaSnapshot {
 export interface ArenaHandle {
   sync(s: ArenaSnapshot): void;
   /** Số sát thương/hồi máu/buff bay lên trên ô tướng (mỗi mảnh có thể kèm icon hiệu ứng). */
-  float(idx: number, parts: FloatPart[], crit: boolean, heal?: boolean): void;
+  float(idx: number, parts: FloatPart[], crit: boolean, tone?: FloatTone): void;
   /** Hiệu ứng niệm chiêu ở ô tướng thi triển, kiểu theo nhóm kỹ năng + phe + sắc thái riêng tướng. */
   cast(idx: number, skill: PvpSkill): void;
   /** Hiệu ứng va chạm trên ô mục tiêu, kiểu theo sự kiện (sát thương, hồi máu, buff, debuff…). */
@@ -325,6 +341,9 @@ export interface FloatPart {
   text: string;
 }
 
+/** Sắc thái màu của số bay lên (khớp quy chuẩn màu hiển thị Combat ở `C`). */
+export type FloatTone = 'damage' | 'heal' | 'burn';
+
 /** Số sát thương/hồi máu bay lên rồi tan. Luôn rõ nét: chỉ mờ ở 20% cuối của hoạt ảnh. */
 class FloatFx {
   readonly c = new Container();
@@ -338,18 +357,19 @@ class FloatFx {
   private readonly climb: number;
   private t = 0;
 
-  constructor(parent: Container, w: number, x: number, y: number, parts: FloatPart[], crit: boolean, heal: boolean, reduce: boolean) {
+  constructor(parent: Container, w: number, x: number, y: number, parts: FloatPart[], crit: boolean, tone: FloatTone, reduce: boolean) {
     this.crit = crit;
     this.reduce = reduce;
     this.y0 = y;
     this.ms = reduce ? 500 : crit ? 1050 : 950;
     const size = crit ? 74 : 36;
-    const fill = crit ? C.crit : heal ? C.heal : C.dmg;
+    // Chí mạng luôn vàng kim; còn lại theo sắc thái: hồi máu/buff xanh lá, thiêu đốt đỏ nhẹ, sát thương xám.
+    const fill = crit ? C.crit : tone === 'heal' ? C.heal : tone === 'burn' ? C.burn : C.dmg;
     // Mỗi mảnh là một dòng chữ; mảnh có icon thì icon đứng ngay trước số (cùng cỡ, cùng màu).
     const texts = parts.map((p) => {
       const t = new Text({
         text: p.text,
-        style: { fontFamily: NUM_FONT, fontSize: size, fontWeight: '900', fill, stroke: { color: 0x000000, width: crit ? 5 : 4 } },
+        style: { fontFamily: NUM_FONT, fontSize: size, fontWeight: '900', fill, stroke: { color: 0x0C0D0C, width: crit ? 4 : 3 } },
       });
       t.anchor.set(0, 0.5);
       return t;
@@ -524,7 +544,7 @@ class Tile {
     name.anchor.set(0.5);
     name.position.set(COL_W / 2, NAME_Y);
 
-    const hpBg = new Graphics().roundRect(8, HP_Y, HP_W, HP_H, 3).fill({ color: 0xffffff, alpha: 0.1 });
+    const hpBg = new Graphics().roundRect(8, HP_Y, HP_W, HP_H, BAR_R).fill({ color: 0xffffff, alpha: 0.1 });
     this.hpT = new Text({
       text: '',
       style: { fontFamily: NUM_FONT, fontSize: 11, fontWeight: '700', fill: C.text },
@@ -841,17 +861,22 @@ class Tile {
    * Vẽ lại thanh máu + thanh khiên.
    * Thanh khiên neo ở MÉP PHẢI CỦA THANH MÁU ĐANG CÓ (đi theo máu, không cố định ở cuối ô)
    * rồi mọc dài về bên trái, nên khi máu tụt thì khiên trôi theo và luôn dính liền thanh máu.
+   * Chỗ NỐI giữa khiên và máu để VUÔNG (không bo) — hai thanh trông liền một mạch, chỉ bo ở hai
+   * đầu NGOÀI của cả thanh.
    */
   private drawBars(): void {
-    this.hpFill
-      .clear()
-      .roundRect(8, HP_Y, Math.max(0.5, HP_W * this.hpShown), HP_H, 3)
-      .fill({ color: this.mine ? C.hp : C.hpEnemy });
+    const hpW = Math.max(0.5, HP_W * this.hpShown);
+    // Thanh máu: bo cả hai đầu; đầu NGOÀI (phải) trùng khít với thanh khiên khi có khiên phủ lên.
+    this.hpFill.clear().roundRect(8, HP_Y, hpW, HP_H, BAR_R).fill({ color: this.mine ? C.hp : C.hpEnemy });
+
     this.shieldFill.clear();
     if (this.shieldShown > 0.001) {
       const w = Math.max(0.5, HP_W * this.shieldShown);
+      const x0 = 8 + hpW - w;
       this.shieldFill
-        .roundRect(8 + HP_W * this.hpShown - w, HP_Y, w, HP_H, 3)
+        .roundRect(x0, HP_Y, w, HP_H, BAR_R)
+        // Mép TRÁI thanh khiên là mối nối với thanh máu → vuông, chỉ bo mép phải (đầu ngoài).
+        .rect(x0, HP_Y, Math.min(BAR_R, w), HP_H)
         .fill({ color: 0xe8edf2, alpha: 0.92 });
     }
   }
@@ -1065,11 +1090,11 @@ class Arena implements ArenaHandle {
     this.skillC.position.set(x, y);
   }
 
-  float(idx: number, parts: FloatPart[], crit: boolean, heal = false): void {
+  float(idx: number, parts: FloatPart[], crit: boolean, tone: FloatTone = 'damage'): void {
     if (this.dead) return;
     const t = this.tiles.get(idx);
     if (!t) return;
-    this.fx.push(new FloatFx(this.fxLayer, this.W, t.centerX, t.topY + 34, parts, crit, heal, this.reduce));
+    this.fx.push(new FloatFx(this.fxLayer, this.W, t.centerX, t.topY + 34, parts, crit, tone, this.reduce));
   }
 
   /** Hiệu ứng niệm chiêu ở người thi triển (kiểu theo nhóm kỹ năng; màu + sắc thái theo tướng). */

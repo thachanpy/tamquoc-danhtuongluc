@@ -31,7 +31,7 @@ import { StatIcon } from '../components/StatIcon.tsx';
 import { FACTION_STYLE, STYLE_COLOR, gemUrl, initials, levelTier, pct, portraitUrl } from '../art.ts';
 import { preBattleNote } from '../combat-notes.ts';
 import type { IconId } from '../icons.ts';
-import { arenaLayoutFor, createArena, type ArenaHandle, type ArenaLayout, type ArenaUnit, type ArenaView, type FloatPart } from '../pixi/arena.ts';
+import { arenaLayoutFor, createArena, type ArenaHandle, type ArenaLayout, type ArenaUnit, type ArenaView, type FloatPart, type FloatTone } from '../pixi/arena.ts';
 import type { FxKind } from '../pixi/skillsfx.ts';
 import { toast } from '../ui.ts';
 import { playSfx, sfxPrefs, stopAllSfx, toggleSfx, type SfxName } from '../sfx.ts';
@@ -1457,10 +1457,10 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   }
 
   /** Số sát thương/hồi máu bay lên trên ô tướng (vẽ bằng PixiJS; mỗi mảnh có thể kèm icon hiệu ứng). */
-  const addFloat = (idx: number, parts: FloatPart[], crit: boolean, heal = false) => {
+  const addFloat = (idx: number, parts: FloatPart[], crit: boolean, tone: FloatTone = 'damage') => {
     // Tua nhanh: không tạo hiệu ứng bay để tránh dựng hàng nghìn đối tượng PixiJS trong một lúc.
     if (fastForward) return;
-    arena?.float(idx, parts, crit, heal);
+    arena?.float(idx, parts, crit, tone);
   };
 
   /** Hiệu ứng kỹ năng trên ô tướng (niệm chiêu ở người ra đòn / va chạm trên mục tiêu). */
@@ -1524,7 +1524,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
       case 'miss':
         // Né đòn (mục 18 — BƯỚC 1): không gây sát thương, Khiên & Máu giữ nguyên.
         setActing(ev.from);
-        addFloat(ev.idx, [{ text: 'NÉ' }], false, true);
+        addFloat(ev.idx, [{ text: 'NÉ' }], false, 'heal');
         break;
       case 'damage':
         setActing(ev.from);
@@ -1543,7 +1543,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
       case 'heal':
         setActing(ev.from);
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp }));
-        addFloat(ev.idx, [{ text: `+${num(ev.amount)}` }], ev.crit, true);
+        addFloat(ev.idx, [{ text: `+${num(ev.amount)}` }], ev.crit, 'heal');
         addFx(ev.idx, 'heal');
         break;
       case 'stun':
@@ -1589,7 +1589,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
           ...(ev.hpFlat > 0 ? [{ text: `+${num(ev.hpFlat)}` }] : []),
           ...(ev.lifestealBps > 0 ? [{ icon: 'blood' as const, text: `+${pct(ev.lifestealBps)}` }] : []),
         ];
-        if (gains.length) addFloat(ev.idx, gains, ev.crit, true);
+        if (gains.length) addFloat(ev.idx, gains, ev.crit, 'heal');
         addFx(ev.idx, 'buff');
         break;
       }
@@ -1626,7 +1626,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
       case 'burn':
         // Thiêu đốt gây sát thương vào đầu mỗi lượt (có thể ăn chí mạng theo chỉ số người thi triển).
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp, shields: absorbedOf(s, ev.absorbed) }));
-        addFloat(ev.idx, [{ icon: 'burn', text: `-${num(ev.amount)}` }], ev.crit);
+        addFloat(ev.idx, [{ icon: 'burn', text: `-${num(ev.amount)}` }], ev.crit, 'burn');
         addFx(ev.idx, 'burn');
         break;
       case 'shield':
@@ -1640,7 +1640,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
           }
           return { ...s, shields };
         });
-        addFloat(ev.idx, [{ icon: 'sphere-shield', text: `+${num(ev.amount)}` }], false, true);
+        addFloat(ev.idx, [{ icon: 'sphere-shield', text: `+${num(ev.amount)}` }], false, 'heal');
         break;
       case 'shieldBreak':
         // Xóa Khiên (mục 17): bẻ gãy TOÀN BỘ lớp khiên của mục tiêu trúng đòn.
@@ -1665,7 +1665,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
       case 'revive':
         // Hồi sinh (mục 1.14): tướng sống lại với `hp` máu và giảm sát thương vĩnh viễn → cập nhật hệ số nhân.
         upd(ev.idx, (s) => ({ ...s, alive: true, hp: ev.hp, damageMulBps: Math.max(0, BPS_SCALE - ev.damageDownBps) }));
-        addFloat(ev.idx, [{ text: `HỒI SINH +${num(ev.hp)}` }], false, true);
+        addFloat(ev.idx, [{ text: `HỒI SINH +${num(ev.hp)}` }], false, 'heal');
         addFx(ev.idx, 'heal');
         break;
       case 'down':

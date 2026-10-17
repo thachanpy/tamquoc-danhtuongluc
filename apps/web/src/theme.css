@@ -725,8 +725,10 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .pvp-cell-stat { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 6px; max-width: 100%; font: 600 10.5px/1.35 var(--num, sans-serif); color: var(--muted); }
 .pvp-cell-stat.loading { opacity: .55; }
 .pvp-cell-num { color: var(--text); }
-/* Huy hiệu Chỉ số Nền Ra Trận: phần (+X) cộng thêm so với chỉ số gốc, tooltip hiện chi tiết % nguồn cộng. */
-.pvp-cell-num .pvp-pre { margin-left: 2px; font-style: normal; font-weight: 700; color: #7fd6a6; cursor: help; }
+/* Huy hiệu Chỉ số Nền Ra Trận: phần (+X) cộng thêm so với chỉ số gốc, tooltip hiện chi tiết % nguồn cộng.
+   Tông BÍCH NGỌC #6FBE73 — đúng nhóm "buff có lợi" của quy chuẩn màu Combat (mục 6.7), dùng chung cho
+   cả bảng đội hình lẫn modal Chuẩn bị khiêu chiến vì cả hai đều đang cộng thêm chỉ số. */
+.pvp-cell-num .pvp-pre { margin-left: 2px; font-style: normal; font-weight: 700; color: #6FBE73; cursor: help; }
 /* Hai hàng chỉ số trong ô, mỗi hàng đúng 5 chỉ số để luôn ngang hàng nhau: hàng 1 (sát thương ·
    HP · phòng thủ · xuyên giáp · giảm ST nhận) và hàng 2 (chí mạng · ST chí mạng · chính xác ·
    né tránh · hút máu). Mỗi chỉ số là một khối riêng nên ô hẹp thì tự xuống dòng,
@@ -913,19 +915,23 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-t-style { padding: 0 5px; }
 /* Chip lực chiến: tông vàng, cùng chiều cao với các chip định danh khác */
 .rp-t-lc { padding: 0 6px; color: var(--gold-2); }
+/* Cột số trong bảng tổng kết chỉ số — cùng QUY CHUẨN màu hiển thị Combat với dòng diễn biến ở trên:
+   sát thương thường #E0D8C3 (bạch ngân) · hồi máu / khiên #6FBE73 (bích ngọc). */
 .rp-t-num { text-align: right; white-space: nowrap; }
-.rp-t-num.dmg { color: #ff9d8f; }
-.rp-t-num.taken { color: #ffc9b0; }
-.rp-t-num.heal { color: #7fe0a8; }
-/* Cột Khiên dùng đúng tông trắng nhạt của thanh khiên trong sân đấu (mục 16) */
-.rp-t-num.shield { color: #dfe6ee; }
+.rp-t-num.dmg { color: #e0d8c3; }
+.rp-t-num.taken { color: #e0d8c3; }
+.rp-t-num.heal { color: #6FBE73; }
+.rp-t-num.shield { color: #6FBE73; }
 .rp-t-sep td { padding-top: 12px; font-weight: 700; letter-spacing: .04em; color: var(--gold-2); border-bottom: none; }
 /* Avatar nhỏ trong bảng kết quả (cả bảng tổng kết lẫn diễn biến) */
 .rp-mini { position: relative; flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; overflow: hidden; background: linear-gradient(160deg, #2a2112, var(--panel-2)); border: 1px solid var(--line); }
 .rp-mini.foe { border-color: rgba(217, 83, 79, .45); }
 .rp-mini-ini { font: 800 10px/1 var(--num, sans-serif); color: var(--gold-2); }
 .rp-mini > img { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
-/* Dòng diễn biến chi tiết */
+/* Dòng diễn biến chi tiết.
+   Màu theo QUY CHUẨN màu hiển thị Combat (khớp palette `C` ở pixi/arena.ts + `KIND_COLOR` ở skillsfx.ts):
+   sát thương thường #E0D8C3 (bạch ngân / trắng ngà) · chí mạng #FFB300 (hoàng kim) · thiêu đốt #E65100 (xích hỏa)
+   · buff có lợi / hồi máu / khiên #6FBE73 (bích ngọc) · debuff / khống chế / xóa buff #C62828 (chu tước). */
 .rp-drow { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 8px; font-size: 13.5px; }
 .rp-drow.round { justify-content: center; margin-top: 5px; border-top: 1px solid rgba(212, 168, 74, .18); border-radius: 0; }
 .rp-dround { font: 700 12px/1 var(--num, sans-serif); letter-spacing: .04em; color: var(--gold-2); }
@@ -933,27 +939,28 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-drow-side { flex: 0 0 auto; padding: 1px 6px; border-radius: 999px; color: var(--gold-2); background: rgba(212, 168, 74, .16); border: 1px solid rgba(212, 168, 74, .35); font: 800 10px/1.6 var(--num, sans-serif); text-transform: uppercase; letter-spacing: .04em; }
 .rp-drow-side.foe { color: #ffb3ae; background: rgba(217, 83, 79, .16); border-color: rgba(217, 83, 79, .4); }
 .rp-drow.act { background: rgba(212, 168, 74, .07); }
-.rp-drow.skip { background: rgba(255, 215, 94, .07); color: var(--muted); }
-.rp-drow.damage { background: rgba(217, 83, 79, .06); }
-.rp-drow.heal { background: rgba(63, 191, 127, .07); }
-.rp-drow.stun { background: rgba(255, 215, 94, .07); }
-.rp-drow.cleanse { background: rgba(90, 162, 255, .07); }
-.rp-drow.buff { background: rgba(63, 191, 127, .05); }
-.rp-drow.debuff { background: rgba(217, 83, 79, .08); }
-.rp-drow.burn { background: rgba(255, 138, 58, .09); }
-.rp-drow.dispel { background: rgba(90, 162, 255, .06); }
-/* Khiên (mục 16) tông trắng xám nhạt; Xóa Khiên (mục 17) tông lam như giải/kết giới */
-.rp-drow.shield { background: rgba(232, 237, 242, .07); }
-.rp-drow.shieldBreak { background: rgba(90, 162, 255, .08); }
-.rp-drow.purify { background: rgba(63, 191, 200, .08); }
-.rp-drow.down { background: rgba(217, 83, 79, .14); font-weight: 700; }
+.rp-drow.skip { background: rgba(198, 40, 40, .07); color: var(--muted); }
+.rp-drow.damage { background: rgba(224, 216, 195, .06); }
+.rp-drow.heal { background: rgba(46, 125, 50, .12); }
+.rp-drow.stun { background: rgba(198, 40, 40, .07); }
+.rp-drow.cleanse { background: rgba(46, 125, 50, .12); }
+.rp-drow.buff { background: rgba(46, 125, 50, .09); }
+.rp-drow.debuff { background: rgba(198, 40, 40, .08); }
+.rp-drow.burn { background: rgba(230, 81, 0, .10); }
+.rp-drow.dispel { background: rgba(198, 40, 40, .06); }
+/* Khiên (mục 16) là hiệu ứng có lợi nên tông bích ngọc; Xóa Khiên (mục 17) là debuff nên tông chu tước */
+.rp-drow.shield { background: rgba(46, 125, 50, .12); }
+.rp-drow.shieldBreak { background: rgba(198, 40, 40, .08); }
+.rp-drow.purify { background: rgba(46, 125, 50, .12); }
+.rp-drow.down { background: rgba(198, 40, 40, .14); font-weight: 700; }
 .rp-drow-text { flex: 1 1 auto; min-width: 0; }
 .rp-drow-arrow { flex: 0 0 auto; color: var(--muted); }
-.rp-drow-amt { flex: 0 0 auto; font: 900 18px/1 var(--num, sans-serif); color: #ff8a7a; white-space: nowrap; }
-.rp-drow-amt.heal { color: #7fe0a8; }
-.rp-drow-amt.crit { font-size: 29px; color: #c08cff; text-shadow: 0 0 10px rgba(192, 140, 255, .75); }
+.rp-drow-amt { flex: 0 0 auto; font: 900 18px/1 var(--num, sans-serif); color: #e0d8c3; white-space: nowrap; }
+.rp-drow-amt.heal { color: #6FBE73; }
+.rp-drow-amt.burn { color: #e65100; }
+.rp-drow-amt.crit { font-size: 29px; color: #ffb300; text-shadow: 0 0 10px rgba(255, 179, 0, .75); }
 /* Nhãn chí mạng: chip nhỏ đi kèm con số (không phình theo cỡ số chí mạng) */
-.rp-drow-crit { display: inline-block; margin-left: 5px; padding: 1px 6px; border: 1px solid rgba(192, 140, 255, .45); border-radius: 999px; background: rgba(192, 140, 255, .14); font: 800 10px/1.5 var(--num, sans-serif); letter-spacing: .04em; vertical-align: 2px; }
+.rp-drow-crit { display: inline-block; margin-left: 5px; padding: 1px 6px; border: 1px solid rgba(255, 179, 0, .45); border-radius: 999px; background: rgba(255, 179, 0, .14); color: #ffb300; font: 800 10px/1.5 var(--num, sans-serif); letter-spacing: .04em; vertical-align: 2px; }
 /* Khung cuộn của danh sách diễn biến khi ĐANG ĐÁNH (bảng kết quả dùng khung cuộn của chính nó) */
 .rp-drows { display: grid; gap: 3px; align-content: start; }
 .rp-drows.scroll { height: 156px; overflow-y: auto; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(10, 6, 4, .4); }
@@ -1030,7 +1037,8 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
 .gem-pill:hover .gem-tip { display: block; }
 .gem-tip-head { margin-bottom: 4px; font: 700 12.5px/1.4 var(--num, sans-serif); color: var(--gold-2); white-space: nowrap; }
 .gem-tip-row { display: flex; justify-content: space-between; gap: 14px; font: 600 12.5px/1.6 var(--num, sans-serif); color: var(--muted); }
-.gem-tip-row b { color: #7fd6a6; }
+/* Chỉ số Ngọc cộng thêm trong tooltip — cùng tông bích ngọc với huy hiệu (+X) ở bảng đội hình. */
+.gem-tip-row b { color: #6FBE73; }
 .pvp-gems { display: flex; flex-direction: column; gap: 6px; }
 /* Dải Ngọc ở khối đội hình (trang Đấu trường) căn giữa. */
 .pvp-myteam .pvp-gems, .pvp-opp .pvp-gems { align-items: center; }
