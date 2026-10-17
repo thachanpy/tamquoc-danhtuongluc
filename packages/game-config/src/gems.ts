@@ -39,7 +39,7 @@ export const PVP_NO_GEM_STATS: PvpGemStats = {
   dodgeBps: 0,
   critBps: 0,
   critDamageBps: 0,
-  defBps: 0,
+  defArmor: 0,
   defPenBps: 0,
 };
 
@@ -112,20 +112,20 @@ const GEM_TABLE: Record<GemElement, { stats: [keyof PvpGemStats, keyof PvpGemSta
       [2500, 4000],
     ],
   },
-  // Thổ: Phòng thủ / Xuyên giáp — +5% → +25% cả hai.
+  // Thổ: Phòng thủ (ĐIỂM GIÁP) / Xuyên giáp — giáp quy đổi tương đương +5% → +25% giảm ST cũ, xuyên giáp +5% → +25%.
   tho: {
-    stats: ['defBps', 'defPenBps'],
+    stats: ['defArmor', 'defPenBps'],
     levels: [
-      [500, 500],
-      [700, 700],
-      [900, 900],
-      [1100, 1100],
-      [1300, 1300],
-      [1500, 1500],
-      [1700, 1700],
-      [1900, 1900],
-      [2100, 2100],
-      [2500, 2500],
+      [11, 500],
+      [16, 700],
+      [21, 900],
+      [27, 1100],
+      [33, 1300],
+      [39, 1500],
+      [46, 1700],
+      [53, 1900],
+      [61, 2100],
+      [80, 2500],
     ],
   },
 };

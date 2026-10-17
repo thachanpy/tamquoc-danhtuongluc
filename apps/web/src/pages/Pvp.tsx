@@ -111,8 +111,8 @@ interface UnitStat {
   hitBps: number;
   /** Né tránh khi vào trận (bps). */
   dodgeBps: number;
-  /** Phòng thủ khi vào trận (bps): % giảm sát thương nhận vào. */
-  defBps: number;
+  /** Giáp khi vào trận (số nguyên điểm): DR = Giáp / (Giáp + 100), trần 75%. */
+  defArmor: number;
   /** Xuyên giáp khi vào trận (bps): % bỏ qua Phòng thủ của mục tiêu. */
   defPenBps: number;
   /** Hút máu khi vào trận (bps): % sát thương gây ra được hồi lại cho bản thân. */
@@ -145,7 +145,7 @@ const statOf = (c: PvpCombatDto): UnitStat => {
     critDamageBps: c.self.critDamageBps,
     hitBps: c.self.hitBps,
     dodgeBps: c.self.dodgeBps,
-    defBps: c.self.defBps,
+    defArmor: c.self.defArmor,
     defPenBps: c.self.defPenBps,
     lifestealBps: c.self.lifestealBps,
     lc: c.self.lc,
@@ -179,7 +179,7 @@ const statKey = (u: PvpUnitDto, squad: PvpUnitDto[], gemSig = '') =>
  * Mô tả buff tăng sức mạnh của một kỹ năng (nhóm TEAM_ và BUFF_ALLIES) kèm LƯỢNG tăng mỗi lớp:
  * "cả đội +10% sát thương", "cả đội +10% HP tối đa", "cả đội +5 điểm chí mạng".
  */
-const TEAM_BUFF_FIELDS: { key: 'damageBps' | 'hpBps' | 'critBps' | 'critDamageBps' | 'takenDownBps' | 'lifestealBps' | 'hitBps' | 'dodgeBps' | 'defBps' | 'defPenBps'; text: (v: number) => string }[] = [
+const TEAM_BUFF_FIELDS: { key: 'damageBps' | 'hpBps' | 'critBps' | 'critDamageBps' | 'takenDownBps' | 'lifestealBps' | 'hitBps' | 'dodgeBps' | 'defArmor' | 'defPenBps'; text: (v: number) => string }[] = [
   { key: 'damageBps', text: (v) => `+${pct(v)} sát thương` },
   { key: 'hpBps', text: (v) => `+${pct(v)} HP tối đa` },
   { key: 'critBps', text: (v) => `+${v / 100} điểm chí mạng` },
@@ -188,7 +188,7 @@ const TEAM_BUFF_FIELDS: { key: 'damageBps' | 'hpBps' | 'critBps' | 'critDamageBp
   { key: 'lifestealBps', text: (v) => `+${pct(v)} hút máu` },
   { key: 'hitBps', text: (v) => `+${pct(v)} chính xác` },
   { key: 'dodgeBps', text: (v) => `+${pct(v)} né tránh` },
-  { key: 'defBps', text: (v) => `+${pct(v)} phòng thủ` },
+  { key: 'defArmor', text: (v) => `+${num(v)} giáp` },
   { key: 'defPenBps', text: (v) => `+${pct(v)} xuyên giáp` },
 ];
 function teamBuffText(buffs?: PvpUnitStateDto['buffs']): string {
@@ -206,14 +206,14 @@ function teamBuffText(buffs?: PvpUnitStateDto['buffs']): string {
 }
 
 /** Mô tả hiệu ứng bất lợi mà kỹ năng của tướng áp lên địch (hiện kèm khi tướng thi triển). */
-const DEBUFF_FIELDS: { key: 'damageDownBps' | 'hpDownBps' | 'critDownBps' | 'critDamageDownBps' | 'hitDownBps' | 'dodgeDownBps' | 'defDownBps' | 'defPenDownBps' | 'burnBps'; text: (v: number) => string }[] = [
+const DEBUFF_FIELDS: { key: 'damageDownBps' | 'hpDownBps' | 'critDownBps' | 'critDamageDownBps' | 'hitDownBps' | 'dodgeDownBps' | 'defArmorDown' | 'defPenDownBps' | 'burnBps'; text: (v: number) => string }[] = [
   { key: 'damageDownBps', text: (v) => `−${pct(v)} sát thương địch` },
   { key: 'hpDownBps', text: (v) => `−${pct(v)} HP tối đa địch` },
   { key: 'critDownBps', text: (v) => `−${v / 100} điểm chí mạng địch` },
   { key: 'critDamageDownBps', text: (v) => `−${pct(v)} ST chí mạng địch` },
   { key: 'hitDownBps', text: (v) => `−${pct(v)} chính xác địch` },
   { key: 'dodgeDownBps', text: (v) => `−${pct(v)} né tránh địch` },
-  { key: 'defDownBps', text: (v) => `−${pct(v)} phòng thủ địch` },
+  { key: 'defArmorDown', text: (v) => `−${num(v)} giáp địch` },
   { key: 'defPenDownBps', text: (v) => `−${pct(v)} xuyên giáp địch` },
   { key: 'burnBps', text: (v) => `thiêu đốt ${pct(v)} sát thương mỗi đầu lượt` },
 ];
@@ -231,10 +231,11 @@ const artThumb = (name: string, artKey: string) => (
   </>
 );
 
-/** Badge xanh "(+x%)" cho phần Ngọc Ngũ Hành cộng thêm vào một chỉ số — cùng kiểu với badge (+) của HP. */
-const GemPlus = (props: { v?: number }) => (
+/** Badge xanh "(+x)" cho phần Ngọc Ngũ Hành cộng thêm vào một chỉ số — cùng kiểu với badge (+) của HP.
+ *  Mặc định định dạng % (bps); truyền `fmt` cho chỉ số dạng điểm nguyên (Giáp). */
+const GemPlus = (props: { v?: number; fmt?: (v: number) => string }) => (
   <Show when={props.v}>
-    <em class="pvp-pre" title="Ngọc Ngũ Hành cộng thêm">{`(+${pct(props.v!)})`}</em>
+    <em class="pvp-pre" title="Ngọc Ngũ Hành cộng thêm">{`(+${(props.fmt ?? pct)(props.v!)})`}</em>
   </Show>
 );
 
@@ -261,8 +262,8 @@ function StatLine(props: { stat?: UnitStat }) {
               </Show>
             </span>
             <span class="pvp-stat">
-              <StatIcon id="armor" size={11} /> {pct(s().defBps)}
-              <GemPlus v={s().pre?.gem.defBps} />
+              <StatIcon id="armor" size={11} /> {num(s().defArmor)}
+              <GemPlus v={s().pre?.gem.defArmor} fmt={num} />
             </span>
             <span class="pvp-stat" title="Xuyên giáp — % bỏ qua Phòng thủ của mục tiêu">
               <StatIcon id="bow-pen" size={11} /> {pct(s().defPenBps)}
@@ -774,7 +775,7 @@ function Picker(props: {
                                 <span class="pvp-pick-lc" title="Lực chiến">{`LC ${num(x().self.lc)}`}</span>
                                 <span class="pvp-pick-stat-num">
                                   <StatIcon id="attack" size={11} /> {num(x().self.damage)} · <StatIcon id="heart" size={11} /> {num(x().self.maxHp)} ·{' '}
-                                  <StatIcon id="armor" size={11} /> {pct(x().self.defBps)}
+                                  <StatIcon id="armor" size={11} /> {num(x().self.defArmor)}
                                 </span>
                                 {/* Chính xác / Né tránh / ST chí mạng cũng scale theo cấp nên hiện luôn ở đây. */}
                                 <span class="pvp-pick-stat-num">
@@ -833,9 +834,9 @@ interface CV {
   /** Hệ số nhân sát thương gây ra (bps): 10000 bình thường, giảm còn 5000 sau khi Hồi sinh (mục 1.14). */
   damageMulBps: number;
   /** Các lớp buff đang hiệu lực (khớp engine): sát thương/HP/chí mạng/ST chí mạng/giảm ST gánh chịu/hút máu + chỉ số trao đổi đòn + lượt hết hạn. */
-  buffs: { sourceIdx: number; channel: number; flat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; lifestealBps: number; hitBps: number; dodgeBps: number; defBps: number; defPenBps: number; burnUpBps: number; expiresRound: number }[];
+  buffs: { sourceIdx: number; channel: number; flat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; lifestealBps: number; hitBps: number; dodgeBps: number; defArmor: number; defPenBps: number; burnUpBps: number; expiresRound: number }[];
   /** Các lớp hiệu ứng bất lợi đang chịu (khớp engine): giảm sát thương/HP/chí mạng/ST chí mạng/chỉ số trao đổi đòn + thiêu đốt. */
-  debuffs: { sourceIdx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; hitDownBps: number; dodgeDownBps: number; defDownBps: number; defPenDownBps: number; burnFlat: number; expiresRound: number }[];
+  debuffs: { sourceIdx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; hitDownBps: number; dodgeDownBps: number; defArmorDown: number; defPenDownBps: number; burnFlat: number; expiresRound: number }[];
   /** Các lớp Khiên đang hấp thụ sát thương (khớp engine): trừ dần khi bị đánh, tự tan theo lượt. */
   shields: { sourceIdx: number; channel: number; amount: number; expiresRound: number }[];
 }
@@ -902,11 +903,11 @@ function effectChips(s: CV): { icon?: IconId; text: string; tone: 'buff' | 'debu
   // Chỉ số Trao đổi đòn (mục 18): Chính xác / Né tránh / Phòng thủ / Xuyên giáp cộng thêm.
   const bHit = sum(s.buffs, (b) => b.hitBps);
   const bDodge = sum(s.buffs, (b) => b.dodgeBps);
-  const bDef = sum(s.buffs, (b) => b.defBps);
+  const bDef = sum(s.buffs, (b) => b.defArmor);
   const bDefPen = sum(s.buffs, (b) => b.defPenBps);
   if (bHit > 0) out.push({ icon: 'eye', text: `+${pct(bHit)}`, tone: 'buff' });
   if (bDodge > 0) out.push({ icon: 'dodge', text: `+${pct(bDodge)}`, tone: 'buff' });
-  if (bDef > 0) out.push({ icon: 'armor', text: `+${pct(bDef)}`, tone: 'buff' });
+  if (bDef > 0) out.push({ icon: 'armor', text: `+${num(bDef)}`, tone: 'buff' });
   if (bDefPen > 0) out.push({ icon: 'bow-pen', text: `+${pct(bDefPen)}`, tone: 'buff' });
   // Tăng sát thương Thiêu đốt (Cố Ung — Vận Trù Trợ Hỏa): dùng icon Thiêu đốt nhưng tô màu XANH
   // như các chip buff khác để thấy rõ tướng nào đang được cường hóa Thiêu đốt (không phải dính đốt).
@@ -927,11 +928,11 @@ function effectChips(s: CV): { icon?: IconId; text: string; tone: 'buff' | 'debu
   if (dCritD > 0) out.push({ icon: 'crit-dmg', text: `−${pct(dCritD)}`, tone: 'debuff' });
   const dHit = sum(s.debuffs, (d) => d.hitDownBps);
   const dDodge = sum(s.debuffs, (d) => d.dodgeDownBps);
-  const dDef = sum(s.debuffs, (d) => d.defDownBps);
+  const dDef = sum(s.debuffs, (d) => d.defArmorDown);
   const dDefPen = sum(s.debuffs, (d) => d.defPenDownBps);
   if (dHit > 0) out.push({ icon: 'eye-off', text: `−${pct(dHit)}`, tone: 'debuff' });
   if (dDodge > 0) out.push({ icon: 'dodge-off', text: `−${pct(dDodge)}`, tone: 'debuff' });
-  if (dDef > 0) out.push({ icon: 'armor', text: `−${pct(dDef)}`, tone: 'debuff' });
+  if (dDef > 0) out.push({ icon: 'armor', text: `−${num(dDef)}`, tone: 'debuff' });
   if (dDefPen > 0) out.push({ icon: 'bow-pen', text: `−${pct(dDefPen)}`, tone: 'debuff' });
   if (dBurn > 0) out.push({ icon: 'burn', text: `${dBurn}`, tone: 'burn' });
   return out;
@@ -1130,10 +1131,13 @@ function createDetailBuilder(units: PvpUnitStateDto[]) {
           text: `${actor !== undefined ? nameOf(actor) : 'Kẻ địch'} áp hiệu ứng bất lợi lên ${nameOf(ev.idx)} (${parts})`,
         });
       }
-      case 'burn':
+      case 'burn': {
         // Thiêu đốt gây sát thương vào đầu mỗi lượt — tính vào lượng sát thương mục tiêu phải chịu.
+        // Chịu Phòng thủ như đòn thường (mục 18 — BƯỚC 2) nên ghi rõ phần giáp chặn.
         at(ev.idx).taken += ev.amount;
-        return push({ kind: 'burn', target: ev.idx, amount: ev.amount, crit: ev.crit, text: `${nameOf(ev.idx)} bị thiêu đốt${ev.crit ? ' · CHÍ MẠNG' : ''}` });
+        const cut = ev.mitigated ?? 0;
+        return push({ kind: 'burn', target: ev.idx, amount: ev.amount, crit: ev.crit, text: `${nameOf(ev.idx)} bị thiêu đốt${ev.crit ? ' · CHÍ MẠNG' : ''}${cut > 0 ? ` · giáp chặn ${num(cut)}` : ''}` });
+      }
       case 'shield':
         // Tạo khiên: hấp thụ sát thương nhận vào trước HP, tự tan sau vài lượt (số lượng đã ghi trong câu).
         // Tính vào cột "Khiên" của người TẠO khiên (kể cả khi tạo cho đồng đội).
@@ -1416,8 +1420,8 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
           Math.max(0, u.damage + s.buffs.reduce((acc, b) => acc + b.flat, 0) - s.debuffs.reduce((acc, d) => acc + d.damageFlat, 0)) *
             (s.damageMulBps / BPS_SCALE),
         ),
-        // Phòng thủ hiện tại = phòng thủ nền + lớp buff − lớp debuff giảm phòng thủ (khớp engine)
-        defBps: Math.max(0, u.defBps + s.buffs.reduce((acc, b) => acc + b.defBps, 0) - s.debuffs.reduce((acc, d) => acc + d.defDownBps, 0)),
+        // Giáp hiện tại = giáp nền + lớp buff − lớp debuff giảm giáp (khớp engine)
+        defArmor: Math.max(0, u.defArmor + s.buffs.reduce((acc, b) => acc + b.defArmor, 0) - s.debuffs.reduce((acc, d) => acc + d.defArmorDown, 0)),
         // Chí mạng / ST chí mạng hiện tại = chỉ số nền + lớp buff − lớp debuff (khớp engine)
         critBps: Math.max(0, u.critBps + s.buffs.reduce((acc, b) => acc + b.critBps, 0) - s.debuffs.reduce((acc, d) => acc + d.critBps, 0)),
         critDamageBps: Math.max(
@@ -1436,7 +1440,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         // Chỉ số CƠ BẢN (đã cộng hết buff nền: cùng phe, hàng trước/sau, phong cách — nhưng chưa
         // tính lớp buff/debuff trong trận) theo ĐÚNG thứ tự icon trên ô (INFO_ITEMS của arena.ts)
         // để arena tô màu từng chỉ số. Giảm ST nhận không có chỉ số nền nên mốc so sánh là 0.
-        statBases: [u.damage, u.defBps, u.defPenBps, u.critBps, u.critDamageBps, u.hitBps, u.dodgeBps, u.lifestealBps, 0],
+        statBases: [u.damage, u.defArmor, u.defPenBps, u.critBps, u.critDamageBps, u.hitBps, u.dodgeBps, u.lifestealBps, 0],
         // Tổng lượng khiên đang hấp thụ (vẽ thanh trắng nhạt dưới thanh máu — mục 16)
         shield: s.shields.reduce((acc, x) => acc + x.amount, 0),
         // Hiệu ứng đang có, hiển thị rõ tăng/giảm cái gì và bao nhiêu (chip trên ô tướng)
@@ -1563,7 +1567,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
               lifestealBps: ev.lifestealBps,
               hitBps: ev.hitBps ?? 0,
               dodgeBps: ev.dodgeBps ?? 0,
-              defBps: ev.defBps ?? 0,
+              defArmor: ev.defArmor ?? 0,
               defPenBps: ev.defPenBps ?? 0,
               burnUpBps: ev.burnUpBps ?? 0,
               expiresRound: ev.expiresRound,
@@ -1599,7 +1603,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
               critDamageBps: ev.critDamageBps,
               hitDownBps: ev.hitDownBps ?? 0,
               dodgeDownBps: ev.dodgeDownBps ?? 0,
-              defDownBps: ev.defDownBps ?? 0,
+              defArmorDown: ev.defArmorDown ?? 0,
               defPenDownBps: ev.defPenDownBps ?? 0,
               burnFlat: ev.burnFlat,
               expiresRound: ev.expiresRound,
@@ -1648,7 +1652,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         // gỡ hẳn lớp không còn thiêu đốt (khớp engine). Trần HP hồi lại phần bị giảm.
         upd(ev.idx, (s) => {
           const debuffs = s.debuffs
-            .map((d) => (d.burnFlat > 0 ? { ...d, damageFlat: 0, hpFlat: 0, critBps: 0, critDamageBps: 0, hitDownBps: 0, dodgeDownBps: 0, defDownBps: 0, defPenDownBps: 0 } : null))
+            .map((d) => (d.burnFlat > 0 ? { ...d, damageFlat: 0, hpFlat: 0, critBps: 0, critDamageBps: 0, hitDownBps: 0, dodgeDownBps: 0, defArmorDown: 0, defPenDownBps: 0 } : null))
             .filter((d): d is CV['debuffs'][number] => d !== null);
           return syncHp({ ...s, debuffs });
         });

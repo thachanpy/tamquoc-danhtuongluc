@@ -12,9 +12,9 @@ import {
   PVP_BUFF_ROUNDS,
   PVP_BURN_CRIT_MUL_BPS,
   PVP_BURN_HEAL_DOWN_BPS,
+  PVP_COUNTER_MAX_BPS,
   PVP_DEBUFF_ROUNDS,
-  PVP_DEF_BPS,
-  PVP_DEF_MAX_BPS,
+  PVP_DEF_PEN_BPS,
   PVP_DISPEL_BPS_PER_LEVEL,
   PVP_FACTION_HP_BPS,
   PVP_FRONT_HP_BPS,
@@ -26,6 +26,9 @@ import {
   PVP_REVIVE_DAMAGE_DOWN_BPS,
   PVP_REVIVE_HP_BPS_PER_LEVEL,
   PVP_SHIELD_BREAK,
+  PVP_SHIELD_BREAK_BPS,
+  PVP_SHIELD_BREAK_BPS_MIN,
+  PVP_SHIELD_BREAK_REMOVE_BPS,
   PVP_SKILL_BUFF_BURN_UP_BPS,
   PVP_SKILL_BUFF_BURN_UP_MAX_LAYERS,
   PVP_SKILL_BUFF_BURN_UP_ROUNDS,
@@ -34,9 +37,12 @@ import {
   PVP_SKILL_DEF,
   PVP_VS_DEBUFF_BONUS_BPS,
   ROSTER,
+  pvpArmorDrBps,
+  pvpArmorEffective,
   pvpBaseDamage,
   pvpBaseHp,
   pvpCritDamageBps,
+  pvpDefArmor,
   pvpDispelBps,
   pvpEffectBps,
   pvpFactionBonus,
@@ -102,15 +108,15 @@ type Input = { slot: number; generalId: string; level: number };
 const one = (side: 'a' | 'b', units: Input[]): PvpSideInput => ({ side, units });
 
 /**
- * Phòng thủ hiệu dụng của mục tiêu sau khi trừ Xuyên giáp của người tấn công, kẹp trần 75%
- * (SKILLS.md mục 18 — BƯỚC 2: Xuyên giáp ăn theo % của Giáp địch). Đọc chỉ số từ ảnh chụp đầu
- * trận: đúng cho các tình huống test không làm thay đổi Phòng thủ/Xuyên giáp giữa trận.
+ * Tỷ lệ Giảm Sát Thương (bps) của mục tiêu sau khi trừ Xuyên giáp của người tấn công
+ * (SKILLS.md mục 18 — BƯỚC 2/3/4: `Armor_effective = MAX(0, Giáp × (1 − Xuyên giáp%))`,
+ * `DR = MIN(75%, Armor_effective / (Armor_effective + 100))`). Đọc chỉ số từ ảnh chụp đầu
+ * trận: đúng cho các tình huống test không làm thay đổi Giáp/Xuyên giáp giữa trận.
  */
 const defFinalBps = (res: ReturnType<typeof simulatePvp>, attackerIdx: number, defenderIdx: number) => {
   const atk = res.units.find((u) => u.idx === attackerIdx)!;
   const dfn = res.units.find((u) => u.idx === defenderIdx)!;
-  const effDef = Math.round((dfn.defBps * (BPS_SCALE - atk.defPenBps)) / BPS_SCALE);
-  return Math.min(PVP_DEF_MAX_BPS, Math.max(0, effDef));
+  return pvpArmorDrBps(pvpArmorEffective(dfn.defArmor, atk.defPenBps));
 };
 
 /** Sát thương sau khi áp Phòng thủ (SKILLS.md mục 18 — BƯỚC 2): Raw × (1 − Def_Final). */
@@ -742,6 +748,9 @@ test('engine: Thiêu đốt vẫn ăn chí mạng (mục 8)', () => {
 
 test('engine: Chu Du tăng thêm 30% tỷ lệ chí mạng và ST chí mạng cho riêng đòn Thiêu đốt (mục 8)', () => {
   // always0 → mọi đòn thiêu đốt đều chí mạng, nên so sánh được hệ số ST chí mạng giữa hai tướng.
+  // Thiêu đốt CHỊU Phòng thủ (mục 8/18) nên phải trừ giáp của mục tiêu (Đại Kiều cấp 10, không Xuyên giáp).
+  const defFinal = pvpArmorDrBps(pvpArmorEffective(pvpDefArmor(10), PVP_DEF_PEN_BPS));
+  const mit = (raw: number) => Math.round((raw * (BPS_SCALE - defFinal)) / BPS_SCALE);
   const firstBurn = (id: string) => {
     const res = simulatePvp(
       [one('a', [{ slot: 1, generalId: id, level: 5 }]), one('b', [{ slot: 1, generalId: 'da-qiao', level: 10 }])],
@@ -750,7 +759,7 @@ test('engine: Chu Du tăng thêm 30% tỷ lệ chí mạng và ST chí mạng ch
     const e = res.events.find((x): x is Extract<PvpEventDto, { t: 'burn' }> => x.t === 'burn');
     assert.ok(e, `${id} phải gây thiêu đốt`);
     // Lớp thiêu đốt = ST hiệu dụng × hệ số thiêu đốt TẠI CẤP (cấp 5); sát thương thiêu đốt =
-    // lớp đó × (1 + ST chí mạng × hệ số riêng).
+    // lớp đó × (1 + ST chí mạng × hệ số riêng), sau đó trừ Phòng thủ.
     const burnBps = pvpSkillDefAtLevel(skillDef(id), 5).debuff.burnBps;
     const flat = Math.round((res.units[0]!.damage * burnBps) / BPS_SCALE);
     return { amount: e.amount, flat };
@@ -759,14 +768,14 @@ test('engine: Chu Du tăng thêm 30% tỷ lệ chí mạng và ST chí mạng ch
   const zhouYu = firstBurn('zhou-yu'); // Chu Du: ×1.3 tỷ lệ chí mạng & ST chí mạng cho thiêu đốt.
   assert.equal(
     normal.amount,
-    Math.round((normal.flat * (BPS_SCALE + pvpCritDamageBps(5))) / BPS_SCALE),
-    'thiêu đốt thường dùng ST chí mạng theo cấp (cấp 5)',
+    mit(Math.round((normal.flat * (BPS_SCALE + pvpCritDamageBps(5))) / BPS_SCALE)),
+    'thiêu đốt thường dùng ST chí mạng theo cấp (cấp 5) rồi chịu Phòng thủ',
   );
   const burnCritDamageBps = Math.round((pvpCritDamageBps(5) * PVP_BURN_CRIT_MUL_BPS) / BPS_SCALE);
   assert.equal(
     zhouYu.amount,
-    Math.round((zhouYu.flat * (BPS_SCALE + burnCritDamageBps)) / BPS_SCALE),
-    'thiêu đốt của Chu Du mạnh hơn nhờ ×1.3 ST chí mạng',
+    mit(Math.round((zhouYu.flat * (BPS_SCALE + burnCritDamageBps)) / BPS_SCALE)),
+    'thiêu đốt của Chu Du mạnh hơn nhờ ×1.3 ST chí mạng (sau Phòng thủ)',
   );
 });
 
@@ -1243,9 +1252,31 @@ test('engine: Xóa Khiên bẻ gãy Khiên của mục tiêu trúng đòn (mục
   assert.ok(broke.every((e) => e.from === bIdx && e.idx === aIdx));
 });
 
+test('config: DTO trả tỉ lệ hiệu ứng ĐÃ QUY THEO CẤP để UI in con số thật (mục 6.7)', () => {
+  // Phá Khiên: span 20% (cấp 1) → 80% (cấp 10), phá 70% Khiên hiện có — Tào Tháo có cờ Xóa Khiên.
+  const cc1 = getCombatStats('cao-cao', 1);
+  const cc10 = getCombatStats('cao-cao', 10);
+  assert.equal(cc1.skillDef.debuff.shieldBreakBps, PVP_SHIELD_BREAK_BPS_MIN);
+  assert.equal(cc10.skillDef.debuff.shieldBreakBps, PVP_SHIELD_BREAK_BPS);
+  assert.equal(cc10.skillDef.debuff.shieldBreakRemoveBps, PVP_SHIELD_BREAK_REMOVE_BPS);
+  // Tướng không có cờ Xóa Khiên: 0 để UI không in dòng "Phá Khiên".
+  assert.equal(getCombatStats('zhang-liao', 10).skillDef.debuff.shieldBreakBps, 0);
+
+  // Phản kích: cấp × 5%, trần 50% ở cấp 10 — Trương Liêu có phản kích đơn.
+  assert.equal(getCombatStats('zhang-liao', 3).skillDef.counter.chanceBps, 1500);
+  assert.equal(getCombatStats('zhang-liao', 10).skillDef.counter.chanceBps, PVP_COUNTER_MAX_BPS);
+
+  // Hồi sinh: cấp × 5% HP tối đa — Tào Nhân có Hồi sinh.
+  assert.equal(getCombatStats('cao-ren', 4).skillDef.reviveHpBps, 2000);
+  assert.equal(getCombatStats('cao-ren', 10).skillDef.reviveHpBps, 5000);
+  assert.equal(getCombatStats('zhang-liao', 10).skillDef.reviveHpBps, 0);
+});
+
 test('engine: mục tiêu đang Thiêu đốt chỉ hồi được 50% máu (mục 8)', () => {
+  // Hai địch thủ gây áp lực sát thương đủ lớn để phần máu thiếu luôn ≥ mức hồi bị cắt (50%),
+  // nhờ đó khẳng định được trần hồi thực sự chạm đúng 50% chứ không chỉ bị giới hạn bởi HP thiếu.
   const res = simulatePvp(
-    [one('a', [{ slot: 1, generalId: 'cheng-pu', level: 10 }]), one('b', [{ slot: 1, generalId: 'zhou-yu', level: 10 }])],
+    [one('a', [{ slot: 1, generalId: 'cheng-pu', level: 10 }]), one('b', [{ slot: 1, generalId: 'zhou-yu', level: 10 }, { slot: 4, generalId: 'zhu-huan', level: 10 }])],
     never,
   );
   const aIdx = res.units.find((u) => u.side === 'a')!.idx;
@@ -1316,8 +1347,8 @@ test('engine: Né thành công thì miễn nhiễm mọi hiệu ứng bất lợ
   assert.equal(res.events.some((e) => e.t === 'burn'), false, 'TRƯỢT thì không có sát thương Thiêu đốt nào');
 });
 
-test('engine: BƯỚC 2 — Xuyên giáp triệt tiêu Phòng thủ; Phòng thủ cấp 10 (30%) giảm 30% sát thương (mục 18)', () => {
-  // Đại Kiều không tự buff Phòng thủ → Phòng thủ nền theo cấp (cấp 10 = 30%); hai tướng cùng cấp 10 để so sánh công bằng.
+test('engine: BƯỚC 2/3 — Xuyên giáp ăn theo % Giáp địch; Giáp nền cấp 10 (43 điểm → DR ≈ 30%) (mục 18)', () => {
+  // Đại Kiều không tự buff Giáp → Giáp nền theo cấp (cấp 10 = 43 điểm → DR ≈ 30%); hai tướng cùng cấp 10 để so sánh công bằng.
   const target = 'da-qiao';
   const firstHit = (attacker: string, selfDamageBps = 0) => {
     const res = simulatePvp(
@@ -1330,17 +1361,17 @@ test('engine: BƯỚC 2 — Xuyên giáp triệt tiêu Phòng thủ; Phòng th�
     const dmg = u.damage + Math.round((u.damage * selfDamageBps) / BPS_SCALE);
     return { hit, raw: Math.round((dmg * skillDef(attacker).damageBps) / BPS_SCALE) };
   };
-  // Hứa Chử: tự buff +20% sát thương và +20% Xuyên giáp (cấp 10) → Xuyên giáp ăn theo % của Giáp địch:
-  // Phòng thủ 30% còn 30% × (1 − 20%) = 24% → nhận 76% sát thương gốc.
+  // Hứa Chử: tự buff +20% sát thương và +20% Xuyên giáp (cấp 10) → Xuyên giáp bào mòn % Giáp địch:
+  // Giáp 43 còn 43 × (1 − 20%) = 34 điểm (DR ≈ 30% → ≈ 25,4%).
   const xu = firstHit('xu-chu', 2000);
-  const xuDefFinal = Math.round((PVP_DEF_BPS * (BPS_SCALE - 2000)) / BPS_SCALE);
-  assert.equal(xu.hit.amount, mitigated(xu.raw, xuDefFinal), 'Xuyên giáp 20% ăn theo % Giáp: Phòng thủ 30% còn 24%');
-  assert.equal(xu.hit.mitigated, xu.raw - xu.hit.amount, 'hiệu số ghi vào sự kiện đúng bằng phần bị Phòng thủ cản lại');
-  // Lữ Mông: Xuyên giáp 0% → giữ nguyên Phòng thủ 30% → chỉ nhận 70% sát thương gốc.
+  const xuDefFinal = pvpArmorDrBps(pvpArmorEffective(pvpDefArmor(10), 2000));
+  assert.equal(xu.hit.amount, mitigated(xu.raw, xuDefFinal), 'Xuyên giáp 20% ăn theo % Giáp địch');
+  assert.equal(xu.hit.mitigated, xu.raw - xu.hit.amount, 'hiệu số ghi vào sự kiện đúng bằng phần bị Giáp cản lại');
+  // Lữ Mông: Xuyên giáp 0% → giữ nguyên Giáp nền 43 điểm (DR ≈ 30%) → chỉ nhận ~70% sát thương gốc.
   const lu = firstHit('lu-meng');
-  assert.ok(lu.hit.amount < lu.raw, 'Phòng thủ mặc định phải cản lại một phần sát thương');
-  assert.equal(lu.hit.amount, Math.round((lu.raw * (BPS_SCALE - PVP_DEF_BPS)) / BPS_SCALE), 'chỉ nhận 70% sát thương gốc');
-  assert.equal(lu.hit.mitigated, lu.raw - lu.hit.amount, 'hiệu số ghi vào sự kiện đúng bằng phần bị cản lại');
+  assert.ok(lu.hit.amount < lu.raw, 'Giáp mặc định phải cản lại một phần sát thương');
+  assert.equal(lu.hit.amount, mitigated(lu.raw, pvpArmorDrBps(pvpDefArmor(10))), 'chỉ nhận ~70% sát thương gốc');
+  assert.equal(lu.hit.mitigated, lu.raw - lu.hit.amount, 'hiệu số ghi vào sự kiện đúng bằng phần bị Giáp cản lại');
 });
 
 test('engine: BƯỚC 1 — Trúng/Né theo công thức chia trọng số K = 1.85, kẹp biên [69%, 99%] (mục 18)', () => {

@@ -198,8 +198,8 @@ export interface ArenaView {
   buffed: boolean;
   /** Sát thương hiện tại = nền + buff − debuff (chỉ để hiển thị). */
   damage: number;
-  /** Phòng thủ hiện tại (bps) = nền + buff − debuff (chỉ để hiển thị). */
-  defBps: number;
+  /** Giáp hiện tại (số nguyên điểm) = nền + buff − debuff (chỉ để hiển thị). */
+  defArmor: number;
   /** Tỉ lệ chí mạng hiện tại (bps) = nền + buff − debuff. */
   critBps: number;
   /** Sát thương chí mạng hiện tại (bps) = nền + buff − debuff. */
@@ -630,7 +630,7 @@ class Tile {
     // [tia sét] chí mạng · [vụ nổ] ST chí mạng · [mắt] chính xác /
     // [gió] né tránh · [giọt máu] hút máu · [khiên] giảm ST nhận. Từng chỉ số tự tô màu theo so sánh với nền.
     this.setInfoLine(
-      [v.damage, v.defBps, v.defPenBps, v.critBps, v.critDamageBps, v.hitBps, v.dodgeBps, v.lifestealBps, v.takenDownBps],
+      [v.damage, v.defArmor, v.defPenBps, v.critBps, v.critDamageBps, v.hitBps, v.dodgeBps, v.lifestealBps, v.takenDownBps],
       v.statBases,
       v.alive,
     );
@@ -663,8 +663,8 @@ class Tile {
    */
   private setInfoLine(values: number[], bases: number[], alive: boolean): void {
     const texts = values.map((v) => num(v));
-    // Chỉ số % (mọi chỉ số trừ sát thương ở vị trí đầu) hiển thị theo đơn vị phần trăm.
-    for (let i = 1; i < texts.length; i++) texts[i] = `${(values[i]! / 100).toFixed(0)}%`;
+    // Chỉ số % (bps) hiển thị theo đơn vị phần trăm; Sát thương (0) và Giáp (1, điểm nguyên) giữ số thô.
+    for (let i = 2; i < texts.length; i++) texts[i] = `${(values[i]! / 100).toFixed(0)}%`;
     let k = 0;
     for (const row of this.infoRows) {
       for (const t of row.vals) {

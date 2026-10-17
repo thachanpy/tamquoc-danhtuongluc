@@ -16,6 +16,12 @@ function gemNote(c: PvpCombatDto, key: keyof PvpGemStats): string | undefined {
   return v > 0 ? `Ngọc +${pct(v)}` : undefined;
 }
 
+/** Ghi chú phần Ngọc cộng Giáp — Giáp là điểm nguyên nên in số thô, không quy ra %. */
+function gemArmorNote(c: PvpCombatDto): string | undefined {
+  const v = c.preBattle?.bonus.gem.defArmor ?? 0;
+  return v > 0 ? `Ngọc +${v}` : undefined;
+}
+
 /** Các dòng chỉ số chi tiết: giá trị thực tế, kèm ghi chú chỉ số nền + phần % được cộng. */
 export function statRows(c: PvpCombatDto): { label: string; value: string; note?: string }[] {
   // Phần % cộng thêm vào chỉ số của riêng tướng gồm nội tại (mục 10.1) + Chỉ số Nền Ra Trận (mục 1):
@@ -41,7 +47,7 @@ export function statRows(c: PvpCombatDto): { label: string; value: string; note?
     },
     // LC đã hiện cạnh cấp ở đầu modal (ngang hàng Lv) nên không lặp lại trong bảng chỉ số.
     // Toàn bộ 9 chỉ số còn lại của ô tướng — tướng không có chỉ số nền thì hiện 0%, phần Ngọc ở ghi chú.
-    { label: 'Phòng thủ', value: pct(c.self.defBps), note: gemNote(c, 'defBps') },
+    { label: 'Giáp', value: `${c.self.defArmor}`, note: gemArmorNote(c) },
     { label: 'Xuyên giáp', value: pct(c.self.defPenBps), note: gemNote(c, 'defPenBps') },
     { label: 'Chí mạng', value: pct(c.self.critBps), note: gemNote(c, 'critBps') },
     { label: 'ST chí mạng', value: pct(c.self.critDamageBps), note: gemNote(c, 'critDamageBps') },

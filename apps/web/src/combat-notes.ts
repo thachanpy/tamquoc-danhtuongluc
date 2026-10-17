@@ -59,7 +59,7 @@ function buffGains(b: PvpBuffDto): string {
     b.lifestealBps ? `+${pct(b.lifestealBps)} hút máu` : '',
     b.hitBps ? `+${pct(b.hitBps)} chính xác` : '',
     b.dodgeBps ? `+${pct(b.dodgeBps)} né tránh` : '',
-    b.defBps ? `+${pct(b.defBps)} phòng thủ` : '',
+    b.defArmor ? `+${num(b.defArmor)} giáp` : '',
     b.defPenBps ? `+${pct(b.defPenBps)} xuyên giáp` : '',
     b.shieldBps ? `tạo Khiên bằng ${pct(b.shieldBps)} HP tối đa` : '',
     b.hotBps ? `hồi ${pct(b.hotBps)} sát thương nền mỗi lượt (hồi theo lượt)` : '',
@@ -105,7 +105,7 @@ export function skillNote(c: PvpCombatDto): SkillNoteLine[] {
     d.debuff.critDamageDownBps ? `giảm ${pct(d.debuff.critDamageDownBps)} ST chí mạng` : '',
     d.debuff.hitDownBps ? `giảm ${pct(d.debuff.hitDownBps)} chính xác` : '',
     d.debuff.dodgeDownBps ? `giảm ${pct(d.debuff.dodgeDownBps)} né tránh` : '',
-    d.debuff.defDownBps ? `giảm ${pct(d.debuff.defDownBps)} phòng thủ` : '',
+    d.debuff.defArmorDown ? `giảm ${num(d.debuff.defArmorDown)} giáp` : '',
     d.debuff.defPenDownBps ? `giảm ${pct(d.debuff.defPenDownBps)} xuyên giáp` : '',
   ]
     .filter(Boolean)
@@ -114,13 +114,16 @@ export function skillNote(c: PvpCombatDto): SkillNoteLine[] {
     const layer = layerNote(d.debuff.rounds, d.debuff.maxLayers);
     lines.push({ label: 'Làm yếu địch', text: layer ? `${down} (${layer})` : down });
   }
-  if (d.debuff.shieldBreakPerLevelBps)
-    lines.push({ label: 'Phá Khiên', text: 'bẻ gãy Khiên của địch — tỉ lệ 20% (cấp 1) → 80% (cấp 10), phá 70% Khiên hiện có' });
+  if (d.debuff.shieldBreakBps)
+    lines.push({
+      label: 'Phá Khiên',
+      text: `bẻ gãy Khiên của địch — tỉ lệ ${pct(d.debuff.shieldBreakBps)}, phá ${pct(d.debuff.shieldBreakRemoveBps)} Khiên hiện có`,
+    });
   if (d.debuff.burnBps) {
     const layer = d.debuff.burnMaxLayers > 1 ? `, chồng tối đa ${d.debuff.burnMaxLayers} lớp` : '';
     lines.push({
       label: 'Thiêu đốt',
-      text: `${pct(d.debuff.burnBps)} sát thương mỗi lượt trong ${d.debuff.burnRounds} lượt${layer} (bỏ qua Né tránh & Phòng thủ)`,
+      text: `${pct(d.debuff.burnBps)} sát thương mỗi lượt trong ${d.debuff.burnRounds} lượt${layer} (chịu Phòng thủ của mục tiêu)`,
     });
   }
 
@@ -136,14 +139,14 @@ export function skillNote(c: PvpCombatDto): SkillNoteLine[] {
   if (d.counter.damageBps)
     lines.push({
       label: 'Phản kích',
-      text: `khi bị đánh, có cơ hội đánh trả ${d.counter.scope === 'all' ? 'toàn bộ địch' : 'kẻ tấn công'} bằng ${pct(
+      text: `khi bị đánh, có ${pct(d.counter.chanceBps)} cơ hội đánh trả ${d.counter.scope === 'all' ? 'toàn bộ địch' : 'kẻ tấn công'} bằng ${pct(
         d.counter.damageBps,
-      )} sát thương cơ bản (tỉ lệ tăng theo cấp, tối đa 50%)`,
+      )} sát thương cơ bản`,
     });
   if (d.revive)
     lines.push({
       label: 'Hồi sinh',
-      text: 'gục lần đầu thì sống lại, hồi 5%→50% HP tối đa theo cấp, đổi lại −50% sát thương tới hết trận',
+      text: `gục lần đầu thì sống lại, hồi ${pct(d.reviveHpBps)} HP tối đa, đổi lại −50% sát thương tới hết trận`,
     });
   if (d.vsDebuffBonusBps)
     lines.push({
