@@ -11,7 +11,7 @@ import {
   type PvpGemStats,
 } from '@tq/shared';
 import { api } from './api.ts';
-import { pct } from './art.ts';
+import { gemStatText } from './art.ts';
 import { Card } from './components/Card.tsx';
 import { GemCard } from './components/GemCard.tsx';
 import { CombatDetailModal } from './components/CombatDetailModal.tsx';
@@ -112,7 +112,7 @@ function GemDetail(props: {
           <div class="cmb-row">
             <span class="cmb-key">{GEM_STAT_LABELS[k]}</span>
             <span class="cmb-val">
-              <b>{pct(row()?.[k] ?? 0, props.config.bpsScale)}</b>
+              <b>{gemStatText(k, row()?.[k] ?? 0, props.config.bpsScale)}</b>
             </span>
           </div>
         )}

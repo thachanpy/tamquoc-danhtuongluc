@@ -32,7 +32,7 @@ import {
   type PvpTargeting,
 } from '@tq/shared';
 import { api, type ApiError } from '../api.ts';
-import { gemUrl, initials, pct, portraitUrl } from '../art.ts';
+import { gemStatText, gemUrl, initials, pct, portraitUrl } from '../art.ts';
 import { StyleIcon } from '../components/StyleIcon.tsx';
 
 /**
@@ -735,7 +735,6 @@ export function PvpGemsPane(props: { alive: () => boolean; ctl: (c: Ctl) => void
     const typeKey: 'stat1Type' | 'stat2Type' = idx === 1 ? 'stat1Type' : 'stat2Type';
     const minKey: 'stat1Min' | 'stat2Min' = idx === 1 ? 'stat1Min' : 'stat2Min';
     const maxKey: 'stat1Max' | 'stat2Max' = idx === 1 ? 'stat1Max' : 'stat2Max';
-    const isArmor = d[typeKey] === 'defArmor';
     return (
       <>
         <label class="cfg-field">
@@ -767,7 +766,7 @@ export function PvpGemsPane(props: { alive: () => boolean; ctl: (c: Ctl) => void
           />
         </label>
         <div class="cfg-help muted small">
-          {isArmor ? 'Đơn vị: điểm Giáp nguyên' : `Đơn vị bps — Cấp 1 ≈ ${pct(d[minKey])}, Cấp 10 ≈ ${pct(d[maxKey])}`}
+          {`Cấp 1 ≈ ${gemStatText(d[typeKey], d[minKey])} · Cấp 10 ≈ ${gemStatText(d[typeKey], d[maxKey])}`}
         </div>
       </>
     );

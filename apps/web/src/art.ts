@@ -1,4 +1,4 @@
-import type { Faction, GemElement, PvpStyle } from '@tq/shared';
+import type { Faction, GemElement, PvpGemStats, PvpStyle } from '@tq/shared';
 
 /** Màu & biểu tượng phe — dùng thống nhất cho DOM và PixiJS. */
 export const FACTION_STYLE: Record<Faction, { color: number; css: string; dark: string; glyph: string }> = {
@@ -104,3 +104,16 @@ export const pct = (bps: number, scale = 10000) => {
   const v = (bps / scale) * 100;
   return (Number.isInteger(v) ? v.toFixed(0) : v.toFixed(3).replace(/\.?0+$/, '')) + '%';
 };
+
+/**
+ * Chỉ số Ngọc tính bằng ĐIỂM GIÁP nguyên (KHÔNG phải bps) — hiện chỉ có Thổ "Phòng thủ".
+ * Các chỉ số còn lại đều là bps nên phải quy ra %.
+ */
+const ARMOR_GEM_STATS = new Set<keyof PvpGemStats>(['defArmor']);
+
+/** Chỉ số Ngọc này tính bằng điểm Giáp nguyên (không quy ra %)? */
+export const isArmorGemStat = (key: keyof PvpGemStats) => ARMOR_GEM_STATS.has(key);
+
+/** Hiển thị giá trị một chỉ số Ngọc: Giáp hiện số nguyên kèm đơn vị, còn lại quy ra %. */
+export const gemStatText = (key: keyof PvpGemStats, value: number, scale = 10000) =>
+  isArmorGemStat(key) ? `${value} Giáp` : pct(value, scale);

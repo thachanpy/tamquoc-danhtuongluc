@@ -28,7 +28,7 @@ import { Avatar } from '../components/Avatar.tsx';
 import { CombatDetailModal } from '../components/CombatDetailModal.tsx';
 import { StyleIcon } from '../components/StyleIcon.tsx';
 import { StatIcon } from '../components/StatIcon.tsx';
-import { FACTION_STYLE, STYLE_COLOR, gemUrl, initials, levelTier, pct, portraitUrl } from '../art.ts';
+import { FACTION_STYLE, STYLE_COLOR, gemStatText, gemUrl, initials, levelTier, pct, portraitUrl } from '../art.ts';
 import { preBattleNote } from '../combat-notes.ts';
 import type { IconId } from '../icons.ts';
 import { arenaLayoutFor, createArena, type ArenaHandle, type ArenaLayout, type ArenaUnit, type ArenaView, type FloatPart, type FloatTone } from '../pixi/arena.ts';
@@ -2007,7 +2007,7 @@ function GemTip(props: { gem: PvpTeamGemDto; config: GemConfigDto | null }) {
           {(k) => (
             <div class="gem-tip-row">
               <span>{GEM_STAT_LABELS[k]}</span>
-              <b>{pct(row()?.[k] ?? 0, cfg()!.bpsScale)}</b>
+              <b>{gemStatText(k, row()?.[k] ?? 0, cfg()!.bpsScale)}</b>
             </div>
           )}
         </For>
@@ -2144,7 +2144,7 @@ function GemPicker(props: {
                               <>
                                 {i() ? ' · ' : ''}
                                 {`${GEM_STAT_LABELS[k]} `}
-                                <b>{pct(rowOf(el, lv())?.[k] ?? 0, props.config!.bpsScale)}</b>
+                                <b>{gemStatText(k, rowOf(el, lv())?.[k] ?? 0, props.config!.bpsScale)}</b>
                               </>
                             )}
                           </For>
