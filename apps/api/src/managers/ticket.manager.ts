@@ -74,7 +74,7 @@ export function devTopup(ctx: GameContext, userId: number, idempotencyKey: strin
 
 /**
  * Xử lý toàn bộ mốc hồi vé chưa xử lý (mục 3.6, 8.2).
- * - Mỗi mốc hồi (RECOVERY_INTERVAL_MS, hiện 5 phút) UTC = đúng 1 vé, loại vé roll độc lập.
+ * - Mỗi mốc hồi (RECOVERY_INTERVAL_MS, hiện 1 phút) UTC = đúng 1 vé, loại vé roll độc lập.
  * - Chia batch nội bộ; mỗi batch là 1 transaction: cấp vé + ledger + cập nhật mốc.
  *   Nếu lỗi giữa chừng, các batch đã commit được giữ, lần gọi sau tiếp tục từ mốc đã lưu.
  * - Unique index (user_id, reference_id) cho reason=time_recovery chặn cấp trùng mốc.

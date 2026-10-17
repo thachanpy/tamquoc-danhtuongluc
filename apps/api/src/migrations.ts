@@ -645,6 +645,23 @@ CREATE TABLE pvp_gems (
 );
 `,
   },
+  {
+    // Cấu hình TỈ LỆ QUAY chỉnh trên trang Quản trị: bảng tỉ lệ cấp tướng (Lv1–Lv9) + rớt Ngọc.
+    // Một dòng duy nhất (id = 1). Dữ liệu ban đầu do seedGachaConfig() nạp từ config cứng.
+    version: 21,
+    name: 'gacha_config',
+    sql: `
+CREATE TABLE gacha_config (
+  id                INTEGER PRIMARY KEY CHECK (id = 1),
+  -- Bảng tỉ lệ cấp tướng khi quay dạng JSON [{ level, bps } × N]; thang 100000 = 100%.
+  -- Tỉ lệ rớt Ngọc mỗi lượt quay (bps) và trọng số chọn hệ dạng JSON { kim, moc, thuy, hoa, tho } (bps).
+  level_rates       TEXT NOT NULL DEFAULT '[]',
+  gem_drop_bps      INTEGER NOT NULL DEFAULT 0,
+  gem_type_weights  TEXT NOT NULL DEFAULT '{}',
+  updated_at        TEXT NOT NULL
+);
+`,
+  },
 ];
 
 /** target: chỉ chạy tới version này (dùng khi test migration). */

@@ -24,10 +24,40 @@ export type { GemElement, PvpGemStats };
 /** Danh sách loại Ngọc theo thứ tự hiển thị (Kim → Mộc → Thủy → Hỏa → Thổ). */
 export const PVP_GEM_ELEMENTS = GEM_ELEMENTS;
 
-/** Tỉ lệ rớt Ngọc đính kèm mỗi lần quay ra Tướng (bps): 10%. */
+/** Tỉ lệ rớt Ngọc đính kèm mỗi lần quay ra Tướng (bps): 10% — giá trị MẶC ĐỊNH khi DB chưa có cấu hình. */
 export const PVP_GEM_DROP_BPS = 1000;
-/** Tỉ lệ mỗi loại Ngọc khi trúng rớt (bps): 20%/loại × 5 loại = 100%. */
+/** Tỉ lệ mỗi loại Ngọc khi trúng rớt (bps): 20%/loại × 5 loại = 100% — giá trị MẶC ĐỊNH. */
 export const PVP_GEM_TYPE_WEIGHT_BPS = 2000;
+
+/** Cấu hình rớt Ngọc đang áp dụng (Admin chỉnh được): tỉ lệ rớt mỗi lượt quay + trọng số từng hệ. */
+export interface GemDropConfig {
+  /** Tỉ lệ rớt Ngọc mỗi lượt quay (bps, 10000 = 100%). */
+  dropBps: number;
+  /** Trọng số chọn hệ khi trúng rớt (bps) — tổng phải bằng `BPS_SCALE`. */
+  typeWeights: Record<GemElement, number>;
+}
+
+/** Cấu hình rớt Ngọc mặc định (bảng cứng trong code): chia đều 5 hệ. */
+export const PVP_GEM_DROP_DEFAULT: GemDropConfig = {
+  dropBps: PVP_GEM_DROP_BPS,
+  typeWeights: Object.fromEntries(PVP_GEM_ELEMENTS.map((e) => [e, PVP_GEM_TYPE_WEIGHT_BPS])) as Record<GemElement, number>,
+};
+
+/**
+ * Cấu hình rớt Ngọc ĐANG có hiệu lực. `GachaConfigRegistry` (apps/api) ghi đè bằng dữ liệu đọc từ DB
+ * khi Admin sửa tỉ lệ rớt — lượt quay kế tiếp áp dụng ngay, không cần restart API.
+ */
+let gemDropOverride: GemDropConfig | undefined;
+
+/** Ghi đè cấu hình rớt Ngọc (truyền `undefined` để quay về mặc định trong code). */
+export function setGemDropOverride(config: GemDropConfig | undefined): void {
+  gemDropOverride = config;
+}
+
+/** Cấu hình rớt Ngọc đang áp dụng. */
+export function gemDropConfig(): GemDropConfig {
+  return gemDropOverride ?? PVP_GEM_DROP_DEFAULT;
+}
 
 /** Ngọc "rỗng" — không cộng chỉ số (dùng làm giá trị mặc định/điểm khởi tạo). */
 export const PVP_NO_GEM_STATS: PvpGemStats = {
@@ -186,11 +216,12 @@ export function pvpGemStatTable(): Record<GemElement, PvpGemStats[]> {
 
 /** Cấu hình Ngọc công khai cho client (bảng chỉ số + tỷ lệ ghép/rớt). */
 export function pvpGemConfig(): GemConfigDto {
+  const drop = gemDropConfig();
   return {
     bpsScale: BPS_SCALE,
     teamGemCount: PVP_TEAM_GEM_COUNT,
-    dropBps: PVP_GEM_DROP_BPS,
-    typeWeightBps: PVP_GEM_TYPE_WEIGHT_BPS,
+    dropBps: drop.dropBps,
+    typeWeights: { ...drop.typeWeights },
     elements: [...PVP_GEM_ELEMENTS],
     table: pvpGemStatTable(),
     rates: upgradeRateTable(),
@@ -198,13 +229,22 @@ export function pvpGemConfig(): GemConfigDto {
 }
 
 /**
- * Roll Ngọc rớt đính kèm khi quay ra MỘT Tướng: `PVP_GEM_DROP_BPS` (10%) trúng, và khi trúng thì
- * chọn ĐỀU một trong 5 loại (`PVP_GEM_TYPE_WEIGHT_BPS` = 20%/loại). Ngọc nhận đúng CẤP của Tướng đó.
+ * Roll Ngọc rớt đính kèm khi quay ra MỘT Tướng: `dropBps` (mặc định 10%) trúng, và khi trúng thì
+ * chọn hệ theo trọng số `typeWeights` (mặc định 20%/hệ). Ngọc nhận đúng CẤP của Tướng đó.
  * Trả `null` = lượt quay này không rớt Ngọc.
  */
 export function rollGemDrop(rand: (max: number) => number): GemElement | null {
-  if (rand(BPS_SCALE) >= PVP_GEM_DROP_BPS) return null;
-  return PVP_GEM_ELEMENTS[rand(PVP_GEM_ELEMENTS.length)]!;
+  const { dropBps, typeWeights } = gemDropConfig();
+  if (dropBps <= 0 || rand(BPS_SCALE) >= dropBps) return null;
+  const weight = (e: GemElement) => Math.max(0, typeWeights[e]);
+  const total = PVP_GEM_ELEMENTS.reduce((s, e) => s + weight(e), 0);
+  if (total <= 0) return null;
+  let r = rand(total);
+  for (const e of PVP_GEM_ELEMENTS) {
+    r -= weight(e);
+    if (r < 0) return e;
+  }
+  return PVP_GEM_ELEMENTS[PVP_GEM_ELEMENTS.length - 1]!;
 }
 
 /**

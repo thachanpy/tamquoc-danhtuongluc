@@ -34,7 +34,7 @@ Các nguyên tắc bắt buộc:
 - Không còn nút "+50 vé" trên UI (chủ dự án yêu cầu bỏ); endpoint cộng vé thử nghiệm chỉ còn ở server, mặc định tắt (mục 3.7). Cộng vé cho người chơi dùng trang Quản trị.
 - Có nhiệm vụ hằng ngày (gồm nhiệm vụ đăng nhập), thưởng reset 05:00 giờ Việt Nam, điểm danh theo tháng và thành tựu (mục 3.10, chủ dự án yêu cầu; trước đây MVP không có thưởng đăng nhập). Chỉ thưởng vé.
 - Vé được chia thành 5 loại (thường, Thục, Ngụy, Ngô, Quần) và được xác định ngẫu nhiên khi cấp.
-- **Trần vé hồi theo loại: Vé thường 1000, mỗi loại vé phe 500** (`RECOVERY_CAP_PER_TYPE`, chủ dự án yêu cầu): chỉ chặn vé hồi theo thời gian; vé từ nguồn khác vẫn cộng vượt trần (VD 510/500 vé phe) và được giữ nguyên (mục 3.6). Ngoài ra không giới hạn số vé tích trữ.
+- **Trần vé hồi theo loại: Vé thường 5000, mỗi loại vé phe 2000** (`RECOVERY_CAP_PER_TYPE`, chủ dự án yêu cầu): chỉ chặn vé hồi theo thời gian; vé từ nguồn khác vẫn cộng vượt trần (VD 2010/2000 vé phe) và được giữ nguyên (mục 3.6). Ngoài ra không giới hạn số vé tích trữ.
 - Mỗi lần nâng cấp cần đúng 2 thẻ cùng level và cùng tướng; không có thẻ chính hoặc thẻ mồi.
 - Mọi thao tác thay đổi nhiều dữ liệu liên quan phải nguyên tử.
 - Các quy tắc game và tỷ lệ phải cấu hình được, có kiểm thử.
@@ -311,7 +311,7 @@ Quy tắc:
 - Vé không thể quy đổi thành tiền hoặc tài nguyên khác.
 - Mỗi loại vé có số dư riêng.
 - UI hiển thị số lượng từng loại vé và tổng số vé.
-- Vé **hồi theo thời gian** dừng khi loại vé đó đạt trần: **Vé thường 1000, mỗi loại vé phe 500** (`RECOVERY_CAP_PER_TYPE`, mục 3.6). Đây là trần duy nhất: các nguồn khác (quà đăng ký, giftcode, admin, nhiệm vụ, thành tựu, thưởng 05:00, cộng vé thử nghiệm) vẫn cộng vượt trần, số dư vượt trần được giữ nguyên, không bị cắt.
+- Vé **hồi theo thời gian** dừng khi loại vé đó đạt trần: **Vé thường 5000, mỗi loại vé phe 2000** (`RECOVERY_CAP_PER_TYPE`, mục 3.6). Đây là trần duy nhất: các nguồn khác (quà đăng ký, giftcode, admin, nhiệm vụ, thành tựu, thưởng 05:00, cộng vé thử nghiệm) vẫn cộng vượt trần, số dư vượt trần được giữ nguyên, không bị cắt.
 - Ngoài trần vé hồi, số lượng vé không bị giới hạn bởi mức trần nghiệp vụ nào khác.
 - Backend vẫn phải chống số âm, integer overflow, dữ liệu sai và thao tác cộng vé trùng.
 
@@ -351,13 +351,9 @@ Quy tắc:
 
 ### 3.6. Vé hồi theo thời gian
 
-**Cứ đến mỗi mốc 5 phút của đồng hồ server, người chơi được cấp 1 vé miễn phí ngẫu nhiên** (288 vé/ngày). Chu kỳ nằm trong cấu hình server (`RECOVERY_INTERVAL_MS`). Trước đây là 10 phút; chủ dự án đã đổi thành 5 phút. Các mốc 10 phút đã xử lý trước đó vẫn là mốc 5 phút hợp lệ, nên không cần migration và không mất hoặc cấp trùng vé.
+**Cứ đến mỗi mốc 1 phút của đồng hồ server, người chơi được cấp 1 vé miễn phí ngẫu nhiên** (1440 vé/ngày). Chu kỳ nằm trong cấu hình server (`RECOVERY_INTERVAL_MS`). Trước đây là 10 phút, rồi 5 phút; chủ dự án đã đổi thành 1 phút. Các mốc 5 phút đã xử lý trước đó vẫn là mốc 1 phút hợp lệ (5 phút chia hết cho 1 phút), nên không cần migration và không mất hoặc cấp trùng vé.
 
-Các mốc trong mỗi giờ:
-
-- Phút 00, 05, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55.
-
-Ví dụ: 14:00, 14:05, 14:10, …, 14:55 theo thời gian server.
+Mốc là mọi phút của đồng hồ server (14:00, 14:01, 14:02, …).
 
 Quy tắc:
 
@@ -367,10 +363,10 @@ Quy tắc:
 - Khi người chơi quay lại, server xác định các mốc hợp lệ chưa xử lý kể từ trạng thái đã ghi nhận gần nhất.
 - Mỗi mốc hợp lệ tạo ra tối đa 1 vé ngẫu nhiên.
 - Loại vé được roll độc lập cho từng mốc, theo bảng xác suất tại mục 3.5.
-- **Trần vé hồi theo loại** (`RECOVERY_CAP_PER_TYPE`, chủ dự án yêu cầu): **Vé thường 1000**; Vé Thục/Ngụy/Ngô/Quần **mỗi loại 500**.
+- **Trần vé hồi theo loại** (`RECOVERY_CAP_PER_TYPE`, chủ dự án yêu cầu): **Vé thường 5000**; Vé Thục/Ngụy/Ngô/Quần **mỗi loại 2000**.
   - Mỗi mốc chỉ random trong các loại vé có số dư **dưới trần của loại đó** (giữ tỷ lệ tương đối của mục 3.5 giữa các loại còn chỗ).
   - Cả 5 loại đều đạt trần thì mốc đó vẫn được đánh dấu đã xử lý nhưng **không cấp vé**, không ghi ledger và **không cộng bù** sau này (response `skippedFull`).
-  - Trần chỉ áp dụng cho vé hồi. Vé từ nguồn khác cộng vượt trần vẫn được giữ (VD nhiệm vụ đưa Vé Thục lên 510 thì giữ 510, Vé thường lên 1010 thì giữ 1010; vé hồi không cấp thêm loại đó cho tới khi xuống dưới trần).
+  - Trần chỉ áp dụng cho vé hồi. Vé từ nguồn khác cộng vượt trần vẫn được giữ (VD nhiệm vụ đưa Vé Thục lên 2010 thì giữ 2010, Vé thường lên 5010 thì giữ 5010; vé hồi không cấp thêm loại đó cho tới khi xuống dưới trần).
 - Khi người chơi offline trong thời gian dài, server xử lý đủ mọi mốc chưa xử lý (theo batch), cấp vé cho tới khi chạm trần như trên.
 - Không cấp trùng vé cho cùng một mốc.
 - Không bỏ mất các mốc đã đến hạn chỉ vì request bị retry hoặc server khởi động lại.
@@ -380,23 +376,23 @@ Quy tắc:
 - Client chỉ hiển thị số dư và đồng hồ đếm ngược đến mốc tiếp theo.
 - Client không quyết định hoặc ghi nhận vé.
 
-Nên lưu timestamp UTC và chuẩn hóa mốc hồi theo các ranh giới 5 phút. Không phụ thuộc múi giờ của máy người chơi.
+Nên lưu timestamp UTC và chuẩn hóa mốc hồi theo các ranh giới 1 phút. Không phụ thuộc múi giờ của máy người chơi.
 
 Ví dụ:
 
 - Người chơi đã xử lý mốc 10:00.
-- Người chơi offline đến 10:30.
-- Khi quay lại, server xử lý các mốc 10:05, 10:10, 10:15, 10:20, 10:25 và 10:30.
-- Server cấp đúng 6 vé, từng vé được random loại độc lập.
+- Người chơi offline đến 10:10.
+- Khi quay lại, server xử lý các mốc 10:01, 10:02, …, 10:09 và 10:10.
+- Server cấp đúng 10 vé, từng vé được random loại độc lập.
 - Refresh hoặc gửi lại request không được cấp thêm vé cho các mốc này.
 
-Nếu cần xử lý lượng mốc rất lớn sau thời gian offline dài, có thể chia thành các batch nội bộ, nhưng phải bảo đảm tiến trình có thể tiếp tục an toàn mà không bỏ sót hoặc cấp trùng mốc. Trần duy nhất là trần vé hồi (Vé thường 1000, mỗi loại vé phe 500) ở trên.
+Nếu cần xử lý lượng mốc rất lớn sau thời gian offline dài, có thể chia thành các batch nội bộ, nhưng phải bảo đảm tiến trình có thể tiếp tục an toàn mà không bỏ sót hoặc cấp trùng mốc. Trần duy nhất là trần vé hồi (Vé thường 5000, mỗi loại vé phe 2000) ở trên.
 
 ### 3.7. Nguồn vé trong MVP
 
 MVP có các nguồn cấp vé sau:
 
-1. **Hồi vé theo mốc 5 phút** (mục 3.6).
+1. **Hồi vé theo mốc 1 phút** (mục 3.6).
 2. **Quà đăng ký (tân thủ)**: khi tài khoản được admin duyệt, người chơi nhận **100 vé** một lần duy nhất.
 3. **Cộng vé thử nghiệm** (endpoint server, **không còn nút trên UI** — chủ dự án đã yêu cầu bỏ nút "+50 vé"): mỗi lần gọi cộng **50 vé**, chỉ hoạt động khi server bật cấu hình (xem bên dưới).
 4. **Admin cộng vé** (chủ dự án yêu cầu): admin chọn người chơi, loại vé và số lượng tại trang Quản trị (mục 3.8).
@@ -410,7 +406,7 @@ Quy tắc quà đăng ký:
 - Số vé nằm trong cấu hình server (`SIGNUP_BONUS_TICKETS`, mặc định 100).
 - Mỗi vé được roll loại độc lập theo bảng xác suất tại mục 3.5, bằng RNG server.
 - Cấp trong cùng transaction **duyệt tài khoản** (tài khoản đầu tiên tự duyệt: cấp trong transaction tạo tài khoản); nếu thao tác thất bại thì không cấp vé.
-- Tài khoản chờ duyệt chưa có số dư vé; mốc hồi vé bắt đầu tính từ mốc 5 phút gần nhất đã qua tại lúc duyệt.
+- Tài khoản chờ duyệt chưa có số dư vé; mốc hồi vé bắt đầu tính từ mốc 1 phút gần nhất đã qua tại lúc duyệt.
 - Ghi ledger với reason `signup_bonus`, mỗi loại vé một dòng (`amount_delta` = số vé loại đó).
 - Mỗi người chơi chỉ nhận một lần; đăng nhập lại hoặc duyệt lại không cấp thêm. Unique constraint chặn cấp lần hai.
 - Chỉ áp dụng cho tài khoản tạo mới, không cấp hồi tố cho tài khoản đã tồn tại.
@@ -471,6 +467,7 @@ Trang Quản trị (`apps/web/src/pages/Admin.tsx`, tab "Quản trị" chỉ hi�
 - **Người chơi**: ô bật/tắt "Duyệt tài khoản đăng ký" ở đầu tab; tìm theo tên, lọc trạng thái; tài khoản chờ duyệt lên đầu. Mỗi dòng: tên, admin, ngày đăng ký/duyệt, trạng thái, số dư từng loại vé và tổng, số thẻ và level cao nhất. Thao tác: Duyệt, Từ chối (có bước xác nhận), Cộng vé (form chọn loại + số lượng), Xem thẻ, Cấp/Thu quyền admin. Khóa nút khi đang xử lý.
 - **Thẻ tướng**: mọi thẻ đang active của mọi người chơi, chỉ xem; lọc theo người chơi, tên tướng, phe, level; sắp xếp level cao nhất (mặc định) / mới nhất / tên tướng / theo người chơi; phân trang 60 thẻ; bấm thẻ mở popup ngắm thẻ.
 - **Ngọc**: mọi viên Ngọc đang active của mọi người chơi, chỉ xem (mục 6.8); lọc theo người chơi, loại (Ngũ Hành), cấp; sắp xếp mới nhất (mặc định) / cấp giảm / cấp tăng / theo người chơi; phân trang 60 viên; mỗi ô ghi tên chủ sở hữu, bấm mở popup chi tiết Ngọc ở đúng cấp.
+- **Tỉ lệ quay**: chỉnh bảng tỉ lệ cấp tướng khi quay (Lv1–Lv9) và tỉ lệ rớt Ngọc (tỉ lệ rớt tổng + trọng số 5 hệ), hiển thị % quy đổi; nút Lưu/Hoàn tác; cảnh báo và chặn lưu khi tổng ≠ 100% (mục 4.3). Lưu xong áp dụng ngay cho lượt quay sau, không cần restart API.
 
 ### 3.9. Giftcode
 
@@ -649,8 +646,9 @@ Yêu cầu:
 - UI hiển thị tỷ lệ thực tế đang được server áp dụng.
 - Viết unit test cho bảng cấu hình và thuật toán roll.
 - Không giả lập kết quả ở client rồi yêu cầu server chấp nhận.
+- **Chỉnh trên trang Quản trị**: bảng tỉ lệ level quay (Lv1–Lv9) chỉnh được ở tab **Tỉ lệ quay** (bảng `gacha_config`, migration v21; route `GET/PUT /api/admin/gacha/rates`); server từ chối lưu khi tổng ≠ 100% (`INVALID_RATES_SUM`). `GACHA_LEVEL_SCALE` = 100000 là thang lưu (Lv9 = 5). Lưu xong nạp lại `GachaConfigRegistry` ⇒ lượt quay sau áp dụng ngay, không cần restart API. Dữ liệu DB thiếu/hỏng/tổng sai thì tự rơi về bảng mặc định.
 
-**Rớt kèm Ngọc Ngũ Hành** (mục 6.8): mỗi Tướng quay ra có **10%** rớt kèm 1 viên Ngọc **cùng cấp** với thẻ, chọn đều **20%/loại** trong 5 loại. Kết quả nằm ở `DrawnCardDto.gem` (null = không rớt); Ngọc lưu vào `user_gems` trong cùng transaction với thẻ.
+**Rớt kèm Ngọc Ngũ Hành** (mục 6.8): mặc định mỗi Tướng quay ra có **10%** rớt kèm 1 viên Ngọc **cùng cấp** với thẻ, chọn đều **20%/loại** trong 5 loại. Tỉ lệ rớt tổng (`gem_drop_bps`) và trọng số 5 hệ (`gem_type_weights`) **chỉnh được ở tab Quản trị "Tỉ lệ quay"** (bảng `gacha_config`). Kết quả nằm ở `DrawnCardDto.gem` (null = không rớt); Ngọc lưu vào `user_gems` trong cùng transaction với thẻ.
 
 ### 4.4. Quay nhiều lần (×10)
 
@@ -954,7 +952,7 @@ Do chủ dự án yêu cầu (đặc tả *Hệ thống Ngọc Ngũ Hành — PV
 - **Ảnh Ngọc**: `apps/web/public/gem/{loại}_{cấp}.webp` — 50 ảnh WebP chủ dự án cung cấp; tên loại dạng tiếng Anh: `metal` (Kim), `wood` (Mộc), `water` (Thủy), `fire` (Hỏa), `earth` (Thổ), cấp ghi **2 chữ số** `01`–`10` (VD `metal_01.webp`, `fire_10.webp`). Đường dẫn dựng ở `art.ts#gemUrl` (kèm `GEM_ART_VERSION` để bỏ cache khi đổi ảnh). **Thiếu ảnh thì nơi hiển thị tự rơi về viên Ngọc vẽ dự phòng** (CSS gradient ở DOM, Graphics ở PixiJS).
 - **Gắn theo đội hình (CHỌN TAY, tối đa 3 loại)**: người chơi bấm chọn trong **5 loại Ngũ Hành** ở dải Ngọc dưới bàn tướng — tối đa `PVP_TEAM_GEM_COUNT` = **3 loại KHÁC NHAU**; loại chưa sở hữu hoặc đã đủ 3 loại thì bị khoá. Lựa chọn lưu ở bảng `pvp_team_gems`. Trong một loại luôn dùng viên **cấp cao nhất đang sở hữu**. Đội **chưa lưu** dùng đội gợi ý + Ngọc tự chọn theo cấp cao nhất (`autoTeamGemElements`) — khớp `effectiveTeam` ở `pvp.manager`.
 - **Hiệu lực**: chỉ số Ngọc cộng **TRỰC TIẾP vào Chỉ số Nền Ra Trận cho TOÀN ĐỘI** khi vào trận — aura gốc, **không chiếm `maxLayers`, không thể bị Xóa Buff** (giống Vị trí/Cổng đồng phe/nội tại). Ngọc **được tính vào Lực chiến (LC)** ở ô đội hình, đội đã lưu và bảng xếp hạng (mục 6.6). Trên ô tướng ở màn chuẩn bị, phần Ngọc cộng thêm hiện **riêng ở badge xanh `(+x%)`** (không cộng dồn vào số chính): các chỉ số phụ (Giáp/Chí mạng/ST chí mạng/Chính xác/Né tránh) giữ **giá trị cơ bản** của tướng, badge lấy từ `preBattle.bonus.gem` (`statOf`); LC chip lấy từ `self.lc` (server đã tính Ngọc khi có ngữ cảnh đội).
-- **Rớt kèm khi gacha**: mỗi Tướng quay ra có **10%** (`PVP_GEM_DROP_BPS`) rớt kèm 1 Ngọc **cùng cấp** với thẻ; khi trúng chọn đều **20%/loại** (`PVP_GEM_TYPE_WEIGHT_BPS`) — `rollGemDrop` trong `gems.ts`, gọi trong `gacha.manager`; kết quả trả ở `DrawnCardDto.gem`.
+- **Rớt kèm khi gacha**: mặc định mỗi Tướng quay ra có **10%** (`PVP_GEM_DROP_BPS`) rớt kèm 1 Ngọc **cùng cấp** với thẻ; khi trúng chọn đều **20%/loại** (`PVP_GEM_TYPE_WEIGHT_BPS`) — `rollGemDrop` trong `gems.ts`, gọi trong `gacha.manager`; kết quả trả ở `DrawnCardDto.gem`. Tỉ lệ rớt tổng và trọng số từng hệ **chỉnh được ở tab Quản trị "Tỉ lệ quay"** (bảng `gacha_config`, override qua `setGemDropOverride`; ràng buộc tổng 5 hệ = 100%).
 - **Ghép 2→1**: 2 viên **cùng loại & cùng cấp** ghép thành 1 viên **cấp +1**, dùng lại **cùng công thức / tỷ lệ / phân phối thất bại / tài nguyên (miễn phí)** với ghép thẻ Tướng (mục 5). Cấp 10 là trần.
 - **UI** (lưới nhóm dùng **chung bố cục với Tướng**: `.pick-grid`/`gen-group`/`gen-runs`/`lv-run`/`run-cards`; **thẻ** dùng chung `components/GemCard.tsx` nhưng là **HÌNH TRÒN** — ảnh viên Ngọc trong ô vuông bo tròn hoàn toàn, viền + hào quang theo màu cấp, tên + cấp là dòng chú thích **bên dưới** vòng tròn, khác khung chữ nhật đứng của thẻ tướng):
   - **Nâng cấp** (`#upgrade`): sub-tab **Ngọc** — nhóm theo **loại** rồi chia theo **cấp** ("Cấp 8 ×2"), mỗi viên là một thẻ bấm chọn; ghép từng cặp hoặc **Ghép nhanh** theo cấp (tái dùng layout ghép thẻ); ghép xong chạy **cùng hiệu ứng PixiJS với nâng cấp Tướng** (`playGemUpgrade` — 2 viên lao vào tâm → loé sáng → viên kết quả, thành công có tia vàng + hạt, thất bại nứt đỏ + rung). Khung "Đã chọn" hiện thẻ Ngọc như thẻ tướng.
@@ -1029,7 +1027,7 @@ Ràng buộc:
 - `ticket_type` thuộc `normal`, `shu`, `wei`, `wu`, `qun` (`qun` được thêm bằng migration v4; tài khoản cũ nhận dòng số dư Vé Quần = 0).
 - Mỗi người chơi có tối đa một bản ghi cho mỗi loại vé.
 - Số dư không âm.
-- Không có giới hạn tồn kho nghiệp vụ; chỉ vé hồi theo thời gian dừng ở trần (thường 1000, phe 500, mục 3.6). Số dư có thể vượt trần nhờ nguồn khác.
+- Không có giới hạn tồn kho nghiệp vụ; chỉ vé hồi theo thời gian dừng ở trần (thường 5000, phe 2000, mục 3.6). Số dư có thể vượt trần nhờ nguồn khác.
 - Chống overflow và giá trị không hợp lệ.
 - Tổng số vé có thể được tính từ năm số dư hoặc được cache nếu cần, nhưng dữ liệu cache phải đồng bộ chính xác.
 
@@ -1044,10 +1042,10 @@ Quản lý mốc hồi vé.
 Quy tắc:
 
 - Timestamp lưu theo UTC.
-- Trạng thái đủ để xác định mốc 5 phút đã xử lý.
+- Trạng thái đủ để xác định mốc hồi 1 phút đã xử lý.
 - Không dùng bộ nhớ tiến trình làm nguồn trạng thái duy nhất.
 - Xử lý mốc hồi, cấp vé và cập nhật trạng thái phải an toàn với request đồng thời.
-- Mốc hồi chỉ bỏ (không cấp vé) khi cả 5 loại vé đều đạt `RECOVERY_CAP_PER_TYPE` (thường 1000, phe 500); mốc vẫn được đánh dấu đã xử lý.
+- Mốc hồi chỉ bỏ (không cấp vé) khi cả 5 loại vé đều đạt `RECOVERY_CAP_PER_TYPE` (thường 5000, phe 2000); mốc vẫn được đánh dấu đã xử lý.
 
 Có thể gộp bảng này vào bảng tài khoản nếu thiết kế phù hợp, miễn là giữ nguyên tính nguyên tử và khả năng chống cấp trùng.
 
@@ -1161,6 +1159,10 @@ Lịch sử tặng thẻ (migration v5).
 - **`gem_merge_history`** (v16): nhật ký từng lần ghép Ngọc — `input_gem_ids_snapshot`, `element`, `input_level` (1–9), `result_gem_id` (viên kết quả, cấp `input_level+1`), `success_chance`, `failure_chance`, `outcome` (`success|failure`), `failure_distribution_snapshot`, `idempotency_key`, `created_at`; UNIQUE `(user_id, idempotency_key)`.
 - **`pvp_team_gems`** (v16, tạo lại ở v18): lưu LOẠI Ngọc người chơi gắn cho đội — `user_id`, `element`, `updated_at`, PK `(user_id, element)`; tối đa `PVP_TEAM_GEM_COUNT` loại khác nhau. Bản v17 từng drop bảng khi thử cơ chế tự động; v18 tạo lại (`CREATE TABLE IF NOT EXISTS`).
 
+### 7.8h. Cấu hình tỉ lệ quay (migration v21)
+
+- **`gacha_config`** (v21): một dòng duy nhất (`id = 1`, CHECK) lưu tỉ lệ quay chỉnh trên trang Quản trị — `level_rates` (JSON `WeightEntry[]` cho Lv1–Lv9, tổng = `GACHA_LEVEL_SCALE` = 100000), `gem_drop_bps` (0–10000), `gem_type_weights` (JSON trọng số 5 hệ Ngũ Hành, tổng = `BPS_SCALE` = 10000), `updated_at`. Seed 1 dòng từ config cứng (`GACHA_LEVEL_RATES`, `PVP_GEM_DROP_DEFAULT`). `GachaConfigRegistry` nạp bảng này vào memory cache (hot-reload) qua `setGachaLevelRatesOverride`/`setGemDropOverride`; dữ liệu hỏng/tổng sai thì bỏ override và rơi về bảng mặc định.
+
 ### 7.9. Idempotency
 
 Có thể dùng bảng idempotency riêng hoặc các unique constraint phù hợp để bảo đảm:
@@ -1216,7 +1218,7 @@ Server phải:
 
 Các bước ghi dữ liệu phải nguyên tử hoặc có cơ chế batch/idempotency đủ an toàn để tiếp tục sau lỗi mà không mất hoặc cấp trùng vé.
 
-Áp dụng trần vé hồi (Vé thường 1000, mỗi loại vé phe 500) (mục 3.6): chỉ random trong loại còn dưới trần; cả 5 loại đầy thì mốc không cấp vé. Response có thêm `skippedFull` (số mốc bị bỏ) và `GET /api/tickets` có `recoveryCap` (trần theo từng loại).
+Áp dụng trần vé hồi (Vé thường 5000, mỗi loại vé phe 2000) (mục 3.6): chỉ random trong loại còn dưới trần; cả 5 loại đầy thì mốc không cấp vé. Response có thêm `skippedFull` (số mốc bị bỏ) và `GET /api/tickets` có `recoveryCap` (trần theo từng loại).
 
 Không triển khai `POST /api/daily-claim`. Thưởng ngày đi qua nhiệm vụ (mục 3.10, `POST /api/quests/claim`).
 
@@ -1273,6 +1275,7 @@ Server phải:
 - Route chơi game gọi bằng tài khoản admin → 403 `ADMIN_NOT_PLAYER` (mục 3.8).
 - `GET /api/admin/cards?userId=&faction=&level=&q=&sort=&page=&pageSize=`: thẻ active của mọi người chơi kèm `username`.
 - `GET /api/admin/gems?userId=&element=&level=&sort=&page=&pageSize=`: Ngọc active của mọi người chơi kèm `username` (mục 6.8).
+- `GET /api/admin/gacha/rates`, `PUT /api/admin/gacha/rates`: đọc/lưu tỉ lệ quay (mục 4.3) — body `PUT` gồm `{ levelRates[], gemDropBps, gemTypeWeights }`. Ràng buộc: tổng `levelRates` = 100% (`INVALID_RATES_SUM`), tổng `gemTypeWeights` (5 hệ) = 100% (`INVALID_GEM_WEIGHTS_SUM`), `gemDropBps` 0–10000 (`INVALID_GEM_DROP`). Lưu xong nạp lại `GachaConfigRegistry` (hot-reload, không cần restart API).
 - Có rate limit cho các thao tác ghi.
 
 ### 8.4d. Giftcode (mục 3.9)
@@ -1342,7 +1345,7 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 - Dùng transaction, unique constraint và concurrency control.
 - Tính mốc hồi bằng thời gian server và UTC.
 - Không dùng đồng hồ client để cấp vé.
-- Trần duy nhất là trần vé hồi (Vé thường 1000, mỗi loại vé phe 500) (mục 3.6); nguồn khác cộng vượt trần được.
+- Trần duy nhất là trần vé hồi (Vé thường 5000, mỗi loại vé phe 2000) (mục 3.6); nguồn khác cộng vượt trần được.
 - Chống integer overflow và số dư âm.
 - Validate tất cả bảng tỷ lệ trước khi sử dụng.
 - Phân phối thất bại chỉ được roll sau khi xác định nâng cấp thất bại.
@@ -1382,12 +1385,12 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 
 ### 10.3. Vé hồi theo thời gian
 
-- Hồi đúng mỗi mốc 5 phút (phút 00, 05, 10, …, 55).
+- Hồi đúng mỗi mốc 1 phút.
 - Không hồi sớm hơn mốc.
 - Xử lý đúng qua giờ mới, ngày mới và thời gian offline dài.
-- Xử lý đủ mọi mốc chưa xử lý; cấp vé tới trần rồi dừng (offline 30 ngày → Vé thường đúng 1000, mỗi vé phe đúng 500).
+- Xử lý đủ mọi mốc chưa xử lý; cấp vé tới trần rồi dừng (offline 30 ngày → Vé thường đúng 5000, mỗi vé phe đúng 2000).
 - Mốc hồi chỉ ra loại còn dưới trần (Vé thường 600 vẫn được hồi); cả 5 loại đầy thì không cấp vé, không ghi ledger, không cộng bù.
-- Vé vượt trần từ nguồn khác (VD Vé thường 1010) được giữ nguyên.
+- Vé vượt trần từ nguồn khác (VD Vé thường 5010) được giữ nguyên.
 - Không cấp trùng khi refresh hoặc retry.
 - Xử lý an toàn với request đồng thời.
 - Không mất mốc khi server khởi động lại.
@@ -1521,8 +1524,8 @@ Không tạo API ví Vàng, mua vé, nạp tiền hoặc `daily-claim` riêng tr
 ### 10.7. UI
 
 - Hiển thị chính xác số dư từng loại vé và tổng số vé.
-- Số vé hiển thị kèm trần vé hồi dạng `số dư / trần` (VD `510 / 500`, Vé thường `/ 1000`) ở thanh vé và ô chọn vé trang Quay thẻ.
-- Hiển thị đồng hồ đến mốc hồi kế tiếp; loại vé đạt trần (thường 1000, phe 500) có nhãn MAX, cả 5 loại đầy thì hiện "Vé hồi đã đầy".
+- Số vé hiển thị kèm trần vé hồi dạng `số dư / trần` (VD `2010 / 2000`, Vé thường `/ 5000`) ở thanh vé và ô chọn vé trang Quay thẻ.
+- Hiển thị đồng hồ đến mốc hồi kế tiếp; loại vé đạt trần (thường 5000, phe 2000) có nhãn MAX, cả 5 loại đầy thì hiện "Vé hồi đã đầy".
 - Có loading, empty state và error state.
 - Chọn đúng pool tướng theo loại vé.
 - Animation khớp với kết quả server.
@@ -1578,15 +1581,15 @@ Thứ tự ưu tiên:
 
 - 140 tướng, 35 tướng mỗi phe.
 - 5 loại vé: thường, Thục, Ngụy, Ngô, Quần.
-- Vé miễn phí hồi 1 vé mỗi 5 phút theo mốc đồng hồ server.
+- Vé miễn phí hồi 1 vé mỗi 1 phút theo mốc đồng hồ server.
 - Duyệt tài khoản bật/tắt trên trang Quản trị (mặc định tắt: đăng ký là vào game ngay); tài khoản mới nhận 100 vé quà đăng ký một lần lúc được duyệt (loại vé random theo mục 3.5).
-- Trang Quản trị: duyệt/từ chối đăng ký, danh sách người chơi, admin cộng vé (chọn loại + số lượng), xem mọi thẻ và mọi Ngọc của mọi người chơi, tạo/bật/tắt giftcode.
+- Trang Quản trị: duyệt/từ chối đăng ký, danh sách người chơi, admin cộng vé (chọn loại + số lượng), xem mọi thẻ và mọi Ngọc của mọi người chơi, tạo/bật/tắt giftcode, chỉnh tỉ lệ quay (cấp tướng + rớt Ngọc).
 - Giftcode chỉ tặng vé quay (nhiều loại + số lượng, hạn tuỳ chọn, mỗi người nhập 1 lần); 4 code tân thủ THUCQUOC/NGUYQUOC/NGOQUOC/QUANQUOC, mỗi code 200 vé phe tương ứng.
 - Không có nút "+50 vé" trên UI; endpoint thử nghiệm chỉ chạy khi server bật `ENABLE_DEV_TOPUP` (mặc định tắt).
 - Người chơi offline vẫn tích lũy đầy đủ các mốc hợp lệ.
 - Nhiệm vụ hằng ngày (chung + phe), thưởng reset 05:00 (25 vé, chỉ ngày hiện tại), điểm danh theo tháng, thành tựu; bấm Nhận, nhiệm vụ ngày cũ tự nhận khi sang ngày.
 - Mỗi vé được cấp sẽ random loại với xác suất mặc định 20% cho mỗi loại.
-- Vé hồi theo thời gian dừng ở trần: Vé thường 1000, mỗi vé phe 500; nhiệm vụ/giftcode/admin… vẫn cộng vượt trần (giữ nguyên số dư vượt).
+- Vé hồi theo thời gian dừng ở trần: Vé thường 5000, mỗi vé phe 2000; nhiệm vụ/giftcode/admin… vẫn cộng vượt trần (giữ nguyên số dư vượt).
 - Có vé Quần, quay trong 35 tướng Quần.
 - Không có nạp tiền, mua vé bằng Vàng, thanh toán thật hoặc cửa hàng vé.
 - Vé thường quay trong toàn bộ 140 tướng.

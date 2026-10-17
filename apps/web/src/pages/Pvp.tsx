@@ -905,10 +905,10 @@ function effectChips(s: CV): { icon?: IconId; text: string; tone: 'buff' | 'debu
   const bDodge = sum(s.buffs, (b) => b.dodgeBps);
   const bDef = sum(s.buffs, (b) => b.defArmor);
   const bDefPen = sum(s.buffs, (b) => b.defPenBps);
-  if (bHit > 0) out.push({ icon: 'eye', text: `+${pct(bHit)}`, tone: 'buff' });
-  if (bDodge > 0) out.push({ icon: 'dodge', text: `+${pct(bDodge)}`, tone: 'buff' });
+  if (bHit > 0) out.push({ icon: 'eye', text: `+${pt(bHit)}`, tone: 'buff' });
+  if (bDodge > 0) out.push({ icon: 'dodge', text: `+${pt(bDodge)}`, tone: 'buff' });
   if (bDef > 0) out.push({ icon: 'armor', text: `+${num(bDef)}`, tone: 'buff' });
-  if (bDefPen > 0) out.push({ icon: 'bow-pen', text: `+${pct(bDefPen)}`, tone: 'buff' });
+  if (bDefPen > 0) out.push({ icon: 'bow-pen', text: `+${pt(bDefPen)}`, tone: 'buff' });
   // Tăng sát thương Thiêu đốt (Cố Ung — Vận Trù Trợ Hỏa): dùng icon Thiêu đốt nhưng tô màu XANH
   // như các chip buff khác để thấy rõ tướng nào đang được cường hóa Thiêu đốt (không phải dính đốt).
   const bBurnUp = sum(s.buffs, (b) => b.burnUpBps);
@@ -930,10 +930,10 @@ function effectChips(s: CV): { icon?: IconId; text: string; tone: 'buff' | 'debu
   const dDodge = sum(s.debuffs, (d) => d.dodgeDownBps);
   const dDef = sum(s.debuffs, (d) => d.defArmorDown);
   const dDefPen = sum(s.debuffs, (d) => d.defPenDownBps);
-  if (dHit > 0) out.push({ icon: 'eye-off', text: `−${pct(dHit)}`, tone: 'debuff' });
-  if (dDodge > 0) out.push({ icon: 'dodge-off', text: `−${pct(dDodge)}`, tone: 'debuff' });
+  if (dHit > 0) out.push({ icon: 'eye-off', text: `−${pt(dHit)}`, tone: 'debuff' });
+  if (dDodge > 0) out.push({ icon: 'dodge-off', text: `−${pt(dDodge)}`, tone: 'debuff' });
   if (dDef > 0) out.push({ icon: 'armor', text: `−${num(dDef)}`, tone: 'debuff' });
-  if (dDefPen > 0) out.push({ icon: 'bow-pen', text: `−${pct(dDefPen)}`, tone: 'debuff' });
+  if (dDefPen > 0) out.push({ icon: 'bow-pen', text: `−${pt(dDefPen)}`, tone: 'debuff' });
   if (dBurn > 0) out.push({ icon: 'burn', text: `${dBurn}`, tone: 'burn' });
   return out;
 }

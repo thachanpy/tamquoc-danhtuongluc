@@ -103,7 +103,7 @@ Tướng được gán theo **hướng kỹ năng** (thiên phòng thủ/hồi s
 
 - **Tăng theo cấp**: mỗi cấp +2 điểm % cho hầu hết chỉ số, riêng cấp 10 nhảy +4 điểm % (bảng đầy đủ ở `GEM_TABLE`, `packages/game-config/src/gems.ts`). Riêng cột **Giáp của Ngọc Thổ** là **điểm Giáp nguyên** (11 → 80), không phải %.
 - **Ghép 2→1**: 2 viên **cùng loại & cùng cấp** ghép thành 1 viên **cấp +1**, dùng **chung công thức / tỷ lệ / tài nguyên** với ghép thẻ Tướng (mục 5 — CLAUDE.md). Cấp 10 là trần, không ghép được nữa.
-- **Rớt kèm khi quay**: mỗi Tướng quay ra có **10%** (`PVP_GEM_DROP_BPS`) rớt kèm 1 Ngọc **cùng cấp** với thẻ đó; khi trúng chọn đều **20%/loại** (`PVP_GEM_TYPE_WEIGHT_BPS`).
+- **Rớt kèm khi quay**: mặc định mỗi Tướng quay ra có **10%** (`PVP_GEM_DROP_BPS`) rớt kèm 1 Ngọc **cùng cấp** với thẻ đó; khi trúng chọn đều **20%/loại** (`PVP_GEM_TYPE_WEIGHT_BPS`). Tỉ lệ rớt tổng và trọng số từng hệ **chỉnh được ở trang Quản trị** (tab **Tỉ lệ quay**, bảng `gacha_config`); ràng buộc tổng trọng số 5 hệ = 100%.
 
 ### Danh mục 20 Hiệu ứng được phép sử dụng
 
@@ -155,7 +155,7 @@ Tướng được gán theo **hướng kỹ năng** (thiên phòng thủ/hồi s
 
 Toàn bộ chỉ số dùng đơn vị **bps** (`10000 = 100%`). Mọi tính toán nằm ở **server** (`pvp.engine.ts`), client chỉ phát lại.
 
-**Đơn vị hiển thị trên UI**: **Chính xác · Né tránh · Xuyên giáp** hiện theo **điểm** (1 điểm = 1%); **Giáp** hiện theo **điểm Giáp nguyên**; các chỉ số còn lại hiện theo **%**.
+**Đơn vị hiển thị trên UI**: **Chính xác · Né tránh · Xuyên giáp** hiện theo **điểm** (1 điểm = 1%, **làm tròn tới hàng đơn vị** — không hiện phần thập phân, kể cả chỉ số cộng thêm trên ô tướng khi chiến đấu); **Giáp** hiện theo **điểm Giáp nguyên**; các chỉ số còn lại hiện theo **%**.
 
 **Bảng quy định chỉ số & giới hạn (Stat Caps)**
 

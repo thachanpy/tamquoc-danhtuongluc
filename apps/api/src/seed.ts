@@ -1,5 +1,13 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { PVP_GEM_ELEMENTS, ROSTER, pvpGemTable, pvpProfile, skillDefToEffects } from '@tq/game-config';
+import {
+  GACHA_LEVEL_RATES,
+  PVP_GEM_DROP_DEFAULT,
+  PVP_GEM_ELEMENTS,
+  ROSTER,
+  pvpGemTable,
+  pvpProfile,
+  skillDefToEffects,
+} from '@tq/game-config';
 
 /**
  * Seed roster vào bảng generals. Chạy lặp an toàn: upsert theo ID ổn định,
@@ -89,6 +97,31 @@ export function seedPvpConfig(db: DatabaseSync): void {
         nowIso,
       );
     }
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
+}
+
+/**
+ * Seed cấu hình TỈ LỆ QUAY (`gacha_config`) từ bảng cứng trong `@tq/game-config`
+ * (`GACHA_LEVEL_RATES` + `PVP_GEM_DROP_DEFAULT`). Dùng `INSERT OR IGNORE`: cấu hình Admin đã sửa
+ * không bị ghi đè mỗi lần khởi động server.
+ */
+export function seedGachaConfig(db: DatabaseSync): void {
+  const nowIso = new Date().toISOString();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.prepare(`
+      INSERT OR IGNORE INTO gacha_config (id, level_rates, gem_drop_bps, gem_type_weights, updated_at)
+      VALUES (1, ?, ?, ?, ?)
+    `).run(
+      JSON.stringify(GACHA_LEVEL_RATES.map((e) => ({ level: e.level, bps: e.bps }))),
+      PVP_GEM_DROP_DEFAULT.dropBps,
+      JSON.stringify(PVP_GEM_DROP_DEFAULT.typeWeights),
+      nowIso,
+    );
     db.exec('COMMIT');
   } catch (e) {
     db.exec('ROLLBACK');

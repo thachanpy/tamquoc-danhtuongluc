@@ -23,7 +23,7 @@ Database SQLite nằm ở `data/tamquoc.db` (đổi bằng biến `DB_PATH`). Kh
 > **Duyệt tài khoản** bật/tắt ở trang Quản trị → Người chơi (mặc định tắt: đăng ký là vào game ngay). Khi bật, tài khoản mới
 > phải chờ quản trị viên duyệt mới đăng nhập được (màn đăng ký báo rõ). Khi được duyệt, tài khoản nhận
 > **100 vé quà đăng ký** (loại vé random 20% mỗi loại). **Tài khoản đầu tiên** tạo trên database mới tự thành admin và được duyệt ngay.
-> Sau đó hồi 1 vé ở mỗi mốc 5 phút (giờ :00, :05, :10…) theo đồng hồ server. Số vé quà chỉnh ở
+> Sau đó hồi 1 vé ở mỗi mốc 1 phút theo đồng hồ server. Số vé quà chỉnh ở
 > `SIGNUP_BONUS_TICKETS` trong `packages/game-config/src/rates.ts`.
 
 ## Triển khai lên server
@@ -160,9 +160,9 @@ apps/web               Vite + SolidJS: quay thẻ, bộ sưu tập, nâng cấp,
 ## Điểm chính
 
 - **Server quyết định mọi thứ**: RNG (`crypto.randomInt`), số vé, loại vé, tướng, level, kết quả ghép.
-- **Hồi vé** theo mốc 5 phút UTC (`RECOVERY_INTERVAL_MS`, 288 vé/ngày); offline vẫn tích lũy đủ; xử lý theo batch, mỗi batch 1 transaction;
-  unique index `(user_id, reference_id)` cho `time_recovery` chặn cấp trùng mốc. Vé hồi dừng ở trần: Vé thường 1000,
-  mỗi vé phe 500 (`RECOVERY_CAP_PER_TYPE`); nguồn khác (nhiệm vụ, giftcode, admin…) vẫn cộng vượt trần.
+- **Hồi vé** theo mốc 1 phút UTC (`RECOVERY_INTERVAL_MS`, 1440 vé/ngày); offline vẫn tích lũy đủ; xử lý theo batch, mỗi batch 1 transaction;
+  unique index `(user_id, reference_id)` cho `time_recovery` chặn cấp trùng mốc. Vé hồi dừng ở trần: Vé thường 5000,
+  mỗi vé phe 2000 (`RECOVERY_CAP_PER_TYPE`); nguồn khác (nhiệm vụ, giftcode, admin…) vẫn cộng vượt trần.
 - **Gacha / nâng cấp** chạy trong `BEGIN IMMEDIATE` transaction, có idempotency key gắn với người dùng + thao tác.
   Retry trả lại kết quả cũ; dùng cùng key cho yêu cầu khác → 409.
 - **Cộng vé thử nghiệm**: không còn nút trên UI; endpoint `/api/tickets/dev-topup` chỉ chạy khi server có

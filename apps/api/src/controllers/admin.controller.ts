@@ -26,6 +26,7 @@ import {
   type AdminPvpHeroUpdateInput,
   type AdminPvpHeroesQuery,
 } from '../managers/admin-pvp.manager.ts';
+import { adminGetGachaRates, adminUpdateGachaRates, type AdminGachaRatesUpdateInput } from '../managers/admin-gacha.manager.ts';
 import { adminGuard, LIMIT_120 } from '../middleware/guards.ts';
 
 /** Routes trang quản trị (mục 3.7, 3.8, 3.9) — mọi route yêu cầu quyền admin. */
@@ -102,5 +103,14 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: GameContext): voi
     '/api/admin/pvp/gems',
     { preHandler: admin, schema: { body: schemas.adminPvpGemsUpdateBody }, config: LIMIT_120 },
     async (req) => adminUpdatePvpGem(ctx, req.body as PvpGemAdminDto),
+  );
+
+  // ===== Tỉ lệ quay: cấp tướng + rớt Ngọc =====
+  // Server kiểm tra tổng mỗi bảng = 100%, lưu DB rồi reload cache ⇒ lượt quay kế tiếp áp dụng ngay.
+  app.get('/api/admin/gacha/rates', { preHandler: admin }, async () => adminGetGachaRates());
+  app.put(
+    '/api/admin/gacha/rates',
+    { preHandler: admin, schema: { body: schemas.adminGachaRatesUpdateBody }, config: LIMIT_120 },
+    async (req) => adminUpdateGachaRates(ctx, req.body as AdminGachaRatesUpdateInput),
   );
 }

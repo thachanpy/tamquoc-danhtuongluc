@@ -19,6 +19,7 @@ import type {
   DevTopupDto,
   DrawResultDto,
   GachaConfigDto,
+  GachaRatesAdminDto,
   GemElement,
   GemMergeResultDto,
   GemsDto,
@@ -174,6 +175,10 @@ export const api = {
     pvpHeroDelete: (id: string) => call<{ ok: true }>('DELETE', `/api/admin/pvp/heroes/${encodeURIComponent(id)}`),
     pvpGems: () => call<PvpGemsAdminDto>('GET', '/api/admin/pvp/gems'),
     pvpGemUpdate: (body: PvpGemAdminDto) => call<PvpGemAdminDto>('PUT', '/api/admin/pvp/gems', body),
+    // Tỉ lệ quay: bảng tỉ lệ cấp tướng + tỉ lệ/trọng số rớt Ngọc (server kiểm tra tổng = 100%).
+    gachaRates: () => call<GachaRatesAdminDto>('GET', '/api/admin/gacha/rates'),
+    gachaRatesUpdate: (body: Pick<GachaRatesAdminDto, 'levelRates' | 'gemDropBps' | 'gemTypeWeights'>) =>
+      call<GachaRatesAdminDto>('PUT', '/api/admin/gacha/rates', body),
   },
   quests: () => call<QuestsDto>('GET', '/api/quests'),
   claimQuests: (keys?: string[]) => call<QuestClaimResultDto>('POST', '/api/quests/claim', keys ? { keys } : {}),

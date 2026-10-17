@@ -598,7 +598,7 @@ function GemCollectionTab(): JSX.Element {
           <p class="muted small">
             Ngọc cộng Chỉ số Nền cho toàn đội khi vào trận (không thể bị Xóa Buff). Mỗi đội hình gắn tối đa{' '}
             <b>{c().teamGemCount} Ngọc khác loại</b>; hệ thống tự dùng viên cấp cao nhất đang sở hữu. Quay thẻ có {pct(c().dropBps, c().bpsScale)} cơ hội rớt
-            kèm 1 viên Ngọc cùng cấp (mỗi loại {pct(c().typeWeightBps, c().bpsScale)}).
+            kèm 1 viên Ngọc cùng cấp (hệ chọn theo trọng số).
           </p>
         )}
       </Show>

@@ -109,8 +109,9 @@ export const pct = (bps: number, scale = 10000) => `${fmtNum((bps / scale) * 100
  * bps → ĐIỂM cho Chính xác · Né tránh · Xuyên giáp (1 điểm = 1%). Ba chỉ số này được đối chiếu
  * theo tỷ lệ giữa hai bên chứ không cộng thẳng vào % nên hiện theo điểm cho khỏi gây hiểu nhầm.
  * Ô tướng hiện con số trần (giống Giáp); dùng `ptText` khi cần kèm chữ "điểm".
+ * Làm tròn tới hàng đơn vị — điểm là số nguyên, không hiện phần thập phân trên UI.
  */
-export const pt = (bps: number, scale = 10000) => fmtNum((bps / scale) * 100);
+export const pt = (bps: number, scale = 10000) => String(Math.round((bps / scale) * 100));
 
 /** bps → "15 điểm" — dùng ở gợi ý / chi tiết chỉ số / nhật ký / trang Quản trị. */
 export const ptText = (bps: number, scale = 10000) => `${pt(bps, scale)} điểm`;

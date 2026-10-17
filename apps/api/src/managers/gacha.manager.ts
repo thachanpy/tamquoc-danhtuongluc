@@ -8,7 +8,7 @@ import {
   type DrawnCardDto,
 } from '@tq/shared';
 import {
-  GACHA_LEVEL_RATES,
+  gachaLevelRates,
   GACHA_LEVEL_SCALE,
   BPS_SCALE,
   DRAW_COUNT_OPTIONS,
@@ -36,7 +36,7 @@ import { syncRecovery, getTickets } from './ticket.manager.ts';
 export function getGachaConfig(): GachaConfigDto {
   return {
     ticketTypes: TICKET_TYPES.map((id) => ({ id, label: TICKET_LABELS[id], pool: poolForTicket(id).map((g) => g.id) })),
-    levelRates: GACHA_LEVEL_RATES.map((e) => ({ ...e })),
+    levelRates: gachaLevelRates().map((e) => ({ ...e })),
     /** Đơn vị của `levelRates` (khác `bpsScale` vì Lv9 = 0.005% cần thang chi tiết hơn). */
     levelScale: GACHA_LEVEL_SCALE,
     bpsScale: BPS_SCALE,
@@ -98,10 +98,10 @@ export function draw(
       const ttxId = applyTicketDelta(ctx.db, userId, ticketType, -1, 'gacha_draw', `gacha:${rowKey}`, idempotencyKey, nowIso);
       // Bước 5-7: chọn đều trong pool, roll level độc lập
       const general = pool[ctx.rand(pool.length)]!;
-      const level = rollLevel(GACHA_LEVEL_RATES, ctx.rand);
+      const level = rollLevel(gachaLevelRates(), ctx.rand);
       // Bước 8-9: tạo thẻ + lịch sử
       const cardId = insertCard(ctx.db, userId, general.id, level, nowIso);
-      // Ngọc Ngũ Hành đính kèm: 10% mỗi lượt quay, cùng cấp với Tướng; khi trúng random đều 1 trong 5 loại.
+      // Ngọc Ngũ Hành đính kèm: tỉ lệ rớt + trọng số từng hệ do Admin cấu hình; Ngọc cùng cấp với Tướng.
       const gemElement = rollGemDrop(ctx.rand);
       const gem: GemDto | null = gemElement
         ? { id: insertGem(ctx.db, userId, gemElement, level, nowIso), element: gemElement, level, createdAt: nowIso }

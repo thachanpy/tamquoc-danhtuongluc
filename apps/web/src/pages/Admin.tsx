@@ -22,6 +22,7 @@ import { rewardText } from '../giftcode-text.ts';
 import { Card } from '../components/Card.tsx';
 import { GemCard } from '../components/GemCard.tsx';
 import { PvpHeroesPane, PvpGemsPane } from './AdminPvp.tsx';
+import { GachaRatesPane } from './AdminGacha.tsx';
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('vi-VN');
 
@@ -64,7 +65,7 @@ function Pager(props: { info: PagerInfo; onPrev: () => void; onNext: () => void 
   );
 }
 
-type Sub = 'users' | 'cards' | 'gems' | 'giftcode' | 'pvpheros' | 'pvpgems';
+type Sub = 'users' | 'cards' | 'gems' | 'giftcode' | 'pvpheros' | 'pvpgems' | 'gacharates';
 type PaneCtl = { ensureLoaded: () => void };
 type CardsCtl = PaneCtl & { showUser: (userId: number) => void };
 
@@ -75,6 +76,7 @@ type CardsCtl = PaneCtl & { showUser: (userId: number) => void };
  * - Ngọc Ngũ Hành (mục 6.8): mọi viên Ngọc của mọi người chơi, lọc theo người chơi/loại/cấp.
  * - Giftcode (mục 3.9): tạo code (vé quay nhiều loại + số lượng, hạn sử dụng tuỳ chọn), bật/tắt code.
  * - Cấu hình PvP (mục 6.7): Tướng (chỉ số nền + kỹ năng + hiệu ứng) và Ngọc Ngũ Hành (2 chỉ số × Cấp 1/Cấp 10).
+ * - Tỉ lệ quay: bảng tỉ lệ cấp tướng (Lv1–Lv9) + tỉ lệ/trọng số rớt Ngọc (tổng mỗi bảng phải bằng 100%).
  */
 export function AdminPage(): JSX.Element {
   let alive = true;
@@ -86,6 +88,7 @@ export function AdminPage(): JSX.Element {
   let giftcodes: PaneCtl | undefined;
   let pvpHeroes: PaneCtl | undefined;
   let pvpGems: PaneCtl | undefined;
+  let gachaRates: PaneCtl | undefined;
 
   function switchTo(id: Sub) {
     setSub(id);
@@ -94,6 +97,7 @@ export function AdminPage(): JSX.Element {
     if (id === 'giftcode') giftcodes?.ensureLoaded();
     if (id === 'pvpheros') pvpHeroes?.ensureLoaded();
     if (id === 'pvpgems') pvpGems?.ensureLoaded();
+    if (id === 'gacharates') gachaRates?.ensureLoaded();
   }
   const tabs: [Sub, string][] = [
     ['users', 'Người chơi'],
@@ -102,6 +106,7 @@ export function AdminPage(): JSX.Element {
     ['giftcode', 'Giftcode'],
     ['pvpheros', 'Cấu hình Tướng'],
     ['pvpgems', 'Cấu hình Ngọc'],
+    ['gacharates', 'Tỉ lệ quay'],
   ];
 
   return (
@@ -138,6 +143,9 @@ export function AdminPage(): JSX.Element {
       </div>
       <div data-pane="pvpgems" hidden={sub() !== 'pvpgems'}>
         <PvpGemsPane alive={isAlive} ctl={(c) => (pvpGems = c)} />
+      </div>
+      <div data-pane="gacharates" hidden={sub() !== 'gacharates'}>
+        <GachaRatesPane alive={isAlive} ctl={(c) => (gachaRates = c)} />
       </div>
     </section>
   );

@@ -2,8 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { runMigrations } from './migrations.ts';
-import { seedGenerals, seedPvpConfig } from './seed.ts';
+import { seedGachaConfig, seedGenerals, seedPvpConfig } from './seed.ts';
 import { installPvpConfigRegistry } from './pvp-config.registry.ts';
+import { installGachaConfigRegistry } from './gacha-config.registry.ts';
 
 export type DB = DatabaseSync;
 
@@ -16,8 +17,11 @@ export function openDatabase(path: string): DB {
   runMigrations(db);
   seedGenerals(db);
   seedPvpConfig(db);
+  seedGachaConfig(db);
   // Nạp cấu hình PvP (Tướng/Ngọc) từ DB vào memory cache cho engine dùng.
   installPvpConfigRegistry(db);
+  // Nạp cấu hình tỉ lệ quay (cấp tướng + rớt Ngọc) từ DB vào memory cache cho lượt quay dùng.
+  installGachaConfigRegistry(db);
   return db;
 }
 

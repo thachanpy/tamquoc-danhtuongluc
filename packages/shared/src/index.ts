@@ -86,8 +86,8 @@ export interface GemConfigDto {
   teamGemCount: number;
   /** Tỉ lệ rớt Ngọc đính kèm mỗi Tướng quay ra (bps). */
   dropBps: number;
-  /** Tỉ lệ mỗi loại Ngọc khi trúng rớt (bps). */
-  typeWeightBps: number;
+  /** Trọng số chọn hệ Ngọc khi trúng rớt (bps) — tổng bằng `bpsScale`. */
+  typeWeights: Record<GemElement, number>;
   /** Loại Ngọc theo thứ tự hiển thị. */
   elements: GemElement[];
   /** Bảng chỉ số: loại → 10 cấp (index 0 = cấp 1); mỗi cấp chỉ 2 chỉ số khác 0. */
@@ -281,7 +281,7 @@ export interface DrawnCardDto {
   drawId: number;
   card: CardDto;
   general: GeneralDto;
-  /** Ngọc Ngũ Hành rớt đính kèm (5% mỗi lượt quay, cùng cấp với Tướng); null = lượt này không rớt Ngọc. */
+  /** Ngọc Ngũ Hành rớt đính kèm (tỉ lệ + trọng số hệ do Admin cấu hình, cùng cấp với Tướng); null = lượt này không rớt Ngọc. */
   gem: GemDto | null;
 }
 
@@ -694,7 +694,7 @@ export const PVP_TARGETING_LABELS: Record<PvpTargeting, string> = {
   back_row: 'các tướng ở hàng sau',
   back_single: 'một tướng ở hàng sau',
   highest_damage_enemy: 'tướng địch có sát thương cao nhất',
-  front_enemies: 'các tướng ở hàng trước (hết hàng trước thì đánh hàng sau)',
+  front_enemies: 'các tướng ở hàng trước',
   all_enemies: 'toàn bộ tướng địch',
   all_allies: 'toàn bộ đồng minh',
   lowest_ally: 'đồng minh thấp máu nhất',
@@ -774,6 +774,30 @@ export interface PvpGemAdminDto {
 
 export interface PvpGemsAdminDto {
   items: PvpGemAdminDto[];
+}
+
+/** Tầng cấp cao nhất được quay trực tiếp (khớp `GACHA_MAX_LEVEL` bên game-config). */
+export const GACHA_ADMIN_MAX_LEVEL = 9;
+/** Thang riêng của bảng tỉ lệ level quay: 100000 = 100% (đủ chi tiết để biểu diễn Lv9 = 0.005%). */
+export const GACHA_LEVEL_SCALE_ADMIN = 100_000;
+
+/**
+ * Tỉ lệ quay chỉnh trên trang Quản trị: bảng tỉ lệ cấp tướng (Lv1–Lv9) + cấu hình rớt Ngọc
+ * (tỉ lệ rớt mỗi lượt và trọng số 5 hệ). Tổng mỗi bảng BẮT BUỘC = 100% khi lưu.
+ */
+export interface GachaRatesAdminDto {
+  /** Bảng tỉ lệ cấp tướng khi quay — tổng `bps` phải bằng `levelScale`. */
+  levelRates: WeightEntry[];
+  /** Đơn vị của `levelRates` (100000 = 100%). */
+  levelScale: number;
+  /** Tỉ lệ rớt Ngọc đính kèm mỗi lượt quay (bps, 10000 = 100%). */
+  gemDropBps: number;
+  /** Trọng số chọn hệ Ngọc khi trúng rớt (bps) — tổng bằng `bpsScale`. */
+  gemTypeWeights: Record<GemElement, number>;
+  /** Đơn vị của `gemDropBps`/`gemTypeWeights` (10000 = 100%). */
+  bpsScale: number;
+  /** Lần chỉnh gần nhất (ISO) — null nếu chưa từng lưu từ trang Quản trị. */
+  updatedAt: string | null;
 }
 
 // ===== JSON Schemas (Fastify validate) =====
@@ -1009,6 +1033,35 @@ export const schemas = {
       stat2Type: { type: 'string', enum: [...PVP_GEM_STAT_KEYS] },
       stat2Min: { type: 'integer', minimum: 0, maximum: 1000000 },
       stat2Max: { type: 'integer', minimum: 0, maximum: 1000000 },
+    },
+  },
+  /** Cập nhật tỉ lệ quay (cấp tướng + rớt Ngọc) — server kiểm tra tổng mỗi bảng = 100%. */
+  adminGachaRatesUpdateBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['levelRates', 'gemDropBps', 'gemTypeWeights'],
+    properties: {
+      levelRates: {
+        type: 'array',
+        minItems: 1,
+        maxItems: GACHA_ADMIN_MAX_LEVEL,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['level', 'bps'],
+          properties: {
+            level: { type: 'integer', minimum: MIN_LEVEL, maximum: GACHA_ADMIN_MAX_LEVEL },
+            bps: { type: 'integer', minimum: 0, maximum: GACHA_LEVEL_SCALE_ADMIN },
+          },
+        },
+      },
+      gemDropBps: { type: 'integer', minimum: 0, maximum: 10000 },
+      gemTypeWeights: {
+        type: 'object',
+        additionalProperties: false,
+        required: [...GEM_ELEMENTS],
+        properties: Object.fromEntries(GEM_ELEMENTS.map((e) => [e, { type: 'integer', minimum: 0, maximum: 10000 }])),
+      },
     },
   },
   questClaimBody: {

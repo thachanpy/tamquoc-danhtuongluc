@@ -3,14 +3,14 @@ import type { TicketType, WeightEntry, Faction } from '@tq/shared';
 /** Mọi tỷ lệ dùng basis points (bps). 10000 bps = 100%. */
 export const BPS_SCALE = 10_000;
 
-/** Mốc hồi vé: mỗi 5 phút theo đồng hồ server (UTC). Mục 3.6. (Trước đây 10 phút; chủ dự án đổi thành 5.) */
-export const RECOVERY_INTERVAL_MS = 5 * 60 * 1000;
+/** Mốc hồi vé: mỗi 1 phút theo đồng hồ server (UTC). Mục 3.6. (Trước đây 5 phút; chủ dự án đổi thành 1 phút.) */
+export const RECOVERY_INTERVAL_MS = 60 * 1000;
 /**
- * Trần vé HỒI THEO THỜI GIAN theo từng loại vé (chủ dự án yêu cầu): Vé thường 1000, vé phe 500. Mỗi mốc hồi chỉ random trong các loại
+ * Trần vé HỒI THEO THỜI GIAN theo từng loại vé (chủ dự án yêu cầu): Vé thường 5000, vé phe 2000. Mỗi mốc hồi chỉ random trong các loại
  * còn dưới trần; cả 5 loại đều ≥ trần thì mốc đó không cấp vé (không cộng bù).
  * Chỉ chặn vé hồi: nhiệm vụ, thành tựu, thưởng 05:00, giftcode, admin, quà đăng ký vẫn cộng vượt trần (VD 510/500 vé phe).
  */
-export const RECOVERY_CAP_PER_TYPE: Record<TicketType, number> = { normal: 1000, shu: 500, wei: 500, wu: 500, qun: 500 };
+export const RECOVERY_CAP_PER_TYPE: Record<TicketType, number> = { normal: 5000, shu: 2000, wei: 2000, wu: 2000, qun: 2000 };
 /** Số mốc tối đa xử lý trong MỘT transaction nội bộ. Không phải trần vé — vòng lặp xử lý đến hết. */
 export const RECOVERY_BATCH_SIZE = 1_000;
 
@@ -92,6 +92,22 @@ export const GACHA_LEVEL_RATES: WeightEntry[] = [
   { level: 8, bps: 20 }, // 0.02%
   { level: 9, bps: 5 }, // 0.005%
 ];
+
+/**
+ * Bảng tỉ lệ level ĐANG có hiệu lực. `GachaConfigRegistry` (apps/api) ghi đè bằng dữ liệu đọc từ DB
+ * khi Admin sửa tỉ lệ quay — nhờ vậy lượt quay kế tiếp áp dụng ngay, không cần restart API.
+ */
+let gachaLevelRatesOverride: WeightEntry[] | undefined;
+
+/** Ghi đè bảng tỉ lệ level (truyền `undefined` để quay về bảng cứng trong code). */
+export function setGachaLevelRatesOverride(table: WeightEntry[] | undefined): void {
+  gachaLevelRatesOverride = table;
+}
+
+/** Bảng tỉ lệ level khi quay đang áp dụng (DB nếu Admin đã sửa, ngược lại bảng cứng). */
+export function gachaLevelRates(): readonly WeightEntry[] {
+  return gachaLevelRatesOverride ?? GACHA_LEVEL_RATES;
+}
 
 /**
  * Số thẻ đầu vào cho mỗi lần ghép (mục 5.1): cùng tướng, cùng level.

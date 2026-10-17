@@ -302,13 +302,13 @@ test('đăng ký: tài khoản đầu tiên là admin & được duyệt; tài k
   assert.equal(second.status, 'pending');
   assert.deepEqual(readBalances(h.ctx.db, second.userId), { normal: 0, shu: 0, wei: 0, wu: 0, qun: 0 });
   assert.throws(() => login(h.ctx, 'newbie', 'secret123'), errCode('ACCOUNT_PENDING'));
-  // Duyệt lúc 10:23 => mốc hồi đã xử lý là 10:20, quà 100 vé tính từ lúc duyệt
+  // Duyệt lúc 10:23 => mốc hồi đã xử lý là 10:23, quà 100 vé tính từ lúc duyệt
   h.advance(20 * 60 * 1000);
   const { signupBonus } = approveUser(h.ctx, second.userId);
   assert.equal(Object.values(signupBonus).reduce((a, b) => a + b, 0), BONUS);
   const t = getTickets(h.ctx, second.userId);
   assert.equal(t.total, BONUS);
-  assert.equal(t.lastProcessedRecoveryAt, new Date(Date.UTC(2026, 9, 14, 10, 20)).toISOString());
+  assert.equal(t.lastProcessedRecoveryAt, new Date(Date.UTC(2026, 9, 14, 10, 23)).toISOString());
   assert.ok(login(h.ctx, 'newbie', 'secret123').token);
   assert.throws(() => approveUser(h.ctx, second.userId), errCode('ALREADY_APPROVED'));
   assert.equal(getTickets(h.ctx, second.userId).total, BONUS);
@@ -349,80 +349,80 @@ test('tài khoản mới có đủ 5 loại vé, gồm Vé Quần', () => {
 
 // ================= Hồi vé =================
 
-test('mốc hồi là 5 phút; tài khoản mới (10:03) chỉ có vé quà đăng ký, mốc kế tiếp là 10:05', () => {
-  assert.equal(RECOVERY_INTERVAL_MS, 5 * 60 * 1000);
+test('mốc hồi là 1 phút; tài khoản mới (10:03) chỉ có vé quà đăng ký, mốc kế tiếp là 10:04', () => {
+  assert.equal(RECOVERY_INTERVAL_MS, 60 * 1000);
   const { ctx } = makeCtx();
   const { userId } = register(ctx, 'alice', 'secret123');
   const t = getTickets(ctx, userId);
   assert.equal(t.total, BONUS);
-  assert.equal(t.lastProcessedRecoveryAt, '2026-10-14T10:00:00.000Z');
-  assert.equal(t.nextRecoveryAt, '2026-10-14T10:05:00.000Z');
-  assert.equal(t.msUntilNextRecovery, 2 * 60 * 1000);
+  assert.equal(t.lastProcessedRecoveryAt, '2026-10-14T10:03:00.000Z');
+  assert.equal(t.nextRecoveryAt, '2026-10-14T10:04:00.000Z');
+  assert.equal(t.msUntilNextRecovery, 60 * 1000);
 });
 
 test('không hồi sớm hơn mốc; đúng mốc thì cấp 1 vé', () => {
   const h = makeCtx();
   const { userId } = register(h.ctx, 'alice', 'secret123');
-  h.setNow(Date.UTC(2026, 9, 14, 10, 4, 59, 999));
+  h.setNow(Date.UTC(2026, 9, 14, 10, 3, 59, 999));
   assert.equal(claimRecovery(h.ctx, userId).grantedTotal, 0);
-  h.setNow(Date.UTC(2026, 9, 14, 10, 5, 0, 0));
+  h.setNow(Date.UTC(2026, 9, 14, 10, 4, 0, 0));
   const r = claimRecovery(h.ctx, userId);
   assert.equal(r.grantedTotal, 1);
   assert.equal(r.total, BONUS + 1);
 });
 
-test('ví dụ đặc tả: xử lý 10:00, offline đến 10:30 => đúng 6 vé (mốc 5 phút); retry không cấp thêm', () => {
+test('ví dụ đặc tả: xử lý 10:00, offline đến 10:10 => đúng 10 vé (mốc 1 phút); retry không cấp thêm', () => {
   const h = makeCtx(Date.UTC(2026, 9, 14, 10, 0, 0));
   const { userId } = register(h.ctx, 'alice', 'secret123');
-  h.setNow(Date.UTC(2026, 9, 14, 10, 30, 0));
-  assert.equal(claimRecovery(h.ctx, userId).grantedTotal, 6);
+  h.setNow(Date.UTC(2026, 9, 14, 10, 10, 0));
+  assert.equal(claimRecovery(h.ctx, userId).grantedTotal, 10);
   assert.equal(claimRecovery(h.ctx, userId).grantedTotal, 0);
-  assert.equal(getTickets(h.ctx, userId).total, BONUS + 6);
+  assert.equal(getTickets(h.ctx, userId).total, BONUS + 10);
   const slots = (h.ctx.db
     .prepare("SELECT reference_id FROM ticket_transactions WHERE reason = 'time_recovery' ORDER BY id")
     .all() as { reference_id: string }[]).map((r) => r.reference_id);
-  assert.deepEqual(slots, ['05', '10', '15', '20', '25', '30'].map((m) => `2026-10-14T10:${m}:00.000Z`));
+  assert.deepEqual(slots, ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10'].map((m) => `2026-10-14T10:${m}:00.000Z`));
 });
 
-test('qua giờ mới / ngày mới / offline dài (30 ngày, nhiều batch): vé hồi lấp đầy tới trần 500 mỗi loại rồi dừng', () => {
-  const h = makeCtx(Date.UTC(2026, 9, 14, 23, 55, 0));
+test('qua giờ mới / ngày mới / offline dài (30 ngày, nhiều batch): vé hồi lấp đầy tới trần mỗi loại rồi dừng', () => {
+  const h = makeCtx(Date.UTC(2026, 9, 14, 23, 59, 0));
   const { userId } = register(h.ctx, 'alice', 'secret123');
-  h.setNow(Date.UTC(2026, 9, 15, 0, 2, 0));
+  h.setNow(Date.UTC(2026, 9, 15, 0, 0, 0));
   assert.equal(claimRecovery(h.ctx, userId).grantedTotal, 1); // 00:00 ngày mới
-  h.advance(30 * 24 * 60 * 60 * 1000); // 30 ngày = 8640 mốc 5 phút
+  h.advance(30 * 24 * 60 * 60 * 1000); // 30 ngày = 43200 mốc 1 phút
   const r = claimRecovery(h.ctx, userId);
-  const cap = Object.values(RECOVERY_CAP_PER_TYPE).reduce((s, n) => s + n, 0); // 1000 + 4×500
+  const cap = Object.values(RECOVERY_CAP_PER_TYPE).reduce((s, n) => s + n, 0); // 5000 + 4×2000
   assert.equal(r.grantedTotal, cap - BONUS - 1); // chỉ lấp tới trần
-  assert.equal(r.skippedFull, 8640 - r.grantedTotal); // các mốc còn lại bỏ, không cộng bù
-  assert.deepEqual(readBalances(h.ctx.db, userId), { normal: 1000, shu: 500, wei: 500, wu: 500, qun: 500 });
+  assert.equal(r.skippedFull, 43200 - r.grantedTotal); // các mốc còn lại bỏ, không cộng bù
+  assert.deepEqual(readBalances(h.ctx.db, userId), { normal: 5000, shu: 2000, wei: 2000, wu: 2000, qun: 2000 });
   assert.deepEqual(r.recoveryCap, RECOVERY_CAP_PER_TYPE);
   assert.deepEqual(ledgerSum(h.ctx, userId), readBalances(h.ctx.db, userId));
   // Đã xử lý hết các mốc (không xử lý lại khi gọi tiếp)
   assert.equal(claimRecovery(h.ctx, userId).grantedTotal, 0);
 });
 
-test('trần vé hồi theo loại (thường 1000, phe 500): chỉ random trong loại còn dưới trần; vé vượt trần từ nguồn khác được giữ', () => {
+test('trần vé hồi theo loại (thường 5000, phe 2000): chỉ random trong loại còn dưới trần; vé vượt trần từ nguồn khác được giữ', () => {
   const h = makeCtx(Date.UTC(2026, 9, 14, 10, 0, 0));
   const { userId } = register(h.ctx, 'alice', 'secret123');
   const nowIso = () => new Date(h.ctx.now()).toISOString();
   // Mọi RNG trả 0 => nếu không lọc thì luôn ra Vé thường
   h.ctx.rand = () => 0;
-  // Vé thường 600 (> 500 nhưng < trần 1000) vẫn được hồi
+  // Vé thường 600 (< trần 5000) vẫn được hồi
   const b0 = readBalances(h.ctx.db, userId);
   applyTicketDelta(h.ctx.db, userId, 'normal', 600 - b0.normal, 'admin_grant', 'admin:test:0', null, nowIso());
   h.advance(SLOT);
   assert.equal(claimRecovery(h.ctx, userId).granted.normal, 1);
-  // Đưa Vé thường lên 1010 bằng nguồn không bị trần (admin cộng)
-  applyTicketDelta(h.ctx.db, userId, 'normal', 1010 - readBalances(h.ctx.db, userId).normal, 'admin_grant', 'admin:test:1', null, nowIso());
+  // Đưa Vé thường lên 5010 bằng nguồn không bị trần (admin cộng)
+  applyTicketDelta(h.ctx.db, userId, 'normal', 5010 - readBalances(h.ctx.db, userId).normal, 'admin_grant', 'admin:test:1', null, nowIso());
   h.advance(20 * SLOT);
   const r = claimRecovery(h.ctx, userId);
   assert.equal(r.granted.normal, 0);
   assert.equal(r.grantedTotal, 20);
-  assert.equal(readBalances(h.ctx.db, userId).normal, 1010); // giữ nguyên 1010, không bị cắt
+  assert.equal(readBalances(h.ctx.db, userId).normal, 5010); // giữ nguyên 5010, không bị cắt
   // Cả 5 loại đầy => mốc không cấp vé, không ghi ledger
   for (const t of ['shu', 'wei', 'wu', 'qun'] as const) {
     const cur = readBalances(h.ctx.db, userId)[t];
-    applyTicketDelta(h.ctx.db, userId, t, 500 - cur, 'admin_grant', `admin:test:${t}`, null, nowIso());
+    applyTicketDelta(h.ctx.db, userId, t, 2000 - cur, 'admin_grant', `admin:test:${t}`, null, nowIso());
   }
   const before = (h.ctx.db.prepare("SELECT COUNT(*) AS n FROM ticket_transactions WHERE reason='time_recovery'").get() as { n: number }).n;
   h.advance(5 * SLOT);
@@ -443,7 +443,7 @@ test('loại vé roll độc lập theo RNG server cho từng mốc', () => {
   const { userId } = register(h.ctx, 'alice', 'secret123');
   // 5 mốc: r=0 => normal, 2500 => wei, 5000 => shu, 7500 => wu, 9000 => qun
   h.pushRand(0, 2500, 5000, 7500, 9000);
-  h.setNow(Date.UTC(2026, 9, 14, 10, 25, 0));
+  h.setNow(Date.UTC(2026, 9, 14, 10, 5, 0));
   const r = claimRecovery(h.ctx, userId);
   assert.deepEqual(r.granted, { normal: 1, shu: 1, wei: 1, wu: 1, qun: 1 });
 });
@@ -456,7 +456,7 @@ test('unique index chặn cấp trùng mốc kể cả khi state bị lùi', () 
   // Giả lập lỗi: lùi state về 10:00 => lần sync tiếp phải lỗi (rollback), không cấp trùng
   h.ctx.db.prepare("UPDATE ticket_recovery_state SET last_processed_recovery_at = '2026-10-14T10:00:00.000Z'").run();
   assert.throws(() => syncRecovery(h.ctx, userId));
-  assert.equal(getTickets(h.ctx, userId).total, BONUS + 2);
+  assert.equal(getTickets(h.ctx, userId).total, BONUS + 10);
 });
 
 test('batch lỗi giữa chừng: batch đã commit giữ nguyên, lần sau tiếp tục không mất/không trùng', () => {
