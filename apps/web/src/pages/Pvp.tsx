@@ -1840,7 +1840,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   });
 
   return (
-    <div class="pvp-modal rp-modal" role="dialog" aria-modal="true">
+    <div class="pvp-modal rp-modal" role="dialog" aria-modal="true" onClick={(e) => e.target === e.currentTarget && props.onClose()}>
       <div class="panel rp-box">
         <div class="rp-head">
           <div class="rp-side mine">

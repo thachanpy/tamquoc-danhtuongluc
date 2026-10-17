@@ -31,15 +31,15 @@ export const castKindOf = (skill: PvpSkill): FxKind => SKILL_KIND[skill];
 /**
  * Màu đặc trưng từng loại hiệu ứng (pha tiếp với màu phe và accent riêng tướng).
  * Theo QUY CHUẨN màu hiển thị Combat (khớp palette `C` trong `arena.ts` và `.rp-drow-*` ở theme.css):
- * sát thương bạch ngân · hồi máu/buff/khiên bích ngọc · thiêu đốt xích hỏa · debuff/khống chế/xóa buff chu tước.
+ * sát thương bạch ngân · hồi máu/buff/khiên/choáng bích ngọc · thiêu đốt xích hỏa · debuff/xóa buff chu tước.
  */
 const KIND_COLOR: Record<FxKind, number> = {
   damage: 0xe0d8c3,
   heal: 0x6FBE73,
   buff: 0x6FBE73,
   debuff: 0xDB5151,
-  burn: 0xe65100,
-  stun: 0xDB5151,
+  burn: 0xFF772E,
+  stun: 0xA8A8A8,
   dispel: 0xDB5151,
   purify: 0x6FBE73,
 };

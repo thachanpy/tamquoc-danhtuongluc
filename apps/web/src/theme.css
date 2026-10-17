@@ -755,6 +755,9 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .pvp-opp-row.current { border-color: var(--gold); background: rgba(212, 168, 74, .1); }
 .pvp-opp-row-info { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pvp-opp-row-info b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Nút không được co theo bề ngang: chữ dài ("Chuẩn bị khiêu chiến") xuống dòng sẽ làm vỡ nút.
+   Tên đối thủ dài đã có ellipsis nên luôn là bên nhường chỗ. */
+.pvp-opp-row .btn { flex: none; white-space: nowrap; }
 /* Modal rộng hơn để ô tướng đủ chỗ cho hàng chỉ số (chí mạng · ST chí mạng · chính xác · né tránh).
    Cùng cỡ với modal phát lại trận (`.rp-box`) để hai màn hình chiến đấu trông đồng nhất. */
 .pvp-challenge { display: flex; flex-direction: column; gap: 12px; width: min(1240px, 100%); max-height: min(920px, 92dvh); overflow-y: auto; }
@@ -936,8 +939,8 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-mini > img { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
 /* Dòng diễn biến chi tiết.
    Màu theo QUY CHUẨN màu hiển thị Combat (khớp palette `C` ở pixi/arena.ts + `KIND_COLOR` ở skillsfx.ts):
-   sát thương thường #E0D8C3 (bạch ngân / trắng ngà) · chí mạng #FFB300 (hoàng kim) · thiêu đốt #E65100 (xích hỏa)
-   · buff có lợi / hồi máu / khiên #6FBE73 (bích ngọc) · debuff / khống chế / xóa buff #DB5151 (chu tước). */
+   sát thương thường #E0D8C3 (bạch ngân / trắng ngà) · chí mạng #FFB300 (hoàng kim) · thiêu đốt #FF772E (xích hỏa)
+   · buff có lợi / hồi máu / khiên / choáng #6FBE73 (bích ngọc) · debuff / xóa buff #DB5151 (chu tước). */
 .rp-drow { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 8px; font-size: 13.5px; }
 .rp-drow.round { justify-content: center; margin-top: 5px; border-top: 1px solid rgba(212, 168, 74, .18); border-radius: 0; }
 .rp-dround { font: 700 12px/1 var(--num, sans-serif); letter-spacing: .04em; color: var(--gold-2); }
@@ -948,7 +951,7 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-drow.skip { background: rgba(198, 40, 40, .07); color: var(--muted); }
 .rp-drow.damage { background: rgba(224, 216, 195, .06); }
 .rp-drow.heal { background: rgba(46, 125, 50, .12); }
-.rp-drow.stun { background: rgba(198, 40, 40, .07); }
+.rp-drow.stun { background: rgba(125, 125, 125, 0.09); }
 .rp-drow.cleanse { background: rgba(46, 125, 50, .12); }
 .rp-drow.buff { background: rgba(46, 125, 50, .09); }
 .rp-drow.debuff { background: rgba(198, 40, 40, .08); }
@@ -963,7 +966,7 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-drow-arrow { flex: 0 0 auto; color: var(--muted); }
 .rp-drow-amt { flex: 0 0 auto; font: 900 18px/1 var(--num, sans-serif); color: #e0d8c3; white-space: nowrap; }
 .rp-drow-amt.heal { color: #6FBE73; }
-.rp-drow-amt.burn { color: #e65100; }
+.rp-drow-amt.burn { color: #FF772E; }
 .rp-drow-amt.crit { color: #ffb300; text-shadow: 0 0 10px rgba(255, 179, 0, .75); }
 /* Nhãn chí mạng: chip nhỏ đi kèm con số (không phình theo cỡ số chí mạng) */
 .rp-drow-crit { display: inline-block; margin-left: 4px; padding: 1px 4px; border: 1px solid rgba(255, 179, 0, .45); border-radius: 999px; background: rgba(255, 179, 0, .14); color: #ffb300; font: 800 10px/1.4 var(--num, sans-serif); letter-spacing: .04em; vertical-align: 1px; }
@@ -1066,6 +1069,10 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
   .pvp-cell-stat { font-size: 10px; }
   .pvp-pick-art { width: 34px; height: 34px; }
   .pvp-pick-row { padding: 5px 8px; gap: 8px; }
+  /* Màn hẹp: hàng đối thủ xuống 2 dòng — tên được trọn bề ngang, nút "Chuẩn bị khiêu chiến"
+     nằm riêng một dòng và giãn hết cỡ (nếu để chung dòng, bề ngang còn quá ít cho cả hai). */
+  .pvp-opp-row { flex-wrap: wrap; }
+  .pvp-opp-row .btn { flex: 1 1 100%; }
   /* Màn hẹp: 2 đội xếp dọc thay vì trái/phải */
   .pvp-duel { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .pvp-duel-vs { justify-self: center; }

@@ -119,8 +119,8 @@ const UI_FONT = 'system-ui, sans-serif';
  * Bảng màu hiển thị Combat — QUY CHUẨN dùng chung cho mọi màn chiến đấu (sân đấu PixiJS, dòng diễn
  * biến và bảng tổng kết chỉ số). Đổi màu ở đây thì phải đổi tương ứng ở `theme.css` (`.rp-drow-*`,
  * `.rp-t-num.*`) và `skillsfx.ts` (`KIND_COLOR`) để không lệch tông:
- * - Sát thương thường `#E0D8C3` (bạch ngân / trắng ngà) · Chí mạng `#FFB300` (hoàng kim) · Thiêu đốt `#E65100` (xích hỏa)
- * - Buff có lợi / Hồi máu / Khiên `#6FBE73` (bích ngọc) · Debuff / Khống chế / Xóa buff `#DB5151` (chu tước)
+ * - Sát thương thường `#E0D8C3` (bạch ngân / trắng ngà) · Chí mạng `#FFB300` (hoàng kim) · Thiêu đốt `#FF772E` (xích hỏa)
+ * - Buff có lợi / Hồi máu / Khiên / Choáng `#6FBE73` (bích ngọc) · Debuff / Xóa buff `#DB5151` (chu tước)
  */
 const C = {
   line: 0x2c303b,
@@ -146,12 +146,12 @@ const C = {
   heal: 0x6FBE73,
   /** Sát thương chí mạng — hoàng kim / vàng đế vương. */
   crit: 0xffb300,
-  /** Khống chế (choáng) — chu tước, cùng nhóm với debuff. */
-  stun: 0xDB5151,
+  /** Khống chế (choáng) — xanh lục (bích ngọc): sao váng đầu nhìn là thấy rõ, không lẫn với sát thương. */
+  stun: 0xA8A8A8,
   /** Debuff / Xóa buff — chu tước (đỏ máu). */
   debuff: 0xDB5151,
   /** Sát thương Thiêu đốt theo lượt (DoT) — xích hỏa / cam lửa trầm. */
-  burn: 0xe65100,
+  burn: 0xFF772E,
 };
 
 /** Mã màu hex cho bộ nạp SVG của PixiJS (nó không hiểu `currentColor`). */

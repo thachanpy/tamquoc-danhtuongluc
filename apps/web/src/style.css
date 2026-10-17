@@ -250,9 +250,9 @@ button.slot:disabled { cursor: not-allowed; }
 /* ---------- hồ sơ người chơi + ảnh đại diện ---------- */
 .user-id { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
-/* Ảnh đại diện: ảnh tròn; chưa có ảnh thì hiện chữ cái đầu của tên hiển thị */
-.avatar { display: inline-grid; place-items: center; border-radius: 50%; overflow: hidden; flex: none; background: linear-gradient(160deg, #2a2112, var(--panel-2)); color: var(--gold-2); font-weight: 800; border: 1px solid var(--line); }
-.avatar img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+/* Ảnh đại diện: chữ cái đầu là lớp nền; ảnh thật phủ lên trên (lỗi tải thì tự ẩn, còn lại chữ cái đầu) */
+.avatar { position: relative; display: inline-grid; place-items: center; border-radius: 50%; overflow: hidden; flex: none; background: linear-gradient(160deg, #2a2112, var(--panel-2)); color: var(--gold-2); font-weight: 800; border: 1px solid var(--line); }
+.avatar img { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
 .avatar-ini { line-height: 1; letter-spacing: 1px; }
 .head-avatar { width: 32px; height: 32px; font-size: 13px; }
 .avatar-lg { width: 96px; height: 96px; font-size: 34px; }
