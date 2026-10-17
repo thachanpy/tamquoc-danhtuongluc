@@ -106,7 +106,7 @@ test('đăng ký: nhận đúng 100 vé, loại vé roll độc lập, ledger kh
   assert.equal(BONUS, 100);
   const h = makeCtx();
   // 20 vé mỗi loại theo RNG điều khiển (thang 10000, mỗi loại 2000):
-  // 0 -> normal, 2500 -> shu, 5000 -> wei, 7500 -> wu, 9000 -> qun
+  // 0 -> normal, 2500 -> wei, 5000 -> shu, 7500 -> wu, 9000 -> qun
   h.pushRand(...Array(20).fill(0), ...Array(20).fill(2500), ...Array(20).fill(5000), ...Array(20).fill(7500), ...Array(20).fill(9000));
   const { userId, signupBonus } = register(h.ctx, 'alice', 'secret123');
   assert.deepEqual(signupBonus, { normal: 20, shu: 20, wei: 20, wu: 20, qun: 20 });
@@ -441,7 +441,7 @@ test('trần vé hồi theo loại (thường 1000, phe 500): chỉ random trong
 test('loại vé roll độc lập theo RNG server cho từng mốc', () => {
   const h = makeCtx(Date.UTC(2026, 9, 14, 10, 0, 0));
   const { userId } = register(h.ctx, 'alice', 'secret123');
-  // 5 mốc: r=0 => normal, 2500 => shu, 5000 => wei, 7500 => wu, 9000 => qun
+  // 5 mốc: r=0 => normal, 2500 => wei, 5000 => shu, 7500 => wu, 9000 => qun
   h.pushRand(0, 2500, 5000, 7500, 9000);
   h.setNow(Date.UTC(2026, 9, 14, 10, 25, 0));
   const r = claimRecovery(h.ctx, userId);
@@ -554,8 +554,8 @@ test('quay: tiêu đúng 1 vé, tạo 1 thẻ, ledger khớp; retry cùng key tr
 
 test('vé phe (Thục/Ngụy/Ngô/Quần) chỉ ra tướng đúng phe; vé thường phủ 140 tướng', () => {
   const h = userWithTickets(700, [
-    ...Array(140).fill(2500), // 140 vé Thục
-    ...Array(140).fill(5000), // 140 vé Ngụy
+    ...Array(140).fill(5000), // 140 vé Thục
+    ...Array(140).fill(2500), // 140 vé Ngụy
     ...Array(140).fill(7500), // 140 vé Ngô
     ...Array(140).fill(9000), // 140 vé Quần
     ...Array(140).fill(0), // 140 vé thường
@@ -631,8 +631,8 @@ test('quay ×10: đủ vé => quay đúng 10, tiêu 10 vé, 10 thẻ, 10 dòng l
 
 test('quay ×10 khi còn ít hơn 10 vé => quay hết số vé còn lại', () => {
   const h = makeCtx();
-  // 3 vé Thục, 97 vé thường
-  h.pushRand(2500, 2500, 2500, ...Array(97).fill(0));
+  // 3 vé Thục, 97 vé thường (vé Thục là mốc thứ 3 trong TICKET_TYPES: normal → ngụy → thục)
+  h.pushRand(5000, 5000, 5000, ...Array(97).fill(0));
   const { userId } = register(h.ctx, 'alice', 'secret123');
   assert.equal(readBalances(h.ctx.db, userId).shu, 3);
   const r = draw(h.ctx, userId, 'shu', 'multi-0000001', 10);
@@ -1089,7 +1089,7 @@ test('giftcode chỉ tặng vé: tạo code có thẻ bị từ chối; code nhi
     expiresAt: new Date(T0 + 60 * 60 * 1000).toISOString(),
   });
   assert.equal(c.code, 'MIX-01');
-  assert.deepEqual(c.rewards, [{ kind: 'ticket', pool: 'shu', count: 15 }, { kind: 'ticket', pool: 'wei', count: 20 }]);
+  assert.deepEqual(c.rewards, [{ kind: 'ticket', pool: 'wei', count: 20 }, { kind: 'ticket', pool: 'shu', count: 15 }]);
   assert.equal(c.totalTickets, 35);
   assert.equal(c.totalCards, 0);
   assert.throws(() => adminCreateGiftCode(h.ctx, userId, { code: 'MIX-01', rewards: [{ pool: 'wu', count: 1 }] }), errCode('GIFTCODE_EXISTS'));
@@ -1100,7 +1100,7 @@ test('giftcode chỉ tặng vé: tạo code có thẻ bị từ chối; code nhi
   const bob = register(h.ctx, 'bob', 'secret123').userId;
   const b0 = readBalances(h.ctx.db, bob);
   const r = redeemGiftCode(h.ctx, bob, 'MIX-01');
-  assert.deepEqual(r.tickets, [{ pool: 'shu', count: 15 }, { pool: 'wei', count: 20 }]);
+  assert.deepEqual(r.tickets, [{ pool: 'wei', count: 20 }, { pool: 'shu', count: 15 }]);
   const b1 = readBalances(h.ctx.db, bob);
   assert.deepEqual([b1.shu - b0.shu, b1.wei - b0.wei], [15, 20]);
   assert.deepEqual(ledgerSum(h.ctx, bob), b1);

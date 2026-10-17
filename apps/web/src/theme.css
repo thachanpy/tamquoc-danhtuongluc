@@ -677,6 +677,21 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
    của hàng sau, dù tên tướng / số chỉ số dài ngắn khác nhau (không bị lệch hàng). */
 .pvp-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto repeat(3, auto); gap: 6px 10px; }
 .pvp-col { display: grid; grid-template-rows: subgrid; grid-row: 1 / -1; gap: 6px; }
+/* Chuẩn bị khiêu chiến: đội mình và đội địch là HAI bàn riêng nên `subgrid` chỉ khớp hàng trong từng
+   bàn — ô hàng 1 của bên này vẫn có thể cao/thấp hơn bên kia (tên và chip xuống dòng khác nhau).
+   Cho bàn giãn kín chiều cao khung đấu (hai khung luôn cao bằng nhau) và chia đều 3 hàng tướng,
+   nhờ vậy hàng 1-2-3 của hai bên thẳng hàng ngang và các ô đều nhau. */
+.pvp-duel .pvp-board { grid-template-rows: auto repeat(3, minmax(0, 1fr)); flex: 1 1 auto; }
+/* Ô tướng hai bên tuy cao bằng nhau nhưng các hàng BÊN TRONG ô vẫn lệch: tên/chip xuống dòng khác
+   nhau, số chỉ số dài ngắn khác nhau => avatar và các dòng chỉ số của ta với địch không ngang hàng.
+   Cố định hàng avatar (60px) và neo khối chỉ số xuống ĐÁY ô với hai hàng chỉ số cao bằng nhau
+   (tối thiểu 30px/28px) => avatar, hàng chỉ số 1 và hàng chỉ số 2 của hai bên luôn ngang hàng.
+   Chỉ áp dụng khi 2 đội nằm cạnh nhau (màn hẹp xếp dọc thì không cần đối chiếu hàng). */
+@media (min-width: 641px) {
+  .pvp-duel .pvp-cell { grid-template-rows: 60px auto auto 1fr; }
+  .pvp-duel .pvp-cell-stat:not(.loading) { display: grid; grid-template-rows: minmax(30px, auto) minmax(28px, auto); align-self: end; width: 100%; }
+  .pvp-duel .pvp-cell-stat .row1, .pvp-duel .pvp-cell-stat .row2 { align-content: center; }
+}
 .pvp-col-title { font: 600 12px/1 var(--num, sans-serif); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); text-align: center; }
 .pvp-cell { position: relative; display: grid; grid-template-rows: 1fr auto auto auto; gap: 2px; align-items: center; justify-items: center; min-height: 104px; padding: 8px 6px 6px; border: 1px solid var(--line); border-radius: 10px; background: rgba(10, 6, 4, .4); color: var(--text); font: inherit; cursor: pointer; overflow: hidden; transition: border-color .15s, background .15s; }
 .pvp-cell.empty { border-style: dashed; background: rgba(10, 6, 4, .22); color: var(--muted); }
@@ -730,22 +745,25 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .pvp-drag-ghost > img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; object-position: 50% 0; }
 .pvp-drag-ghost > b { font-size: 12px; }
 
-/* Khối đối thủ: dòng tóm tắt, chi tiết 2 đội nằm trong modal chuẩn bị khiêu chiến */
+/* Khối đối thủ: danh sách gợi ý (người vừa đánh gần nhất trước, bù thêm từ bảng xếp hạng);
+   chi tiết 2 đội nằm trong modal chuẩn bị khiêu chiến. */
+.pvp-opp-list { display: grid; gap: 6px; }
 .pvp-opp-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(10, 6, 4, .3); }
+/* Dòng đang mở trong modal chuẩn bị khiêu chiến (đối thủ đang chọn) */
+.pvp-opp-row.current { border-color: var(--gold); background: rgba(212, 168, 74, .1); }
 .pvp-opp-row-info { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pvp-opp-row-info b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Modal rộng hơn để ô tướng đủ chỗ cho hàng chỉ số (chí mạng · ST chí mạng · chính xác · né tránh) */
 .pvp-challenge { display: flex; flex-direction: column; gap: 12px; width: min(1040px, 100%); max-height: 90dvh; overflow-y: auto; }
 .pvp-challenge-hint { margin: 0; }
-/* Modal chuẩn bị khiêu chiến: hai khối đội (mình · địch) cao BẰNG NHAU và mọi hàng trong ô tướng
-   (avatar · cấp · phe · phong cách · LC · chỉ số) thẳng hàng nhau. Cách làm: khối đội là flex dọc,
-   phần đầu cao cố định, bàn đội và ô tướng giữ nguyên chiều cao tự nhiên (KHÔNG giãn), phần chênh
-   lệch chiều cao dồn hết thành khoảng trống NGAY TRÊN dải Ngọc (`margin-top: auto`) → dải Ngọc hai
-   bên neo cùng đáy, còn đáy ô tướng bên nào không có chỉ số thì để trống cho gọn. */
+/* Modal chuẩn bị khiêu chiến: hai khối đội (mình · địch) cao BẰNG NHAU (lưới stretch) và mọi hàng
+   trong ô tướng (avatar · cấp · phe · phong cách · LC · chỉ số) thẳng hàng nhau. Cách làm: khối đội là
+   flex dọc, bàn đội hình giãn kín phần chiều cao còn lại và chia đều 3 hàng tướng (rule ở .pvp-board)
+   → hàng 1-2-3 của hai bên luôn ngang nhau; dải Ngọc vẫn neo đáy khối đội. */
 .pvp-duel { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: stretch; }
 .pvp-duel-side { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid rgba(212, 168, 74, .18); border-radius: 12px; background: rgba(10, 6, 4, .3); }
 .pvp-duel-side.foe { border-color: rgba(217, 83, 79, .28); }
-/* Phần tử cuối khối đội (dải Ngọc) neo đáy; khoảng trống dư nằm ở trên nó. */
+/* Phần tử cuối khối đội (dải Ngọc) neo đáy; khoảng trống dư (nếu có) nằm ở trên nó. */
 .pvp-duel-side > :last-child { margin-top: auto; }
 /* Phần đầu khối đội cao cố định để hai bên chia đều khoảng trống cho bàn đội như nhau
    (tên đội địch có thêm hậu tố "· đội gợi ý" nên phải cắt bằng ellipsis, không được xuống dòng). */

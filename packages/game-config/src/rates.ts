@@ -46,11 +46,11 @@ export const DRAW_COUNT_OPTIONS: readonly number[] = [1, 10];
  */
 export const DRAW_ALL_MAX = 1000;
 
-/** Xác suất loại vé khi cấp (mục 3.5): 5 loại, mỗi loại 20%. */
+/** Xác suất loại vé khi cấp (mục 3.5): 5 loại, mỗi loại 20%. Thứ tự khóa theo `TICKET_TYPES`. */
 export const TICKET_GRANT_WEIGHTS: Record<TicketType, number> = {
   normal: 2000,
-  shu: 2000,
   wei: 2000,
+  shu: 2000,
   wu: 2000,
   qun: 2000,
 };
@@ -58,8 +58,8 @@ export const TICKET_GRANT_WEIGHTS: Record<TicketType, number> = {
 /** Pool phe của từng loại vé. null = toàn bộ 100 tướng. */
 export const TICKET_POOL_FACTION: Record<TicketType, Faction | null> = {
   normal: null,
-  shu: 'shu',
   wei: 'wei',
+  shu: 'shu',
   wu: 'wu',
   qun: 'qun',
 };

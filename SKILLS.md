@@ -53,11 +53,11 @@ Nguồn dữ liệu cân bằng cho chiến đấu PvP. Mã hoá tường minh t
 | Số tướng cùng phe | % Máu | % Sát thương |
 | :---: | :---: | :---: |
 | 1 (không đủ mốc) | +0% | +0% |
-| 2 | +2% | +0% |
-| 3 | +4% | +2% |
-| 4 | +6% | +4% |
-| 5 | +8% | +6% |
-| 6 | +10% | +8% |
+| 2 | +2% | +2% |
+| 3 | +4% | +4% |
+| 4 trở lên | +6% | +6% |
+
+> Cổng Đồng Phe chỉ có **3 mốc** (2 → 3 → 4 tướng); **mốc 4 tướng là mốc cao nhất**, từ **4 tướng trở lên kẹp ở mốc cao nhất** (+6% Máu, +6% Sát thương), không có mốc riêng cho 5–6 tướng.
 
 - **Thứ tự hành động**: Hai đội **luân phiên nhau theo vị trí**. Vào trận, bên có **tổng LC cả đội cao hơn** ra đòn trước ở **vị trí 1**, rồi tới **vị trí 1 của bên kia**, **vị trí 2 của bên đi trước**, **vị trí 2 của bên kia**… cứ thế tới vị trí 6 (bằng tổng LC thì bên khiêu chiến A đi trước).
 - **Phạm vi nhắm mục tiêu (Targeting)**: 6 ô gồm **Hàng Trước** `1-2-3` và **Hàng Sau** `4-5-6`; cặp ô **Hàng Ngang** là `1-4`, `2-5`, `3-6` (tức `X` và `X+3`).

@@ -194,17 +194,20 @@ export function pvpStyleBonus(style: PvpStyle, supportLayers: number): { damageB
 }
 
 // ===== Cổng Đồng Phe (Faction Synergy — SKILLS.md mục 1) =====
-// Đếm số tướng CÙNG PHE trong đội (2–6 tướng) để cộng % Máu/Sát thương cho chính các tướng cùng phe đó.
+// Đếm số tướng CÙNG PHE trong đội để cộng % Máu/Sát thương cho chính các tướng cùng phe đó.
 // Tướng phe khác nhận mốc riêng theo số tướng cùng phe của mình (không dùng chung mốc phe đông nhất).
+// Mốc cao nhất là **4 tướng cùng phe**; từ 4 tướng trở lên kẹp ở mốc cao nhất.
 
-/** % Máu cộng thêm theo số tướng cùng phe (index = số tướng: 2 tướng +2%, 3 tướng +4%, …, 6 tướng +10%). */
-export const PVP_FACTION_HP_BPS = [0, 0, 200, 400, 600, 800, 1000] as const;
-/** % Sát thương cộng thêm theo số tướng cùng phe (2 tướng +0%, 3 tướng +2%, …, 6 tướng +8%). */
-export const PVP_FACTION_DAMAGE_BPS = [0, 0, 0, 200, 400, 600, 800] as const;
+/** % Máu cộng thêm theo số tướng cùng phe (2 tướng +2%, 3 tướng +4%, 4+ tướng +6%). */
+export const PVP_FACTION_HP_BPS = [0, 0, 200, 400, 600] as const;
+/** % Sát thương cộng thêm theo số tướng cùng phe (2 tướng +2%, 3 tướng +4%, 4+ tướng +6%). */
+export const PVP_FACTION_DAMAGE_BPS = [0, 0, 200, 400, 600] as const;
+/** Mốc cao nhất của Cổng Đồng Phe (4 tướng cùng phe) — vượt số này kẹp về đây. */
+export const PVP_FACTION_MAX_COUNT = PVP_FACTION_HP_BPS.length - 1;
 
 /** Chỉ số Cổng Đồng Phe cho MỘT tướng theo số tướng CÙNG PHE trong đội. */
 export function pvpFactionBonus(count: number): { damageBps: number; hpBps: number } {
-  const n = Math.max(0, Math.min(PVP_TEAM_SIZE, Math.floor(count)));
+  const n = Math.max(0, Math.min(PVP_FACTION_MAX_COUNT, Math.floor(count)));
   return { hpBps: PVP_FACTION_HP_BPS[n] ?? 0, damageBps: PVP_FACTION_DAMAGE_BPS[n] ?? 0 };
 }
 

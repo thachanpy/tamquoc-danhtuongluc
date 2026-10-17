@@ -3,7 +3,9 @@
 export const FACTIONS = ['wei', 'shu', 'wu', 'qun'] as const;
 export type Faction = (typeof FACTIONS)[number];
 
-export const TICKET_TYPES = ['normal', 'shu', 'wei', 'wu', 'qun'] as const;
+/** Loại vé quay thẻ: vé thường (mọi phe) rồi tới 4 vé phe, xếp theo thứ tự hiển thị
+ *  Thường → Ngụy → Thục → Ngô → Quần (trùng thứ tự `FACTIONS`) — dùng luôn cho mọi UI liệt kê vé. */
+export const TICKET_TYPES = ['normal', 'wei', 'shu', 'wu', 'qun'] as const;
 export type TicketType = (typeof TICKET_TYPES)[number];
 
 /** Ngũ hành của Ngọc: Kim / Mộc / Thủy / Hỏa / Thổ. */

@@ -150,15 +150,14 @@ test('engine: hàng sau +5% damage so với hàng trước (mục 2.3)', () => {
   assert.ok(dmgOf(run(5)) > dmgOf(run(2)), 'tướng hàng sau gây nhiều sát thương hơn tướng hàng trước');
 });
 
-test('config: bảng Cổng Đồng Phe đúng mốc 2–6 tướng và kẹp trần (mục 1)', () => {
+test('config: bảng Cổng Đồng Phe 3 mốc (2–4 tướng), mốc 4 là cao nhất và kẹp trần (mục 1)', () => {
   assert.deepEqual(pvpFactionBonus(0), { hpBps: 0, damageBps: 0 });
   assert.deepEqual(pvpFactionBonus(1), { hpBps: 0, damageBps: 0 }, '1 tướng chưa đủ mốc cộng hưởng');
-  assert.deepEqual(pvpFactionBonus(2), { hpBps: 200, damageBps: 0 });
-  assert.deepEqual(pvpFactionBonus(3), { hpBps: 400, damageBps: 200 });
-  assert.deepEqual(pvpFactionBonus(4), { hpBps: 600, damageBps: 400 });
-  assert.deepEqual(pvpFactionBonus(5), { hpBps: 800, damageBps: 600 });
-  assert.deepEqual(pvpFactionBonus(6), { hpBps: 1000, damageBps: 800 });
-  assert.deepEqual(pvpFactionBonus(9), pvpFactionBonus(6), 'vượt 6 tướng kẹp về mốc 6');
+  assert.deepEqual(pvpFactionBonus(2), { hpBps: 200, damageBps: 200 });
+  assert.deepEqual(pvpFactionBonus(3), { hpBps: 400, damageBps: 400 });
+  assert.deepEqual(pvpFactionBonus(4), { hpBps: 600, damageBps: 600 }, 'mốc cao nhất');
+  assert.deepEqual(pvpFactionBonus(5), pvpFactionBonus(4), 'vượt 4 tướng kẹp về mốc cao nhất');
+  assert.deepEqual(pvpFactionBonus(6), pvpFactionBonus(4), 'vượt 4 tướng kẹp về mốc cao nhất');
 });
 
 test('config: pvpPreBattleBonus tổng hợp Vị trí + Phong cách + Cổng Đồng Phe (mục 1)', () => {
@@ -188,15 +187,15 @@ test('config: pvpPreBattleBonus tổng hợp Vị trí + Phong cách + Cổng Đ
     hpBps: 800,
     damageBps: 500,
   });
-  // Hỗ trợ 2 lớp + 4 tướng cùng phe, hàng trước: 5% vị trí + 2%×2 Hỗ trợ (400) + mốc 4 (600 HP / 400 ST).
+  // Hỗ trợ 2 lớp + 4 tướng cùng phe (mốc cao nhất), hàng trước: 5% vị trí + 2%×2 Hỗ trợ (400) + mốc 4 (600).
   const b = pvpPreBattleBonus('support', 2, 4, 'front');
   assert.equal(b.rowHpBps, 500);
   assert.equal(b.supportHpBps, 400);
   assert.equal(b.supportDamageBps, 400);
   assert.equal(b.factionHpBps, 600);
-  assert.equal(b.factionDamageBps, 400);
+  assert.equal(b.factionDamageBps, 600);
   assert.equal(b.hpBps, 1500);
-  assert.equal(b.damageBps, 800);
+  assert.equal(b.damageBps, 1000);
   // Trần aura Hỗ trợ 6 lớp = +12% (1200 bps).
   assert.equal(pvpPreBattleBonus('support', 9, 0, 'back').supportHpBps, 1200);
   assert.equal(pvpPreBattleBonus('support', 9, 0, 'back').supportDamageBps, 1200);

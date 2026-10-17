@@ -13,7 +13,7 @@ import { castKindOf, spawnSkillFx, type Fx, type FxKind } from './skillsfx.ts';
  */
 
 const W = 900;
-const H = 512;
+const H = 532;
 /** Bề rộng dải phân cách giữa hai đội. */
 const DIV_W = 28;
 const SIDE_GAP = 10;
@@ -26,7 +26,9 @@ const COL_W = (SIDE_W - PAD * 2 - COL_GAP) / 2;
  * chen chúc; 3 hàng ô cộng khoảng cách vẫn nằm gọn trong chiều cao sân `H`.
  */
 const TILE_H = 164;
-const ROW_GAP = 6;
+/** Khoảng cách DỌC giữa hai ô liền kề trong cùng một cột (ô 1–2, 2–3) — lấy ĐÚNG bằng khoảng cách
+    NGANG giữa ô 1 và ô 4 (`COL_GAP`) để các ô dàn đều, nhìn không bị lệch một chiều. */
+const ROW_GAP = COL_GAP;
 const ROW_Y0 = 6;
 /** Vòng chân dung trong ô (56px, khớp ô tướng ở trang chuẩn bị chiến). */
 const ART_R = 28;

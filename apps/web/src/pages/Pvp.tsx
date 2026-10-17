@@ -5,6 +5,7 @@ import type {
   GemConfigDto,
   GemElement,
   GemsDto,
+  LeaderboardEntryDto,
   PvpBattleDto,
   PvpBattleSummaryDto,
   PvpCombatDto,
@@ -44,6 +45,18 @@ import { playSfx, sfxPrefs, stopAllSfx, toggleSfx, type SfxName } from '../sfx.t
 const num = (n: number) => n.toLocaleString('vi-VN');
 const FRONT = [1, 2, 3];
 const BACK = [4, 5, 6];
+/** Số gợi ý đối thủ hiện ở mục Đối thủ trên trang Đấu trường (mục 6.7). */
+const OPP_SUGGESTIONS = 5;
+
+/** Một dòng gợi ý đối thủ: người vừa đánh gần nhất (từ lịch sử trận) rồi bù thêm từ bảng xếp hạng. */
+interface OppSuggestion {
+  id: number;
+  displayName: string;
+  avatar: string | null;
+  lc: number;
+  /** true = vừa đánh gần đây (lấy từ lịch sử trận đấu) — ưu tiên xếp trước. */
+  recent: boolean;
+}
 const SLOT_LABEL: Record<number, string> = { 1: 'Trước·Trên', 2: 'Trước·Giữa', 3: 'Trước·Dưới', 4: 'Sau·Trên', 5: 'Sau·Giữa', 6: 'Sau·Dưới' };
 
 const OUTCOME_LABEL: Record<PvpOutcome, string> = { win: 'Thắng', loss: 'Thua', draw: 'Hòa' };
@@ -299,13 +312,12 @@ const FORMATION_STYLE_RULES: readonly { style: PvpStyle; note: string }[] = [
   { style: 'defense', note: '+8% Máu cơ bản' },
   { style: 'support', note: '+2% Máu và +2% Sát thương cho toàn đội mỗi tướng Hỗ trợ (tối đa 6 lớp = +12%/+12%)' },
 ];
-/** Thưởng Cùng phe theo số tướng cùng phe với tướng đó trong đội (`PVP_FACTION_*` trong game-config). */
-const FORMATION_FACTION_RULES: readonly { count: number; note: string }[] = [
-  { count: 2, note: '+2% Máu' },
-  { count: 3, note: '+4% Máu · +2% Sát thương' },
-  { count: 4, note: '+6% Máu · +4% Sát thương' },
-  { count: 5, note: '+8% Máu · +6% Sát thương' },
-  { count: 6, note: '+10% Máu · +8% Sát thương' },
+/** Thưởng Cùng phe theo số tướng cùng phe với tướng đó trong đội (`PVP_FACTION_*` trong game-config).
+    Mốc cao nhất là 4 tướng; từ 4 tướng trở lên kẹp ở mốc cao nhất nên ghi "4+". */
+const FORMATION_FACTION_RULES: readonly { count: string; note: string }[] = [
+  { count: '2', note: '+2% Máu · +2% Sát thương' },
+  { count: '3', note: '+4% Máu · +4% Sát thương' },
+  { count: '4+', note: '+6% Máu · +6% Sát thương (mốc cao nhất)' },
 ];
 
 /** Nút icon thông tin: bấm để mở/đóng bảng quy tắc đội hình + chỉ số nền ra trận. */
@@ -2127,6 +2139,8 @@ export function PvpPage() {
   const [oppBusy, setOppBusy] = createSignal(false);
   const [battle, setBattle] = createSignal<PvpBattleDto | null>(null);
   const [history, setHistory] = createSignal<PvpBattleSummaryDto[]>([]);
+  /** Bảng xếp hạng — dùng để bù gợi ý đối thủ khi lịch sử trận chưa đủ 5 người (mục 6.7). */
+  const [ranks, setRanks] = createSignal<LeaderboardEntryDto[]>([]);
 
   // Lực chiến (LC) của một tướng ở cấp cao nhất đang sở hữu — server tính sẵn trong `ownedCombat`.
   const unitLc = (generalId: string) => overview()?.ownedCombat[generalId]?.self.lc ?? 0;
@@ -2239,6 +2253,15 @@ export function PvpPage() {
       if (alive) setCards([]);
     }
   }
+  /** Nạp bảng xếp hạng để có sẵn ứng viên bù vào danh sách gợi ý đối thủ. */
+  async function loadRanks() {
+    try {
+      const d = await api.leaderboard();
+      if (alive) setRanks(d.items);
+    } catch {
+      /* lỗi tải bảng xếp hạng thì chỉ còn gợi ý từ lịch sử trận */
+    }
+  }
   async function loadOpponent(id: number) {
     setOppBusy(true);
     setOppError('');
@@ -2261,6 +2284,7 @@ export function PvpPage() {
     void loadOverview();
     void loadHistory();
     void loadGems();
+    void loadRanks();
   });
 
   // Nạp chỉ số cơ bản cho đội mình + đội đối thủ để hiển thị ở bước chuẩn bị khiêu chiến
@@ -2325,6 +2349,31 @@ export function PvpPage() {
   const ownedCombat = createMemo(() => overview()?.ownedCombat ?? {});
   /** Đối thủ đang mở trong modal chuẩn bị khiêu chiến. */
   const challengeOpp = createMemo(() => (challengeOpen() ? opponent() : null));
+  /**
+   * Gợi ý đối thủ ở mục Đối thủ (mục 6.7) — luôn hiện ít nhất 5 người:
+   * 1) Người VỪA ĐÁNH GẦN NHẤT lấy từ lịch sử trận đấu (lịch sử đã sắp mới nhất trước), mỗi người 1 dòng;
+   * 2) Thiếu thì bù thêm người trên bảng xếp hạng theo thứ hạng (bỏ qua chính mình và người đã có).
+   */
+  const oppSuggestions = createMemo<OppSuggestion[]>(() => {
+    const out: OppSuggestion[] = [];
+    const seen = new Set<number>();
+    const meId = overview()?.me.id;
+    if (meId) seen.add(meId);
+    for (const h of history()) {
+      const o = h.opponent;
+      if (seen.has(o.id)) continue;
+      seen.add(o.id);
+      out.push({ id: o.id, displayName: o.displayName, avatar: o.avatar, lc: h.opponentLc, recent: true });
+      if (out.length >= OPP_SUGGESTIONS) return out;
+    }
+    for (const e of ranks()) {
+      if (seen.has(e.id)) continue;
+      seen.add(e.id);
+      out.push({ id: e.id, displayName: e.displayName, avatar: e.avatar, lc: e.lc, recent: false });
+      if (out.length >= OPP_SUGGESTIONS) break;
+    }
+    return out;
+  });
   /** Đang lưu đội hình (tự động) — chỉ để hiện trạng thái, không khoá thao tác. */
   const [saving, setSaving] = createSignal(false);
 
@@ -2468,26 +2517,34 @@ export function PvpPage() {
                 <Show when={oppBusy()}>
                   <div class="state-msg">Đang tải đối thủ…</div>
                 </Show>
-                <Show when={!oppBusy() && oppError()}>
+                <Show when={oppError()}>
                   <div class="state-msg error">{oppError()}</div>
                 </Show>
-                <Show when={!oppBusy() && opponent()}>
-                  {(o) => (
-                    <div class="pvp-opp-row">
-                      <Avatar avatar={o().opponent.avatar} name={o().opponent.displayName} class="pvp-opp-avatar" />
-                      <div class="pvp-opp-row-info">
-                        <b>{o().opponent.displayName}</b>
-                        <span class="muted small">{`Lực chiến ${num(o().team.lc)}${o().saved ? '' : ' · đội gợi ý'}`}</span>
+                <Show
+                  when={oppSuggestions().length}
+                  fallback={
+                    <Show when={!oppBusy()}>
+                      <div class="state-msg">
+                        Mở <b>Bảng xếp hạng</b> và bấm vào một người chơi để khiêu chiến.
                       </div>
-                      <button class="btn primary small" onClick={() => setChallengeOpen(true)}>
-                        Chuẩn bị khiêu chiến
-                      </button>
-                    </div>
-                  )}
-                </Show>
-                <Show when={!oppBusy() && !opponent() && !oppError()}>
-                  <div class="state-msg">
-                    Mở <b>Bảng xếp hạng</b> và bấm vào một người chơi để khiêu chiến.
+                    </Show>
+                  }
+                >
+                  <div class="pvp-opp-list">
+                    <For each={oppSuggestions()}>
+                      {(s) => (
+                        <div class="pvp-opp-row" classList={{ current: opponent()?.opponent.id === s.id }}>
+                          <Avatar avatar={s.avatar} name={s.displayName} class="pvp-opp-avatar" />
+                          <div class="pvp-opp-row-info">
+                            <b>{s.displayName}</b>
+                            <span class="muted small">{`Lực chiến ${num(s.lc)}${s.recent ? ' · vừa đánh' : ''}`}</span>
+                          </div>
+                          <button class="btn primary small" disabled={oppBusy()} onClick={() => void loadOpponent(s.id)}>
+                            Chuẩn bị khiêu chiến
+                          </button>
+                        </div>
+                      )}
+                    </For>
                   </div>
                 </Show>
               </div>
