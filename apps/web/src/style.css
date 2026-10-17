@@ -221,6 +221,8 @@ button.slot:disabled { cursor: not-allowed; }
 .lv-chk.on { color: var(--text); border-color: var(--gold); background: rgba(212,168,74,.12); }
 .lv-chk input { accent-color: var(--gold); margin: 0; }
 .quick-confirm { margin-top: 10px; display: grid; gap: 8px; justify-items: start; }
+/* Hai nút Huỷ + Xác nhận của Ghép nhanh nằm CÙNG một hàng (thay vì mỗi nút một dòng của grid). */
+.quick-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .quick-confirm .rates { max-width: 420px; }
 .quick-confirm thead td { color: var(--muted); font-size: 12px; }
 .quick-summary { margin-top: 10px; font-size: 14px; }

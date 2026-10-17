@@ -12,7 +12,7 @@ const MAX_UPLOAD_BYTES = 1024 * 1024;
 const AVATAR_PX = 256;
 
 /** Đường dẫn chân dung tướng lưu ở server (không kèm ?v= của client). */
-const portraitPath = (artKey: string) => `/generals/${artKey}.jpg`;
+const portraitPath = (artKey: string) => `/generals/${artKey}.webp`;
 
 /**
  * Đọc file ảnh người chơi chọn, cắt vuông ở giữa rồi thu nhỏ về AVATAR_PX và nén thành JPEG.

@@ -37,10 +37,10 @@ const KIND_COLOR: Record<FxKind, number> = {
   damage: 0xe0d8c3,
   heal: 0x6FBE73,
   buff: 0x6FBE73,
-  debuff: 0xc62828,
+  debuff: 0xDB5151,
   burn: 0xe65100,
-  stun: 0xc62828,
-  dispel: 0xc62828,
+  stun: 0xDB5151,
+  dispel: 0xDB5151,
   purify: 0x6FBE73,
 };
 

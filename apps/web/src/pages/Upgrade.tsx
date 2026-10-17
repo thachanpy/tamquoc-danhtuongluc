@@ -342,12 +342,14 @@ export function UpgradePage(): JSX.Element {
                     ⚠ Mỗi lần ghép tiêu thụ {N} thẻ, có thể thất bại hoặc tụt level. Thẻ mới tạo ra thuộc mức đã chọn sẽ được ghép tiếp. Thẻ ở mức không chọn không bị
                     đụng tới.
                   </p>
-                  <button class="btn ghost" data-quick-no onClick={() => setQuickConfirming(false)}>
-                    Huỷ
-                  </button>{' '}
-                  <button class="btn danger" data-quick-yes disabled={busy()} onClick={() => void runQuick()}>
-                    {busy() ? 'Đang ghép…' : 'Xác nhận nâng cấp nhanh'}
-                  </button>
+                  <div class="quick-actions">
+                    <button class="btn ghost" data-quick-no onClick={() => setQuickConfirming(false)}>
+                      Huỷ
+                    </button>
+                    <button class="btn primary" data-quick-yes disabled={busy()} onClick={() => void runQuick()}>
+                      {busy() ? 'Đang ghép…' : 'Xác nhận nâng cấp nhanh'}
+                    </button>
+                  </div>
                 </div>
               </Show>
               <Show when={quickSummary()}>
@@ -547,7 +549,7 @@ export function UpgradePage(): JSX.Element {
                               }}>
                               Quay lại
                             </button>{' '}
-                            <button class="btn danger" data-yes disabled={busy()} onClick={() => void attempt()}>
+                            <button class="btn primary" data-yes disabled={busy()} onClick={() => void attempt()}>
                               Xác nhận ghép
                             </button>
                           </Show>
@@ -825,12 +827,14 @@ function GemUpgradeTab(): JSX.Element {
                     ⚠ Mỗi lần ghép tiêu thụ 2 viên Ngọc, có thể thất bại hoặc tụt cấp. Ngọc mới tạo ra thuộc mức đã chọn sẽ được ghép tiếp. Ngọc ở mức không
                     chọn không bị đụng tới.
                   </p>
-                  <button class="btn ghost" onClick={() => setQuickConfirming(false)}>
-                    Huỷ
-                  </button>{' '}
-                  <button class="btn danger" disabled={busy()} onClick={() => void runQuick()}>
-                    {busy() ? 'Đang ghép…' : 'Xác nhận ghép nhanh'}
-                  </button>
+                  <div class="quick-actions">
+                    <button class="btn ghost" onClick={() => setQuickConfirming(false)}>
+                      Huỷ
+                    </button>
+                    <button class="btn primary" disabled={busy()} onClick={() => void runQuick()}>
+                      {busy() ? 'Đang ghép…' : 'Xác nhận ghép nhanh'}
+                    </button>
+                  </div>
                 </div>
               </Show>
               <Show when={quickSummary()}>
@@ -1003,7 +1007,7 @@ function GemUpgradeTab(): JSX.Element {
                         >
                           Quay lại
                         </button>{' '}
-                        <button class="btn danger" disabled={busy()} onClick={() => void attempt()}>
+                        <button class="btn primary" disabled={busy()} onClick={() => void attempt()}>
                           Xác nhận ghép
                         </button>
                       </Show>

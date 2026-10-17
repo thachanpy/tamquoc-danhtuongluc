@@ -152,7 +152,7 @@ const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /** Mặt sau thẻ (ảnh chủ dự án cung cấp). Thiếu ảnh thì vẽ mặt sau dự phòng bằng Graphics. */
-const CARD_BACK_URL = '/theme/card-back.jpg';
+const CARD_BACK_URL = '/theme/card-back.webp';
 let backTex: Texture | null = null;
 async function ensureCardBack(): Promise<void> {
   if (backTex) return;

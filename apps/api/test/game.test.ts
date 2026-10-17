@@ -1176,7 +1176,7 @@ test('leaderboard: xếp theo TỔNG LC đội hình (đội tự động), đ�
   for (let i = 0; i < 5; i++) insertCard(ctx, c, 'sun-quan', 10);
   insertCard(ctx, d, 'sun-quan', 10);
   // Hồ sơ (mục 3.11): bob đổi tên hiển thị + ảnh đại diện => bảng xếp hạng trả về cả hai
-  ctx.db.prepare("UPDATE users SET display_name = 'Lưu Bị', avatar = '/generals/liu-bei.jpg' WHERE id = ?").run(b);
+  ctx.db.prepare("UPDATE users SET display_name = 'Lưu Bị', avatar = '/generals/liu-bei.webp' WHERE id = ?").run(b);
 
   const lcAlice = pvpUnitLc('cao-cao', 10) + pvpUnitLc('liu-bei', 1);
   const lcBob = pvpUnitLc('liu-bei', 9) + pvpUnitLc('cao-cao', 9); // KHÔNG gồm zhao-yun (đã tiêu thụ)
@@ -1205,7 +1205,7 @@ test('leaderboard: xếp theo TỔNG LC đội hình (đội tự động), đ�
     rank: byUser['bob']!.rank,
     username: 'bob',
     displayName: 'Lưu Bị',
-    avatar: '/generals/liu-bei.jpg',
+    avatar: '/generals/liu-bei.webp',
     lc: lcBob,
     isMe: true,
   });

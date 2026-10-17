@@ -566,8 +566,8 @@ test('HTTP: hồ sơ — đổi tên hiển thị (mặc định = tên đăng n
   assert.equal((await app.inject({ method: 'GET', url: '/api/me', headers: auth })).json().displayName, 'Quan Vũ');
 
   // Ảnh gợi ý (chân dung tướng) và ảnh tự tải (data URL đã thu nhỏ)
-  const portrait = await app.inject({ method: 'POST', url: '/api/me/profile', headers: auth, payload: { avatar: '/generals/cao-cao.jpg' } });
-  assert.equal(portrait.json().avatar, '/generals/cao-cao.jpg');
+  const portrait = await app.inject({ method: 'POST', url: '/api/me/profile', headers: auth, payload: { avatar: '/generals/cao-cao.webp' } });
+  assert.equal(portrait.json().avatar, '/generals/cao-cao.webp');
   const dataUrl = 'data:image/png;base64,iVBORw0KGgo=';
   const uploaded = await app.inject({ method: 'POST', url: '/api/me/profile', headers: auth, payload: { avatar: dataUrl } });
   assert.equal(uploaded.json().avatar, dataUrl);

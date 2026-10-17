@@ -140,7 +140,7 @@ export function isAdmin(ctx: GameContext, userId: number): boolean {
 /** Ảnh đại diện tự tải: data URL đã thu nhỏ ở client (png/jpeg/webp). */
 const AVATAR_DATA_URL = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 /** Ảnh đại diện gợi ý: chân dung tướng trong /generals (chỉ nhận đúng tên file, không nhận đường dẫn khác). */
-const AVATAR_PORTRAIT = /^\/generals\/[a-z0-9-]+\.jpg$/;
+const AVATAR_PORTRAIT = /^\/generals\/[a-z0-9-]+\.webp$/;
 
 function validateDisplayName(raw: string): string {
   const name = raw.trim();

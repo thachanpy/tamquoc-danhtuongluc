@@ -211,7 +211,7 @@ export interface ProfileDto {
   displayName: string;
   /**
    * Ảnh đại diện: data URL ảnh tự tải (client đã thu nhỏ) hoặc đường dẫn chân dung tướng
-   * `/generals/{artKey}.jpg`; null = dùng ảnh mặc định (chữ cái đầu của tên hiển thị).
+   * `/generals/{artKey}.webp`; null = dùng ảnh mặc định (chữ cái đầu của tên hiển thị).
    */
   avatar: string | null;
 }

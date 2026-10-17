@@ -82,12 +82,12 @@ export const RANK_ICON_MAX = 4;
 export const rankIconUrl = (rank: number) => `/theme/rank/r${rank}.png?v=${RANK_ICON_VERSION}`;
 
 /**
- * Chân dung tướng: /generals/{artKey}.jpg (cắt từ bộ ảnh chủ dự án cung cấp).
+ * Chân dung tướng: /generals/{artKey}.webp (cắt từ bộ ảnh chủ dự án cung cấp).
  * Thay artwork = thay file cùng tên. Thiếu ảnh thì thẻ tự rơi về placeholder (glyph phe + chữ viết tắt).
  */
 /** Tăng khi thay bộ chân dung để trình duyệt bỏ bản cũ (nginx cache /generals/ 7 ngày). */
 const PORTRAIT_VERSION = 6;
-export const portraitUrl = (artKey: string) => `/generals/${encodeURIComponent(artKey)}.jpg?v=${PORTRAIT_VERSION}`;
+export const portraitUrl = (artKey: string) => `/generals/${encodeURIComponent(artKey)}.webp?v=${PORTRAIT_VERSION}`;
 
 /** Chữ viết tắt cho placeholder artwork (VD: "Gia Cát Lượng" -> "GCL"). Thay bằng ảnh thật theo artKey sau. */
 export const initials = (name: string) =>

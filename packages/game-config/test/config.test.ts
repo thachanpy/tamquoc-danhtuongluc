@@ -132,6 +132,6 @@ test('chân dung tướng: toàn bộ 140 tướng đã có ảnh theo artKey', 
   const { resolve } = await import('node:path');
   const dir = resolve(import.meta.dirname, '../../../apps/web/public/generals');
   // art.ts tự rơi về placeholder (glyph phe + chữ viết tắt) khi thiếu file chân dung.
-  const missing = ROSTER.filter((g) => !existsSync(resolve(dir, `${g.artKey}.jpg`))).map((g) => g.id);
+  const missing = ROSTER.filter((g) => !existsSync(resolve(dir, `${g.artKey}.webp`))).map((g) => g.id);
   assert.equal(missing.length, 0);
 });
