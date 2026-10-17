@@ -1,5 +1,5 @@
 import { PVP_BUFF_SCOPE_LABELS, PVP_TARGETING_LABELS, type PvpBuffDto, type PvpCombatDto } from '@tq/shared';
-import { pct } from './art.ts';
+import { pct, ptText } from './art.ts';
 
 /**
  * Mô tả bằng tiếng Việt cho dữ liệu chiến đấu do server tính (`PvpCombatDto`).
@@ -57,10 +57,10 @@ function buffGains(b: PvpBuffDto): string {
     b.critDamageBps ? `+${pct(b.critDamageBps)} ST chí mạng` : '',
     b.takenDownBps ? `giảm ${pct(b.takenDownBps)} sát thương nhận vào` : '',
     b.lifestealBps ? `+${pct(b.lifestealBps)} hút máu` : '',
-    b.hitBps ? `+${pct(b.hitBps)} chính xác` : '',
-    b.dodgeBps ? `+${pct(b.dodgeBps)} né tránh` : '',
+    b.hitBps ? `+${ptText(b.hitBps)} chính xác` : '',
+    b.dodgeBps ? `+${ptText(b.dodgeBps)} né tránh` : '',
     b.defArmor ? `+${num(b.defArmor)} giáp` : '',
-    b.defPenBps ? `+${pct(b.defPenBps)} xuyên giáp` : '',
+    b.defPenBps ? `+${ptText(b.defPenBps)} xuyên giáp` : '',
     b.shieldBps ? `tạo Khiên bằng ${pct(b.shieldBps)} HP tối đa` : '',
     b.hotBps ? `hồi ${pct(b.hotBps)} sát thương nền mỗi lượt (hồi theo lượt)` : '',
     b.burnUpBps ? `+${pct(b.burnUpBps)} sát thương Thiêu đốt` : '',
@@ -103,10 +103,10 @@ export function skillNote(c: PvpCombatDto): SkillNoteLine[] {
     d.debuff.hpDownBps ? `giảm ${pct(d.debuff.hpDownBps)} HP tối đa` : '',
     d.debuff.critDownBps ? `giảm ${d.debuff.critDownBps / 100} điểm chí mạng` : '',
     d.debuff.critDamageDownBps ? `giảm ${pct(d.debuff.critDamageDownBps)} ST chí mạng` : '',
-    d.debuff.hitDownBps ? `giảm ${pct(d.debuff.hitDownBps)} chính xác` : '',
-    d.debuff.dodgeDownBps ? `giảm ${pct(d.debuff.dodgeDownBps)} né tránh` : '',
+    d.debuff.hitDownBps ? `giảm ${ptText(d.debuff.hitDownBps)} chính xác` : '',
+    d.debuff.dodgeDownBps ? `giảm ${ptText(d.debuff.dodgeDownBps)} né tránh` : '',
     d.debuff.defArmorDown ? `giảm ${num(d.debuff.defArmorDown)} giáp` : '',
-    d.debuff.defPenDownBps ? `giảm ${pct(d.debuff.defPenDownBps)} xuyên giáp` : '',
+    d.debuff.defPenDownBps ? `giảm ${ptText(d.debuff.defPenDownBps)} xuyên giáp` : '',
   ]
     .filter(Boolean)
     .join(', ');

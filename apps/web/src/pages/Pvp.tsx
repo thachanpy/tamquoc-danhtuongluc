@@ -28,7 +28,7 @@ import { Avatar } from '../components/Avatar.tsx';
 import { CombatDetailModal } from '../components/CombatDetailModal.tsx';
 import { StyleIcon } from '../components/StyleIcon.tsx';
 import { StatIcon } from '../components/StatIcon.tsx';
-import { FACTION_STYLE, STYLE_COLOR, gemStatText, gemUrl, initials, levelTier, pct, portraitUrl } from '../art.ts';
+import { FACTION_STYLE, STYLE_COLOR, gemStatText, gemUrl, initials, levelTier, pct, pt, ptText, portraitUrl } from '../art.ts';
 import { preBattleNote } from '../combat-notes.ts';
 import type { IconId } from '../icons.ts';
 import { arenaLayoutFor, createArena, type ArenaHandle, type ArenaLayout, type ArenaUnit, type ArenaView, type FloatPart, type FloatTone } from '../pixi/arena.ts';
@@ -186,10 +186,10 @@ const TEAM_BUFF_FIELDS: { key: 'damageBps' | 'hpBps' | 'critBps' | 'critDamageBp
   { key: 'critDamageBps', text: (v) => `+${pct(v)} ST chí mạng` },
   { key: 'takenDownBps', text: (v) => `−${pct(v)} sát thương gánh chịu` },
   { key: 'lifestealBps', text: (v) => `+${pct(v)} hút máu` },
-  { key: 'hitBps', text: (v) => `+${pct(v)} chính xác` },
-  { key: 'dodgeBps', text: (v) => `+${pct(v)} né tránh` },
+  { key: 'hitBps', text: (v) => `+${ptText(v)} chính xác` },
+  { key: 'dodgeBps', text: (v) => `+${ptText(v)} né tránh` },
   { key: 'defArmor', text: (v) => `+${num(v)} giáp` },
-  { key: 'defPenBps', text: (v) => `+${pct(v)} xuyên giáp` },
+  { key: 'defPenBps', text: (v) => `+${ptText(v)} xuyên giáp` },
 ];
 function teamBuffText(buffs?: PvpUnitStateDto['buffs']): string {
   if (!buffs?.length) return '';
@@ -211,10 +211,10 @@ const DEBUFF_FIELDS: { key: 'damageDownBps' | 'hpDownBps' | 'critDownBps' | 'cri
   { key: 'hpDownBps', text: (v) => `−${pct(v)} HP tối đa địch` },
   { key: 'critDownBps', text: (v) => `−${v / 100} điểm chí mạng địch` },
   { key: 'critDamageDownBps', text: (v) => `−${pct(v)} ST chí mạng địch` },
-  { key: 'hitDownBps', text: (v) => `−${pct(v)} chính xác địch` },
-  { key: 'dodgeDownBps', text: (v) => `−${pct(v)} né tránh địch` },
+  { key: 'hitDownBps', text: (v) => `−${ptText(v)} chính xác địch` },
+  { key: 'dodgeDownBps', text: (v) => `−${ptText(v)} né tránh địch` },
   { key: 'defArmorDown', text: (v) => `−${num(v)} giáp địch` },
-  { key: 'defPenDownBps', text: (v) => `−${pct(v)} xuyên giáp địch` },
+  { key: 'defPenDownBps', text: (v) => `−${ptText(v)} xuyên giáp địch` },
   { key: 'burnBps', text: (v) => `thiêu đốt ${pct(v)} sát thương mỗi đầu lượt` },
 ];
 function debuffText(debuff?: PvpUnitStateDto['debuff']): string {
@@ -265,9 +265,9 @@ function StatLine(props: { stat?: UnitStat }) {
               <StatIcon id="armor" size={11} /> {num(s().defArmor)}
               <GemPlus v={s().pre?.gem.defArmor} fmt={num} />
             </span>
-            <span class="pvp-stat" title="Xuyên giáp — % bỏ qua Phòng thủ của mục tiêu">
-              <StatIcon id="bow-pen" size={11} /> {pct(s().defPenBps)}
-              <GemPlus v={s().pre?.gem.defPenBps} />
+            <span class="pvp-stat" title="Xuyên giáp — điểm bỏ qua Phòng thủ của mục tiêu">
+              <StatIcon id="bow-pen" size={11} /> {pt(s().defPenBps)}
+              <GemPlus v={s().pre?.gem.defPenBps} fmt={pt} />
             </span>
             <span class="pvp-stat" title="Giảm sát thương nhận vào (chỉ đến từ Ngọc/buff)">
               <StatIcon id="shield-reduce" size={11} /> 0%
@@ -285,13 +285,13 @@ function StatLine(props: { stat?: UnitStat }) {
               <StatIcon id="crit-dmg" size={11} /> {pct(s().critDamageBps)}
               <GemPlus v={s().pre?.gem.critDamageBps} />
             </span>
-            <span class="pvp-stat">
-              <StatIcon id="eye" size={11} /> {pct(s().hitBps)}
-              <GemPlus v={s().pre?.gem.hitBps} />
+            <span class="pvp-stat" title="Chính xác — số điểm đối chiếu với Né tránh của mục tiêu để tính tỷ lệ trúng">
+              <StatIcon id="eye" size={11} /> {pt(s().hitBps)}
+              <GemPlus v={s().pre?.gem.hitBps} fmt={pt} />
             </span>
-            <span class="pvp-stat">
-              <StatIcon id="dodge" size={11} /> {pct(s().dodgeBps)}
-              <GemPlus v={s().pre?.gem.dodgeBps} />
+            <span class="pvp-stat" title="Né tránh — số điểm làm giảm tỷ lệ đánh trúng của địch">
+              <StatIcon id="dodge" size={11} /> {pt(s().dodgeBps)}
+              <GemPlus v={s().pre?.gem.dodgeBps} fmt={pt} />
             </span>
             <span class="pvp-stat" title="Hút máu — % sát thương gây ra được hồi lại cho bản thân">
               <StatIcon id="blood" size={11} /> {pct(s().lifestealBps)}
@@ -780,8 +780,8 @@ function Picker(props: {
                                 {/* Chính xác / Né tránh / ST chí mạng cũng scale theo cấp nên hiện luôn ở đây. */}
                                 <span class="pvp-pick-stat-num">
                                   <StatIcon id="crit-rate" size={11} /> {pct(x().self.critBps)} · <StatIcon id="crit-dmg" size={11} />{' '}
-                                  {pct(x().self.critDamageBps)} · <StatIcon id="eye" size={11} /> {pct(x().self.hitBps)} ·{' '}
-                                  <StatIcon id="dodge" size={11} /> {pct(x().self.dodgeBps)}
+                                  {pct(x().self.critDamageBps)} · <StatIcon id="eye" size={11} /> {pt(x().self.hitBps)} ·{' '}
+                                  <StatIcon id="dodge" size={11} /> {pt(x().self.dodgeBps)}
                                 </span>
                               </>
                             )}

@@ -84,6 +84,11 @@ const INFO_ROWS: readonly (readonly IconId[])[] = [
 ];
 /** Danh sách icon theo thứ tự phẳng (khớp `infoIcons`/`infoVals`). */
 const INFO_ITEMS: readonly IconId[] = INFO_ROWS.flat();
+/**
+ * Vị trí các chỉ số hiện theo ĐIỂM (1 điểm = 1%) trong dãy 9 chỉ số của ô tướng:
+ * 2 = xuyên giáp · 5 = chính xác · 6 = né tránh. Các vị trí còn lại hiện theo %.
+ */
+const POINT_STAT_IDX = new Set([2, 5, 6]);
 /** Toạ độ y của từng hàng chỉ số (dưới số máu) — cách đều 15px, hàng dưới vẫn chừa lề đáy trong ô. */
 const INFO_ROW_Y: readonly number[] = [124, 139, 154];
 /** Tên tướng nằm ngay dưới chân dung (khớp font/màu ô tướng ở trang chuẩn bị chiến). */
@@ -724,8 +729,12 @@ class Tile {
    */
   private setInfoLine(values: number[], bases: number[], alive: boolean): void {
     const texts = values.map((v) => num(v));
-    // Chỉ số % (bps) hiển thị theo đơn vị phần trăm; Sát thương (0) và Giáp (1, điểm nguyên) giữ số thô.
-    for (let i = 2; i < texts.length; i++) texts[i] = `${(values[i]! / 100).toFixed(0)}%`;
+    // Sát thương (0) và Giáp (1) giữ số thô. Xuyên giáp (2) · Chính xác (5) · Né tránh (6) hiện theo
+    // ĐIỂM (1 điểm = 1%, số thô, không kèm %); các chỉ số còn lại hiện theo %.
+    for (let i = 2; i < texts.length; i++) {
+      const v = (values[i]! / 100).toFixed(0);
+      texts[i] = POINT_STAT_IDX.has(i) ? v : `${v}%`;
+    }
     let k = 0;
     for (const row of this.infoRows) {
       for (const t of row.vals) {

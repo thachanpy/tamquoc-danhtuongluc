@@ -1,6 +1,6 @@
 import { For, Show } from 'solid-js';
 import { PVP_PASSIVE_LABELS, PVP_STYLE_LABELS, type PvpCombatDto, type PvpGemStats } from '@tq/shared';
-import { STYLE_COLOR, pct } from '../art.ts';
+import { STYLE_COLOR, gemStatText, pct, ptText } from '../art.ts';
 import { preBattleNote, skillNote } from '../combat-notes.ts';
 import { StyleIcon } from './StyleIcon.tsx';
 
@@ -10,16 +10,11 @@ import { StyleIcon } from './StyleIcon.tsx';
  * Dùng chung cho popup ngắm thẻ (Bộ sưu tập) và bảng chọn tướng (Đấu trường) để hai nơi khớp nhau.
  */
 
-/** Ghi chú phần Ngọc Ngũ Hành cộng thêm cho một chỉ số (aura nền cả đội, mục 6.8); rỗng nếu không có. */
+/** Ghi chú phần Ngọc Ngũ Hành cộng thêm cho một chỉ số (aura nền cả đội, mục 6.8); rỗng nếu không có.
+ *  Đơn vị hiển thị theo đúng loại chỉ số: Giáp là điểm nguyên, Chính xác/Né tránh/Xuyên giáp là điểm, còn lại là %. */
 function gemNote(c: PvpCombatDto, key: keyof PvpGemStats): string | undefined {
   const v = c.preBattle?.bonus.gem[key] ?? 0;
-  return v > 0 ? `Ngọc +${pct(v)}` : undefined;
-}
-
-/** Ghi chú phần Ngọc cộng Giáp — Giáp là điểm nguyên nên in số thô, không quy ra %. */
-function gemArmorNote(c: PvpCombatDto): string | undefined {
-  const v = c.preBattle?.bonus.gem.defArmor ?? 0;
-  return v > 0 ? `Ngọc +${v}` : undefined;
+  return v > 0 ? `Ngọc +${gemStatText(key, v, c.bpsScale)}` : undefined;
 }
 
 /** Các dòng chỉ số chi tiết: giá trị thực tế, kèm ghi chú chỉ số nền + phần % được cộng. */
@@ -47,12 +42,12 @@ export function statRows(c: PvpCombatDto): { label: string; value: string; note?
     },
     // LC đã hiện cạnh cấp ở đầu modal (ngang hàng Lv) nên không lặp lại trong bảng chỉ số.
     // Toàn bộ 9 chỉ số còn lại của ô tướng — tướng không có chỉ số nền thì hiện 0%, phần Ngọc ở ghi chú.
-    { label: 'Giáp', value: `${c.self.defArmor}`, note: gemArmorNote(c) },
-    { label: 'Xuyên giáp', value: pct(c.self.defPenBps), note: gemNote(c, 'defPenBps') },
+    { label: 'Giáp', value: `${c.self.defArmor}`, note: gemNote(c, 'defArmor') },
+    { label: 'Xuyên giáp', value: ptText(c.self.defPenBps), note: gemNote(c, 'defPenBps') },
     { label: 'Chí mạng', value: pct(c.self.critBps), note: gemNote(c, 'critBps') },
     { label: 'ST chí mạng', value: pct(c.self.critDamageBps), note: gemNote(c, 'critDamageBps') },
-    { label: 'Chính xác', value: pct(c.self.hitBps), note: gemNote(c, 'hitBps') },
-    { label: 'Né tránh', value: pct(c.self.dodgeBps), note: gemNote(c, 'dodgeBps') },
+    { label: 'Chính xác', value: ptText(c.self.hitBps), note: gemNote(c, 'hitBps') },
+    { label: 'Né tránh', value: ptText(c.self.dodgeBps), note: gemNote(c, 'dodgeBps') },
     { label: 'Hút máu', value: `${pct(c.self.lifestealBps)} ST gây ra`, note: gemNote(c, 'lifestealBps') },
     { label: 'Giảm ST nhận', value: '0%', note: gemNote(c, 'takenDownBps') },
   ];

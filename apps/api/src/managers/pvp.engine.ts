@@ -400,7 +400,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     u.defPenBps += gem.defPenBps;
     u.critDamageBps += gem.critDamageBps;
     u.gemTakenDownBps = gem.takenDownBps;
-    // Giáp: giáp nền theo cấp (12% → 30% giảm ST) + nội tại (+11 Giáp) + Ngọc Thổ.
+    // Giáp: giáp nền theo cấp (12% → 30% giảm ST) + nội tại (+20 Giáp) + Ngọc Thổ.
     u.defArmor += (passiveEffect.stat === 'def' ? passiveEffect.armor : 0) + gem.defArmor;
   }
 

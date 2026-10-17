@@ -713,7 +713,7 @@ export const PVP_PASSIVE_LABELS: Record<PvpPassive, string> = {
   CRIT_5: '+5% tỷ lệ chí mạng',
   DAMAGE_10: '+10% sát thương',
   HP_10: '+10% HP tối đa',
-  DEF_5: '+5% phòng thủ',
+  DEF_5: '+20 Giáp',
 };
 
 // ===== DTO cấu hình PvP cho trang Admin =====

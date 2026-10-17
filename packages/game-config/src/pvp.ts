@@ -716,8 +716,8 @@ export const PVP_PASSIVE_EFFECT: Record<PvpPassive, PvpPassiveEffect> = {
   CRIT_5: { stat: 'crit', bps: 0, pointsBps: 500, armor: 0 },
   DAMAGE_10: { stat: 'damage', bps: 1000, pointsBps: 0, armor: 0 },
   HP_10: { stat: 'maxHp', bps: 1000, pointsBps: 0, armor: 0 },
-  /** Nội tại Phòng thủ = **+11 Giáp**, tương đương +5 điểm % giảm sát thương của mô hình trước. */
-  DEF_5: { stat: 'def', bps: 0, pointsBps: 0, armor: 11 },
+  /** Nội tại Phòng thủ = **+20 Giáp** (điểm Giáp nguyên) — cân theo vùng cấp chơi thật 6–9. */
+  DEF_5: { stat: 'def', bps: 0, pointsBps: 0, armor: 20 },
 };
 
 // ===== Kỹ năng =====

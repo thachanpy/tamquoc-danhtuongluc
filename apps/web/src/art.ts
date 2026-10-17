@@ -99,21 +99,33 @@ export const initials = (name: string) =>
 
 export const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** Hiển thị bps thành %: số nguyên thì bỏ thập phân, ngược lại hiện tối đa 3 chữ số (đủ cho Lv9 = 0.005%). */
-export const pct = (bps: number, scale = 10000) => {
-  const v = (bps / scale) * 100;
-  return (Number.isInteger(v) ? v.toFixed(0) : v.toFixed(3).replace(/\.?0+$/, '')) + '%';
-};
+/** Số nguyên thì bỏ thập phân, ngược lại hiện tối đa 3 chữ số (đủ cho Lv9 = 0.005%). */
+const fmtNum = (v: number) => (Number.isInteger(v) ? v.toFixed(0) : v.toFixed(3).replace(/\.?0+$/, ''));
+
+/** Hiển thị bps thành % (10000 = 100%). */
+export const pct = (bps: number, scale = 10000) => `${fmtNum((bps / scale) * 100)}%`;
 
 /**
- * Chỉ số Ngọc tính bằng ĐIỂM GIÁP nguyên (KHÔNG phải bps) — hiện chỉ có Thổ "Phòng thủ".
- * Các chỉ số còn lại đều là bps nên phải quy ra %.
+ * bps → ĐIỂM cho Chính xác · Né tránh · Xuyên giáp (1 điểm = 1%). Ba chỉ số này được đối chiếu
+ * theo tỷ lệ giữa hai bên chứ không cộng thẳng vào % nên hiện theo điểm cho khỏi gây hiểu nhầm.
+ * Ô tướng hiện con số trần (giống Giáp); dùng `ptText` khi cần kèm chữ "điểm".
  */
+export const pt = (bps: number, scale = 10000) => fmtNum((bps / scale) * 100);
+
+/** bps → "15 điểm" — dùng ở gợi ý / chi tiết chỉ số / nhật ký / trang Quản trị. */
+export const ptText = (bps: number, scale = 10000) => `${pt(bps, scale)} điểm`;
+
+/** Chỉ số Ngọc tính bằng ĐIỂM GIÁP nguyên (KHÔNG phải bps) — hiện chỉ có Thổ "Phòng thủ". */
 const ARMOR_GEM_STATS = new Set<keyof PvpGemStats>(['defArmor']);
+/** Chỉ số Ngọc hiện theo ĐIỂM (1 điểm = 1%) thay vì %: Xuyên giáp · Chính xác · Né tránh. */
+const POINT_GEM_STATS = new Set<keyof PvpGemStats>(['defPenBps', 'hitBps', 'dodgeBps']);
 
 /** Chỉ số Ngọc này tính bằng điểm Giáp nguyên (không quy ra %)? */
 export const isArmorGemStat = (key: keyof PvpGemStats) => ARMOR_GEM_STATS.has(key);
 
-/** Hiển thị giá trị một chỉ số Ngọc: Giáp hiện số nguyên kèm đơn vị, còn lại quy ra %. */
+/** Chỉ số Ngọc này hiện theo điểm (1 điểm = 1%) thay vì %? */
+export const isPointGemStat = (key: keyof PvpGemStats) => POINT_GEM_STATS.has(key);
+
+/** Hiển thị giá trị một chỉ số Ngọc: Giáp → "N Giáp", chỉ số đối kháng → "N điểm", còn lại → %. */
 export const gemStatText = (key: keyof PvpGemStats, value: number, scale = 10000) =>
-  isArmorGemStat(key) ? `${value} Giáp` : pct(value, scale);
+  isArmorGemStat(key) ? `${value} Giáp` : isPointGemStat(key) ? ptText(value, scale) : pct(value, scale);
