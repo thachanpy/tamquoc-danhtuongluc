@@ -40,10 +40,12 @@ export const PREFIX = {
   quests: (userId: number) => `tq:qst:${userId}`,
   /** Lịch sử phân trang của một người chơi (gộp nhiều bảng) theo tham số truy vấn. */
   history: (userId: number, query = '') => `tq:his:${userId}:${query}`,
-  /** Nhật ký trận PvP phân trang của một người chơi. */
+  /** Nhật ký trận PvP phân trang của một người chơi; chi tiết một trận dùng thêm khoá phụ `id=<id>`. */
   battles: (userId: number, query = '') => `tq:btl:${userId}:${query}`,
   /** Đội hình của một người chơi khi người khác xem trước khi khiêu chiến (không phụ thuộc người xem). */
   opponent: (userId: number) => `tq:opp:${userId}`,
+  /** Chỉ số chiến đấu của một tướng theo (cấp, đội, Ngọc) — client gọi theo lô cho cả 2 đội. */
+  combat: (userId: number, query = '') => `tq:cbt:${userId}:${query}`,
   /** Danh sách ở trang Quản trị (mọi phân trang/lọc). */
   admin: (kind: string, query = '') => `tq:adm:${kind}:${query}`,
 } as const;
@@ -60,6 +62,7 @@ export const DROP = {
   collection: (userId: number) => `tq:col:${userId}:`,
   history: (userId: number) => `tq:his:${userId}:`,
   battles: (userId: number) => `tq:btl:${userId}:`,
+  combat: (userId: number) => `tq:cbt:${userId}:`,
   admin: 'tq:adm:',
 } as const;
 
@@ -74,7 +77,9 @@ export const TTL = {
   quests: 15,
   history: 30,
   battles: 15,
+  battleDetail: 300,
   opponent: 30,
+  combat: 60,
   admin: 15,
 } as const;
 
@@ -101,7 +106,10 @@ export function invalidatePlayers(cache: CacheStore, ...userIds: number[]): void
     DROP.leaderboard,
     ...userIds.flatMap((id) => [DROP.user(id), DROP.pvp(id), DROP.quests(id), DROP.opponent(id)]),
   ]);
-  cache.drop([DROP.admin, ...userIds.flatMap((id) => [DROP.collection(id), DROP.history(id), DROP.battles(id)])]);
+  cache.drop([
+    DROP.admin,
+    ...userIds.flatMap((id) => [DROP.collection(id), DROP.history(id), DROP.battles(id), DROP.combat(id)]),
+  ]);
 }
 
 /** Cache rỗng — mọi lượt đọc đều đi thẳng vào DB. */

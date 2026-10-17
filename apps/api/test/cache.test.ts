@@ -61,10 +61,14 @@ test('key builder: mỗi nhóm có tiền tố riêng, tiền tố xoá khớp m
   assert.ok(PREFIX.collection(7, 'cards', 'page=1').startsWith(DROP.collection(7)));
   assert.ok(PREFIX.history(7, 'kind=gacha').startsWith(DROP.history(7)));
   assert.ok(PREFIX.battles(7, 'page=1').startsWith(DROP.battles(7)));
+  // Chi tiết một trận dùng chung nhóm `tq:btl` => xoá nhóm cũng phủ luôn key chi tiết
+  assert.equal(PREFIX.battles(7, 'id=42'), 'tq:btl:7:id=42');
+  assert.ok(TTL.battleDetail > TTL.battles); // trận đã lưu bất biến => TTL dài hơn nhật ký
+  assert.ok(PREFIX.combat(7, 'id=cao-cao&level=1').startsWith(DROP.combat(7)));
   assert.equal(PREFIX.quests(7), DROP.quests(7)); // nhiệm vụ là 1 key đúng, không có key con
   assert.equal(PREFIX.opponent(7), DROP.opponent(7));
   assert.ok(PREFIX.admin('users', 'page=1').startsWith(DROP.admin));
-  assert.ok(TTL.leaderboard > 0 && TTL.session > 0 && TTL.settings > 0 && TTL.quests > 0);
+  assert.ok(TTL.leaderboard > 0 && TTL.session > 0 && TTL.settings > 0 && TTL.quests > 0 && TTL.combat > 0);
 });
 
 test('invalidatePlayers: xoá key đúng của từng người + BXH, xoá theo tiền tố nhóm nhiều key con', () => {
@@ -86,9 +90,11 @@ test('invalidatePlayers: xoá key đúng của từng người + BXH, xoá theo 
     DROP.collection(3),
     DROP.history(3),
     DROP.battles(3),
+    DROP.combat(3),
     DROP.collection(9),
     DROP.history(9),
     DROP.battles(9),
+    DROP.combat(9),
   ]);
 });
 

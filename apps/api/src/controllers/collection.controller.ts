@@ -3,6 +3,8 @@ import { schemas, type MeDto } from '@tq/shared';
 import { DEV_TOPUP_TICKETS, ROSTER } from '@tq/game-config';
 import type { GameContext } from '../context.ts';
 import { PREFIX, TTL, queryKey } from '../cache.ts';
+import { memoByConfig } from '../utils.ts';
+import { pvpConfigRegistry } from '../pvp-config.registry.ts';
 import { getProfile, getUsername, isAdmin } from '../managers/auth.manager.ts';
 import { getTickets, syncRecovery } from '../managers/ticket.manager.ts';
 import { listCards, listHistory, type CardsQuery, type HistoryQuery } from '../managers/collection.manager.ts';
@@ -30,7 +32,14 @@ export function registerCollectionRoutes(app: FastifyInstance, ctx: GameContext)
   // styles/skills/skillNames: phong cách + kỹ năng chiến đấu + tên chiêu thật từng tướng (mục 6.7).
   // Client hiện nhãn Tấn công/Phòng thủ/Hỗ trợ trên mọi thẻ, hiện kỹ năng khi chọn tướng PvP,
   // và hiện tên chiêu thay cho nhãn chung (ví dụ "Hiệu lệnh thiên hạ").
-  app.get('/api/generals', async () => ({ items: ROSTER, styles: rosterStyles(), skills: rosterSkills(), skillNames: rosterSkillNames() }));
+  // Payload dựng từ cấu hình trong memory nên nhớ đệm theo phiên bản registry (Admin sửa là tính lại ngay).
+  const generals = memoByConfig(() => pvpConfigRegistry().updatedAt, () => ({
+    items: ROSTER,
+    styles: rosterStyles(),
+    skills: rosterSkills(),
+    skillNames: rosterSkillNames(),
+  }));
+  app.get('/api/generals', async () => generals());
   app.get('/api/cards', { preHandler: auth, schema: { querystring: schemas.cardsQuery } }, async (req) => {
     const query = req.query as CardsQuery;
     // Bộ sưu tập đổi khi quay thẻ/ghép/tặng => cache 30s, xoá ngay ở các thao tác đó.

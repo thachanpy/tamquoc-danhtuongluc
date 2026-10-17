@@ -27,3 +27,21 @@ export function searchGeneralIds(q: string): string[] {
 
 /** Mẫu LIKE '%...%' đã escape ký tự đặc biệt (% _ \) để dùng kèm `ESCAPE '\'`. */
 export const likeContains = (q: string) => `%${q.trim().replace(/[%_\\]/g, (m) => '\\' + m)}%`;
+
+/**
+ * Nhớ đệm giá trị DẪN XUẤT TỪ CẤU HÌNH (không cần Redis vì cấu hình đã nằm trong memory registry).
+ * `version()` trả về dấu hiệu phiên bản cấu hình; đổi giá trị ⇒ tính lại. Dùng cho payload
+ * dựng lại nhiều lần nhưng chỉ đổi khi Admin sửa cấu hình.
+ */
+export function memoByConfig<T>(version: () => unknown, build: () => T): () => T {
+  let cachedVersion: unknown;
+  let cached: T | undefined;
+  return () => {
+    const v = version();
+    if (cached === undefined || cachedVersion !== v) {
+      cached = build();
+      cachedVersion = v;
+    }
+    return cached;
+  };
+}

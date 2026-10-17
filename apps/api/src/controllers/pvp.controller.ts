@@ -19,8 +19,11 @@ export function registerPvpRoutes(app: FastifyInstance, ctx: GameContext): void 
   const player = playerGuard(ctx);
   const auth = authGuard(ctx);
 
-  // Chi tiết chiến đấu (kỹ năng, chỉ số) của một tướng ở một cấp — modal xem thẻ ở Bộ sưu tập.
-  // Chỉ là dữ liệu cấu hình nên chỉ cần đăng nhập, không phải thao tác chơi.
+  // Chi tiết chiến đấu (kỹ năng, chỉ số) của một tướng ở một cấp — modal xem thẻ ở Bộ sưu tập
+  // và dòng chỉ số dưới mỗi ô tướng trong màn chuẩn bị khiêu chiến.
+  // Client gọi endpoint này theo LÔ (mỗi tướng trong đội 1 request) mỗi lần đổi đội/Ngọc
+  // => cache 60s theo (người chơi, tướng, cấp, đội, Ngọc). Phần phụ thuộc người chơi là kho Ngọc
+  // đang sở hữu nên xoá cùng nhóm khi quay thẻ/ghép Ngọc (invalidatePlayers).
   app.get(
     '/api/pvp/generals/:id/combat',
     { preHandler: auth, schema: { params: schemas.generalCombatParams, querystring: schemas.generalCombatQuery }, config: LIMIT_120 },
@@ -31,8 +34,17 @@ export function registerPvpRoutes(app: FastifyInstance, ctx: GameContext): void 
       const squadIds = squad ? squad.split(',').filter(Boolean) : undefined;
       // `gems` (nếu có) = danh sách LOẠI Ngọc đã gắn cho đội — quy ra chỉ số cộng toàn đội để hiển thị khớp khi vào trận.
       const gemElements = gems ? (gems.split(',').filter(Boolean) as GemElement[]) : [];
-      const gem = gemElements.length ? ownedGemStats(ctx, req.userId, gemElements) : undefined;
-      return getCombatStats(id, level, squadIds, gem);
+      // Sắp xếp để hai lần gọi cùng nội dung (khác thứ tự) dùng chung một key cache.
+      const key = queryKey({
+        id,
+        level,
+        squad: squadIds?.slice().sort().join(','),
+        gems: gemElements.slice().sort().join(','),
+      });
+      return ctx.cache.readThrough(PREFIX.combat(req.userId, key), TTL.combat, () => {
+        const gem = gemElements.length ? ownedGemStats(ctx, req.userId, gemElements) : undefined;
+        return getCombatStats(id, level, squadIds, gem);
+      });
     },
   );
 
@@ -69,7 +81,13 @@ export function registerPvpRoutes(app: FastifyInstance, ctx: GameContext): void 
     },
   );
 
-  app.get('/api/pvp/battles/:id', { preHandler: player, schema: { params: schemas.idParams }, config: LIMIT_60 }, async (req) =>
-    getBattle(ctx, req.userId, (req.params as { id: number }).id),
-  );
+  app.get('/api/pvp/battles/:id', { preHandler: player, schema: { params: schemas.idParams }, config: LIMIT_60 }, async (req) => {
+    const id = (req.params as { id: number }).id;
+    // Trận đã lưu là BẤT BIẾN (chỉ INSERT, không sửa) nên TTL dài hơn nhật ký; key vẫn kèm người xem
+    // vì vai trò công/thủ lật theo người xem. Phần duy nhất có thể đổi là tên/ảnh đối thủ (lấy từ `users`)
+    // và đã được xoá sẵn qua DROP.battles khi đổi hồ sơ.
+    return ctx.cache.readThrough(PREFIX.battles(req.userId, `id=${id}`), TTL.battleDetail, () =>
+      getBattle(ctx, req.userId, id),
+    );
+  });
 }

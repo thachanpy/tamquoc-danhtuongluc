@@ -1202,15 +1202,18 @@ Có thể dùng bảng idempotency riêng hoặc các unique constraint phù h�
 | Đội hình PvP + chỉ số | `tq:pvp:<id>` | 30 |
 | Nhiệm vụ + thành tựu (hàng chục truy vấn đếm, client hỏi mỗi lần chuyển tab) | `tq:qst:<id>` | 15 |
 | Lịch sử gộp 5 bảng (UNION ALL + COUNT) | `tq:his:<id>:<query>` | 30 |
-| Nhật ký trận PvP phân trang | `tq:btl:<id>:<query>` | 15 |
+| Nhật ký trận PvP phân trang | `tq:btl:<id>:page=…` | 15 |
+| Chi tiết (dữ liệu phát lại) một trận PvP — trận đã lưu là bất biến, key kèm người xem vì vai trò công/thủ lật theo người xem | `tq:btl:<id>:id=<battleId>` | 300 |
 | Đội hình người chơi khi người khác xem trước khiêu chiến (không phụ thuộc người xem) | `tq:opp:<id>` | 30 |
+| Chỉ số chiến đấu của một tướng theo (cấp, đội, Ngọc) — client gọi theo lô cho cả 2 đội | `tq:cbt:<id>:<query>` | 60 |
 | Danh sách trang Quản trị (users/cards/gems) | `tq:adm:<kind>:<query>` | 15 |
 
 - Xoá cache ở mọi đường ghi bằng `invalidatePlayers(ctx.cache, ...userIds)` (gọi cả người bị tác động, ví dụ cả hai bên trong một trận PvP):
   - `del()` cho key đúng — 1 lệnh `DEL`: `tq:lb` và `tq:usr` / `tq:pvp` / `tq:qst` / `tq:opp` của từng người.
-  - `drop()` cho nhóm nhiều key con — `SCAN` + `DEL`: `tq:adm:*` và `tq:col` / `tq:his` / `tq:btl` của từng người.
+  - `drop()` cho nhóm nhiều key con — `SCAN` + `DEL`: `tq:adm:*` và `tq:col` / `tq:his` / `tq:btl` / `tq:cbt` của từng người.
   Đường ghi nằm trong transaction đồng bộ nên cả `del()` lẫn `drop()` đều best-effort, không await (chạy nền).
 - Một số đường ghi chỉ ảnh hưởng một nhóm thì xoá đúng nhóm đó thay vì `invalidatePlayers`: đăng xuất → `tq:sess`; đổi cài đặt → `tq:set`; nhận thưởng nhiệm vụ → `tq:qst` + `tq:his`; vé hồi / cộng vé thử nghiệm → `tq:his`.
+- Payload dẫn xuất từ cấu hình nhưng tính lại tốn kém thì nhớ đệm **trong tiến trình** bằng `memoByConfig(() => registry().updatedAt, build)` (`apps/api/src/utils.ts`) thay vì Redis — cấu hình đã nằm sẵn trong memory registry của tiến trình nên khi Admin sửa, `updatedAt` đổi và payload được dựng lại ngay: `/api/generals` (roster + phong cách + kỹ năng) và `/api/gacha/config` (bảng tỉ lệ quay).
 - `readThrough` gọi `load` trực tiếp (không phải hàm async bắt buộc) nên dùng được với repository đồng bộ của SQLite. `load` ném lỗi thì không lưu cache (lỗi như "không tìm thấy đối thủ" không bị cache lại).
 - Sổ cái vé hồi (`time_recovery`) thêm dòng mỗi phút; `tq:his` bị xoá ngay khi có vé hồi nên lịch sử luôn khớp. Huỷ cache sai cũng không nguy hiểm vì mọi key đều có TTL.
 
