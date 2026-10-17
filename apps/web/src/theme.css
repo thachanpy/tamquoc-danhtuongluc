@@ -898,7 +898,7 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-close { margin-left: auto; }
 
 /* Bảng kết quả trận: tab Tổng kết chỉ số / Diễn biến chi tiết */
-.rp-report-wrap { flex: 1 1 auto; min-height: 180px; overflow-y: auto; }
+.rp-report-wrap { flex: 1 1 auto; min-height: 180px; overflow-y: auto; overflow-x: auto; }
 .rp-report { display: grid; gap: 6px; }
 .rp-report-tabs { position: sticky; top: 0; z-index: 2; display: flex; gap: 6px; flex-wrap: wrap; padding-bottom: 6px; background: var(--panel); }
 .rp-report-tabs .btn.on { border-color: var(--gold); color: var(--gold-2); background: rgba(212, 168, 74, .12); }
@@ -932,6 +932,13 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-table .rp-mini { width: 40px; height: 40px; }
 .rp-table .rp-mini-ini { font-size: 12px; }
 .rp-t-sep td { padding-top: 12px; font-weight: 700; letter-spacing: .04em; color: var(--gold-2); border-bottom: none; }
+/* Tướng gục ở cuối trận: làm mờ tên + avatar (ảnh xám) để nhìn phát biết ngay ai còn ai mất.
+   Riêng ô "Tử vong" giữ nguyên độ nét vì nó chính là dấu hiệu nhận biết. */
+.rp-table tr.rp-t-dead .rp-t-name,
+.rp-table tr.rp-t-dead .rp-t-num:not(.rp-t-death) { opacity: .5; }
+.rp-table tr.rp-t-dead .rp-mini { filter: grayscale(1); }
+/* Nhãn "Đã hạ" ở cột Tử vong — tông Xích Hỏa, cao bằng chip định danh cho hàng không so le. */
+.rp-t-down { display: inline-flex; align-items: center; height: 19px; padding: 0 6px; border: 1px solid rgba(216, 67, 47, .55); border-radius: 999px; font: 700 11px/1 var(--num, sans-serif); color: var(--cinnabar-2); }
 /* Avatar nhỏ trong bảng kết quả (cả bảng tổng kết lẫn diễn biến) */
 .rp-mini { position: relative; flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; overflow: hidden; background: linear-gradient(160deg, #2a2112, var(--panel-2)); border: 1px solid var(--line); }
 .rp-mini.foe { border-color: rgba(217, 83, 79, .45); }
@@ -1108,8 +1115,10 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
   .rp-avatar { width: 34px; height: 34px; font-size: 13px; }
   .rp-side-name { font-size: 13px; }
   .rp-table th, .rp-table td { padding-left: 5px; padding-right: 5px; }
-  /* Bảng tổng kết có 9 cột số — màn hẹp hạ cỡ xuống 13px (vẫn to hơn chữ bảng 12px) cho khỏi tràn ngang. */
+  /* Bảng tổng kết có 10 cột số — màn hẹp hạ cỡ xuống 13px (vẫn to hơn chữ bảng 12px) cho khỏi tràn ngang. */
   .rp-t-num { font-size: 13px; }
+  /* Nhãn "Đã hạ" cũng thu nhỏ theo để không đội cột cao hơn các dòng khác. */
+  .rp-t-down { height: 17px; padding: 0 5px; font-size: 10px; }
   .rp-close { margin-left: 0; }
 }
 

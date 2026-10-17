@@ -1,4 +1,5 @@
 import { For, Match, Show, Switch, createSignal, onCleanup, onMount, type JSX } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import {
   FACTIONS,
@@ -139,7 +140,9 @@ export function PvpHeroesPane(props: { alive: () => boolean; ctl: (c: Ctl) => vo
   const [listState, setListState] = createSignal<Load>({ kind: 'loading' });
   const [notice, setNotice] = createSignal<Notice>(null);
   const [busy, setBusy] = createSignal(false);
-  const [draft, setDraft] = createSignal<PvpHeroAdminDto | null>(null);
+  // Bản nháp đang sửa (`hero: null` = đóng modal). Dùng STORE để ghi tại chỗ: danh tính object giữ
+  // nguyên nên `<Show>`/`<For>` không dựng lại DOM — thay object mới sẽ làm ô số mất focus mỗi phím gõ.
+  const [draft, setDraft] = createStore<{ hero: PvpHeroAdminDto | null }>({ hero: null });
   const [creating, setCreating] = createSignal(false);
   const [newName, setNewName] = createSignal('');
   const [newFaction, setNewFaction] = createSignal<Faction>('wei');
@@ -180,22 +183,20 @@ export function PvpHeroesPane(props: { alive: () => boolean; ctl: (c: Ctl) => vo
   props.ctl({ ensureLoaded: () => !loaded && void load() });
   void load();
 
-  const patch = (p: Partial<PvpHeroAdminDto>) => setDraft((d) => (d ? { ...d, ...p } : d));
-  const patchEffect = (i: number, p: Partial<PvpSkillEffectDto>) =>
-    setDraft((d) => (d ? { ...d, skillEffects: d.skillEffects.map((e, j) => (j === i ? { ...e, ...p } : e)) } : d));
-  const addEffect = () => setDraft((d) => (d ? { ...d, skillEffects: [...d.skillEffects, newEffect()] } : d));
-  const removeEffect = (i: number) =>
-    setDraft((d) => (d ? { ...d, skillEffects: d.skillEffects.filter((_, j) => j !== i) } : d));
+  const patch = (p: Partial<PvpHeroAdminDto>) => setDraft('hero', p);
+  const patchEffect = (i: number, p: Partial<PvpSkillEffectDto>) => setDraft('hero', 'skillEffects', i, p);
+  const addEffect = () => setDraft('hero', 'skillEffects', (list) => [...list, newEffect()]);
+  const removeEffect = (i: number) => setDraft('hero', 'skillEffects', (list) => list.filter((_, j) => j !== i));
 
   async function save() {
-    const d = draft();
+    const d = draft.hero;
     if (!d || busy() || !props.alive()) return;
     setBusy(true);
     try {
       const { id, ...body } = d;
       await api.admin.pvpHeroUpdate(id, body);
       if (!props.alive()) return;
-      setDraft(null);
+      setDraft('hero', null);
       say(`Đã lưu cấu hình tướng "${d.name}". Trận PvP tạo sau đây áp dụng ngay.`);
     } catch (e) {
       if (props.alive()) say((e as ApiError).message, false);
@@ -216,7 +217,7 @@ export function PvpHeroesPane(props: { alive: () => boolean; ctl: (c: Ctl) => vo
       setNewName('');
       say(`Đã thêm tướng "${hero.name}" với cấu hình mặc định — bấm "Sửa" để chỉnh kỹ năng.`);
       await load();
-      setDraft(hero);
+      setDraft('hero', hero);
     } catch (e) {
       if (props.alive()) say((e as ApiError).message, false);
     } finally {
@@ -319,7 +320,7 @@ export function PvpHeroesPane(props: { alive: () => boolean; ctl: (c: Ctl) => vo
                     </div>
                   </div>
                   <div class="cfg-actions">
-                    <button class="btn ghost small" data-act="edit" onClick={() => setDraft(h)}>
+                    <button class="btn ghost small" data-act="edit" onClick={() => setDraft('hero', h)}>
                       Sửa
                     </button>
                     <Show
@@ -394,9 +395,9 @@ export function PvpHeroesPane(props: { alive: () => boolean; ctl: (c: Ctl) => vo
         </ConfigModal>
       </Show>
 
-      <Show when={draft()}>
+      <Show when={draft.hero}>
         {(d) => (
-          <ConfigModal wide title={`Cấu hình tướng — ${d().name}`} onClose={() => setDraft(null)}>
+          <ConfigModal wide title={`Cấu hình tướng — ${d().name}`} onClose={() => setDraft('hero', null)}>
             <div class="cfg-form">
               <h4>Định danh</h4>
               <div class="cfg-hero-preview">
@@ -650,7 +651,7 @@ export function PvpHeroesPane(props: { alive: () => boolean; ctl: (c: Ctl) => vo
                 <button class="btn primary" data-act="save" disabled={busy()} onClick={() => void save()}>
                   Lưu cấu hình
                 </button>
-                <button class="btn ghost" disabled={busy()} onClick={() => setDraft(null)}>
+                <button class="btn ghost" disabled={busy()} onClick={() => setDraft('hero', null)}>
                   Huỷ
                 </button>
               </div>
@@ -688,7 +689,8 @@ export function PvpGemsPane(props: { alive: () => boolean; ctl: (c: Ctl) => void
   let loaded = false;
   const [listState, setListState] = createSignal<Load>({ kind: 'loading' });
   const [notice, setNotice] = createSignal<Notice>(null);
-  const [rows, setRows] = createSignal<GemRowState[]>([]);
+  // Store (không phải signal) để ghi tại chỗ: nếu thay object mới, `<For>` sẽ dựng lại DOM mỗi phím gõ → mất focus.
+  const [rows, setRows] = createStore<GemRowState[]>([]);
   const say = (text: string, ok = true) => setNotice(text ? { ok, text } : null);
 
   async function load() {
@@ -707,27 +709,31 @@ export function PvpGemsPane(props: { alive: () => boolean; ctl: (c: Ctl) => void
   props.ctl({ ensureLoaded: () => !loaded && void load() });
   void load();
 
-  const update = (element: string, p: Partial<GemDraft>) =>
-    setRows((rs) => rs.map((r) => (r.draft.element === element ? { ...r, dirty: true, draft: { ...r.draft, ...p } } : r)));
+  /** Ghi tại chỗ theo `element` (giữ nguyên danh tính dòng) để `<For>` không dựng lại DOM khi đang gõ. */
+  const update = (element: string, p: Partial<GemDraft>) => {
+    const i = rows.findIndex((r) => r.draft.element === element);
+    if (i < 0) return;
+    setRows(i, 'dirty', true);
+    setRows(i, 'draft', p);
+  };
 
   async function save(element: string) {
-    const row = rows().find((r) => r.draft.element === element);
+    const i = rows.findIndex((r) => r.draft.element === element);
+    const row = i < 0 ? null : rows[i];
     if (!row || row.saving) return;
     const d = row.draft;
     if (d.stat1Min > d.stat1Max || d.stat2Min > d.stat2Max) {
       return say('Giá trị Cấp 1 không được lớn hơn Cấp 10.', false);
     }
-    setRows((rs) => rs.map((r) => (r.draft.element === element ? { ...r, saving: true } : r)));
+    setRows(i, 'saving', true);
     try {
       const saved = await api.admin.pvpGemUpdate(d);
       if (!props.alive()) return;
-      setRows((rs) =>
-        rs.map((r) => (r.draft.element === element ? { draft: { ...saved }, saving: false, dirty: false } : r)),
-      );
+      setRows(i, { draft: { ...saved }, saving: false, dirty: false });
       say(`Đã lưu Ngọc hệ ${GEM_ELEMENT_LABELS[saved.element]} — áp dụng ngay cho trận PvP mới.`);
     } catch (e) {
       if (props.alive()) say((e as ApiError).message, false);
-      setRows((rs) => rs.map((r) => (r.draft.element === element ? { ...r, saving: false } : r)));
+      setRows(i, 'saving', false);
     }
   }
 
@@ -791,7 +797,7 @@ export function PvpGemsPane(props: { alive: () => boolean; ctl: (c: Ctl) => void
         </Match>
         <Match when={true}>
           <div class="cfg-gems">
-            <For each={rows()}>
+            <For each={rows}>
               {(r) => (
                 <div class="cfg-gem" data-gem={r.draft.element}>
                   <div class="cfg-gem-head">

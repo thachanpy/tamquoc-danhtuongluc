@@ -982,8 +982,10 @@ interface Tally {
   /** Số lần THANH TẨY hiệu ứng bất lợi cho đồng minh (không gỡ choáng/thiêu đốt). */
   purifies: number;
   buffs: number;
+  /** Tướng có gục ở cuối trận không (đã HỒI SINH thành công thì vẫn tính là còn sống — trạng thái cuối trận). */
+  dead: boolean;
 }
-const newTally = (): Tally => ({ dealt: 0, taken: 0, healedAllies: 0, healedSelf: 0, shielded: 0, kills: 0, stuns: 0, cleanses: 0, purifies: 0, buffs: 0 });
+const newTally = (): Tally => ({ dealt: 0, taken: 0, healedAllies: 0, healedSelf: 0, shielded: 0, kills: 0, stuns: 0, cleanses: 0, purifies: 0, buffs: 0, dead: false });
 
 /** Một dòng diễn biến chi tiết (kèm avatar người thi triển / mục tiêu). */
 interface DetailRow {
@@ -1161,6 +1163,7 @@ function createDetailBuilder(units: PvpUnitStateDto[]) {
         return push({ kind: 'purify', actor, target: ev.idx, text: `${actor !== undefined ? nameOf(actor) : 'Đồng minh'} thanh tẩy hiệu ứng bất lợi cho ${nameOf(ev.idx)}` });
       case 'revive':
         // Hồi sinh: tướng gục lần đầu nhưng sống lại (chỉ 1 lần/trận), đổi lại bị giảm sát thương vĩnh viễn.
+        at(ev.idx).dead = false;
         return push({
           kind: 'revive',
           target: ev.idx,
@@ -1168,6 +1171,7 @@ function createDetailBuilder(units: PvpUnitStateDto[]) {
           text: `${nameOf(ev.idx)} HỒI SINH với ${num(ev.hp)} máu nhưng giảm ${pct(ev.damageDownBps)} sát thương tới hết trận`,
         });
       case 'down':
+        at(ev.idx).dead = true;
         return push({ kind: 'down', target: ev.idx, text: `${nameOf(ev.idx)} bị hạ` });
       case 'end':
         return null;
@@ -1273,7 +1277,7 @@ function BattleReport(props: { units: PvpUnitStateDto[]; mySide: PvpSide; analys
     return <MiniArt unit={u} mine={u?.side === props.mySide} />;
   };
   const row = (t: Tally, idx: number) => (
-    <tr>
+    <tr classList={{ 'rp-t-dead': t.dead }}>
       <td class="rp-t-name">
         {artOf(idx)}
         <span>{nameOf(idx)}</span>
@@ -1313,6 +1317,8 @@ function BattleReport(props: { units: PvpUnitStateDto[]; mySide: PvpSide; analys
       <td class="rp-t-num">{t.cleanses || '—'}</td>
       <td class="rp-t-num">{t.purifies || '—'}</td>
       <td class="rp-t-num">{t.buffs || '—'}</td>
+      {/* Tình trạng cuối trận của chính tướng này (khác cột "Hạ" = số địch tướng này hạ được). */}
+      <td class="rp-t-num rp-t-death">{t.dead ? <span class="rp-t-down">Đã hạ</span> : '—'}</td>
     </tr>
   );
 
@@ -1344,17 +1350,18 @@ function BattleReport(props: { units: PvpUnitStateDto[]; mySide: PvpSide; analys
                 <th>Giải choáng</th>
                 <th>Thanh tẩy</th>
                 <th>Buff</th>
+                <th>Tử vong</th>
               </tr>
             </thead>
             <tbody>
               <For each={ordered().filter((u) => u.side === props.mySide)}>{(u) => row(props.analysis.tallies.get(u.idx)!, u.idx)}</For>
               <tr class="rp-t-sep">
-                <td colSpan={10}>Đối thủ</td>
+                <td colSpan={11}>Đối thủ</td>
               </tr>
               <For each={ordered().filter((u) => u.side !== props.mySide)}>{(u) => row(props.analysis.tallies.get(u.idx)!, u.idx)}</For>
             </tbody>
           </table>
-          <p class="muted small">Sát thương = tổng ST tướng này gây ra. Đã chịu = tổng ST nhận vào. Hồi máu = máu hồi cho bản thân + đồng đội. Khiên = tổng lượng khiên tạo ra. Giải choáng = gỡ choáng &amp; thiêu đốt. Thanh tẩy = gỡ hiệu ứng bất lợi (không gỡ choáng/thiêu đốt).</p>
+          <p class="muted small">Sát thương = tổng ST tướng này gây ra. Đã chịu = tổng ST nhận vào. Hồi máu = máu hồi cho bản thân + đồng đội. Khiên = tổng lượng khiên tạo ra. Giải choáng = gỡ choáng &amp; thiêu đốt. Thanh tẩy = gỡ hiệu ứng bất lợi (không gỡ choáng/thiêu đốt). Tử vong = tướng gục ở cuối trận (hồi sinh thành công vẫn tính là còn sống).</p>
         </div>
       </Show>
     </div>
