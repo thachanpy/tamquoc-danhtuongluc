@@ -66,7 +66,7 @@ const GEM_ART_KEY: Record<GemElement, string> = {
   tho: 'earth',
 };
 /** Tăng khi thay bộ ảnh Ngọc để trình duyệt bỏ bản cũ (nginx cache /gem/ 7 ngày). */
-const GEM_ART_VERSION = 2;
+const GEM_ART_VERSION = 3;
 export const gemUrl = (element: GemElement, level: number) => {
   const lv = String(Math.min(Math.max(level, 1), 10)).padStart(2, '0');
   return `/gem/${GEM_ART_KEY[element]}_${lv}.webp?v=${GEM_ART_VERSION}`;
