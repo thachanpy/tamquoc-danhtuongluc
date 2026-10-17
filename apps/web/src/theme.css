@@ -916,12 +916,18 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 /* Chip lực chiến: tông vàng, cùng chiều cao với các chip định danh khác */
 .rp-t-lc { padding: 0 6px; color: var(--gold-2); }
 /* Cột số trong bảng tổng kết chỉ số — cùng QUY CHUẨN màu hiển thị Combat với dòng diễn biến ở trên:
-   sát thương thường #E0D8C3 (bạch ngân) · hồi máu / khiên #6FBE73 (bích ngọc). */
-.rp-t-num { text-align: right; white-space: nowrap; }
+   sát thương thường #E0D8C3 (bạch ngân) · hồi máu / khiên #6FBE73 (bích ngọc).
+   Con số cho TO hơn chữ thường của bảng (12px) để đọc nhanh kết quả trận. */
+.rp-t-num { text-align: right; white-space: nowrap; font: 700 15px/1.35 var(--num, sans-serif); }
 .rp-t-num.dmg { color: #e0d8c3; }
 .rp-t-num.taken { color: #e0d8c3; }
 .rp-t-num.heal { color: #6FBE73; }
 .rp-t-num.shield { color: #6FBE73; }
+/* Tên tướng + avatar ở cột đầu bảng tổng kết: cho TO hơn chữ bảng (12px / avatar 26px) để cân với
+   cỡ số 15px bên phải. Chỉ áp trong `.rp-table` nên không đụng tới avatar nhỏ ở dòng diễn biến. */
+.rp-table .rp-t-name { font-size: 15px; }
+.rp-table .rp-mini { width: 40px; height: 40px; }
+.rp-table .rp-mini-ini { font-size: 12px; }
 .rp-t-sep td { padding-top: 12px; font-weight: 700; letter-spacing: .04em; color: var(--gold-2); border-bottom: none; }
 /* Avatar nhỏ trong bảng kết quả (cả bảng tổng kết lẫn diễn biến) */
 .rp-mini { position: relative; flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; overflow: hidden; background: linear-gradient(160deg, #2a2112, var(--panel-2)); border: 1px solid var(--line); }
@@ -958,9 +964,9 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-drow-amt { flex: 0 0 auto; font: 900 18px/1 var(--num, sans-serif); color: #e0d8c3; white-space: nowrap; }
 .rp-drow-amt.heal { color: #6FBE73; }
 .rp-drow-amt.burn { color: #e65100; }
-.rp-drow-amt.crit { font-size: 29px; color: #ffb300; text-shadow: 0 0 10px rgba(255, 179, 0, .75); }
+.rp-drow-amt.crit { color: #ffb300; text-shadow: 0 0 10px rgba(255, 179, 0, .75); }
 /* Nhãn chí mạng: chip nhỏ đi kèm con số (không phình theo cỡ số chí mạng) */
-.rp-drow-crit { display: inline-block; margin-left: 4px; padding: 1px 5px; border: 1px solid rgba(255, 179, 0, .45); border-radius: 999px; background: rgba(255, 179, 0, .14); color: #ffb300; font: 800 8.5px/1.4 var(--num, sans-serif); letter-spacing: .04em; vertical-align: 1px; }
+.rp-drow-crit { display: inline-block; margin-left: 4px; padding: 1px 4px; border: 1px solid rgba(255, 179, 0, .45); border-radius: 999px; background: rgba(255, 179, 0, .14); color: #ffb300; font: 800 10px/1.4 var(--num, sans-serif); letter-spacing: .04em; vertical-align: 1px; }
 /* Khung cuộn của danh sách diễn biến khi ĐANG ĐÁNH (bảng kết quả dùng khung cuộn của chính nó) */
 .rp-drows { display: grid; gap: 3px; align-content: start; }
 .rp-drows.scroll { height: 156px; overflow-y: auto; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(10, 6, 4, .4); }
@@ -1095,5 +1101,7 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
   .rp-avatar { width: 34px; height: 34px; font-size: 13px; }
   .rp-side-name { font-size: 13px; }
   .rp-table th, .rp-table td { padding-left: 5px; padding-right: 5px; }
+  /* Bảng tổng kết có 9 cột số — màn hẹp hạ cỡ xuống 13px (vẫn to hơn chữ bảng 12px) cho khỏi tràn ngang. */
+  .rp-t-num { font-size: 13px; }
   .rp-close { margin-left: 0; }
 }

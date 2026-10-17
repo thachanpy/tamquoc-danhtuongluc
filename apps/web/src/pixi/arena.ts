@@ -362,7 +362,7 @@ class FloatFx {
     this.reduce = reduce;
     this.y0 = y;
     this.ms = reduce ? 500 : crit ? 1050 : 950;
-    const size = crit ? 74 : 36;
+    const size = crit ? 50 : 36;
     // Chí mạng luôn vàng kim; còn lại theo sắc thái: hồi máu/buff xanh lá, thiêu đốt đỏ nhẹ, sát thương xám.
     const fill = crit ? C.crit : tone === 'heal' ? C.heal : tone === 'burn' ? C.burn : C.dmg;
     // Mỗi mảnh là một dòng chữ; mảnh có icon thì icon đứng ngay trước số (cùng cỡ, cùng màu).
