@@ -9,6 +9,7 @@ import {
 } from '@tq/shared';
 import {
   GACHA_LEVEL_RATES,
+  GACHA_LEVEL_SCALE,
   BPS_SCALE,
   DRAW_COUNT_OPTIONS,
   DRAW_ALL_MAX,
@@ -36,6 +37,8 @@ export function getGachaConfig(): GachaConfigDto {
   return {
     ticketTypes: TICKET_TYPES.map((id) => ({ id, label: TICKET_LABELS[id], pool: poolForTicket(id).map((g) => g.id) })),
     levelRates: GACHA_LEVEL_RATES.map((e) => ({ ...e })),
+    /** Đơn vị của `levelRates` (khác `bpsScale` vì Lv9 = 0.005% cần thang chi tiết hơn). */
+    levelScale: GACHA_LEVEL_SCALE,
     bpsScale: BPS_SCALE,
     drawCountOptions: [...DRAW_COUNT_OPTIONS],
     drawAllMax: DRAW_ALL_MAX,
@@ -98,7 +101,7 @@ export function draw(
       const level = rollLevel(GACHA_LEVEL_RATES, ctx.rand);
       // Bước 8-9: tạo thẻ + lịch sử
       const cardId = insertCard(ctx.db, userId, general.id, level, nowIso);
-      // Ngọc Ngũ Hành đính kèm: 5% mỗi lượt quay, cùng cấp với Tướng; khi trúng random đều 1 trong 5 loại.
+      // Ngọc Ngũ Hành đính kèm: 10% mỗi lượt quay, cùng cấp với Tướng; khi trúng random đều 1 trong 5 loại.
       const gemElement = rollGemDrop(ctx.rand);
       const gem: GemDto | null = gemElement
         ? { id: insertGem(ctx.db, userId, gemElement, level, nowIso), element: gemElement, level, createdAt: nowIso }

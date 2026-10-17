@@ -15,15 +15,20 @@ import {
   PVP_DEBUFF_ROUNDS,
   PVP_DEF_BPS,
   PVP_DEF_MAX_BPS,
+  PVP_DISPEL_BPS_PER_LEVEL,
   PVP_FACTION_HP_BPS,
   PVP_FRONT_HP_BPS,
   PVP_BACK_DAMAGE_BPS,
   PVP_MAXHP_GAIN_HEAL_BPS,
   PVP_MAX_ROUNDS,
   PVP_PASSIVE_EFFECT,
+  PVP_PURIFY_BPS_PER_LEVEL,
   PVP_REVIVE_DAMAGE_DOWN_BPS,
   PVP_REVIVE_HP_BPS_PER_LEVEL,
   PVP_SHIELD_BREAK,
+  PVP_SKILL_BUFF_BURN_UP_BPS,
+  PVP_SKILL_BUFF_BURN_UP_MAX_LAYERS,
+  PVP_SKILL_BUFF_BURN_UP_ROUNDS,
   PVP_SKILL_BUFF_LIFESTEAL_BPS,
   PVP_TEAM_LIFESTEAL_BPS_PER_LEVEL,
   PVP_SKILL_DEF,
@@ -32,11 +37,13 @@ import {
   pvpBaseDamage,
   pvpBaseHp,
   pvpCritDamageBps,
+  pvpDispelBps,
   pvpEffectBps,
   pvpFactionBonus,
   pvpPerLevelEffectBps,
   pvpPreBattleBonus,
   pvpProfile,
+  pvpPurifyBps,
   pvpRealHitBps,
   pvpSkillDefAtLevel,
   pvpStyleBonus,
@@ -904,7 +911,8 @@ test('engine: hồi máu theo lượt (HoT) — Cát Huyền hồi cả đội v
 });
 
 test('config: Cố Ung xóa hiệu ứng bất lợi (kể cả Thiêu đốt) + Giảm 10% ST nhận toàn đội', () => {
-  // SKILLS.md: "Trị quốc an dân" — Xóa hiệu ứng bất lợi và Giảm 10% sát thương nhận vào toàn đội (3 lượt).
+  // SKILLS.md: "Vận Trù Trợ Hỏa" — Xóa hiệu ứng bất lợi và Giảm 10% sát thương nhận vào toàn đội (3 lượt),
+  // kèm buff +10% sát thương Thiêu đốt (2 lượt, cộng dồn tối đa 2 lớp) cho các đồng minh biết thiêu đốt.
   const def = skillDef('gu-yong');
   assert.equal(pvpProfile('gu-yong').skill, 'PURIFY');
   assert.equal(def.purify, true);
@@ -912,6 +920,42 @@ test('config: Cố Ung xóa hiệu ứng bất lợi (kể cả Thiêu đốt) +
   assert.equal(def.buffs[0]!.scope, 'all_allies');
   assert.equal(def.buffs[0]!.buff.takenDownBps, 1000);
   assert.equal(def.buffs[0]!.buff.hpBps, 0, 'không còn tăng HP tối đa');
+  assert.equal(def.buffs[1]!.scope, 'burn_allies');
+  assert.equal(def.buffs[1]!.buff.burnUpBps, PVP_SKILL_BUFF_BURN_UP_BPS);
+  assert.equal(def.buffs[1]!.buff.rounds, PVP_SKILL_BUFF_BURN_UP_ROUNDS, 'mỗi lớp hiệu lực 2 lượt');
+  assert.equal(def.buffs[1]!.buff.maxLayers, PVP_SKILL_BUFF_BURN_UP_MAX_LAYERS, 'cộng dồn tối đa 2 lớp');
+  assert.equal(PVP_SKILL_BUFF_BURN_UP_MAX_LAYERS, 2);
+  assert.ok(
+    PVP_SKILL_BUFF_BURN_UP_ROUNDS >= 2,
+    'trần 2 lớp chỉ có nghĩa khi mỗi lớp sống ≥ 2 lượt (nếu không 2 lớp không bao giờ cùng tồn tại)',
+  );
+});
+
+test('engine: buff tăng sát thương Thiêu đốt của Cố Ung cộng dồn 2 lớp (+20%)', () => {
+  // Cố Ung (slot 1) đi trước Chu Hoàn (slot 4) trong cùng đội: lượt 1 phát 1 lớp (+10%), lượt 2 phát
+  // thêm 1 lớp (lớp cũ còn sống vì hiệu lực 2 lượt) → đòn Thiêu đốt tạo ở lượt 2 hưởng đủ 2 lớp (+20%).
+  const res = simulatePvp(
+    [
+      one('a', [
+        { slot: 1, generalId: 'gu-yong', level: 10 },
+        { slot: 4, generalId: 'zhu-huan', level: 10 },
+      ]),
+      one('b', [{ slot: 1, generalId: 'da-qiao', level: 10 }]),
+    ],
+    never,
+  );
+  const zhu = res.units.find((u) => u.generalId === 'zhu-huan')!;
+  const burnBps = skillDef('zhu-huan').debuff.burnBps;
+  // Sát thương thiêu đốt = ST hiệu dụng × burnBps × (100% + số lớp × 10%) — Cố Ung không ban buff ST
+  // nên ST hiệu dụng của Chu Hoàn không đổi giữa các lượt, chỉ hệ số lớp tăng.
+  const flat = (layers: number) =>
+    Math.round((zhu.damage * burnBps * (BPS_SCALE + layers * PVP_SKILL_BUFF_BURN_UP_BPS)) / (BPS_SCALE * BPS_SCALE));
+  const flats = res.events
+    .filter(
+      (e): e is Extract<PvpEventDto, { t: 'debuff' }> => e.t === 'debuff' && e.from === zhu.idx && e.burnFlat > 0,
+    )
+    .map((e) => e.burnFlat);
+  assert.deepEqual(flats.slice(0, 2), [flat(1), flat(2)], 'lượt 1 = 1 lớp (+10%), lượt 2 = 2 lớp (+20%)');
 });
 
 test('config: Hoa Đà giải khống đặc thù 55% (cấp 1) → 100% (cấp 10)', () => {
@@ -922,6 +966,43 @@ test('config: Hoa Đà giải khống đặc thù 55% (cấp 1) → 100% (cấp 
   assert.equal(def.purify, true, 'vẫn thanh tẩy debuff chỉ số (giữ choáng/thiêu đốt cho cleanse)');
   assert.equal(def.cleanseMinBps, 5500);
   assert.equal(def.cleanseMaxBps, 10000);
+});
+
+test('config: Thanh tẩy gỡ TỪNG lớp debuff theo tỉ lệ cấp × 7.5% (cấp 10 = 75%)', () => {
+  // SKILLS.md mục 15: "gỡ lớp debuff theo tỉ lệ purifyBps" — trước đây gỡ 100% nên quá mạnh.
+  const def = skillDef('zhang-lu');
+  assert.equal(def.purify, true);
+  assert.equal(pvpPurifyBps(def, 1), PVP_PURIFY_BPS_PER_LEVEL, 'cấp 1 = 7.5%');
+  assert.equal(pvpPurifyBps(def, 10), 7500, 'cấp 10 = 75%');
+  assert.equal(pvpPurifyBps(skillDef('guan-yu'), 10), 0, 'tướng không thanh tẩy thì tỉ lệ 0');
+});
+
+test('engine: Thanh tẩy gỡ debuff theo tỉ lệ — cấp 1 (7.5%) hụt, cấp 10 (75%) thành công (mục 15)', () => {
+  // `never` luôn roll 5000 (50%): thấp hơn 75% nên cấp 10 gỡ được, nhưng cao hơn 7.5% nên cấp 1 hụt.
+  const setup = (level: number) =>
+    simulatePvp(
+      [
+        one('a', [
+          { slot: 1, generalId: 'zhang-lu', level },
+          { slot: 2, generalId: 'guan-yu', level: 10 },
+        ]),
+        one('b', [{ slot: 4, generalId: 'lu-xun', level: 10 }]),
+      ],
+      never,
+    );
+  const low = setup(1);
+  assert.ok(low.events.some((e) => e.t === 'debuff' && e.hpFlat > 0), 'địch phải giảm HP tối đa đồng minh ta');
+  assert.equal(low.events.some((e) => e.t === 'purify'), false, 'cấp 1 (7.5%) không gỡ được lớp nào khi roll 50%');
+  const high = setup(10);
+  assert.ok(high.events.some((e) => e.t === 'purify'), 'cấp 10 (75%) gỡ được khi roll 50% < 75%');
+});
+
+test('config: Xóa buff địch (dispel) theo tỉ lệ cấp × 7.5% (cấp 10 = 75%) — mục 14', () => {
+  const def = skillDef('cao-cao');
+  assert.equal(def.dispel, true);
+  assert.equal(pvpDispelBps(def, 1), PVP_DISPEL_BPS_PER_LEVEL, 'cấp 1 = 7.5%');
+  assert.equal(pvpDispelBps(def, 10), 7500, 'cấp 10 = 75%');
+  assert.equal(pvpDispelBps(skillDef('guan-yu'), 10), 0, 'tướng không xóa buff thì tỉ lệ 0');
 });
 
 test('engine: hút máu — tướng hồi bản thân theo % sát thương gây ra (mục 6.5)', () => {
@@ -986,10 +1067,11 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(lm.def.buffs[0]!.buff.hpBps, 1000);
   assert.equal(lm.def.buffs[0]!.scope, 'all_allies');
   assert.equal(lm.def.dispel, false);
-  // Tào Tháo: AoE 75%, 100% xóa 1 buff địch, buff ST toàn đội 20%, 5%-50% xóa khiên.
+  // Tào Tháo: AoE 75%, xóa buff địch theo tỉ lệ cấp (mục 14), buff ST toàn đội 20%, 5%-50% xóa khiên.
   const cc = pvpProfile('cao-cao');
   assert.equal(cc.def.damageBps, 7500);
-  assert.equal(cc.def.dispelChanceBps, BPS_SCALE);
+  assert.equal(cc.def.dispel, true);
+  assert.equal(pvpDispelBps(cc.def, 10), 7500);
   assert.equal(cc.def.buffs[0]!.buff.damageBps, 2000);
   assert.equal(cc.def.debuff.shieldBreakPerLevelBps, PVP_SHIELD_BREAK);
   // Trương Liêu: hàng ngang 225%, giảm ST địch 20%, hút máu 3%/cấp (max 30%), phản kích đơn (100% ST, không tự buff ST).
@@ -1201,6 +1283,38 @@ test('engine: BƯỚC 1 — Né thành công thì TRƯỢT: 0 sát thương, gi�
     !res.events.some((e) => (e.t === 'damage' || e.t === 'counter') && (e.absorbed ?? 0) > 0),
     'TRƯỢT thì Khiên cũng không bị tiêu hao',
   );
+});
+
+test('engine: Né thành công thì miễn nhiễm CẢ choáng của chiêu (mục 18)', () => {
+  // Cao Hoa: choáng đơn 100% ở cấp 10 (`stunPerLevelBps` 1000). Nếu engine roll choáng ĐỘC LẬP với
+  // bước Trúng/Trượt thì RNG 96% luôn choáng. Nhưng Trúng thực tế chỉ ~92.8% (Chính xác 100% vs Né
+  // 20%) nên đòn TRƯỢT → mục tiêu phải miễn nhiễm cả choáng (hết cảnh "né rồi mà vẫn bị choáng").
+  const def = skillDef('cao-hua');
+  assert.equal(def.stun, 'single');
+  assert.equal(pvpPerLevelEffectBps(def.stunPerLevelBps, 10), 10000, 'tiền đề: choáng 100% ở cấp 10');
+  const res = simulatePvp(
+    [one('a', [{ slot: 1, generalId: 'cao-hua', level: 10 }]), one('b', [{ slot: 4, generalId: 'sun-quan', level: 10 }])],
+    fixedBelow(9600),
+  );
+  assert.ok(res.events.some((e) => e.t === 'miss'), 'đòn phải TRƯỢT');
+  assert.equal(res.events.some((e) => e.t === 'stun'), false, 'TRƯỢT thì không được dính choáng');
+});
+
+test('engine: Né thành công thì miễn nhiễm mọi hiệu ứng bất lợi của chiêu — suy yếu & Thiêu đốt (mục 18)', () => {
+  // Trương Giác (toàn bộ địch): suy yếu (giảm Chí mạng) + Thiêu đốt. Trước đây 2 hiệu ứng này được áp
+  // KHÔNG qua bước Trúng/Trượt nên né được sát thương vẫn dính debuff; nay phải sạch hoàn toàn.
+  const res = simulatePvp(
+    [one('a', [{ slot: 1, generalId: 'zhang-jiao', level: 10 }]), one('b', [{ slot: 1, generalId: 'sun-quan', level: 10 }])],
+    fixedBelow(9600),
+  );
+  const zj = res.units.find((u) => u.generalId === 'zhang-jiao')!.idx;
+  assert.ok(res.events.some((e) => e.t === 'miss' && e.from === zj), 'đòn của Trương Giác phải TRƯỢT');
+  assert.equal(
+    res.events.some((e) => e.t === 'debuff' && e.from === zj),
+    false,
+    'TRƯỢT thì không dính suy yếu lẫn Thiêu đốt',
+  );
+  assert.equal(res.events.some((e) => e.t === 'burn'), false, 'TRƯỢT thì không có sát thương Thiêu đốt nào');
 });
 
 test('engine: BƯỚC 2 — Xuyên giáp triệt tiêu Phòng thủ; Phòng thủ cấp 10 (30%) giảm 30% sát thương (mục 18)', () => {

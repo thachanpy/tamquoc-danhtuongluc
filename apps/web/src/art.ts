@@ -99,7 +99,8 @@ export const initials = (name: string) =>
 
 export const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/** Hiển thị bps thành %: số nguyên thì bỏ thập phân, ngược lại hiện tối đa 3 chữ số (đủ cho Lv9 = 0.005%). */
 export const pct = (bps: number, scale = 10000) => {
   const v = (bps / scale) * 100;
-  return (Number.isInteger(v) ? v.toFixed(0) : v.toFixed(2).replace(/0$/, '')) + '%';
+  return (Number.isInteger(v) ? v.toFixed(0) : v.toFixed(3).replace(/\.?0+$/, '')) + '%';
 };

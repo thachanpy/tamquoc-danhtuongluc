@@ -595,7 +595,7 @@ test('quay thẻ tối đa level 9: RNG cao nhất ra Lv.9, không bao giờ ra 
   const h = makeCtx();
   const { userId } = register(h.ctx, 'alice', 'secret123');
   const type = (['normal', 'shu', 'wei', 'wu', 'qun'] as const).find((t) => readBalances(h.ctx.db, userId)[t] >= 1)!;
-  h.pushRand(0, 9999); // tướng index 0, r level = 9999 (giá trị cao nhất)
+  h.pushRand(0, 99999); // tướng index 0, r level = 99999 (giá trị cao nhất của thang GACHA_LEVEL_SCALE)
   const r = draw(h.ctx, userId, type, 'maxlv-0000001');
   assert.equal(r.results[0]!.card.level, 9);
   // Thực tế: dùng hết 100 vé quà, không thẻ nào ra Lv.10

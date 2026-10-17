@@ -17,6 +17,7 @@ import {
   pvpCleanseBps,
   pvpCritDamageBps,
   pvpDefBps,
+  pvpDispelBps,
   pvpDodgeBps,
   pvpHitBps,
   pvpGemTeamStats,
@@ -24,6 +25,7 @@ import {
   pvpPerLevelEffectBps,
   pvpPreBattleBonus,
   pvpProfile,
+  pvpPurifyBps,
   pvpSkillDefAtLevel,
   pvpStyleBonus,
   pvpTeamLc,
@@ -297,6 +299,8 @@ export function getCombatStats(generalId: string, level: number, squad?: string[
       stunBps: pvpPerLevelEffectBps(def.stunPerLevelBps, level),
       // Giải choáng khớp engine: mặc định chốt 75% ở cấp 10 (Hoa Đà ghi đè 55% → 100%).
       cleanseBps: pvpCleanseBps(def, level),
+      // Thanh tẩy khớp engine: gỡ MỖI lớp suy yếu theo tỉ lệ cấp × 7.5% (cấp 10 = 75%).
+      purifyBps: pvpPurifyBps(def, level),
       heal,
       // Hút máu ở cấp hiện tại (khớp engine): chốt ở cấp 10, quy theo cấp.
       lifestealBps: pvpPerLevelEffectBps(profile.lifestealPerLevelBps, level),
@@ -321,7 +325,8 @@ export function getCombatStats(generalId: string, level: number, squad?: string[
       cleanse: def.cleanse,
       purify: def.purify,
       dispel: def.dispel,
-      dispelChanceBps: def.dispelChanceBps,
+      // Xóa buff địch khớp engine: tỉ lệ cấp × 7.5% (cấp 10 = 75%), roll riêng mỗi mục tiêu (mục 14).
+      dispelBps: pvpDispelBps(def, level),
       buffs: def.buffs,
       debuff: def.debuff,
       counter: def.counter,

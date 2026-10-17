@@ -89,6 +89,8 @@ export function pvpSkillDefAtLevel(def: PvpSkillDef, level: number): PvpSkillDef
     selfHealBps: b(def.selfHealBps),
     buffs: def.buffs.map((e) => ({
       scope: e.scope,
+      // `burnUpBps` (tăng sát thương Thiêu đốt) giữ NGUYÊN theo cấp như `damageBps`: đây là mức %
+      // cố định của hiệu ứng, không nội suy theo cấp.
       buff: {
         ...e.buff,
         damageBps: b(e.buff.damageBps),
@@ -133,6 +135,26 @@ export function pvpCleanseBps(def: PvpSkillDef, level: number): number {
   if (def.cleanseMinBps !== undefined && def.cleanseMaxBps !== undefined)
     return pvpLevelSpanBps(def.cleanseMinBps, def.cleanseMaxBps, level);
   return pvpEffectBps(PVP_CLEANSE_CHAMP_BPS, level);
+}
+
+/**
+ * Tỉ lệ Thanh tẩy hiệu ứng bất lợi (bps) của một kỹ năng TẠI CẤP — dùng CHUNG cho engine và
+ * `getCombatStats` để chỉ số hiển thị khớp thực chiến. Tuyến tính theo cấp: cấp 1 = 7.5% … cấp 10 = 75%
+ * (`PVP_PURIFY_BPS_PER_LEVEL`). Mỗi lớp suy yếu được roll RIÊNG theo tỉ lệ này (SKILLS.md mục 15).
+ */
+export function pvpPurifyBps(def: PvpSkillDef, level: number): number {
+  if (!def.purify) return 0;
+  return pvpPerLevelEffectBps(PVP_PURIFY_BPS_PER_LEVEL, level);
+}
+
+/**
+ * Tỉ lệ Xóa hiệu ứng CÓ LỢI của địch (bps) của một kỹ năng TẠI CẤP — dùng CHUNG cho engine và
+ * `getCombatStats`. Tuyến tính theo cấp: cấp 1 = 7.5% … cấp 10 = 75% (`PVP_DISPEL_BPS_PER_LEVEL`);
+ * mỗi mục tiêu địch roll RIÊNG theo tỉ lệ này (SKILLS.md mục 14).
+ */
+export function pvpDispelBps(def: PvpSkillDef, level: number): number {
+  if (!def.dispel) return 0;
+  return pvpPerLevelEffectBps(PVP_DISPEL_BPS_PER_LEVEL, level);
 }
 
 // ===== Chỉ số Nền Ra Trận: phong cách + cổng đồng phe (SKILLS.md mục 1) =====
@@ -265,6 +287,12 @@ export interface PvpBuff {
    * Snapshot tại thời điểm phát; chịu chung lượt hiệu lực `rounds` (mục 3).
    */
   hotBps: number;
+  /**
+   * % sát thương Thiêu đốt cộng thêm cho đồng minh CÓ khả năng thiêu đốt (thường đi kèm phạm vi
+   * `burn_allies`). Đòn thiêu đốt gây ra trong thời gian hiệu lực mạnh lên nhưng các lớp thiêu đốt
+   * đang có của tướng đó vẫn giữ nguyên cộng dồn (không bị xóa/đặt lại).
+   */
+  burnUpBps: number;
   /** Số lượt mỗi lớp còn hiệu lực. */
   rounds: number;
   /** Số lớp cộng dồn tối đa. */
@@ -285,6 +313,19 @@ export const PVP_SKILL_BUFF_LIFESTEAL_BPS = 1500;
 export const PVP_SKILL_BUFF_LIFESTEAL_MAX_LAYERS = 1;
 /** Số lượt hiệu lực của buff ban hút máu — ngắn hơn buff chỉ số thường (2 lượt). */
 export const PVP_SKILL_BUFF_LIFESTEAL_ROUNDS = 2;
+
+/**
+ * Tăng sát thương Thiêu đốt mà kỹ năng hỗ trợ ban cho đồng minh CÓ khả năng thiêu đốt (mỗi lớp):
+ * **+10%** (Cố Ung — Vận Trù Trợ Hỏa). Mức % cố định theo cấp, cộng dồn tối đa 2 lớp → tối đa +20%.
+ */
+export const PVP_SKILL_BUFF_BURN_UP_BPS = 1000;
+/**
+ * Số lượt hiệu lực mỗi lớp (2 lượt). Phải ≥ 2 để 2 lớp có thể CÙNG tồn tại: lớp phát ở lượt N
+ * sống tới đầu lượt N+2, nên lượt N+1 Cố Ung phát lớp mới là đã có 2 lớp cộng dồn (tối đa +20%).
+ */
+export const PVP_SKILL_BUFF_BURN_UP_ROUNDS = 2;
+/** Trần 2 lớp cộng dồn cho buff tăng sát thương Thiêu đốt (SKILLS.md — "cộng dồn 2 lần"). */
+export const PVP_SKILL_BUFF_BURN_UP_MAX_LAYERS = 2;
 
 /** Số lượt mỗi lớp Khiên còn hiệu lực (SKILLS.md mục 16: 3 lượt). */
 export const PVP_SHIELD_ROUNDS = 3;
@@ -319,6 +360,7 @@ export const PVP_NO_BUFF: PvpBuff = {
   defBps: 0,
   defPenBps: 0,
   hotBps: 0,
+  burnUpBps: 0,
   rounds: PVP_BUFF_ROUNDS,
   maxLayers: PVP_BUFF_MAX_LAYERS,
 };
@@ -603,10 +645,8 @@ export interface PvpSkillDef {
   cleanseMaxBps?: number;
   /** Kỹ năng thanh tẩy hiệu ứng bất lợi cho đồng minh (trừ choáng và thiêu đốt). */
   purify: boolean;
-  /** Xóa hiệu ứng có lợi (lớp buff) của đối thủ. */
+  /** Xóa hiệu ứng có lợi (lớp buff) của đối thủ; tỉ lệ theo cấp xem `pvpDispelBps` (mục 14). */
   dispel: boolean;
-  /** Xác suất xóa hiệu ứng có lợi thành công (bps; 10000 = chắc chắn). */
-  dispelChanceBps: number;
   /** Các kênh buff tăng sức mạnh phát mỗi lần tướng tới lượt. Rỗng = kỹ năng không buff. */
   buffs: PvpBuffEntry[];
   /** Hiệu ứng bất lợi áp lên địch. */
@@ -634,15 +674,15 @@ export interface PvpSkillDef {
  * tường minh trong `PVP_ROSTER_ROWS`; bảng này là mẫu đại diện cho từng nhóm.
  */
 export const PVP_SKILL_DEF: Record<PvpSkill, PvpSkillDef> = {
-  ATTACK: { targeting: 'single', damageBps: 25000, healBps: 0, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: false, purify: false, dispel: false, dispelChanceBps: 0, buffs: [], debuff: PVP_NO_DEBUFF, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
-  STUN: { targeting: 'single', damageBps: 25000, healBps: 0, selfHealBps: 0, stun: 'single', stunPerLevelBps: 300, cleanse: false, purify: false, dispel: false, dispelChanceBps: 0, buffs: [], debuff: PVP_NO_DEBUFF, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
-  BUFF: { targeting: 'all_allies', damageBps: 0, healBps: 0, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: false, purify: false, dispel: false, dispelChanceBps: 0, buffs: [{ scope: 'all_allies', buff: { ...PVP_NO_BUFF, damageBps: 1000 } }], debuff: PVP_NO_DEBUFF, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
-  HEAL: { targeting: 'all_allies', damageBps: 0, healBps: 13000, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: false, purify: false, dispel: false, dispelChanceBps: 0, buffs: [], debuff: PVP_NO_DEBUFF, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
-  DEBUFF: { targeting: 'single', damageBps: 25000, healBps: 0, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: false, purify: false, dispel: false, dispelChanceBps: 0, buffs: [], debuff: { ...PVP_NO_DEBUFF, damageDownBps: 2500 }, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
-  BURN: { targeting: 'all_enemies', damageBps: 8000, healBps: 0, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: false, purify: false, dispel: false, dispelChanceBps: 0, buffs: [], debuff: { ...PVP_NO_DEBUFF, burnBps: PVP_BURN_BPS, burnRounds: PVP_BURN_ROUNDS }, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
-  DISPEL: { targeting: 'single', damageBps: 25000, healBps: 0, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: false, purify: false, dispel: true, dispelChanceBps: BPS_SCALE, buffs: [], debuff: PVP_NO_DEBUFF, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
-  PURIFY: { targeting: 'all_allies', damageBps: 0, healBps: 0, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: false, purify: true, dispel: false, dispelChanceBps: 0, buffs: [], debuff: PVP_NO_DEBUFF, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
-  CLEANSE: { targeting: 'all_allies', damageBps: 0, healBps: 0, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: true, purify: false, dispel: false, dispelChanceBps: 0, buffs: [], debuff: PVP_NO_DEBUFF, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
+  ATTACK: { targeting: 'single', damageBps: 25000, healBps: 0, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: false, purify: false, dispel: false, buffs: [], debuff: PVP_NO_DEBUFF, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
+  STUN: { targeting: 'single', damageBps: 25000, healBps: 0, selfHealBps: 0, stun: 'single', stunPerLevelBps: 300, cleanse: false, purify: false, dispel: false, buffs: [], debuff: PVP_NO_DEBUFF, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
+  BUFF: { targeting: 'all_allies', damageBps: 0, healBps: 0, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: false, purify: false, dispel: false, buffs: [{ scope: 'all_allies', buff: { ...PVP_NO_BUFF, damageBps: 1000 } }], debuff: PVP_NO_DEBUFF, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
+  HEAL: { targeting: 'all_allies', damageBps: 0, healBps: 13000, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: false, purify: false, dispel: false, buffs: [], debuff: PVP_NO_DEBUFF, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
+  DEBUFF: { targeting: 'single', damageBps: 25000, healBps: 0, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: false, purify: false, dispel: false, buffs: [], debuff: { ...PVP_NO_DEBUFF, damageDownBps: 2500 }, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
+  BURN: { targeting: 'all_enemies', damageBps: 8000, healBps: 0, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: false, purify: false, dispel: false, buffs: [], debuff: { ...PVP_NO_DEBUFF, burnBps: PVP_BURN_BPS, burnRounds: PVP_BURN_ROUNDS }, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
+  DISPEL: { targeting: 'single', damageBps: 25000, healBps: 0, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: false, purify: false, dispel: true, buffs: [], debuff: PVP_NO_DEBUFF, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
+  PURIFY: { targeting: 'all_allies', damageBps: 0, healBps: 0, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: false, purify: true, dispel: false, buffs: [], debuff: PVP_NO_DEBUFF, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
+  CLEANSE: { targeting: 'all_allies', damageBps: 0, healBps: 0, selfHealBps: 0, stun: 'none', stunPerLevelBps: 0, cleanse: true, purify: false, dispel: false, buffs: [], debuff: PVP_NO_DEBUFF, counter: PVP_NO_COUNTER, revive: false, vsDebuffBonusBps: 0, selfBurn: false, selfBurnRounds: 0, burnCritMulBps: 0, burnLifesteal: false, burnCritDamageBps: 0 },
 };
 
 // ===== Tỉ lệ theo cấp =====
@@ -654,6 +694,19 @@ export const PVP_CRIT_BPS_PER_LEVEL = 300;
  * Tướng có kỹ năng giải choáng dùng trần này (riêng Hoa Đà ghi đè 55% → 100%).
  */
 export const PVP_CLEANSE_CHAMP_BPS = 7500;
+
+/**
+ * Thanh tẩy hiệu ứng bất lợi: **7.5% mỗi cấp** → cấp 1 = 7.5% … cấp 10 = 75% (`pvpPurifyBps`).
+ * Mỗi lớp suy yếu (kể cả Giảm Máu Tối Đa) roll RIÊNG theo tỉ lệ này; gỡ xong thì đồng bộ lại trần HP
+ * (`syncMaxHp`). Mục 15 — giảm sức mạnh so với bản cũ (trước đây gỡ 100%).
+ */
+export const PVP_PURIFY_BPS_PER_LEVEL = 750;
+
+/**
+ * Xóa hiệu ứng CÓ LỢI của địch (dispel — mục 14): **7.5% mỗi cấp** → cấp 1 = 7.5% … cấp 10 = 75%
+ * (`pvpDispelBps`). Mỗi mục tiêu địch roll RIÊNG theo tỉ lệ này.
+ */
+export const PVP_DISPEL_BPS_PER_LEVEL = 750;
 
 /** ST chí mạng tại cấp 1: +30% (hệ số ×1,30). */
 export const PVP_CRIT_DAMAGE_BPS_MIN = 3000;
@@ -776,8 +829,6 @@ interface RosterPvpRow {
   cleanseMaxBps?: number;
   purify?: boolean;
   dispel?: boolean;
-  /** Xác suất xóa hiệu ứng có lợi (bps); bỏ trống = chắc chắn (10000). */
-  dispelChanceBps?: number;
   /** Các KÊNH buff phát mỗi lần tướng tới lượt (thường 1 kênh; tướng vừa tự buff vừa buff đồng minh có nhiều kênh). */
   buffs?: { buff?: Partial<PvpBuff>; buffScope?: PvpBuffScope }[];
   debuff?: Partial<PvpDebuff>;
@@ -807,7 +858,7 @@ interface RosterPvpRow {
 // ----- Phe Ngụy: suy yếu, khống chế, xóa buff đối thủ, phản kích -----
 
 const WEI_PVP: RosterPvpRow[] = [
-  { id: 'cao-cao', skillName: 'Hiệu lệnh thiên hạ', style: 'support', skill: 'DISPEL', targeting: 'all_enemies', damageBps: 7500, dispel: true, dispelChanceBps: BPS_SCALE, debuff: { shieldBreakPerLevelBps: PVP_SHIELD_BREAK, defDownBps: 1500 }, buffs: [{ buffScope: 'all_allies', buff: { damageBps: 2000 } }] },
+  { id: 'cao-cao', skillName: 'Hiệu lệnh thiên hạ', style: 'support', skill: 'DISPEL', targeting: 'all_enemies', damageBps: 7500, dispel: true, debuff: { shieldBreakPerLevelBps: PVP_SHIELD_BREAK, defDownBps: 1500 }, buffs: [{ buffScope: 'all_allies', buff: { damageBps: 2000 } }] },
   { id: 'cao-pi', skillName: 'Đế vương trảm', style: 'attack', skill: 'ATTACK', targeting: 'single', damageBps: 29000, lifestealPerLevelBps: PVP_LIFESTEAL_BPS_PER_LEVEL, debuff: { critDownBps: 2000, critDamageDownBps: 2000 }, vsDebuffBonusBps: PVP_VS_DEBUFF_BONUS_BPS, buffs: [{ buffScope: 'self', buff: { defPenBps: 1500 } }] },
   { id: 'cao-ren', skillName: 'Thiết bích', style: 'defense', skill: 'BUFF', targeting: 'all_allies', buffs: [{ buffScope: 'self', buff: { hpBps: 1500, shieldBps: 2000, defBps: 1000 } }], selfHealBps: 1000, revive: true, counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_ALL_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'all' } },
   { id: 'cao-hong', skillName: 'Hộ chủ', style: 'defense', skill: 'ATTACK', targeting: 'single', damageBps: 23000, selfHealBps: 1000, buffs: [{ buffScope: 'self', buff: { takenDownBps: 1500, defBps: 1500 } }] },
@@ -916,7 +967,8 @@ const WU_PVP: RosterPvpRow[] = [
   { id: 'sun-luban', skillName: 'An định Giang Đông', style: 'support', skill: 'DEBUFF', targeting: 'all_enemies', damageBps: 7000, debuff: { hpDownBps: 1500, defDownBps: 1500 } },
   // ----- 10 tướng mở rộng (STT 26–35) -----
   { id: 'zhu-fang', skillName: 'Kết trận Giang Đông', style: 'support', skill: 'DISPEL', targeting: 'all_enemies', damageBps: 7500, dispel: true, debuff: { damageDownBps: 2000, shieldBreakPerLevelBps: PVP_SHIELD_BREAK } },
-  { id: 'gu-yong', skillName: 'Trị quốc an dân', style: 'support', skill: 'PURIFY', targeting: 'all_allies', purify: true, buffs: [{ buffScope: 'all_allies', buff: { takenDownBps: 1000 } }] },
+  // Vận Trù Trợ Hỏa: thanh tẩy + giảm ST nhận toàn đội, kèm buff riêng cho nhóm tướng biết Thiêu đốt.
+  { id: 'gu-yong', skillName: 'Vận Trù Trợ Hỏa', style: 'support', skill: 'PURIFY', targeting: 'all_allies', purify: true, buffs: [{ buffScope: 'all_allies', buff: { takenDownBps: 1000 } }, { buffScope: 'burn_allies', buff: { burnUpBps: PVP_SKILL_BUFF_BURN_UP_BPS, rounds: PVP_SKILL_BUFF_BURN_UP_ROUNDS, maxLayers: PVP_SKILL_BUFF_BURN_UP_MAX_LAYERS } }] },
   { id: 'quan-zong', skillName: 'Trùng thành cố thủ', style: 'defense', skill: 'BUFF', targeting: 'all_allies', selfHealBps: 1500, buffs: [{ buffScope: 'self', buff: { takenDownBps: 2500, shieldBps: 1500 } }], counter: { perLevelBps: PVP_COUNTER_BPS_PER_LEVEL, damageBps: PVP_COUNTER_ALL_DAMAGE_BPS, rounds: PVP_COUNTER_ROUNDS, scope: 'all' } },
   { id: 'lu-dai', skillName: 'Bình định sơn Việt', style: 'defense', skill: 'DEBUFF', targeting: 'front_enemies', damageBps: 19000, debuff: { damageDownBps: 2000, critDownBps: 1000, defDownBps: 1500 } },
   { id: 'sun-huan', skillName: 'Hãm trận xung phong', style: 'attack', skill: 'ATTACK', targeting: 'lane', damageBps: 21000, buffs: [{ buffScope: 'self', buff: { damageBps: 1500 } }] },
@@ -992,7 +1044,8 @@ const hasBuffEffect = (b: PvpBuff) =>
   b.dodgeBps > 0 ||
   b.defBps > 0 ||
   b.defPenBps > 0 ||
-  b.hotBps > 0;
+  b.hotBps > 0 ||
+  b.burnUpBps > 0;
 
 /** Kỹ năng có phát buff tăng sức mạnh cho ĐỒNG MINH (không tính tự buff) hay không. */
 const buffsAllies = (def: PvpSkillDef) =>
@@ -1072,7 +1125,6 @@ function buildDef(row: RosterPvpRow): PvpSkillDef {
     cleanseMaxBps: row.cleanseMaxBps,
     purify: row.purify ?? false,
     dispel: row.dispel ?? false,
-    dispelChanceBps: row.dispel ? (row.dispelChanceBps ?? BPS_SCALE) : 0,
     buffs,
     debuff,
     counter: row.counter ? { ...PVP_NO_COUNTER, ...row.counter } : PVP_NO_COUNTER,

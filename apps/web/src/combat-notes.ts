@@ -63,6 +63,7 @@ function buffGains(b: PvpBuffDto): string {
     b.defPenBps ? `+${pct(b.defPenBps)} xuyên giáp` : '',
     b.shieldBps ? `tạo Khiên bằng ${pct(b.shieldBps)} HP tối đa` : '',
     b.hotBps ? `hồi ${pct(b.hotBps)} sát thương nền mỗi lượt (hồi theo lượt)` : '',
+    b.burnUpBps ? `+${pct(b.burnUpBps)} sát thương Thiêu đốt` : '',
   ]
     .filter(Boolean)
     .join(', ');
@@ -89,11 +90,11 @@ export function skillNote(c: PvpCombatDto): SkillNoteLine[] {
   // Khống chế & gỡ hiệu ứng.
   if (d.stun !== 'none') lines.push({ label: 'Choáng', text: `${pct(c.self.stunBps)} lên mục tiêu trúng đòn` });
   if (d.cleanse) lines.push({ label: 'Giải khống', text: `gỡ Choáng & Thiêu đốt cho đồng minh, tỉ lệ ${pct(c.self.cleanseBps)}` });
-  if (d.purify) lines.push({ label: 'Thanh tẩy', text: 'gỡ hiệu ứng bất lợi cho đồng minh (trừ Choáng & Thiêu đốt)' });
+  if (d.purify) lines.push({ label: 'Thanh tẩy', text: `gỡ hiệu ứng bất lợi cho đồng minh (trừ Choáng & Thiêu đốt), tỉ lệ ${pct(c.self.purifyBps)} mỗi lớp` });
   if (d.dispel)
     lines.push({
       label: 'Xóa buff',
-      text: `gỡ hiệu ứng có lợi của địch${d.dispelChanceBps < 10000 ? ` (tỉ lệ ${pct(d.dispelChanceBps)})` : ''}`,
+      text: `gỡ hiệu ứng có lợi của địch (tỉ lệ ${pct(d.dispelBps)})`,
     });
 
   // Hiệu ứng bất lợi áp lên địch.

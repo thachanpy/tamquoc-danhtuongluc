@@ -52,6 +52,7 @@ export function statRows(c: PvpCombatDto): { label: string; value: string; note?
   ];
   if (c.skillDef.stun !== 'none') rows.push({ label: 'Choáng', value: pct(c.self.stunBps) });
   if (c.skillDef.cleanse) rows.push({ label: 'Giải choáng & thiêu đốt', value: pct(c.self.cleanseBps) });
+  if (c.skillDef.purify) rows.push({ label: 'Thanh tẩy', value: `${pct(c.self.purifyBps)} mỗi lớp` });
   if (c.self.heal) rows.push({ label: 'Hồi máu', value: `${c.self.heal} HP` });
   if (c.self.teamLifestealBps) rows.push({ label: 'Hút máu đội', value: `${pct(c.self.teamLifestealBps)} tổng sát thương` });
   return rows;

@@ -242,6 +242,8 @@ export interface WeightEntry {
 export interface GachaConfigDto {
   ticketTypes: { id: TicketType; label: string; pool: string[] }[];
   levelRates: WeightEntry[];
+  /** Đơn vị của `levelRates` (100000 = 100%) — chi tiết hơn `bpsScale` để biểu diễn Lv9 = 0.005%. */
+  levelScale: number;
   bpsScale: number;
   /** Các lựa chọn số lần quay mỗi request, VD [1, 10]. */
   drawCountOptions: number[];
@@ -982,7 +984,7 @@ export const PVP_TARGETING_LABELS: Record<PvpTargeting, string> = {
 };
 
 /** Phạm vi nhận hiệu ứng có lợi (buff/hồi máu) của kỹ năng. */
-export const PVP_BUFF_SCOPES = ['none', 'self', 'all_allies', 'same_row_allies', 'lowest_ally', 'front_allies', 'back_allies'] as const;
+export const PVP_BUFF_SCOPES = ['none', 'self', 'all_allies', 'same_row_allies', 'lowest_ally', 'front_allies', 'back_allies', 'burn_allies'] as const;
 export type PvpBuffScope = (typeof PVP_BUFF_SCOPES)[number];
 
 export const PVP_BUFF_SCOPE_LABELS: Record<PvpBuffScope, string> = {
@@ -993,6 +995,7 @@ export const PVP_BUFF_SCOPE_LABELS: Record<PvpBuffScope, string> = {
   lowest_ally: 'đồng minh thấp máu nhất',
   front_allies: 'các tướng hàng trước',
   back_allies: 'các tướng hàng sau',
+  burn_allies: 'các đồng minh có khả năng Thiêu đốt',
 };
 
 /**
@@ -1118,7 +1121,7 @@ export type PvpEventDto =
    * riêng theo từng (nguồn, kênh)). `maxLayers` = số lớp cộng dồn tối đa THEO TỪNG (nguồn, kênh) (client
    * bỏ lớp cũ nhất cùng `from` + `channel` khi vượt trần; nguồn/kênh khác vẫn cộng dồn).
    */
-  | { t: 'buff'; from: number; channel: number; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; lifestealBps: number; hitBps?: number; dodgeBps?: number; defBps?: number; defPenBps?: number; crit: boolean; expiresRound: number; maxLayers: number }
+  | { t: 'buff'; from: number; channel: number; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; lifestealBps: number; hitBps?: number; dodgeBps?: number; defBps?: number; defPenBps?: number; burnUpBps?: number; crit: boolean; expiresRound: number; maxLayers: number }
   /**
    * Áp một lớp hiệu ứng bất lợi lên mục tiêu địch: giảm sát thương gây ra (`damageFlat`),
    * giảm trần HP (`hpFlat`), giảm chí mạng (`critBps`), giảm ST chí mạng (`critDamageBps`),
@@ -1231,6 +1234,12 @@ export interface PvpBuffDto {
   defPenBps: number;
   /** Hồi máu theo lượt (HoT): mỗi lớp hồi % sát thương nền của người thi triển vào đầu mỗi lượt. 0 = không có. */
   hotBps: number;
+  /**
+   * % sát thương Thiêu đốt cộng thêm cho đồng minh CÓ khả năng thiêu đốt (bps; 0 = không có).
+   * Lớp thiêu đốt của tướng được buff vẫn giữ nguyên cộng dồn như thường, chỉ đòn thiêu đốt
+   * gây ra trong thời gian hiệu lực mạnh hơn.
+   */
+  burnUpBps: number;
   /** Số lượt mỗi lớp còn hiệu lực. */
   rounds: number;
   /** Số lớp cộng dồn tối đa. */
@@ -1324,8 +1333,8 @@ export interface PvpSkillDefDto {
   purify: boolean;
   /** Xóa hiệu ứng có lợi (lớp buff) của đối thủ. */
   dispel: boolean;
-  /** Xác suất xóa hiệu ứng có lợi thành công (bps; 10000 = chắc chắn). */
-  dispelChanceBps: number;
+  /** Tỉ lệ xóa hiệu ứng có lợi của địch tại cấp (bps) — cấp × 7.5%, cấp 10 = 75% (mục 14). */
+  dispelBps: number;
   /** Các kênh buff tăng sức mạnh phát mỗi lần tướng tới lượt (rỗng = không buff). */
   buffs: PvpBuffEntryDto[];
   /** Hiệu ứng bất lợi áp lên địch (rỗng = không có). */
@@ -1397,7 +1406,7 @@ export interface PvpCombatDto {
   /** Chỉ số nền theo cấp — chưa tính hiệu ứng kỹ năng, nội tại, vị trí. */
   base: { maxHp: number; damage: number };
   /** Chỉ số của riêng tướng sau khi áp nội tại. */
-  self: { maxHp: number; damage: number; lc: number; critBps: number; critDamageBps: number; stunBps: number; cleanseBps: number; heal: number; lifestealBps: number; teamLifestealBps: number; hitBps: number; dodgeBps: number; defBps: number; defPenBps: number };
+  self: { maxHp: number; damage: number; lc: number; critBps: number; critDamageBps: number; stunBps: number; cleanseBps: number; purifyBps: number; heal: number; lifestealBps: number; teamLifestealBps: number; hitBps: number; dodgeBps: number; defBps: number; defPenBps: number };
   passiveEffect: PvpPassiveEffectDto;
   skillDef: PvpSkillDefDto;
   /** Các kênh buff tăng sức mạnh kỹ năng phát mỗi lượt; rỗng = kỹ năng không buff. */

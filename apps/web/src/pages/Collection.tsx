@@ -260,7 +260,7 @@ export function CollectionPage(): JSX.Element {
 
   return (
     <>
-      <div class="sub-tabs" role="tablist">
+      <div class="sub-tabs lg" role="tablist">
         <button class="btn small" classList={{ on: sub() === 'tuong' }} role="tab" onClick={() => setSub('tuong')}>
           Tướng
         </button>

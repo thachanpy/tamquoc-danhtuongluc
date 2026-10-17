@@ -18,6 +18,7 @@ import {
   TICKET_GRANT_WEIGHTS,
   TICKET_POOL_FACTION,
   GACHA_LEVEL_RATES,
+  GACHA_LEVEL_SCALE,
   GACHA_MAX_LEVEL,
   UPGRADE_SUCCESS_BPS,
   UPGRADE_FAILURE_DISTRIBUTION,
@@ -30,7 +31,7 @@ function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`[game-config] ${msg}`);
 }
 
-function checkWeights(name: string, entries: WeightEntry[], minLevel: number, maxLevel: number) {
+function checkWeights(name: string, entries: WeightEntry[], minLevel: number, maxLevel: number, scale = BPS_SCALE) {
   assert(entries.length > 0, `${name}: rỗng`);
   const seen = new Set<number>();
   let sum = 0;
@@ -42,7 +43,7 @@ function checkWeights(name: string, entries: WeightEntry[], minLevel: number, ma
     assert(Number.isInteger(e.bps) && e.bps >= 0, `${name}: xác suất âm/không nguyên`);
     sum += e.bps;
   }
-  assert(sum === BPS_SCALE, `${name}: tổng ${sum} != ${BPS_SCALE}`);
+  assert(sum === scale, `${name}: tổng ${sum} != ${scale}`);
 }
 
 /** Validate toàn bộ cấu hình. Ném lỗi nếu sai — server gọi khi khởi động. */
@@ -117,7 +118,7 @@ export function validateGameConfig(): void {
     Number.isInteger(GACHA_MAX_LEVEL) && GACHA_MAX_LEVEL >= MIN_LEVEL && GACHA_MAX_LEVEL <= MAX_LEVEL,
     'GACHA_MAX_LEVEL không hợp lệ',
   );
-  checkWeights('GACHA_LEVEL_RATES', GACHA_LEVEL_RATES, MIN_LEVEL, GACHA_MAX_LEVEL);
+  checkWeights('GACHA_LEVEL_RATES', GACHA_LEVEL_RATES, MIN_LEVEL, GACHA_MAX_LEVEL, GACHA_LEVEL_SCALE);
 
   // Nâng cấp
   for (let lv = MIN_LEVEL; lv <= MAX_LEVEL - 1; lv++) {

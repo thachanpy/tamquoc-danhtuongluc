@@ -167,7 +167,7 @@ apps/web               Vite + SolidJS: quay thẻ, bộ sưu tập, nâng cấp,
   Retry trả lại kết quả cũ; dùng cùng key cho yêu cầu khác → 409.
 - **Cộng vé thử nghiệm**: không còn nút trên UI; endpoint `/api/tickets/dev-topup` chỉ chạy khi server có
   `ENABLE_DEV_TOPUP=1` (mặc định tắt, kể cả `pnpm dev`). Cộng vé cho người chơi dùng trang Quản trị.
-- **Quay thẻ tối đa Lv.9** (`GACHA_MAX_LEVEL`): 72 / 15 / 7 / 3.5 / 2 / 0.4 / 0.07 / 0.02 / 0.01% cho Lv.1–9 (Lv.8–9 cực hiếm). Lv.10 chỉ có qua ghép.
+- **Quay thẻ tối đa Lv.9** (`GACHA_MAX_LEVEL`): 65.075 / 18 / 9 / 5.5 / 2 / 0.32 / 0.08 / 0.02 / 0.005% cho Lv.1–9 (Lv.6–9 cực hiếm). Lv.10 chỉ có qua ghép. Mỗi Tướng quay ra có 10% rớt kèm 1 Ngọc Ngũ Hành cùng cấp.
 - **Tỷ lệ ghép**: thành công 90% (Lv1) giảm đều 10% mỗi bậc tới 10% (Lv9); thất bại giữ nguyên 80% hoặc tụt đúng 1 bậc 20% (Lv2: 90/10, Lv1 luôn giữ).
 - **Trang Nâng cấp** gom thẻ theo tướng (bản sao cùng tướng luôn liền nhau, chia nhóm theo level, đánh dấu nhóm đủ 2 thẻ).
   Logic gom/sắp xếp ở `apps/web/src/upgrade-groups.ts`, có test.

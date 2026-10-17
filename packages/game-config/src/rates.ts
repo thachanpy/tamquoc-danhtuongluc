@@ -71,19 +71,26 @@ export const TICKET_POOL_FACTION: Record<TicketType, Faction | null> = {
 export const GACHA_MAX_LEVEL = 9;
 
 /**
- * Tỷ lệ level khi quay (mục 4.3). Chỉ level 1–GACHA_MAX_LEVEL.
- * Chủ dự án yêu cầu Lv8–9 cực kỳ hiếm: Lv8 = 2/10.000, Lv9 = 1/10.000 (mức nhỏ nhất của thang bps).
+ * Thang riêng cho bảng tỷ lệ level khi quay thẻ (mục 4.3): 100000 = 100%.
+ * Chi tiết hơn `BPS_SCALE` để biểu diễn được Lv9 = 0.005% bằng số nguyên (thang 10000 chỉ tới
+ * 0.01% = 1 bps). Mọi tỷ lệ khác trong game vẫn dùng `BPS_SCALE`.
+ */
+export const GACHA_LEVEL_SCALE = 100_000;
+
+/**
+ * Tỷ lệ level khi quay (mục 4.3). Chỉ level 1–GACHA_MAX_LEVEL, đơn vị theo `GACHA_LEVEL_SCALE`.
+ * Chủ dự án yêu cầu Lv6–9 cực kỳ hiếm (mỗi bậc giảm 4 lần).
  */
 export const GACHA_LEVEL_RATES: WeightEntry[] = [
-  { level: 1, bps: 7200 }, // 72%
-  { level: 2, bps: 1500 }, // 15%
-  { level: 3, bps: 700 }, // 7%
-  { level: 4, bps: 350 }, // 3.5%
-  { level: 5, bps: 200 }, // 2%
-  { level: 6, bps: 40 }, // 0.4%
-  { level: 7, bps: 7 }, // 0.07%
-  { level: 8, bps: 2 }, // 0.02%
-  { level: 9, bps: 1 }, // 0.01%
+  { level: 1, bps: 65075 }, // 65.075%
+  { level: 2, bps: 18000 }, // 18%
+  { level: 3, bps: 9000 }, // 9%
+  { level: 4, bps: 5500 }, // 5.5%
+  { level: 5, bps: 2000 }, // 2%
+  { level: 6, bps: 320 }, // 0.32%
+  { level: 7, bps: 80 }, // 0.08%
+  { level: 8, bps: 20 }, // 0.02%
+  { level: 9, bps: 5 }, // 0.005%
 ];
 
 /**

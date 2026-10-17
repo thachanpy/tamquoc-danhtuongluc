@@ -821,7 +821,7 @@ interface CV {
   /** Hệ số nhân sát thương gây ra (bps): 10000 bình thường, giảm còn 5000 sau khi Hồi sinh (mục 1.14). */
   damageMulBps: number;
   /** Các lớp buff đang hiệu lực (khớp engine): sát thương/HP/chí mạng/ST chí mạng/giảm ST gánh chịu/hút máu + chỉ số trao đổi đòn + lượt hết hạn. */
-  buffs: { sourceIdx: number; channel: number; flat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; lifestealBps: number; hitBps: number; dodgeBps: number; defBps: number; defPenBps: number; expiresRound: number }[];
+  buffs: { sourceIdx: number; channel: number; flat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; lifestealBps: number; hitBps: number; dodgeBps: number; defBps: number; defPenBps: number; burnUpBps: number; expiresRound: number }[];
   /** Các lớp hiệu ứng bất lợi đang chịu (khớp engine): giảm sát thương/HP/chí mạng/ST chí mạng/chỉ số trao đổi đòn + thiêu đốt. */
   debuffs: { sourceIdx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; hitDownBps: number; dodgeDownBps: number; defDownBps: number; defPenDownBps: number; burnFlat: number; expiresRound: number }[];
   /** Các lớp Khiên đang hấp thụ sát thương (khớp engine): trừ dần khi bị đánh, tự tan theo lượt. */
@@ -896,6 +896,10 @@ function effectChips(s: CV): { icon?: IconId; text: string; tone: 'buff' | 'debu
   if (bDodge > 0) out.push({ icon: 'dodge', text: `+${pct(bDodge)}`, tone: 'buff' });
   if (bDef > 0) out.push({ icon: 'armor', text: `+${pct(bDef)}`, tone: 'buff' });
   if (bDefPen > 0) out.push({ icon: 'bow-pen', text: `+${pct(bDefPen)}`, tone: 'buff' });
+  // Tăng sát thương Thiêu đốt (Cố Ung — Vận Trù Trợ Hỏa): dùng icon Thiêu đốt nhưng tô màu XANH
+  // như các chip buff khác để thấy rõ tướng nào đang được cường hóa Thiêu đốt (không phải dính đốt).
+  const bBurnUp = sum(s.buffs, (b) => b.burnUpBps);
+  if (bBurnUp > 0) out.push({ icon: 'burn', text: `+${pct(bBurnUp)}`, tone: 'buff' });
   // Khiên đang hấp thụ sát thương (mục 16) — hiện tổng lượng còn lại.
   const bShield = sum(s.shields, (x) => x.amount);
   if (bShield > 0) out.push({ icon: 'sphere-shield', text: `${num(bShield)}`, tone: 'buff' });
@@ -1084,6 +1088,7 @@ function createDetailBuilder(units: PvpUnitStateDto[]) {
           ev.critDamageBps > 0 ? `+${pct(ev.critDamageBps)} ST chí mạng` : '',
           ev.takenDownBps > 0 ? `−${pct(ev.takenDownBps)} sát thương gánh chịu` : '',
           ev.lifestealBps > 0 ? `+${pct(ev.lifestealBps)} hút máu` : '',
+          (ev.burnUpBps ?? 0) > 0 ? `+${pct(ev.burnUpBps ?? 0)} sát thương Thiêu đốt` : '',
         ]
           .filter(Boolean)
           .join(' · ');
@@ -1548,6 +1553,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
               dodgeBps: ev.dodgeBps ?? 0,
               defBps: ev.defBps ?? 0,
               defPenBps: ev.defPenBps ?? 0,
+              burnUpBps: ev.burnUpBps ?? 0,
               expiresRound: ev.expiresRound,
             },
           ];
@@ -1975,46 +1981,119 @@ function GemBar(props: { gems: PvpTeamGemDto[]; config: GemConfigDto | null; com
 }
 
 /**
- * Dải Ngọc để CHỌN cho đội hình mình: hiện đủ 5 loại Ngũ Hành, bấm để gắn/bỏ gắn — tối đa
- * `PVP_TEAM_GEM_COUNT` loại khác nhau. Loại chưa sở hữu (hoặc đã đủ số loại) bị khoá. Cấp dùng
- * luôn là viên cao nhất đang sở hữu; rê chuột lên một viên để xem chỉ số cộng toàn đội.
- * `compact` = bỏ tên loại — dùng ở modal chuẩn bị khiêu chiến cho vừa 1 hàng.
+ * Ba ô Ngọc của đội hình mình: chỉ vẽ `PVP_TEAM_GEM_COUNT` ô (loại đã gắn + ô trống nét đứt), bấm vào
+ * BẤT KỲ ô nào để mở bảng chọn Ngọc (giống bấm ô tướng để mở bảng chọn tướng). Cấp dùng luôn là viên
+ * cao nhất đang sở hữu; rê chuột lên một viên để xem chỉ số cộng toàn đội.
+ */
+function GemSlots(props: { value: GemElement[]; best: (el: GemElement) => number; config: GemConfigDto | null; onOpen: () => void }) {
+  const slots = () => Array.from({ length: PVP_TEAM_GEM_COUNT }, (_, i) => props.value[i] ?? null);
+  return (
+    <div class="pvp-gems">
+      <div class="gem-cards">
+        <For each={slots()}>
+          {(el) => (
+            <button
+              type="button"
+              class="gem-pill"
+              classList={{ empty: !el }}
+              title={el ? `${GEM_ELEMENT_LABELS[el]} · cấp ${props.best(el)} — bấm để đổi Ngọc` : 'Bấm để chọn Ngọc cho đội hình'}
+              onClick={() => props.onOpen()}
+            >
+              <Show when={el} fallback={<span class="gem-slot-empty">+</span>}>
+                {(e) => (
+                  <>
+                    <img class="gem-dot" src={gemUrl(e(), props.best(e()) || 1)} alt={GEM_ELEMENT_LABELS[e()]} />
+                    {GEM_ELEMENT_LABELS[e()]}
+                    <b>{` L${props.best(e())}`}</b>
+                    <GemTip gem={{ element: e(), level: props.best(e()) }} config={props.config} />
+                  </>
+                )}
+              </Show>
+            </button>
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Bảng chọn Ngọc Ngũ Hành cho đội hình — cùng khung với bảng chọn tướng: mỗi loại là một DÒNG bấm được
+ * (ảnh Ngọc · tên loại · cấp cao nhất đang sở hữu · chỉ số cộng toàn đội). Bấm để gắn/bỏ gắn, tối đa
+ * `PVP_TEAM_GEM_COUNT` loại khác nhau; loại chưa sở hữu (hoặc đã đủ số loại) bị khoá.
  */
 function GemPicker(props: {
   value: GemElement[];
   best: (el: GemElement) => number;
   config: GemConfigDto | null;
-  compact?: boolean;
   onToggle: (el: GemElement) => void;
+  onClose: () => void;
 }) {
+  const keysOf = (el: GemElement) =>
+    props.config ? (Object.keys(GEM_STAT_LABELS) as (keyof PvpGemStats)[]).filter((k) => (props.config!.table[el][0]?.[k] ?? 0) !== 0) : [];
+  const rowOf = (el: GemElement, level: number) => props.config?.table[el][level - 1];
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') props.onClose();
+  };
+  onMount(() => document.addEventListener('keydown', onKey));
+  onCleanup(() => document.removeEventListener('keydown', onKey));
   return (
-    <div class="pvp-gems">
-      <Show when={!props.compact}>
-        <span class="muted small">{`Ngọc đội hình — bấm chọn tối đa ${PVP_TEAM_GEM_COUNT} loại (chỉ loại đang sở hữu)`}</span>
-      </Show>
-      <div class="gem-cards">
-        <For each={GEM_ELEMENTS}>
-          {(el) => {
-            const on = () => props.value.includes(el);
-            const lv = () => props.best(el);
-            return (
-              <button
-                class="gem-pill"
-                classList={{ on: on(), compact: !!props.compact }}
-                disabled={!on() && (lv() === 0 || props.value.length >= PVP_TEAM_GEM_COUNT)}
-                onClick={() => props.onToggle(el)}
-                title={lv() ? `${GEM_ELEMENT_LABELS[el]} · cấp cao nhất đang sở hữu: ${lv()}` : `Chưa sở hữu Ngọc ${GEM_ELEMENT_LABELS[el]}`}
-              >
-                <img class="gem-dot" src={gemUrl(el, lv() || 1)} alt={GEM_ELEMENT_LABELS[el]} />
-                <Show when={!props.compact}>{GEM_ELEMENT_LABELS[el]}</Show>
-                <Show when={lv()}>{(l) => <b>{` L${l()}`}</b>}</Show>
-                <Show when={lv()}>
-                  <GemTip gem={{ element: el, level: lv() }} config={props.config} />
-                </Show>
-              </button>
-            );
-          }}
-        </For>
+    <div class="pvp-modal" role="dialog" aria-modal="true" onClick={(e) => e.target === e.currentTarget && props.onClose()}>
+      <div class="panel pvp-picker">
+        <div class="pvp-picker-head">
+          <h3>{`Chọn Ngọc cho đội hình (tối đa ${PVP_TEAM_GEM_COUNT} loại)`}</h3>
+          <button class="btn ghost small" onClick={() => props.onClose()}>
+            Đóng
+          </button>
+        </div>
+        <div class="pvp-picker-list">
+          <For each={GEM_ELEMENTS}>
+            {(el) => {
+              const on = () => props.value.includes(el);
+              const lv = () => props.best(el);
+              return (
+                <button
+                  type="button"
+                  class="pvp-pick-row"
+                  classList={{ taken: on(), locked: !on() && (lv() === 0 || props.value.length >= PVP_TEAM_GEM_COUNT) }}
+                  disabled={!on() && (lv() === 0 || props.value.length >= PVP_TEAM_GEM_COUNT)}
+                  title={lv() ? `${on() ? 'Bỏ gắn' : 'Gắn'} ${GEM_ELEMENT_LABELS[el]} vào đội hình` : `Chưa sở hữu Ngọc ${GEM_ELEMENT_LABELS[el]}`}
+                  onClick={() => props.onToggle(el)}
+                >
+                  <span class="pvp-pick-id">
+                    <span class="gem-pick-art">
+                      <img src={gemUrl(el, lv() || 1)} alt={GEM_ELEMENT_LABELS[el]} loading="lazy" decoding="async" />
+                    </span>
+                    <Show when={lv()} fallback={<span class="lv-chip">Chưa có</span>}>
+                      <span class="lv-chip">{`Lv.${lv()}`}</span>
+                    </Show>
+                  </span>
+                  <span class="pvp-pick-meta">
+                    <span class="pvp-pick-name">{GEM_ELEMENT_LABELS[el]}</span>
+                    <span class="pvp-pick-tags">
+                      <Show when={lv()}>
+                        <span class="pvp-pick-stat-num">
+                          <For each={keysOf(el)}>
+                            {(k, i) => (
+                              <>
+                                {i() ? ' · ' : ''}
+                                {`${GEM_STAT_LABELS[k]} `}
+                                <b>{pct(rowOf(el, lv())?.[k] ?? 0, props.config!.bpsScale)}</b>
+                              </>
+                            )}
+                          </For>
+                        </span>
+                      </Show>
+                      <Show when={on()}>
+                        <span class="pvp-pick-inteam">Đang dùng</span>
+                      </Show>
+                    </span>
+                  </span>
+                </button>
+              );
+            }}
+          </For>
+        </div>
       </div>
     </div>
   );
@@ -2037,6 +2116,8 @@ export function PvpPage() {
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal('');
   const [pickerSlot, setPickerSlot] = createSignal<number | null>(null);
+  /** Bảng chọn Ngọc cho đội hình đang mở (bấm vào ô Ngọc để mở). */
+  const [gemOpen, setGemOpen] = createSignal(false);
   /** Modal chuẩn bị khiêu chiến (tự mở khi chọn đối thủ) — cho phép xem 2 đội và sửa đội ngay tại đây. */
   const [challengeOpen, setChallengeOpen] = createSignal(false);
 
@@ -2371,7 +2452,7 @@ export function PvpPage() {
                   <span class="pvp-power" title="Tổng Lực chiến của đội">{`Lực chiến ${num(teamLc())}`}</span>
                 </div>
                 <TeamBoard units={team()} combat={combat()} gemSig={gemSigOf(teamGems())} onSlot={openPicker} onMove={moveSlot} />
-                <GemPicker value={teamGems()} best={gemBestLevel} config={gems()?.config ?? null} onToggle={toggleGem} />
+                <GemSlots value={teamGems()} best={gemBestLevel} config={gems()?.config ?? null} onOpen={() => setGemOpen(true)} />
                 <div class="pvp-team-actions">
                   <span class="muted small">{saveHint()}</span>
                 </div>
@@ -2392,19 +2473,16 @@ export function PvpPage() {
                 </Show>
                 <Show when={!oppBusy() && opponent()}>
                   {(o) => (
-                    <>
-                      <div class="pvp-opp-row">
-                        <Avatar avatar={o().opponent.avatar} name={o().opponent.displayName} class="pvp-opp-avatar" />
-                        <div class="pvp-opp-row-info">
-                          <b>{o().opponent.displayName}</b>
-                          <span class="muted small">{`Lực chiến ${num(o().team.lc)}${o().saved ? '' : ' · đội gợi ý'}`}</span>
-                        </div>
-                        <button class="btn primary small" onClick={() => setChallengeOpen(true)}>
-                          Chuẩn bị khiêu chiến
-                        </button>
+                    <div class="pvp-opp-row">
+                      <Avatar avatar={o().opponent.avatar} name={o().opponent.displayName} class="pvp-opp-avatar" />
+                      <div class="pvp-opp-row-info">
+                        <b>{o().opponent.displayName}</b>
+                        <span class="muted small">{`Lực chiến ${num(o().team.lc)}${o().saved ? '' : ' · đội gợi ý'}`}</span>
                       </div>
-                      <GemBar gems={o().team.gems} config={gems()?.config ?? null} />
-                    </>
+                      <button class="btn primary small" onClick={() => setChallengeOpen(true)}>
+                        Chuẩn bị khiêu chiến
+                      </button>
+                    </div>
                   )}
                 </Show>
                 <Show when={!oppBusy() && !opponent() && !oppError()}>
@@ -2459,7 +2537,7 @@ export function PvpPage() {
                     </div>
                   </div>
                   <TeamBoard units={team()} combat={combat()} gemSig={gemSigOf(teamGems())} onSlot={openPicker} onMove={moveSlot} />
-                  <GemPicker compact value={teamGems()} best={gemBestLevel} config={gems()?.config ?? null} onToggle={toggleGem} />
+                  <GemSlots value={teamGems()} best={gemBestLevel} config={gems()?.config ?? null} onOpen={() => setGemOpen(true)} />
                 </div>
                 <div class="pvp-duel-vs" aria-hidden="true">
                   VS
@@ -2503,6 +2581,16 @@ export function PvpPage() {
             onClose={() => setPickerSlot(null)}
           />
         )}
+      </Show>
+
+      <Show when={gemOpen()}>
+        <GemPicker
+          value={teamGems()}
+          best={gemBestLevel}
+          config={gems()?.config ?? null}
+          onToggle={toggleGem}
+          onClose={() => setGemOpen(false)}
+        />
       </Show>
 
       <Show keyed when={battle()}>{(b) => <BattleReplay battle={b} onClose={closeBattle} onRematch={(id) => void rematch(id)} />}</Show>

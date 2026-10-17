@@ -15,7 +15,7 @@ import {
 import { api, fetchAllCards, newKey, type ApiError } from '../api.ts';
 import { gen, genStyle, state } from '../state.ts';
 import { pct } from '../art.ts';
-import { playUpgrade } from '../pixi/stage.ts';
+import { playGemUpgrade, playUpgrade } from '../pixi/stage.ts';
 import { groupCardsByGeneral, type UpgradeSort } from '../upgrade-groups.ts';
 import { Card } from '../components/Card.tsx';
 import { GemCard } from '../components/GemCard.tsx';
@@ -270,7 +270,7 @@ export function UpgradePage(): JSX.Element {
 
   return (
     <>
-      <div class="sub-tabs" role="tablist">
+      <div class="sub-tabs lg" role="tablist">
         <button class="btn small" classList={{ on: sub() === 'tuong' }} role="tab" onClick={() => setSub('tuong')}>
           Tướng
         </button>
@@ -697,13 +697,15 @@ function GemUpgradeTab(): JSX.Element {
       pendingKey = null;
       setSelected([]);
       setConfirming(false);
-      setMsg(
+      const caption =
         r.outcome === 'success'
           ? `Thành công! ${GEM_ELEMENT_LABELS[r.element]} Cấp ${r.inputLevel} ×2 → Cấp ${r.resultGem.level}`
-          : `Thất bại. 2 viên ${GEM_ELEMENT_LABELS[r.element]} Cấp ${r.inputLevel} → nhận Cấp ${r.resultGem.level}`,
-      );
+          : `Thất bại. 2 viên ${GEM_ELEMENT_LABELS[r.element]} Cấp ${r.inputLevel} → nhận Cấp ${r.resultGem.level}`;
+      setMsg(caption);
       setBusy(false);
       await load();
+      // Hiệu ứng ghép Ngọc giống hệt nâng cấp Tướng (2 viên lao vào tâm → loé sáng → viên kết quả).
+      await playGemUpgrade(r.element, r.inputLevel, r.resultGem.level, r.outcome, caption, r.inputGemIds.length);
     } catch (e) {
       const err = e as ApiError;
       if (err.code !== 'NETWORK') pendingKey = null;

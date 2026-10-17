@@ -9,6 +9,7 @@ import {
   rollTicketType,
   rollSuccess,
   GACHA_LEVEL_RATES,
+  GACHA_LEVEL_SCALE,
   GACHA_MAX_LEVEL,
   TICKET_GRANT_WEIGHTS,
   UPGRADE_SUCCESS_BPS,
@@ -64,13 +65,15 @@ test('tỷ lệ level gacha khớp đặc tả: level 1–9, tối đa level 9',
   assert.equal(GACHA_MAX_LEVEL, 9);
   assert.deepEqual(
     GACHA_LEVEL_RATES.map((e) => [e.level, e.bps]),
-    [[1, 7200], [2, 1500], [3, 700], [4, 350], [5, 200], [6, 40], [7, 7], [8, 2], [9, 1]],
+    [
+      [1, 65075], [2, 18000], [3, 9000], [4, 5500], [5, 2000], [6, 320], [7, 80], [8, 20], [9, 5],
+    ],
   );
-  assert.equal(GACHA_LEVEL_RATES.reduce((s, e) => s + e.bps, 0), BPS_SCALE);
+  assert.equal(GACHA_LEVEL_RATES.reduce((s, e) => s + e.bps, 0), GACHA_LEVEL_SCALE);
 });
 
 test('roll level gacha không bao giờ ra level 10 (duyệt toàn bộ r)', () => {
-  for (let r = 0; r < BPS_SCALE; r++) {
+  for (let r = 0; r < GACHA_LEVEL_SCALE; r++) {
     const lv = rollLevel(GACHA_LEVEL_RATES, () => r);
     assert.ok(lv >= 1 && lv <= GACHA_MAX_LEVEL);
   }
@@ -95,9 +98,9 @@ test('tỷ lệ nâng cấp + phân phối thất bại', () => {
 });
 
 test('rollWeighted: biên chính xác (duyệt toàn bộ r)', () => {
-  // Đếm số r trong [0, 10000) cho mỗi level => phải bằng đúng bps.
+  // Đếm số r trong [0, 100000) cho mỗi level => phải bằng đúng bps.
   const counts = new Map<number, number>();
-  for (let r = 0; r < BPS_SCALE; r++) {
+  for (let r = 0; r < GACHA_LEVEL_SCALE; r++) {
     const lv = rollLevel(GACHA_LEVEL_RATES, () => r);
     counts.set(lv, (counts.get(lv) ?? 0) + 1);
   }

@@ -598,3 +598,91 @@ export async function playUpgrade(
   }
   await stage.waitClosed();
 }
+
+/**
+ * Animation ghép Ngọc Ngũ Hành sau khi /api/gems/merge trả kết quả — dựng y hệt `playUpgrade`
+ * (2 viên Ngọc đầu vào lao vào tâm → loé sáng → viên kết quả bung ra), chỉ khác đối tượng là viên
+ * Ngọc thay vì thẻ tướng. Thành công: tia sáng vàng + bắn hạt; thất bại: vết nứt đỏ + rung lắc.
+ */
+export async function playGemUpgrade(
+  element: GemElement,
+  inputLevel: number,
+  resultLevel: number,
+  outcome: UpgradeOutcome,
+  caption: string,
+  inputCount = 2,
+): Promise<void> {
+  const stage = new Stage();
+  /** Bán kính viên Ngọc trên sân khấu: phóng to viên gốc (r=30) cho cân với khung thẻ tướng. */
+  const ORB = 1.9;
+  try {
+    await stage.init();
+    await ensureGems([
+      { element, level: inputLevel },
+      { element, level: resultLevel },
+    ]);
+    // Xếp các viên Ngọc đầu vào đều quanh tâm (2 viên: hai bên; 3 viên: trái-giữa-phải)
+    const xs = Array.from({ length: inputCount }, (_, i) => W / 2 + (i - (inputCount - 1) / 2) * 160);
+    const inputs = xs.map((x) => {
+      const o = makeGemOrb(element, inputLevel);
+      o.scale.set(ORB * 0.6);
+      o.position.set(x, H / 2);
+      stage.root.addChild(o);
+      return o;
+    });
+    await stage.wait(300);
+    await stage.tween(600, (t) => {
+      inputs.forEach((o, i) => {
+        o.x = lerp(xs[i]!, W / 2, easeOut(t));
+        o.alpha = 1 - t * 0.6;
+      });
+    });
+
+    const flash = new Graphics().circle(0, 0, 200).fill({ color: 0xffffff });
+    flash.position.set(W / 2, H / 2);
+    stage.root.addChild(flash);
+    inputs.forEach((o) => (o.visible = false));
+    await stage.tween(300, (t) => {
+      flash.scale.set(lerp(0.1, 1.2, t));
+      flash.alpha = 1 - t;
+    });
+
+    const result = makeGemOrb(element, resultLevel);
+    result.scale.set(ORB);
+    result.position.set(W / 2, H / 2);
+    if (outcome === 'success') {
+      const rays = makeRays(0xffd76a);
+      rays.position.set(W / 2, H / 2);
+      stage.root.addChildAt(rays, 0);
+      if (!stage.skipping) stage.app.ticker.add(() => (rays.rotation += 0.006));
+      stage.root.addChild(result);
+      await stage.tween(400, (t) => result.scale.set(lerp(0.5, ORB, easeOut(t))));
+      burst(stage, 0xffd76a, 60);
+    } else {
+      stage.root.addChild(result);
+      const cracks = new Graphics();
+      for (let i = 0; i < 5; i++) {
+        let x = 0;
+        let y = 0;
+        cracks.moveTo(0, 0);
+        for (let k = 0; k < 4; k++) {
+          x += (Math.random() - 0.5) * 70;
+          y += (Math.random() - 0.5) * 90;
+          cracks.lineTo(x, y);
+        }
+      }
+      cracks.stroke({ width: 3, color: 0xff4d4d, alpha: 0.9 });
+      cracks.position.set(W / 2, H / 2);
+      stage.root.addChild(cracks);
+      await stage.tween(500, (t) => {
+        result.x = W / 2 + Math.sin(t * 40) * 10 * (1 - t);
+        cracks.alpha = 1 - t;
+      });
+      result.x = W / 2;
+    }
+    stage.finish(caption, true);
+  } catch {
+    stage.finish(caption, true);
+  }
+  await stage.waitClosed();
+}

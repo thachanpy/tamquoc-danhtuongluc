@@ -244,8 +244,12 @@ h1, h2, h3, .tabs a, .t-name, .quick-head b, .gen-head b {
 }
 /* Thẻ trong popup: thu nhỏ để chừa chỗ cho khối kỹ năng/chỉ số bên dưới (không tràn màn hình). */
 .tq-card.viewer-card { --cw: min(280px, 66vw, calc((100vh - 400px) * 0.85)); }
-.tq-card.viewer-card .tq-name { font-size: 16px; }
-.tq-card.viewer-card .tq-sub { font-size: 12.5px; }
+/* Popup chi tiết đã in tên + cấp ngay BÊN DƯỚI thẻ (khối .viewer-info) => bỏ dòng tên/cấp in đè
+   trên ảnh tướng / trên viên Ngọc để tránh lặp thông tin. Huy hiệu phong cách cũng có dòng riêng
+   trong bảng chi tiết nên bỏ khỏi ảnh cho đỡ rối. */
+.tq-card.viewer-card .tq-meta, .tq-card.viewer-card .tq-role { display: none; }
+/* Ngọc là VIÊN TRÒN nên vệt sáng khi nghiêng thẻ cũng phải tròn (khung chữ nhật của thẻ tướng sẽ lộ góc). */
+.viewer-tilt:has(.gem-face)::after { inset: 0 0 auto; aspect-ratio: 1 / 1; border-radius: 50%; }
 .viewer-info { text-align: center; display: grid; gap: 4px; }
 /* Hàng đầu modal: ảnh đại diện (Đấu trường) đứng cạnh tên + phe/cấp. */
 .viewer-head { display: flex; align-items: center; justify-content: center; gap: 12px; }
@@ -255,7 +259,9 @@ h1, h2, h3, .tabs a, .t-name, .quick-head b, .gen-head b {
   background: linear-gradient(160deg, #2a2112, var(--panel-2)); }
 .viewer-art > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
 .viewer-art-ini { font-family: var(--script); font-weight: 800; font-size: 24px; color: var(--gold-2); }
-.viewer-name { font-family: var(--script); font-weight: 700; font-size: 26px; line-height: 1.2;
+/* line-height + padding: chữ gradient (background-clip: text) chỉ được tô trong hộp của phần tử, nên
+   đuôi chữ dài (g, ọ của "Ngọc") thò xuống dưới hộp sẽ bị mất màu; nới hộp để đuôi chữ vẫn có màu. */
+.viewer-name { font-family: var(--script); font-weight: 700; font-size: 26px; line-height: 1.35; padding-bottom: 3px;
   background: linear-gradient(180deg, #fff6d6, #f3d58a 40%, #c98a2c); -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .8)); }
 .viewer-sub { font-family: var(--num); font-size: 16px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
@@ -313,6 +319,10 @@ h1, h2, h3, .tabs a, .t-name, .quick-head b, .gen-head b {
 .tabs .badge[hidden] { display: none; }
 .sub-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
 .sub-tabs .btn.on { border-color: var(--gold); color: var(--gold-2); background: rgba(212,168,74,.12); }
+/* Tab Tướng / Ngọc ở Bộ sưu tập & Nâng cấp: phóng to, đậm, đổ bóng để dễ thấy và dễ bấm (nhất là trên mobile). */
+.sub-tabs.lg { gap: 10px; margin-bottom: 16px; }
+.sub-tabs.lg .btn { padding: 10px 30px; font-size: 17px; font-weight: 700; border-radius: 12px; letter-spacing: .3px; }
+.sub-tabs.lg .btn.on { box-shadow: 0 0 14px rgba(212,168,74,.35); }
 .adm-summary { margin: 2px 0 8px; }
 .adm-msg:empty { display: none; }
 .adm-msg { margin-bottom: 8px; }
@@ -467,6 +477,9 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
   .gc-row { grid-template-columns: 1fr; }
   .adm-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 16px 14px; padding: 8px; }
   .sub-tabs { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  /* Mobile: hai tab chia đều bề ngang, không phải cuộn ngang. */
+  .sub-tabs.lg { overflow: visible; }
+  .sub-tabs.lg .btn { flex: 1 1 0; padding: 10px 12px; }
 
   /* Popup mở thẻ / ngắm thẻ */
   .stage-overlay { padding: 10px 6px calc(10px + env(safe-area-inset-bottom)); }
@@ -779,6 +792,12 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .pvp-pick-row:hover { border-color: var(--gold); background: rgba(212, 168, 74, .08); }
 .pvp-pick-row:focus-visible { outline: 2px solid var(--gold-2); outline-offset: -2px; }
 .pvp-pick-row.taken { border-color: rgba(63, 191, 127, .55); background: rgba(63, 191, 127, .07); }
+/* Dòng chọn Ngọc: loại chưa sở hữu hoặc đã đủ số loại thì mờ đi và không bấm được. */
+.pvp-pick-row.locked { opacity: .45; cursor: not-allowed; }
+.pvp-pick-row.locked:hover { border-color: var(--line); background: rgba(10, 6, 4, .35); }
+/* Ảnh Ngọc trong dòng chọn Ngọc (bản tròn của `.pvp-pick-art` bên tướng). */
+.gem-pick-art { flex: 0 0 auto; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; border: 1px solid var(--line); background: rgba(10, 6, 4, .6); }
+.gem-pick-art > img { width: 100%; height: 100%; object-fit: cover; }
 /* Cụm ảnh + cấp độ: cấp đứng ngay cạnh ảnh cho dễ nhìn */
 .pvp-pick-id { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
 .pvp-pick-art { position: relative; flex: 0 0 auto; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: linear-gradient(160deg, #2a2112, var(--panel-2)); border: 1px solid var(--line); }
@@ -919,9 +938,21 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 
 /* ===== Ngọc Ngũ Hành (tab Ngọc ở Nâng cấp & Bộ sưu tập) ===== */
 /* Ngọc là vật phẩm rời (loại + cấp). Màu viên Ngọc theo Ngũ Hành: Kim/Mộc/Thủy/Hỏa/Thổ. */
-/* Thẻ Ngọc dùng CHUNG khung .tq-card với thẻ tướng (mục 6.8) — chỉ đổi ruột: ảnh viên Ngọc thay chân dung. */
-.gem-face .tq-art { background: radial-gradient(circle at 50% 38%, #1a1410, #0a0705); }
+/* Thẻ Ngọc là HÌNH TRÒN (viên Ngọc) — KHÔNG dùng khung chữ nhật đứng của thẻ tướng: ảnh Ngọc nằm
+   trong ô vuông bo tròn hoàn toàn, viền + hào quang theo màu cấp; tên + cấp là dòng chú thích bên dưới. */
+.gem-face { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.gem-face .tq-body {
+  width: 100%; aspect-ratio: 1 / 1; border-radius: 50%; overflow: hidden;
+  border: 2px solid var(--tc, #444);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--tc, #444) 45%, transparent), 0 4px 14px rgba(0, 0, 0, .35);
+}
+/* Ảnh Ngọc phủ kín ô tròn (bỏ tỉ lệ dọc 286/378 của thẻ tướng). */
+.gem-face .tq-art { position: absolute; inset: 0; aspect-ratio: auto; border-radius: 50%; background: radial-gradient(circle at 50% 38%, #1a1410, #0a0705); }
 .gem-face .gem-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Tên + cấp là chú thích NGOÀI vòng tròn (không đè lên viên Ngọc nên không bị vòng tròn cắt chữ). */
+.gem-face .tq-meta { position: static; padding: 0; background: none; text-align: center; }
+.gem-face .tq-name { font-size: 11.5px; }
+.gem-face .tq-sub { justify-content: center; gap: 8px; }
 /* Khung nhóm Ngọc: viền trái lấy màu Ngũ Hành (giống viền phe của nhóm tướng). */
 .gen-group.e-kim { --gc: #cbb26a; } .gen-group.e-moc { --gc: #63b95e; }
 .gen-group.e-thuy { --gc: #4f9de0; } .gen-group.e-hoa { --gc: #ef6b3a; } .gen-group.e-tho { --gc: #c9963f; }
@@ -937,6 +968,11 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
 .gem-pill b { color: var(--gold-2); }
 /* Ô Ngọc trống (chưa sở hữu loại đó) — giữ đúng nhịp của các ô Ngọc. */
 .gem-slot-empty { width: 46px; height: 46px; border-radius: 50%; border: 1px dashed rgba(255, 255, 255, .22); flex: none; }
+/* Ô Ngọc trống chỉ có vòng nét đứt nên bỏ padding phải cho cân với các ô có Ngọc. */
+.gem-pill.empty { padding: 4px; }
+/* Dấu + trong ô Ngọc trống để thấy rõ là bấm được (mở bảng chọn Ngọc). */
+.gem-pill.empty .gem-slot-empty { display: grid; place-items: center; color: rgba(255, 255, 255, .38); font-size: 20px; line-height: 1; }
+.gem-pill.empty:hover .gem-slot-empty { color: var(--gold-2); border-color: var(--gold-2); }
 /* Tooltip chỉ số Ngọc: hiện khi rê chuột lên viên Ngọc (chỉ hiển thị, không bấm được). */
 .gem-tip { display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 40; min-width: 160px; padding: 8px 10px; border: 1px solid var(--gold); border-radius: 10px; background: rgba(13, 8, 5, .97); box-shadow: 0 8px 24px rgba(0, 0, 0, .55); pointer-events: none; }
 .gem-pill:hover .gem-tip { display: block; }
@@ -947,10 +983,11 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
 /* Dải Ngọc ở khối đội hình (trang Đấu trường) căn giữa. */
 .pvp-myteam .pvp-gems, .pvp-opp .pvp-gems { align-items: center; }
 /* Dải Ngọc trong modal chuẩn bị khiêu chiến: một hàng ngang, không xuống dòng.
-   Chiều cao cố định để dải Ngọc hai bên luôn bằng nhau (bên mình 5 loại, bên địch 3 ô). */
+   Chiều cao cố định để dải Ngọc hai bên luôn bằng nhau (mỗi bên 3 ô). */
 .pvp-duel .pvp-gems { align-items: center; justify-content: center; min-height: 48px; }
 .pvp-duel .gem-cards { flex-wrap: nowrap; gap: 6px; }
 .pvp-duel .gem-pill { padding: 3px 9px 3px 4px; font-size: 13px; }
+.pvp-duel .gem-pill.empty { padding: 3px; }
 .pvp-duel .gem-dot { width: 40px; height: 40px; }
 .pvp-duel .gem-slot-empty { width: 40px; height: 40px; }
 

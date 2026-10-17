@@ -209,7 +209,7 @@ export function DrawPage(): JSX.Element {
                       <span class="lv-dot" style={{ '--tc': levelTier(r.level).css }} />
                       Lv.{r.level}
                     </td>
-                    <td>{pct(r.bps, cfg.bpsScale)}</td>
+                    <td>{pct(r.bps, cfg.levelScale)}</td>
                   </tr>
                 )}
               </For>

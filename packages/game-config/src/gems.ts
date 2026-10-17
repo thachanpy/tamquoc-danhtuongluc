@@ -24,8 +24,8 @@ export type { GemElement, PvpGemStats };
 /** Danh sách loại Ngọc theo thứ tự hiển thị (Kim → Mộc → Thủy → Hỏa → Thổ). */
 export const PVP_GEM_ELEMENTS = GEM_ELEMENTS;
 
-/** Tỉ lệ rớt Ngọc đính kèm mỗi lần quay ra Tướng (bps): 5%. */
-export const PVP_GEM_DROP_BPS = 500;
+/** Tỉ lệ rớt Ngọc đính kèm mỗi lần quay ra Tướng (bps): 10%. */
+export const PVP_GEM_DROP_BPS = 1000;
 /** Tỉ lệ mỗi loại Ngọc khi trúng rớt (bps): 20%/loại × 5 loại = 100%. */
 export const PVP_GEM_TYPE_WEIGHT_BPS = 2000;
 
@@ -172,7 +172,7 @@ export function pvpGemConfig(): GemConfigDto {
 }
 
 /**
- * Roll Ngọc rớt đính kèm khi quay ra MỘT Tướng: `PVP_GEM_DROP_BPS` (5%) trúng, và khi trúng thì
+ * Roll Ngọc rớt đính kèm khi quay ra MỘT Tướng: `PVP_GEM_DROP_BPS` (10%) trúng, và khi trúng thì
  * chọn ĐỀU một trong 5 loại (`PVP_GEM_TYPE_WEIGHT_BPS` = 20%/loại). Ngọc nhận đúng CẤP của Tướng đó.
  * Trả `null` = lượt quay này không rớt Ngọc.
  */

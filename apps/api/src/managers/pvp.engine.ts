@@ -32,6 +32,7 @@ import {
   pvpCleanseBps,
   pvpCritDamageBps,
   pvpDefBps,
+  pvpDispelBps,
   pvpDodgeBps,
   pvpFactionBonus,
   pvpGemTeamStats,
@@ -40,6 +41,7 @@ import {
   pvpLevelSpanBps,
   pvpPerLevelEffectBps,
   pvpProfile,
+  pvpPurifyBps,
   pvpRealHitBps,
   pvpSkillDefAtLevel,
   pvpStyleBonus,
@@ -108,6 +110,10 @@ interface Unit {
   critDamageBps: number;
   stunBps: number;
   cleanseBps: number;
+  /** Tỉ lệ gỡ MỖI lớp suy yếu khi Thanh tẩy (mục 15) — cấp × 7.5%, tối đa 75% ở cấp 10. */
+  purifyBps: number;
+  /** Tỉ lệ Xóa lớp buff có lợi của ĐỊCH (mục 14) — cấp × 7.5%, tối đa 75% ở cấp 10; roll riêng mỗi mục tiêu. */
+  dispelBps: number;
   /**
    * Bộ chỉ số Trao đổi đòn (SKILLS.md mục 18): Chính xác / Né tránh / Phòng thủ (% giảm ST nhận) /
    * Xuyên giáp (% bỏ qua Phòng thủ địch). Giá trị nền cố định, buff/debuff cộng trừ thêm khi vào trận.
@@ -181,6 +187,8 @@ interface BuffInstance {
   dodgeBps: number;
   defBps: number;
   defPenBps: number;
+  /** % sát thương Thiêu đốt cộng thêm (bps): chỉ có tác dụng với tướng CÓ khả năng thiêu đốt (Cố Ung). */
+  burnUpBps: number;
   /** Lượt cuối còn hiệu lực (tính theo số vòng). */
   expiresRound: number;
 }
@@ -307,6 +315,8 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         critDamageBps: pvpCritDamageBps(u.level),
         stunBps: 0,
         cleanseBps: 0,
+        purifyBps: 0,
+        dispelBps: 0,
         hitBps: pvpHitBps(u.level),
         dodgeBps: pvpDodgeBps(u.level),
         defBps: pvpDefBps(u.level),
@@ -375,6 +385,10 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     u.teamLifestealBps = pvpPerLevelEffectBps(u.profile.teamLifestealPerLevelBps, u.level);
     // Giải choáng: chốt ở cấp 10 = 75% (Hoa Đà ghi đè 55% → 100%) — xem `pvpCleanseBps`.
     u.cleanseBps = pvpCleanseBps(u.def, u.level);
+    // Thanh tẩy: gỡ MỖI lớp suy yếu theo tỉ lệ cấp × 7.5% (cấp 1 = 7.5% … cấp 10 = 75%) — mục 15.
+    u.purifyBps = pvpPurifyBps(u.def, u.level);
+    // Xóa buff địch: tỉ lệ cấp × 7.5% (cấp 1 = 7.5% … cấp 10 = 75%), roll riêng mỗi mục tiêu — mục 14.
+    u.dispelBps = pvpDispelBps(u.def, u.level);
     // Bộ chỉ số Trao đổi đòn + ST chí mạng: cộng thêm từ Ngọc Ngũ Hành.
     u.hitBps += gem.hitBps;
     u.dodgeBps += gem.dodgeBps;
@@ -502,6 +516,9 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     }
   }
 
+  /** Tướng có khả năng gây Thiêu đốt lên địch (kỹ năng kèm hiệu ứng thiêu đốt) — dùng cho buff `burn_allies`. */
+  const canBurn = (u: Unit) => u.def.debuff.burnBps > 0;
+
   /** Đồng minh nhận buff theo phạm vi phát (mục 1 — buff scope). */
   function buffTargetsOf(u: Unit, scope: PvpBuffScope): Unit[] {
     switch (scope) {
@@ -518,6 +535,9 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         return alliesOf(u).filter((a) => a.row === 'front');
       case 'back_allies':
         return alliesOf(u).filter((a) => a.row === 'back');
+      case 'burn_allies':
+        // Chỉ đồng minh có khả năng gây Thiêu đốt (kỹ năng kèm hiệu ứng thiêu đốt) mới nhận buff.
+        return alliesOf(u).filter(canBurn);
       case 'none':
         return [];
     }
@@ -535,6 +555,8 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
   const buffTakenDown = (u: Unit) => u.buffs.reduce((s, b) => s + b.takenDownBps, 0);
   /** % hút máu cộng thêm từ các lớp buff đang hiệu lực (kỹ năng hỗ trợ ban hút máu cho đồng minh). */
   const buffLifesteal = (u: Unit) => u.buffs.reduce((s, b) => s + b.lifestealBps, 0);
+  /** % sát thương Thiêu đốt cộng thêm từ các lớp buff đang hiệu lực (Cố Ung — Vận Trù Trợ Hỏa). */
+  const buffBurnUp = (u: Unit) => u.buffs.reduce((s, b) => s + b.burnUpBps, 0);
   /** Sát thương bị giảm bởi các lớp suy yếu đang chịu. */
   const debuffDamageDown = (u: Unit) => u.debuffs.reduce((s, d) => s + d.damageDownFlat, 0);
   /** Trần HP bị giảm bởi các lớp suy yếu đang chịu. */
@@ -828,7 +850,8 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         b.hitBps > 0 ||
         b.dodgeBps > 0 ||
         b.defBps > 0 ||
-        b.defPenBps > 0;
+        b.defPenBps > 0 ||
+        b.burnUpBps > 0;
       const crit = statBuff ? rand(BPS_SCALE) < critBpsOf(u) : false;
       const critMul = crit ? (BPS_SCALE + critDamageBpsOf(u)) / BPS_SCALE : 1;
       const damageBps = Math.round(b.damageBps * critMul);
@@ -854,6 +877,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
             dodgeBps: b.dodgeBps,
             defBps: b.defBps,
             defPenBps: b.defPenBps,
+            burnUpBps: b.burnUpBps,
             expiresRound,
           });
           // Trần `maxLayers` tính theo TỪNG (nguồn, kênh): mỗi kênh buff của tướng tối đa `maxLayers` lớp,
@@ -879,6 +903,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
             dodgeBps: b.dodgeBps,
             defBps: b.defBps,
             defPenBps: b.defPenBps,
+            burnUpBps: b.burnUpBps,
             crit,
             expiresRound,
             maxLayers: b.maxLayers,
@@ -912,15 +937,24 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
 
     // Sát thương (mục 6.2, 6.3): (damage cơ bản + buff) × hệ số kỹ năng (đã nhân hot) × chí mạng,
     // sau đó trừ % sát thương gánh chịu của mục tiêu (buff giảm ST nhận).
+    // BƯỚC 1 — Trúng/Trượt (mục 18) tính MỘT lần cho mỗi mục tiêu trong lượt này rồi dùng CHUNG cho
+    // Sát thương, Choáng và mọi hiệu ứng bất lợi (suy yếu/thiêu đốt/giảm máu tối đa). Né thành công thì
+    // mục tiêu KHÔNG dính bất kỳ hiệu ứng nào của chiêu — tránh cảnh "né được sát thương mà vẫn bị choáng".
+    const hitRolls = new Map<number, boolean>();
+    const hits = (t: Unit): boolean => {
+      const cached = hitRolls.get(t.idx);
+      if (cached !== undefined) return cached;
+      const ok = rollHit(u, t);
+      hitRolls.set(t.idx, ok);
+      if (!ok) events.push({ t: 'miss', from: u.idx, idx: t.idx });
+      return ok;
+    };
+
     let dealt = 0;
     if (def.damageBps > 0) {
       for (const t of targets) {
         if (!u.alive) break;
-        // BƯỚC 1: kiểm tra Trúng/Trượt (mục 18) — Né thành công thì 0 sát thương, giữ nguyên Khiên & Máu.
-        if (!rollHit(u, t)) {
-          events.push({ t: 'miss', from: u.idx, idx: t.idx });
-          continue;
-        }
+        if (!hits(t)) continue;
         const { amount: raw, crit } = rollDamage(u, def.damageBps, t);
         // Cộng thêm % sát thương khi đánh trúng mục tiêu đang chịu hiệu ứng bất lợi (mục 1.17).
         const boosted =
@@ -980,6 +1014,8 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     if (def.stun !== 'none') {
       for (const t of targets) {
         if (!t.alive || t.def.cleanse) continue;
+        // Né thành công thì miễn nhiễm luôn cả choáng của chiêu (mục 18).
+        if (!hits(t)) continue;
         if (rand(BPS_SCALE) < u.stunBps) {
           t.stunnedByIdx = u.idx;
           events.push({ t: 'stun', idx: t.idx, byIdx: u.idx });
@@ -1015,12 +1051,13 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     }
 
     // Xóa hiệu ứng có lợi của địch (dispel — mục 14): gỡ toàn bộ lớp buff đang có, trần HP tụt theo.
+    // Tỉ lệ theo cấp × 7.5% (cấp 1 = 7.5% … cấp 10 = 75%), roll RIÊNG cho MỖI mục tiêu địch.
     // Tướng vừa buff đồng minh vừa dispel (Trần Cung) nhắm dispel vào toàn bộ ĐỊCH.
     if (def.dispel) {
       const dispelTargets = isAllyTargeting(def.targeting) ? enemiesOf(u) : targets;
       for (const t of dispelTargets) {
         if (!t.alive || !t.buffs.length) continue;
-        if (rand(BPS_SCALE) >= def.dispelChanceBps) continue;
+        if (rand(BPS_SCALE) >= u.dispelBps) continue;
         t.buffs = [];
         syncMaxHp(t);
         events.push({ t: 'dispel', idx: t.idx });
@@ -1062,12 +1099,9 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
       const expiresRound = round + db.rounds - 1;
       for (const t of targets) {
         if (!t.alive) continue;
-        // Chiêu Giảm Máu Tối Đa chạy qua bước rollHit tiêu chuẩn (mục 18): Né thành công thì mục
-        // tiêu không dính bất kỳ lớp suy yếu/thiêu đốt nào của chiêu — giống mọi đòn tấn công khác.
-        if (db.hpDownBps > 0 && !rollHit(u, t)) {
-          events.push({ t: 'miss', from: u.idx, idx: t.idx });
-          continue;
-        }
+        // Né thành công thì mục tiêu không dính bất kỳ lớp suy yếu/thiêu đốt nào của chiêu (mục 18) —
+        // dùng chung roll Trúng/Trượt với đòn sát thương và choáng ở trên.
+        if (!hits(t)) continue;
         let damageDownFlat = 0;
         let hpDownFlat = 0;
         if (weaken) {
@@ -1095,7 +1129,10 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         }
         let burnFlat = 0;
         if (db.burnBps > 0) {
-          burnFlat = Math.round((effectiveDamage(u) * db.burnBps) / BPS_SCALE);
+          // Buff tăng sát thương Thiêu đốt (Cố Ung — Vận Trù Trợ Hỏa): chỉ nhân vào LƯỢNG THIÊU ĐỐT
+          // của tướng được buff, không đụng tới số lớp/độ cộng dồn của các lớp thiêu đốt đang có.
+          const burnMul = BPS_SCALE + buffBurnUp(u);
+          burnFlat = Math.round((effectiveDamage(u) * db.burnBps * burnMul) / (BPS_SCALE * BPS_SCALE));
           addBurn(t, u, burnFlat, db.burnRounds, db.burnMaxLayers > 0 ? db.burnMaxLayers : 1);
         }
         events.push({ t: 'debuff', from: u.idx, idx: t.idx, damageFlat: damageDownFlat, hpFlat: hpDownFlat, critBps: db.critDownBps, critDamageBps: db.critDamageDownBps, hitDownBps: db.hitDownBps, dodgeDownBps: db.dodgeDownBps, defDownBps: db.defDownBps, defPenDownBps: db.defPenDownBps, burnFlat, expiresRound, maxLayers: db.maxLayers });
@@ -1109,13 +1146,15 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
       events.push({ t: 'debuff', from: u.idx, idx: u.idx, damageFlat: 0, hpFlat: 0, critBps: 0, critDamageBps: 0, hitDownBps: 0, dodgeDownBps: 0, defDownBps: 0, defPenDownBps: 0, burnFlat, expiresRound: round + def.selfBurnRounds - 1, maxLayers: PVP_BURN_MAX_LAYERS_LONG });
     }
 
-    // Thanh tẩy hiệu ứng bất lợi cho đồng minh (mục 15): gỡ toàn bộ lớp suy yếu — bao gồm cả
+    // Thanh tẩy hiệu ứng bất lợi cho đồng minh (mục 15): gỡ lớp suy yếu — bao gồm cả
     // GIẢM MÁU TỐI ĐA (trần HP hồi lại qua `syncMaxHp`) — nhưng GIỮ LẠI choáng và thiêu đốt
-    // (hai hiệu ứng này không bị thanh tẩy).
+    // (hai hiệu ứng này không bị thanh tẩy). MỖI LỚP roll RIÊNG theo `purifyBps` (cấp × 7.5%, max 75%).
     if (def.purify) {
       for (const a of allySkillTargets) {
         if (!a.debuffs.length) continue;
-        a.debuffs = [];
+        const kept = a.debuffs.filter(() => rand(BPS_SCALE) >= u.purifyBps);
+        if (kept.length === a.debuffs.length) continue;
+        a.debuffs = kept;
         syncMaxHp(a);
         events.push({ t: 'purify', idx: a.idx });
       }
