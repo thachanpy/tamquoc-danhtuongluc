@@ -1082,11 +1082,11 @@ test('engine: hồ sơ tướng khớp hệ số chốt trong SKILLS.md', () => 
   assert.equal(pvpDispelBps(cc.def, 10), 7500);
   assert.equal(cc.def.buffs[0]!.buff.damageBps, 2000);
   assert.equal(cc.def.debuff.shieldBreakPerLevelBps, PVP_SHIELD_BREAK);
-  // Trương Liêu: hàng ngang 225%, giảm ST địch 20%, hút máu 3%/cấp (max 30%), phản kích đơn (100% ST, không tự buff ST).
+  // Trương Liêu: hàng ngang 225%, giảm ST địch 10%, hút máu 3%/cấp (max 30%), phản kích đơn (100% ST, không tự buff ST).
   const zl = pvpProfile('zhang-liao');
   assert.equal(zl.def.damageBps, 22500);
   assert.equal(zl.def.targeting, 'lane');
-  assert.equal(zl.def.debuff.damageDownBps, 2000);
+  assert.equal(zl.def.debuff.damageDownBps, 1000);
   assert.equal(zl.def.debuff.rounds, PVP_DEBUFF_ROUNDS, 'debuff không ghi số lượt mặc định 3 lượt');
   assert.equal(PVP_DEBUFF_ROUNDS, 3);
   assert.equal(zl.lifestealPerLevelBps, 300);
@@ -1374,20 +1374,20 @@ test('engine: BƯỚC 2/3 — Xuyên giáp ăn theo % Giáp địch; Giáp nền
   assert.equal(lu.hit.mitigated, lu.raw - lu.hit.amount, 'hiệu số ghi vào sự kiện đúng bằng phần bị Giáp cản lại');
 });
 
-test('engine: BƯỚC 1 — Trúng/Né theo công thức chia trọng số K = 1.85, kẹp biên [69%, 99%] (mục 18)', () => {
-  // Bảng tham chiếu: Hit_Real = clamp((Chính xác × 1.85) / (Chính xác × 1.85 + Né tránh) × 99%, 69%, 99%).
-  assert.equal(pvpRealHitBps(8000, 200), 9768, 'cấp 1 cơ bản: 80% vs 2% → Trúng 97.68%');
-  assert.equal(pvpRealHitBps(10000, 2000), 8934, 'cấp 10 bình thường: 100% vs 20% → Trúng 89.34%');
-  assert.equal(pvpRealHitBps(10000, 3000), 8519, 'Hit Chuẩn vs Né Vừa: 100% vs 30% → Trúng 85.19%');
-  assert.equal(pvpRealHitBps(12000, 5000), 8080, 'Hit Vừa vs Max Né: 120% vs 50% → Trúng 80.80%');
-  assert.equal(pvpRealHitBps(15000, 200), 9829, 'Max Chính xác vs Né thường: 150% vs 2% → Trúng 98.29%');
-  assert.equal(pvpRealHitBps(15000, 5000), 8389, 'Max Hit khắc chế Max Né: 150% vs 50% → Trúng 83.89%');
-  assert.equal(pvpRealHitBps(10000, 5000), 7794, 'Max Né trừng phạt kẻ không build Chính xác: 100% vs 50% → Trúng 77.94%');
+test('engine: BƯỚC 1 — Trúng/Né theo công thức chia trọng số K = 1.35, kẹp biên [55%, 99%] (mục 18)', () => {
+  // Bảng tham chiếu: Hit_Real = clamp((Chính xác × 1.35) / (Chính xác × 1.35 + Né tránh) × 99%, 55%, 99%).
+  assert.equal(pvpRealHitBps(8000, 200), 9720, 'cấp 1 cơ bản: 80% vs 2% → Trúng 97.20%');
+  assert.equal(pvpRealHitBps(10000, 2000), 8623, 'cấp 10 bình thường: 100% vs 20% → Trúng 86.23%');
+  assert.equal(pvpRealHitBps(10000, 3000), 8100, 'Hit Chuẩn vs Né Vừa: 100% vs 30% → Trúng 81.00%');
+  assert.equal(pvpRealHitBps(12000, 5000), 7565, 'Hit Vừa vs Max Né: 120% vs 50% → Trúng 75.65%');
+  assert.equal(pvpRealHitBps(15000, 200), 9803, 'Max Chính xác vs Né thường: 150% vs 2% → Trúng 98.03%');
+  assert.equal(pvpRealHitBps(15000, 5000), 7940, 'Max Hit khắc chế Max Né: 150% vs 50% → Trúng 79.40%');
+  assert.equal(pvpRealHitBps(10000, 5000), 7224, 'Max Né trừng phạt kẻ không build Chính xác: 100% vs 50% → Trúng 72.24%');
   assert.equal(pvpRealHitBps(10000, 0), 9900, 'Né 0 → trần Trúng 99%, vẫn luôn chừa 1% Né may mắn');
-  assert.equal(pvpRealHitBps(4000, 5000), 6900, 'Chính xác bị Suy yếu nặng → chạm sàn Trúng 69% (Né thực tế ≤ 31%)');
+  assert.equal(pvpRealHitBps(4000, 5000), 5500, 'Chính xác bị Suy yếu nặng → chạm sàn Trúng 55% (Né thực tế ≤ 45%)');
   assert.equal(pvpRealHitBps(0, 0), 9900, 'cả hai bằng 0 → mặc định trần Trúng');
 
-  // Engine thật: Lữ Mông (Chính xác 100%) vs Đại Kiều (Né 20%) ở cấp 10 → ngưỡng 8934 bps.
+  // Engine thật: Lữ Mông (Chính xác 100%) vs Đại Kiều (Né 20%) ở cấp 10 → ngưỡng 8623 bps.
   const run = (r: number) =>
     dealtDamage(
       simulatePvp(
@@ -1396,8 +1396,60 @@ test('engine: BƯỚC 1 — Trúng/Né theo công thức chia trọng số K = 1
       ),
       0,
     );
-  assert.equal(run(8933), true, '8933 < 8934 → TRÚNG');
-  assert.equal(run(8934), false, '8934 ≥ 8934 → TRƯỢT (rơi vào vùng Né)');
+  assert.equal(run(8622), true, '8622 < 8623 → TRÚNG');
+  assert.equal(run(8623), false, '8623 ≥ 8623 → TRƯỢT (rơi vào vùng Né)');
+});
+
+test('engine: Né thành công → Triệu Vân phản kích NGAY bằng 50% ST cơ bản (mục 18)', () => {
+  // RNG 9600 ≥ Trúng thực tế của mọi đòn cấp 10 (≈86%) → cả hai bên đánh nhau đều TRƯỢT.
+  const res = simulatePvp(
+    [one('a', [{ slot: 1, generalId: 'zhao-yun', level: 10 }]), one('b', [{ slot: 1, generalId: 'lu-meng', level: 10 }])],
+    fixedBelow(9600),
+  );
+  const zy = res.units.find((u) => u.generalId === 'zhao-yun')!.idx;
+  assert.equal(skillDef('zhao-yun').counter.damageBps, 0, 'tiền đề: Triệu Vân không phản kích theo cơ chế gánh sát thương');
+  assert.ok(res.events.some((e) => e.t === 'miss' && e.idx === zy), 'Triệu Vân phải Né được đòn của địch');
+  const counter = res.events.find((e): e is Extract<PvpEventDto, { t: 'counter' }> => e.t === 'counter' && e.from === zy);
+  assert.ok(counter, 'Né thành công phải kích hoạt phản kích ngay');
+  assert.ok(counter.amount > 0, 'đòn phản kích phải thực sự gây sát thương');
+});
+
+test('engine: Né thành công → Mã Siêu tích lũy VĨNH VIỄN +10% ST chí mạng, trần 3 lớp (mục 18)', () => {
+  const res = simulatePvp(
+    [one('a', [{ slot: 1, generalId: 'ma-chao', level: 10 }]), one('b', [{ slot: 1, generalId: 'lu-meng', level: 10 }])],
+    fixedBelow(9600),
+  );
+  const stacks = res.events.filter((e): e is Extract<PvpEventDto, { t: 'dodgeReact' }> => e.t === 'dodgeReact');
+  assert.deepEqual(
+    stacks.slice(0, 3).map((e) => e.layers),
+    [1, 2, 3],
+    'ba lần Né đầu tiên cộng dồn 1 → 2 → 3 lớp',
+  );
+  assert.ok(stacks.length >= 3, 'trận phải kéo dài đủ để Né ít nhất 3 lần');
+  assert.ok(stacks.every((e) => e.layers <= 3), 'không bao giờ vượt trần 3 lớp');
+  assert.ok(stacks.every((e) => e.critDamageBps === 1000), 'mỗi lớp cộng +10% ST chí mạng');
+});
+
+test('engine: Hoàng Trung CHẮC CHẮN TRÚNG khi mục tiêu dưới 50% HP — bỏ qua roll Trúng/Trượt (mục 18)', () => {
+  assert.equal(getCombatStats('huang-zhong', 10).skillDef.guaranteedHitBelowHpBps, 5000, 'ngưỡng chắc chắn trúng = 50% HP');
+  // RNG 9600 → mọi roll đều TRƯỢT. Hoàng Cái tự Thiêu đốt bản thân (không qua roll) nên máu tụt dần;
+  // khi xuống dưới 50%, Hoàng Trung phải đánh TRÚNG dù roll vẫn luôn trượt.
+  const res = simulatePvp(
+    [one('a', [{ slot: 1, generalId: 'huang-zhong', level: 10 }]), one('b', [{ slot: 1, generalId: 'huang-gai', level: 10 }])],
+    fixedBelow(9600),
+  );
+  const hz = res.units.find((u) => u.generalId === 'huang-zhong')!.idx;
+  const hc = res.units.find((u) => u.generalId === 'huang-gai')!;
+  const firstHit = res.events.findIndex((e) => e.t === 'damage' && e.from === hz);
+  assert.ok(res.events.some((e) => e.t === 'miss' && e.from === hz), 'tiền đề: Hoàng Trung TRƯỢT khi mục tiêu còn trên 50% máu');
+  assert.ok(firstHit >= 0, 'xuống dưới 50% HP thì Hoàng Trung phải đánh TRÚNG');
+  // Máu Hoàng Cái ngay TRƯỚC đòn trúng đầu tiên phải đã tụt dưới 50% (do tự Thiêu đốt — không qua roll).
+  const hpBefore = res.events
+    .slice(0, firstHit)
+    .reverse()
+    .find((e): e is Extract<PvpEventDto, { t: 'damage' | 'heal' | 'burn' | 'counter' | 'revive' }> => 'hp' in e && 'idx' in e && e.idx === hc.idx);
+  assert.ok(hpBefore, 'tiền đề: phải có sự kiện đổi máu của Hoàng Cái trước đó');
+  assert.ok(hpBefore.hp * BPS_SCALE < hc.maxHp * 5000, `máu trước đòn trúng (${hpBefore.hp}/${hc.maxHp}) phải dưới 50% HP tối đa`);
 });
 
 // ===================== HTTP =====================

@@ -942,6 +942,7 @@ const EVENT_MS: Record<PvpEventDto['t'], number> = {
   round: 300,
   act: 220,
   miss: 340,
+  dodgeReact: 280,
   damage: 400,
   heal: 400,
   counter: 400,
@@ -992,6 +993,7 @@ interface DetailRow {
     | 'act'
     | 'skip'
     | 'miss'
+    | 'dodgeReact'
     | 'damage'
     | 'counter'
     | 'heal'
@@ -1053,6 +1055,13 @@ function createDetailBuilder(units: PvpUnitStateDto[]) {
       case 'miss':
         // Né đòn (mục 18 — BƯỚC 1): 0 sát thương, giữ nguyên Khiên & Máu.
         return push({ kind: 'miss', actor: ev.from, target: ev.idx, text: `${nameOf(ev.idx)} né đòn của ${nameOf(ev.from)} — trượt` });
+      case 'dodgeReact':
+        // Nội tại "Né thành công → tích lũy" (Mã Siêu): cộng dồn vĩnh viễn ST chí mạng.
+        return push({
+          kind: 'dodgeReact',
+          actor: ev.idx,
+          text: `${nameOf(ev.idx)} né đòn — tích lũy +${pct(ev.critDamageBps)} ST chí mạng (${ev.layers}/${ev.maxLayers} lớp)`,
+        });
       case 'damage': {
         at(ev.from).dealt += ev.amount;
         at(ev.idx).taken += ev.amount;
@@ -1525,6 +1534,10 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         // Né đòn (mục 18 — BƯỚC 1): không gây sát thương, Khiên & Máu giữ nguyên.
         setActing(ev.from);
         addFloat(ev.idx, [{ text: 'NÉ' }], false, 'heal');
+        break;
+      case 'dodgeReact':
+        // Nội tại "Né thành công → tích lũy" (Mã Siêu): nhắc phần ST chí mạng vừa cộng dồn.
+        addFloat(ev.idx, [{ text: `+${pct(ev.critDamageBps)} STCM` }], false, 'heal');
         break;
       case 'damage':
         setActing(ev.from);

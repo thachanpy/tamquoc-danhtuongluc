@@ -274,10 +274,10 @@ export function getCombatStats(generalId: string, level: number, squad?: string[
   const maxHp = Math.round(baseHp * (1 + hpBps / BPS_SCALE));
   const damage = Math.round(baseDamage * (1 + damageBps / BPS_SCALE));
   const critBps = pvpPerLevelEffectBps(PVP_CRIT_BPS_PER_LEVEL, level) + (passive.stat === 'crit' ? passive.pointsBps : 0);
-  // Hồi máu mỗi lần thi triển: hồi đồng minh theo damage, tự hồi theo HP tối đa (hai loại loại trừ nhau).
-  const heal =
-    (def.healBps > 0 ? Math.round((damage * def.healBps) / BPS_SCALE) : 0) +
-    (def.selfHealBps > 0 ? Math.round((maxHp * def.selfHealBps) / BPS_SCALE) : 0);
+  // Hồi máu ĐỒNG MINH mỗi lần thi triển (theo damage). Tự hồi máu theo HP tối đa (`selfHealBps`)
+  // KHÔNG gộp vào đây: đây là lượng hồi theo PHẠM VI kỹ năng nên gộp sẽ khiến UI hiển thị nhầm
+  // "hồi máu cho toàn bộ đồng minh" (ví dụ Vu Cấm). Tự hồi máu có dòng riêng "Tự hồi máu".
+  const heal = def.healBps > 0 ? Math.round((damage * def.healBps) / BPS_SCALE) : 0;
   // Chỉ số cộng thêm theo phong cách của CHÍNH tướng (mục 1): Tấn công +8% ST, Phòng thủ +8% HP,
   // Hỗ trợ là aura +2% HP & +2% ST — ở đây tính 1 lớp của chính tướng; khi vào trận cộng dồn theo đội.
   const styleBonus = pvpStyleBonus(profile.style, profile.style === 'support' ? 1 : 0);
@@ -340,6 +340,10 @@ export function getCombatStats(generalId: string, level: number, squad?: string[
       },
       // Tỉ lệ phản kích TẠI CẤP đã kẹp trần — khớp engine (`tryCounter`).
       counter: { ...def.counter, chanceBps: pvpCounterChanceBps(def.counter.perLevelBps, level) },
+      // Nội tại "Né thành công → phản ứng" (Triệu Vân phản kích / Mã Siêu tích lũy) — khớp engine.
+      dodgeReact: def.dodgeReact,
+      // Ngưỡng HP "chắc chắn trúng" của Hoàng Trung — khớp engine (`hits`).
+      guaranteedHitBelowHpBps: def.guaranteedHitBelowHpBps ?? 0,
       revive: def.revive,
       // Hồi sinh hồi lại cấp × 5% HP tối đa (trần 100%) — khớp engine (`fell`).
       reviveHpBps: def.revive ? pvpReviveHpBps(level) : 0,

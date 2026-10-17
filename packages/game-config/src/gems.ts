@@ -80,7 +80,7 @@ const GEM_TABLE: Record<GemElement, { stats: [keyof PvpGemStats, keyof PvpGemSta
       [2500, 1200],
     ],
   },
-  // Thủy: Chính xác / Né tránh — chính xác +10% → +30%, né tránh +5% → +25%.
+  // Thủy: Chính xác / Né tránh — chính xác +10% → +35%, né tránh +5% → +30%.
   thuy: {
     stats: ['hitBps', 'dodgeBps'],
     levels: [
@@ -91,9 +91,9 @@ const GEM_TABLE: Record<GemElement, { stats: [keyof PvpGemStats, keyof PvpGemSta
       [1800, 1300],
       [2000, 1500],
       [2200, 1700],
-      [2400, 1900],
-      [2600, 2100],
+      [2500, 2000],
       [3000, 2500],
+      [3500, 3000],
     ],
   },
   // Hỏa: Chí mạng / ST chí mạng — chí mạng +5% → +25%, ST chí mạng +10% → +40%.

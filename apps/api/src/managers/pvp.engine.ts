@@ -136,6 +136,11 @@ interface Unit {
   teamLifestealBps: number;
   /** Đã dùng lượt Hồi sinh chưa (chỉ 1 lần/trận). */
   reviveUsed: boolean;
+  /**
+   * Số lớp đã tích lũy từ nội tại "Né thành công" (Mã Siêu — SKILLS.md mục 18): mỗi lần Né thành công
+   * cộng thêm `def.dodgeReact.critDamageBps` ST chí mạng, VĨNH VIỄN tới hết trận, trần `maxLayers`.
+   */
+  dodgeReactLayers: number;
   /** Hệ số nhân sát thương gây ra (bps): 10000 bình thường, giảm còn 5000 sau khi Hồi sinh. */
   damageMulBps: number;
   lc: number;
@@ -325,6 +330,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         lifestealBps: 0,
         teamLifestealBps: 0,
         reviveUsed: false,
+        dodgeReactLayers: 0,
         damageMulBps: BPS_SCALE,
         lc: pvpLc(profile.style, u.level, profile.passive, gemStats[s.side]),
         alive: true,
@@ -611,8 +617,11 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     Math.round(Math.max(0, u.damage + buffDamage(u) - debuffDamageDown(u)) * (u.damageMulBps / BPS_SCALE));
   /** Điểm chí mạng hiệu dụng = nền + buff − giảm chí mạng (không âm). */
   const critBpsOf = (u: Unit) => Math.max(0, u.critBps + buffCrit(u) - debuffCritDown(u));
-  /** ST chí mạng hiệu dụng = nền + buff − giảm (không âm). */
-  const critDamageBpsOf = (u: Unit) => Math.max(0, u.critDamageBps + buffCritDamage(u) - debuffCritDamageDown(u));
+  /** ST chí mạng cộng dồn VĨNH VIỄN từ nội tại Né thành công (Mã Siêu — SKILLS.md mục 18). */
+  const dodgeReactCritDamage = (u: Unit) => u.dodgeReactLayers * (u.def.dodgeReact?.critDamageBps ?? 0);
+  /** ST chí mạng hiệu dụng = nền + buff − giảm + tích lũy từ Né thành công (không âm). */
+  const critDamageBpsOf = (u: Unit) =>
+    Math.max(0, u.critDamageBps + buffCritDamage(u) - debuffCritDamageDown(u) + dodgeReactCritDamage(u));
   /**
    * Hệ số nhân sát thương gánh chịu sau khi trừ lớp buff giảm ST nhận và aura Ngọc Ngũ Hành (Kim).
    * Aura Ngọc là chỉ số nền đầu trận nên KHÔNG thể bị Xóa Buff.
@@ -652,10 +661,10 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
   const defPenBpsOf = (u: Unit) => Math.max(0, Math.min(PVP_DEF_PEN_MAX_BPS, u.defPenBps + buffDefPen(u) - debuffDefPenDown(u)));
 
   /**
-   * BƯỚC 1 — Kiểm tra Trúng/Trượt (mục 18): chia trọng số K = 1.85,
-   * `Hit_Real = clamp((Chính xác × 1.85) / (Chính xác × 1.85 + Né tránh) × 99%, 69%, 99%)`.
-   * Trả về true nếu TRÚNG; false nếu TRƯỢT (Né thành công). Luôn chừa tối thiểu 1% Né,
-   * và Né thực tế không bao giờ vượt ~31% nhờ sàn Trúng 69%.
+   * BƯỚC 1 — Kiểm tra Trúng/Trượt (mục 18): chia trọng số K = 1.35,
+   * `Hit_Real = clamp((Chính xác × 1.35) / (Chính xác × 1.35 + Né tránh) × 99%, 55%, 99%)`.
+   * Trả về true nếu TRÚNG; false nếu TRƯỢT (Né thành công). Luôn chừa tối thiểu 1% Né ngẫu nhiên,
+   * và Né thực tế không bao giờ vượt 45% nhờ sàn Trúng 55%.
    */
   function rollHit(attacker: Unit, defender: Unit): boolean {
     const chance = pvpRealHitBps(hitBpsOf(attacker), dodgeBpsOf(defender));
@@ -764,6 +773,49 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
       events.push({ t: 'counter', from: victim.idx, idx: v.idx, amount: final, crit, hp: v.hp, ...(mitigated > 0 ? { mitigated } : {}), ...(absorbed > 0 ? { absorbed } : {}) });
       fell(v);
     }
+  }
+
+  /**
+   * Nội tại "Né thành công → phản ứng" (SKILLS.md mục 18): kích hoạt khi `reactor` NÉ được một đòn đánh
+   * trực tiếp của `attacker`.
+   *   - `counterDamageBps > 0` (Triệu Vân): đánh trả NGAY kẻ vừa ra đòn trượt, sát thương = %ST cơ bản.
+   *   - `critDamageBps > 0` (Mã Siêu): cộng dồn VĨNH VIỄN ST chí mạng, tối đa `maxLayers` lớp.
+   * Đòn đánh trả này KHÔNG roll lại Trúng/Trượt (né rồi thì đánh trả luôn) — nhờ vậy không thể đệ quy
+   * vô hạn khi cả hai bên đều có nội tại Né.
+   */
+  function onDodgeReact(reactor: Unit, attacker: Unit): void {
+    const react = reactor.def.dodgeReact;
+    if (!react) return;
+    if (react.critDamageBps > 0 && react.maxLayers > 0 && reactor.dodgeReactLayers < react.maxLayers) {
+      reactor.dodgeReactLayers += 1;
+      events.push({
+        t: 'dodgeReact',
+        idx: reactor.idx,
+        layers: reactor.dodgeReactLayers,
+        maxLayers: react.maxLayers,
+        critDamageBps: react.critDamageBps,
+      });
+    }
+    if (react.counterDamageBps <= 0 || !reactor.alive || !attacker.alive) return;
+    let amount = Math.round((effectiveDamage(reactor) * react.counterDamageBps) / BPS_SCALE);
+    const crit = rand(BPS_SCALE) < critBpsOf(reactor);
+    if (crit) amount = Math.round((amount * (BPS_SCALE + critDamageBpsOf(reactor))) / BPS_SCALE);
+    amount = Math.round((amount * takenMulBps(attacker)) / BPS_SCALE);
+    // BƯỚC 2 & 3: áp Phòng thủ của kẻ bị phản kích rồi tới Khiên hấp thụ (giống `tryCounter`).
+    const { amount: final, mitigated } = mitigate(reactor, attacker, amount);
+    const { absorbed, rest } = absorbShield(attacker, final);
+    attacker.hp = Math.max(0, attacker.hp - rest);
+    events.push({
+      t: 'counter',
+      from: reactor.idx,
+      idx: attacker.idx,
+      amount: final,
+      crit,
+      hp: attacker.hp,
+      ...(mitigated > 0 ? { mitigated } : {}),
+      ...(absorbed > 0 ? { absorbed } : {}),
+    });
+    fell(attacker);
   }
 
   /**
@@ -957,12 +1009,19 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
     // Sát thương, Choáng và mọi hiệu ứng bất lợi (suy yếu/thiêu đốt/giảm máu tối đa). Né thành công thì
     // mục tiêu KHÔNG dính bất kỳ hiệu ứng nào của chiêu — tránh cảnh "né được sát thương mà vẫn bị choáng".
     const hitRolls = new Map<number, boolean>();
+    // "Chắc chắn trúng" (Hoàng Trung): mục tiêu còn dưới ngưỡng HP thì bỏ qua hẳn bước roll Trúng/Trượt.
+    const guaranteedBelowBps = def.guaranteedHitBelowHpBps ?? 0;
     const hits = (t: Unit): boolean => {
       const cached = hitRolls.get(t.idx);
       if (cached !== undefined) return cached;
-      const ok = rollHit(u, t);
+      const guaranteed = guaranteedBelowBps > 0 && t.hp * BPS_SCALE < t.maxHp * guaranteedBelowBps;
+      const ok = guaranteed || rollHit(u, t);
       hitRolls.set(t.idx, ok);
-      if (!ok) events.push({ t: 'miss', from: u.idx, idx: t.idx });
+      if (!ok) {
+        events.push({ t: 'miss', from: u.idx, idx: t.idx });
+        // Nội tại phản ứng khi Né thành công: Triệu Vân phản kích, Mã Siêu tích lũy ST chí mạng.
+        onDodgeReact(t, u);
+      }
       return ok;
     };
 

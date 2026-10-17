@@ -143,6 +143,21 @@ export function skillNote(c: PvpCombatDto): SkillNoteLine[] {
         d.counter.damageBps,
       )} sát thương cơ bản`,
     });
+  if (d.dodgeReact?.counterDamageBps)
+    lines.push({
+      label: 'Phản kích Né',
+      text: `né thành công thì đánh trả NGAY kẻ vừa ra đòn bằng ${pct(d.dodgeReact.counterDamageBps)} sát thương cơ bản`,
+    });
+  if (d.dodgeReact?.critDamageBps)
+    lines.push({
+      label: 'Né tích lũy',
+      text: `mỗi lần né thành công cộng dồn vĩnh viễn +${pct(d.dodgeReact.critDamageBps)} ST chí mạng (tối đa ${d.dodgeReact.maxLayers} lớp)`,
+    });
+  if (d.guaranteedHitBelowHpBps)
+    lines.push({
+      label: 'Chắc chắn trúng',
+      text: `bỏ qua Né khi mục tiêu còn dưới ${pct(d.guaranteedHitBelowHpBps)} HP`,
+    });
   if (d.revive)
     lines.push({
       label: 'Hồi sinh',

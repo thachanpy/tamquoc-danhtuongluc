@@ -1103,6 +1103,11 @@ export type PvpEventDto =
    */
   | { t: 'miss'; from: number; idx: number }
   /**
+   * Nội tại "Né thành công → tích lũy" (Mã Siêu — SKILLS.md mục 18): mỗi lần Né thành công cộng dồn
+   * VĨNH VIỄN `critDamageBps` ST chí mạng cho `idx`, hiện đang có `layers`/`maxLayers` lớp.
+   */
+  | { t: 'dodgeReact'; idx: number; layers: number; maxLayers: number; critDamageBps: number }
+  /**
    * Sát thương trực tiếp. `amount` = sát thương sau khi Phòng thủ đã cản (`mitigated` = phần bị Phòng
    * thủ giảm đi, mục 18 BƯỚC 2), TRƯỚC khi trừ Khiên; `absorbed` = phần Khiên đã hấp thụ (BƯỚC 3).
    */
@@ -1317,6 +1322,16 @@ export interface PvpCounterDto {
   scope: 'single' | 'all';
 }
 
+/** Nội tại phản ứng khi NÉ THÀNH CÔNG (SKILLS.md mục 18). Tất cả bằng 0 = không có nội tại. */
+export interface PvpDodgeReactDto {
+  /** % ST cơ bản đánh trả NGAY kẻ vừa ra đòn trượt (bps; 5000 = 50%). 0 = không phản kích. */
+  counterDamageBps: number;
+  /** ST chí mạng cộng dồn VĨNH VIỄN mỗi lần Né thành công (bps mỗi lớp; 1000 = +10%). */
+  critDamageBps: number;
+  /** Số lớp cộng dồn tối đa của `critDamageBps`. */
+  maxLayers: number;
+}
+
 /** Hiệu ứng nội tại tướng (SKILLS.md). */
 export interface PvpPassiveEffectDto {
   stat: 'crit' | 'damage' | 'maxHp' | 'def';
@@ -1356,6 +1371,13 @@ export interface PvpSkillDefDto {
   debuff: PvpDebuffDto;
   /** Phản kích của bản thân khi gánh chịu sát thương (rỗng = không phản kích). */
   counter: PvpCounterDto;
+  /** Nội tại phản ứng khi Né thành công (Triệu Vân phản kích / Mã Siêu tích lũy ST chí mạng). */
+  dodgeReact?: PvpDodgeReactDto;
+  /**
+   * Ngưỡng HP mục tiêu (bps của HP tối đa) mà từ đó kỹ năng CHẮC CHẮN TRÚNG — bỏ qua hẳn bước roll
+   * Trúng/Trượt (Hoàng Trung). 0 = không có.
+   */
+  guaranteedHitBelowHpBps: number;
   /** Kỹ năng có Hồi sinh: máu về 0 lần đầu thì không gục mà hồi lại rồi giảm sát thương (mục 1.14). */
   revive: boolean;
   /** Hồi sinh: % HP tối đa được hồi lại TẠI CẤP (bps; cấp × 5%, trần 100%) — con số hiển thị trên UI. */
