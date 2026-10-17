@@ -50,6 +50,7 @@ Công nghệ mục tiêu:
 - Frontend: **SolidJS** cho toàn bộ UI; riêng sân khấu mở thẻ/nâng cấp và sân đấu PvP dùng **PixiJS** (engine đồ hoạ ngoài) vì hiệu ứng SolidJS + CSS không đạt yêu cầu trực quan.
 - Backend: Fastify REST API.
 - Database: SQLite.
+- Cache (tùy chọn): **Redis/Dragonfly** qua client `redis` (node-redis). Mặc định dùng `REDIS_URL` (không đặt thì `redis://127.0.0.1:6379`); đặt `REDIS_URL=off` để tắt, hoặc khi kết nối lỗi thì chạy không cache (đọc thẳng SQLite) — xem mục 7.11.
 - Shared package: types, schema validation, DTO và enum dùng chung.
 - Game config package: roster 140 tướng, loại vé, tỷ lệ gacha, tỷ lệ nâng cấp và cấu hình game.
 - pnpm workspace nếu repository chưa có package manager hoặc cấu trúc tương đương.
@@ -1184,6 +1185,26 @@ Có thể dùng bảng idempotency riêng hoặc các unique constraint phù h�
 - Migration có version, chạy theo thứ tự và an toàn.
 - Nếu thay đổi schema, không làm mất lịch sử hoặc dữ liệu thẻ hiện có.
 - Nếu repository đã có dữ liệu theo mô hình nâng cấp cũ, migration phải bảo toàn lịch sử cũ; không được giả định lịch sử cũ có thể chuyển hoàn toàn sang mô hình mới.
+
+### 7.11. Cache Redis (tùy chọn) — `apps/api/src/cache.ts`
+
+- Địa chỉ Redis lấy từ `REDIS_URL`, mặc định `redis://127.0.0.1:6379` (`DEFAULT_REDIS_URL`). Đặt `REDIS_URL=off` (hoặc rỗng/`0`/`false`/`none`) để tắt cache; kết nối lỗi cũng tự chuyển `createNoopCache()` (mọi lượt đọc đi thẳng DB, API chạy như trước). Cache là lớp tăng tốc, **không** phải nguồn dữ liệu thật.
+- `CacheStore` bọc toàn bộ lỗi Redis: đọc lỗi coi như trượt cache, ghi lỗi bỏ qua — cache hỏng không được làm hỏng request.
+- Các nhóm dữ liệu được cache qua `ctx.cache.readThrough(key, ttl, load)`:
+
+| Nhóm | Key | TTL (giây) |
+| --- | --- | --- |
+| Bảng xếp hạng Lực chiến (`rankAll`, truy vấn nặng nhất) | `tq:lb` | 30 |
+| Hồ sơ + cờ admin của người chơi | `tq:usr:<id>` | 60 |
+| Phiên đăng nhập (theo hash token) | `tq:sess:<hash>` | 60 |
+| Cài đặt game (bảng `app_settings`) | `tq:set` | 300 |
+| Bộ sưu tập thẻ / Ngọc (`?…` đã chuẩn hoá bằng `queryKey`) | `tq:col:<id>:<kind>:<query>` | 30 |
+| Đội hình PvP + chỉ số | `tq:pvp:<id>` | 30 |
+| Danh sách trang Quản trị (users/cards/gems) | `tq:adm:<kind>:<query>` | 15 |
+
+- Xoá cache ở mọi đường ghi bằng `invalidatePlayers(ctx.cache, ...userIds)`: xoá `tq:lb`, `tq:adm:*` (danh sách Quản trị hiển thị số thẻ/vé) và `tq:usr/col/pvp` của những người chơi liên quan. Đường ghi nằm trong transaction đồng bộ nên `drop()` là best-effort, không await (`SCAN` + `DEL` chạy nền).
+- `readThrough` gọi `load` trực tiếp (không phải hàm async bắt buộc) nên dùng được với repository đồng bộ của SQLite.
+- Đăng xuất xoá đúng key phiên; đổi cài đặt xoá `tq:set`; huỷ cache sai cũng không nguy hiểm vì mọi key đều có TTL.
 
 ## 8. API Fastify
 

@@ -25,10 +25,10 @@ export function bearer(req: FastifyRequest): string | undefined {
 
 /** Xác thực + ghi nhận sự kiện ngày mới (admin không chơi game nên bỏ qua). */
 async function doAuth(ctx: GameContext, req: FastifyRequest): Promise<void> {
-  req.userId = authenticate(ctx, bearer(req));
+  req.userId = await authenticate(ctx, bearer(req));
   req.dailyEvents = null;
   // Tài khoản quản trị không chơi game (chủ dự án yêu cầu): không ghi đăng nhập/thưởng ngày/nhiệm vụ
-  if (isAdmin(ctx, req.userId)) return;
+  if (await isAdmin(ctx, req.userId)) return;
   // Ngày mới: ghi nhận đăng nhập, thưởng reset 05:00, tự nhận nhiệm vụ ngày cũ (mục 3.10).
   // Lỗi ở đây không được chặn thao tác chính của người chơi; lần request sau sẽ xử lý lại.
   try {
@@ -45,13 +45,13 @@ export const authGuard = (ctx: GameContext) => (req: FastifyRequest) => doAuth(c
 /** preHandler: người chơi — thao tác chơi game (admin bị chặn 403 ADMIN_NOT_PLAYER). */
 export const playerGuard = (ctx: GameContext) => async (req: FastifyRequest) => {
   await doAuth(ctx, req);
-  if (isAdmin(ctx, req.userId)) {
+  if (await isAdmin(ctx, req.userId)) {
     throw new AppError(403, 'ADMIN_NOT_PLAYER', 'Tài khoản quản trị chỉ dùng để quản trị, không tham gia chơi game.');
   }
 };
 
 /** preHandler: chỉ admin (users.is_admin = 1). Dùng cho mọi route /api/admin/*. */
 export const adminGuard = (ctx: GameContext) => async (req: FastifyRequest) => {
-  req.userId = authenticate(ctx, bearer(req));
-  if (!isAdmin(ctx, req.userId)) throw new AppError(403, 'FORBIDDEN', 'Chỉ quản trị viên mới thực hiện được thao tác này.');
+  req.userId = await authenticate(ctx, bearer(req));
+  if (!(await isAdmin(ctx, req.userId))) throw new AppError(403, 'FORBIDDEN', 'Chỉ quản trị viên mới thực hiện được thao tác này.');
 };

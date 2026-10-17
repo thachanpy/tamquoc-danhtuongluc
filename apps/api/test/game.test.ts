@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomInt } from 'node:crypto';
 import { openDatabase } from '../src/db.ts';
 import { AppError, type GameContext } from '../src/context.ts';
+import { createNoopCache } from '../src/cache.ts';
 import { register as rawRegister } from '../src/managers/auth.manager.ts';
 import { approveUser } from '../src/managers/admin.manager.ts';
 import { applyTicketDelta, readBalances } from '../src/repositories/ticket.repository.ts';
@@ -36,6 +37,7 @@ function makeCtx(start = T0) {
     db: openDatabase(':memory:'),
     now: () => now,
     rand: (max) => (queue.length ? queue.shift()! % max : randomInt(max)),
+    cache: createNoopCache(),
   };
   return {
     ctx,
@@ -486,7 +488,7 @@ test('khởi động lại server (mở lại file DB) không mất mốc, khôn
   const dir = mkdtempSync(join(tmpdir(), 'tq-'));
   const path = join(dir, 'test.db');
   let now = Date.UTC(2026, 9, 14, 10, 0, 0);
-  const mk = (): GameContext => ({ db: openDatabase(path), now: () => now, rand: (m) => randomInt(m) });
+  const mk = (): GameContext => ({ db: openDatabase(path), now: () => now, rand: (m) => randomInt(m), cache: createNoopCache() });
   let ctx = mk();
   const { userId } = register(ctx, 'alice', 'secret123');
   now += 3 * SLOT;
@@ -1154,7 +1156,7 @@ test('giftcode nguyên tử: lỗi giữa chừng => không cộng vé nào, ch�
 
 // ======================= Bảng xếp hạng =======================
 
-test('leaderboard: xếp theo TỔNG LC đội hình (đội tự động), đồng LC đồng hạng, ẩn admin, bỏ thẻ đã tiêu thụ', () => {
+test('leaderboard: xếp theo TỔNG LC đội hình (đội tự động), đồng LC đồng hạng, ẩn admin, bỏ thẻ đã tiêu thụ', async () => {
   const { ctx } = makeCtx();
   const admin = register(ctx, 'boss', 'secret123').userId; // tài khoản đầu tiên = admin
   const a = register(ctx, 'alice', 'secret123').userId;
@@ -1183,7 +1185,7 @@ test('leaderboard: xếp theo TỔNG LC đội hình (đội tự động), đ�
   const lcCarol = pvpUnitLc('sun-quan', 10);
   const lcDave = pvpUnitLc('sun-quan', 10);
 
-  const lb = getLeaderboard(ctx, b);
+  const lb = await getLeaderboard(ctx, b);
   assert.equal(lb.metric, 'lc');
   assert.equal(lb.totalRanked, 4); // alice, bob, carol, dave (admin & nocards không tính)
   const byUser = Object.fromEntries(lb.items.map((e) => [e.username, e]));
@@ -1211,13 +1213,13 @@ test('leaderboard: xếp theo TỔNG LC đội hình (đội tự động), đ�
   });
 
   // Admin xem: không có hạng của mình, không xuất hiện trong bảng
-  const asAdmin = getLeaderboard(ctx, admin);
+  const asAdmin = await getLeaderboard(ctx, admin);
   assert.equal(asAdmin.me, null);
   assert.ok(!asAdmin.items.some((e) => e.username === 'boss'));
 
   // Người chưa có tướng: chưa xếp hạng
   const nocards = Number((ctx.db.prepare("SELECT id FROM users WHERE username='nocards'").get() as { id: number }).id);
-  const none = getLeaderboard(ctx, nocards);
+  const none = await getLeaderboard(ctx, nocards);
   assert.deepEqual(none.me, {
     id: nocards,
     rank: null,
@@ -1229,7 +1231,7 @@ test('leaderboard: xếp theo TỔNG LC đội hình (đội tự động), đ�
   });
 });
 
-test('leaderboard: tối đa 100 người, hạng của mình ngoài top vẫn trả về', () => {
+test('leaderboard: tối đa 100 người, hạng của mình ngoài top vẫn trả về', async () => {
   const { ctx } = makeCtx();
   register(ctx, 'boss', 'secret123');
   // 100 người đầu xếp đội 6 tướng Lv.1 (LC cao), 5 người cuối xếp 5 tướng Lv.1 (LC thấp hơn)
@@ -1242,7 +1244,7 @@ test('leaderboard: tối đa 100 người, hạng của mình ngoài top vẫn t
     for (const g of i < 100 ? strong : weak) insertCard(ctx, id, g, 1);
     last = id;
   }
-  const lb = getLeaderboard(ctx, last);
+  const lb = await getLeaderboard(ctx, last);
   assert.equal(lb.items.length, 100);
   assert.equal(lb.totalRanked, 105);
   assert.equal(lb.items[0]!.username, 'p000');

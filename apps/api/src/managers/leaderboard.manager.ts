@@ -2,6 +2,7 @@ import type { GemElement, LeaderboardDto, LeaderboardEntryDto, PvpGemStats } fro
 import { LEADERBOARD_SIZE, LEADERBOARD_TOP, PVP_TEAM_SIZE, autoTeamGemElements, pvpGemTeamStats, pvpTeamLc, pvpUnitLc } from '@tq/game-config';
 import type { GameContext } from '../context.ts';
 import { iso } from '../utils.ts';
+import { PREFIX, TTL } from '../cache.ts';
 import {
   listBestPairsForAutoTeams,
   listEligibleUsers,
@@ -112,8 +113,12 @@ const toEntry = (r: RankedRow, meId: number): LeaderboardEntryDto => ({
   isMe: r.id === meId,
 });
 
-export function getLeaderboard(ctx: GameContext, userId: number): LeaderboardDto {
-  const rows = rankAll(ctx);
+/**
+ * Bảng xếp hạng của người xem. Phần nặng nhất là `rankAll` (quét toàn bộ người chơi + thẻ + Ngọc
+ * + đội hình) nên được đệm cache 30s; phần "hạng của tôi" luôn tính theo người gọi nên không cache.
+ */
+export async function getLeaderboard(ctx: GameContext, userId: number): Promise<LeaderboardDto> {
+  const rows = await ctx.cache.readThrough(PREFIX.leaderboard, TTL.leaderboard, () => rankAll(ctx));
 
   const user = findUserRow(ctx.db, userId);
   let me: LeaderboardEntryDto | null = null;

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { schemas, type GemElement, type PvpUnitDto } from '@tq/shared';
 import type { GameContext } from '../context.ts';
+import { PREFIX, TTL } from '../cache.ts';
 import {
   challenge,
   getBattle,
@@ -35,7 +36,10 @@ export function registerPvpRoutes(app: FastifyInstance, ctx: GameContext): void 
     },
   );
 
-  app.get('/api/pvp', { preHandler: player, config: LIMIT_60 }, async (req) => getOverview(ctx, req.userId));
+  // Tổng quan Đấu trường (đội hình + chỉ số): nặng nên cache 30s, xoá khi lưu đội/quay thẻ/ghép.
+  app.get('/api/pvp', { preHandler: player, config: LIMIT_60 }, async (req) =>
+    ctx.cache.readThrough(PREFIX.pvp(req.userId), TTL.pvp, () => getOverview(ctx, req.userId)),
+  );
 
   app.post('/api/pvp/team', { preHandler: player, schema: { body: schemas.pvpTeamBody }, config: LIMIT_20 }, async (req) => {
     const { units, gems } = req.body as { units: PvpUnitDto[]; gems?: GemElement[] };

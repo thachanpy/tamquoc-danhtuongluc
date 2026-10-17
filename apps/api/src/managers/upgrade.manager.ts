@@ -18,6 +18,7 @@ import {
 } from '@tq/game-config';
 import { AppError, type GameContext } from '../context.ts';
 import { iso, sha256 } from '../utils.ts';
+import { invalidatePlayers } from '../cache.ts';
 import { tx, type DB } from '../db.ts';
 import { findCardsByIds, consumeActiveCards, attachConsumedByUpgrade, insertCard, listActiveCardsUpTo } from '../repositories/card.repository.ts';
 import { insertUpgrade } from '../repositories/upgrade.repository.ts';
@@ -129,13 +130,16 @@ function performUpgradeInTx(ctx: GameContext, userId: number, ids: number[], his
 export function attemptUpgrade(ctx: GameContext, userId: number, cardIds: number[], idempotencyKey: string): UpgradeResultDto {
   const ids = normalizeIds(cardIds);
   const requestHash = sha256(JSON.stringify({ ids }));
-  return tx(ctx.db, () => {
+  const result = tx(ctx.db, () => {
     const prev = findIdempotent<UpgradeResultDto>(ctx.db, userId, 'upgrade_attempt', idempotencyKey, requestHash);
     if (prev) return prev;
-    const result = performUpgradeInTx(ctx, userId, ids, idempotencyKey);
-    saveIdempotent(ctx.db, userId, 'upgrade_attempt', idempotencyKey, requestHash, result, iso(ctx.now()));
-    return result;
+    const r = performUpgradeInTx(ctx, userId, ids, idempotencyKey);
+    saveIdempotent(ctx.db, userId, 'upgrade_attempt', idempotencyKey, requestHash, r, iso(ctx.now()));
+    return r;
   });
+  // Thẻ tiêu thụ/mới => bộ sưu tập, đội hình và bảng xếp hạng đều đổi.
+  invalidatePlayers(ctx.cache, userId);
+  return result;
 }
 
 /**
@@ -168,7 +172,7 @@ export function quickUpgrade(ctx: GameContext, userId: number, idempotencyKey: s
   const levelSet = new Set(selected);
   const maxLevel = selected[selected.length - 1]!;
   const requestHash = sha256(JSON.stringify({ levels: selected, n: UPGRADE_INPUT_COUNT }));
-  return tx(ctx.db, () => {
+  const result = tx(ctx.db, (): QuickUpgradeResultDto => {
     const prev = findIdempotent<QuickUpgradeResultDto>(ctx.db, userId, 'upgrade_quick', idempotencyKey, requestHash);
     if (prev) return prev;
 
@@ -224,4 +228,7 @@ export function quickUpgrade(ctx: GameContext, userId: number, idempotencyKey: s
     saveIdempotent(ctx.db, userId, 'upgrade_quick', idempotencyKey, requestHash, result, iso(ctx.now()));
     return result;
   });
+  // Thẻ tiêu thụ/mới => bộ sưu tập, đội hình và bảng xếp hạng đều đổi.
+  invalidatePlayers(ctx.cache, userId);
+  return result;
 }

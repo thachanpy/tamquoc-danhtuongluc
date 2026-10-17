@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { schemas, type GemsDto } from '@tq/shared';
 import type { GameContext } from '../context.ts';
+import { PREFIX, TTL } from '../cache.ts';
 import { attemptGemMerge, listGems, quickGemMerge } from '../managers/gem.manager.ts';
 import { authGuard, playerGuard, LIMIT_20, LIMIT_60 } from '../middleware/guards.ts';
 
@@ -9,7 +10,10 @@ export function registerGemRoutes(app: FastifyInstance, ctx: GameContext): void 
   const auth = authGuard(ctx);
   const player = playerGuard(ctx);
 
-  app.get('/api/gems', { preHandler: auth }, async (req): Promise<GemsDto> => listGems(ctx, req.userId));
+  app.get('/api/gems', { preHandler: auth }, async (req): Promise<GemsDto> =>
+    // Bộ sưu tập Ngọc đổi khi quay thẻ/ghép Ngọc => cache 30s, xoá ngay ở các thao tác đó.
+    ctx.cache.readThrough(PREFIX.collection(req.userId, 'gems'), TTL.collection, () => listGems(ctx, req.userId)),
+  );
   app.post(
     '/api/gems/merge',
     { preHandler: player, schema: { body: schemas.gemMergeAttemptBody }, config: LIMIT_60 },

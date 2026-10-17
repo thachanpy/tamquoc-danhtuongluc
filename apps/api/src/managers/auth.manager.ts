@@ -10,6 +10,7 @@ import {
 import { RECOVERY_INTERVAL_MS } from '@tq/game-config';
 import { AppError, type GameContext } from '../context.ts';
 import { iso, sha256 } from '../utils.ts';
+import { PREFIX, TTL, DROP, invalidatePlayers } from '../cache.ts';
 import { tx } from '../db.ts';
 import {
   hasAnyUser,
@@ -94,7 +95,12 @@ export function register(ctx: GameContext, username: string, password: string): 
       isAdmin: first,
       approvedAt: autoApprove ? nowIso : null,
     });
-    if (!autoApprove) return { status: 'pending', userId };
+    if (!autoApprove) {
+      // Tài khoản mới xuất hiện trong danh sách Quản trị => xoá cache danh sách.
+      invalidatePlayers(ctx.cache, userId);
+      return { status: 'pending', userId };
+    }
+    invalidatePlayers(ctx.cache, userId);
     const signupBonus = activateAccount(ctx, userId, now);
     return { status: 'approved', userId, isAdmin: first, token: createSession(ctx, userId), signupBonus };
   });
@@ -112,12 +118,19 @@ export function login(ctx: GameContext, username: string, password: string): { t
 }
 
 export function logout(ctx: GameContext, token: string): void {
-  deleteSession(ctx.db, sha256(token));
+  const tokenHash = sha256(token);
+  deleteSession(ctx.db, tokenHash);
+  ctx.cache.drop([DROP.session(tokenHash)]);
 }
 
-export function authenticate(ctx: GameContext, token: string | undefined): number {
+/**
+ * Xác thực token: tra phiên đăng nhập (đệm cache 60s để đỡ 1 truy vấn join mỗi request).
+ * Phiên không hợp lệ/hết hạn/tài khoản chưa duyệt => 401.
+ */
+export async function authenticate(ctx: GameContext, token: string | undefined): Promise<number> {
   if (!token) throw new AppError(401, 'UNAUTHORIZED', 'Chưa đăng nhập.');
-  const row = findSession(ctx.db, sha256(token));
+  const tokenHash = sha256(token);
+  const row = await ctx.cache.readThrough(PREFIX.session(tokenHash), TTL.session, () => findSession(ctx.db, tokenHash) ?? null);
   const expired = row?.expires_at != null && Date.parse(row.expires_at) <= ctx.now();
   if (!row || expired || row.status !== 'approved') {
     throw new AppError(401, 'UNAUTHORIZED', 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn.');
@@ -131,8 +144,10 @@ export function getUsername(ctx: GameContext, userId: number): string {
   return row.username;
 }
 
-export function isAdmin(ctx: GameContext, userId: number): boolean {
-  return findUserRow(ctx.db, userId)?.is_admin === 1;
+/** Cờ quản trị của người chơi (đệm cache 60s; xoá ở các đường đổi quyền/trạng thái). */
+export async function isAdmin(ctx: GameContext, userId: number): Promise<boolean> {
+  const row = await ctx.cache.readThrough(PREFIX.user(userId), TTL.user, () => findUserRow(ctx.db, userId) ?? null);
+  return row?.is_admin === 1;
 }
 
 // ===== Hồ sơ người chơi (mục 3.11): tên hiển thị + ảnh đại diện + đổi mật khẩu =====
@@ -181,6 +196,8 @@ export function updateProfile(ctx: GameContext, userId: number, patch: ProfilePa
   }
   if (patch.displayName !== undefined) updateUserDisplayName(ctx.db, userId, validateDisplayName(patch.displayName));
   if (patch.avatar !== undefined) updateUserAvatar(ctx.db, userId, validateAvatar(patch.avatar));
+  // Tên/ảnh hiển thị xuất hiện trên bảng xếp hạng và danh sách Quản trị => xoá cache liên quan.
+  invalidatePlayers(ctx.cache, userId);
   return getProfile(ctx, userId);
 }
 

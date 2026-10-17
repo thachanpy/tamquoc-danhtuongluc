@@ -2,6 +2,7 @@ import type { GiftCardSnapshot, GiftResultDto, RecipientDto } from '@tq/shared';
 import { GIFT_MAX_CARDS } from '@tq/game-config';
 import { AppError, type GameContext } from '../context.ts';
 import { iso, sha256, likeContains } from '../utils.ts';
+import { invalidatePlayers } from '../cache.ts';
 import { tx } from '../db.ts';
 import { findApprovedUserByUsername } from '../repositories/user.repository.ts';
 import { findCardsByIds, transferActiveCards } from '../repositories/card.repository.ts';
@@ -32,7 +33,8 @@ export function giftCards(
   const ids = [...cardIds].sort((a, b) => a - b);
   const requestHash = sha256(JSON.stringify({ to: toUsername.toLowerCase(), ids }));
 
-  return tx(ctx.db, () => {
+  let toUserId = 0; // id người nhận — lấy được trong transaction để xoá cache sau khi ghi xong
+  const result = tx(ctx.db, () => {
     const prev = findIdempotent<GiftResultDto>(ctx.db, fromUserId, 'gift_cards', idempotencyKey, requestHash);
     if (prev) return prev;
 
@@ -67,8 +69,12 @@ export function giftCards(
 
     const result: GiftResultDto = { giftId, toUsername: to.username, cards, createdAt: nowIso };
     saveIdempotent(ctx.db, fromUserId, 'gift_cards', idempotencyKey, requestHash, result, nowIso);
+    toUserId = to.id;
     return result;
   });
+  // Thẻ đổi chủ => bộ sưu tập, đội hình và bảng xếp hạng của CẢ HAI bên đều đổi.
+  invalidatePlayers(ctx.cache, fromUserId, toUserId);
+  return result;
 }
 
 /**

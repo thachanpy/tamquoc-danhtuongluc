@@ -17,6 +17,7 @@ import {
 } from '@tq/game-config';
 import { AppError, type GameContext } from '../context.ts';
 import { iso, sha256 } from '../utils.ts';
+import { invalidatePlayers } from '../cache.ts';
 import { tx, type DB } from '../db.ts';
 import {
   attachConsumedByMerge,
@@ -133,13 +134,16 @@ function performMergeInTx(ctx: GameContext, userId: number, ids: number[], histo
 export function attemptGemMerge(ctx: GameContext, userId: number, gemIds: number[], idempotencyKey: string): GemMergeResultDto {
   const ids = normalizeIds(gemIds);
   const requestHash = sha256(JSON.stringify({ ids }));
-  return tx(ctx.db, () => {
+  const result = tx(ctx.db, () => {
     const prev = findIdempotent<GemMergeResultDto>(ctx.db, userId, 'gem_merge', idempotencyKey, requestHash);
     if (prev) return prev;
-    const result = performMergeInTx(ctx, userId, ids, idempotencyKey);
-    saveIdempotent(ctx.db, userId, 'gem_merge', idempotencyKey, requestHash, result, iso(ctx.now()));
-    return result;
+    const r = performMergeInTx(ctx, userId, ids, idempotencyKey);
+    saveIdempotent(ctx.db, userId, 'gem_merge', idempotencyKey, requestHash, r, iso(ctx.now()));
+    return r;
   });
+  // Ngọc tiêu thụ/mới => bộ sưu tập Ngọc, đội hình (LC) và bảng xếp hạng đều đổi.
+  invalidatePlayers(ctx.cache, userId);
+  return result;
 }
 
 /**
@@ -173,7 +177,7 @@ export function quickGemMerge(
   const levelSet = new Set(selected);
   const maxLevel = selected[selected.length - 1]!;
   const requestHash = sha256(JSON.stringify({ levels: selected, n: UPGRADE_INPUT_COUNT }));
-  return tx(ctx.db, () => {
+  const result = tx(ctx.db, (): QuickGemMergeResultDto => {
     const prev = findIdempotent<QuickGemMergeResultDto>(ctx.db, userId, 'gem_merge_quick', idempotencyKey, requestHash);
     if (prev) return prev;
 
@@ -229,4 +233,7 @@ export function quickGemMerge(
     saveIdempotent(ctx.db, userId, 'gem_merge_quick', idempotencyKey, requestHash, result, iso(ctx.now()));
     return result;
   });
+  // Ngọc tiêu thụ/mới => bộ sưu tập Ngọc, đội hình (LC) và bảng xếp hạng đều đổi.
+  invalidatePlayers(ctx.cache, userId);
+  return result;
 }

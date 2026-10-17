@@ -15,6 +15,7 @@ import {
 import { ADMIN_GRANT_MAX_TICKETS } from '@tq/game-config';
 import { AppError, type GameContext } from '../context.ts';
 import { iso, sha256, searchGeneralIds } from '../utils.ts';
+import { invalidatePlayers } from '../cache.ts';
 import { tx } from '../db.ts';
 import {
   queryAdminUsers,
@@ -83,7 +84,7 @@ export function adminListUsers(ctx: GameContext, query: AdminUsersQuery): AdminU
  * Duyệt lại tài khoản đã duyệt => 409 ALREADY_APPROVED (không cấp quà lần 2).
  */
 export function approveUser(ctx: GameContext, userId: number): AdminApproveDto {
-  return tx(ctx.db, () => {
+  const out = tx(ctx.db, () => {
     const row = getUserRow(ctx, userId);
     if (row.status !== 'pending') throw new AppError(409, 'ALREADY_APPROVED', 'Tài khoản đã được duyệt.');
     const now = ctx.now();
@@ -92,28 +93,37 @@ export function approveUser(ctx: GameContext, userId: number): AdminApproveDto {
     const signupBonus = activateAccount(ctx, userId, now);
     return { user: toDto(ctx, getUserRow(ctx, userId)), signupBonus };
   });
+  // Trạng thái đổi => phiên/hạng/danh sách Quản trị của người này phải đọc lại từ DB.
+  invalidatePlayers(ctx.cache, userId);
+  return out;
 }
 
 /** Từ chối đăng ký: xoá tài khoản đang chờ duyệt (chưa có vé/thẻ/lịch sử). Tên đăng nhập được giải phóng. */
 export function rejectUser(ctx: GameContext, userId: number): { ok: true; username: string } {
-  return tx(ctx.db, () => {
+  const out = tx(ctx.db, () => {
     const row = getUserRow(ctx, userId);
     if (row.status !== 'pending') throw new AppError(409, 'NOT_PENDING', 'Chỉ từ chối được tài khoản đang chờ duyệt.');
     deleteSessionsForUser(ctx.db, userId);
     deletePendingUser(ctx.db, userId);
     return { ok: true as const, username: row.username };
   });
+  // Tài khoản biến mất => xoá cache danh sách Quản trị.
+  invalidatePlayers(ctx.cache, userId);
+  return out;
 }
 
 /** Cấp/thu quyền admin. Không tự thu quyền của chính mình (luôn còn ít nhất 1 admin). */
 export function setAdmin(ctx: GameContext, actorId: number, userId: number, value: boolean): AdminUserDto {
-  return tx(ctx.db, () => {
+  const out = tx(ctx.db, () => {
     const row = getUserRow(ctx, userId);
     if (row.status !== 'approved') throw new AppError(409, 'NOT_APPROVED', 'Tài khoản chưa được duyệt.');
     if (!value && userId === actorId) throw new AppError(400, 'ADMIN_SELF', 'Không thể tự thu quyền quản trị của chính mình.');
     updateUserAdmin(ctx.db, userId, value);
     return toDto(ctx, getUserRow(ctx, userId));
   });
+  // Cờ admin được cache theo người chơi => xoá ngay để quyền mới có hiệu lực.
+  invalidatePlayers(ctx.cache, userId);
+  return out;
 }
 
 /**

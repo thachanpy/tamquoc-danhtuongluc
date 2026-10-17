@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import { randomInt } from 'node:crypto';
 import { openDatabase } from '../src/db.ts';
 import { AppError, type GameContext } from '../src/context.ts';
+import { createNoopCache } from '../src/cache.ts';
 import { register as rawRegister } from '../src/managers/auth.manager.ts';
 import { approveUser } from '../src/managers/admin.manager.ts';
 import { applyTicketDelta, readBalances } from '../src/repositories/ticket.repository.ts';
 import { draw } from '../src/managers/gacha.manager.ts';
 import { touchDaily, getQuests, claimQuests, gameDayOf, calendarDateOf } from '../src/managers/quest.manager.ts';
-import { DAILY_MAX, DAILY_RESET_BONUS } from '@tq/game-config';
+import { DAILY_MAX, DAILY_RESET_BONUS, PVP_GEM_DROP_DEFAULT, setGemDropOverride } from '@tq/game-config';
 
 /** 10:00 giờ Việt Nam ngày 14/10/2026 (= 03:00 UTC). */
 const T0 = Date.UTC(2026, 9, 14, 3, 0, 0);
@@ -17,7 +18,7 @@ const DAY = 24 * HOUR;
 
 function makeCtx(start = T0) {
   let now = start;
-  const ctx: GameContext = { db: openDatabase(':memory:'), now: () => now, rand: (max) => randomInt(max) };
+  const ctx: GameContext = { db: openDatabase(':memory:'), now: () => now, rand: (max) => randomInt(max), cache: createNoopCache() };
   return { ctx, setNow: (t: number) => (now = t), advance: (ms: number) => (now += ms) };
 }
 
@@ -240,7 +241,13 @@ test('quests: qua ngày mới tự nhận nhiệm vụ ngày cũ đã đạt mà
   const u = newUser(ctx, 'dave');
   touchDaily(ctx, u);
   giveTickets(ctx, u, 'normal', 10);
-  draw(ctx, u, 'normal', 'x', 10);
+  // Tắt rớt Ngọc trong test này: rớt ngẫu nhiên có thể làm xong nhiệm vụ Ngọc, mà test chỉ xét nhiệm vụ ngày.
+  setGemDropOverride({ ...PVP_GEM_DROP_DEFAULT, dropBps: 0 });
+  try {
+    draw(ctx, u, 'normal', 'x', 10);
+  } finally {
+    setGemDropOverride(undefined);
+  }
   const day1 = getQuests(ctx, u).gameDay;
   claimQuests(ctx, u, [`d:${day1}:login`]); // đã tự bấm nhận nhiệm vụ đăng nhập
   advance(DAY);

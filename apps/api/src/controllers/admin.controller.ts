@@ -28,13 +28,17 @@ import {
 } from '../managers/admin-pvp.manager.ts';
 import { adminGetGachaRates, adminUpdateGachaRates, type AdminGachaRatesUpdateInput } from '../managers/admin-gacha.manager.ts';
 import { adminGuard, LIMIT_120 } from '../middleware/guards.ts';
+import { PREFIX, TTL, queryKey } from '../cache.ts';
 
 /** Routes trang quản trị (mục 3.7, 3.8, 3.9) — mọi route yêu cầu quyền admin. */
 export function registerAdminRoutes(app: FastifyInstance, ctx: GameContext): void {
   const admin = adminGuard(ctx);
+  // Danh sách Quản trị chỉ đổi khi có thao tác chơi/quản trị => cache ngắn 15s, xoá ngay ở các đường ghi.
+  const list = <T>(kind: string, query: object, load: () => T): Promise<T> =>
+    ctx.cache.readThrough(PREFIX.admin(kind, queryKey(query)), TTL.admin, load);
 
   app.get('/api/admin/users', { preHandler: admin, schema: { querystring: schemas.adminUsersQuery } }, async (req) =>
-    adminListUsers(ctx, req.query as AdminUsersQuery),
+    list('users', req.query as AdminUsersQuery, () => adminListUsers(ctx, req.query as AdminUsersQuery)),
   );
   app.post('/api/admin/users/:id/approve', { preHandler: admin, schema: { params: schemas.idParams }, config: LIMIT_120 }, async (req) =>
     approveUser(ctx, (req.params as { id: number }).id),
@@ -57,10 +61,10 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: GameContext): voi
     return adminGrantTickets(ctx, req.userId, userId, ticketType, amount, idempotencyKey);
   });
   app.get('/api/admin/cards', { preHandler: admin, schema: { querystring: schemas.adminCardsQuery } }, async (req) =>
-    adminListCards(ctx, req.query as AdminCardsQuery),
+    list('cards', req.query as AdminCardsQuery, () => adminListCards(ctx, req.query as AdminCardsQuery)),
   );
   app.get('/api/admin/gems', { preHandler: admin, schema: { querystring: schemas.adminGemsQuery } }, async (req) =>
-    adminListGems(ctx, req.query as AdminGemsQuery),
+    list('gems', req.query as AdminGemsQuery, () => adminListGems(ctx, req.query as AdminGemsQuery)),
   );
 
   app.get('/api/admin/settings', { preHandler: admin }, async () => getSettings(ctx));

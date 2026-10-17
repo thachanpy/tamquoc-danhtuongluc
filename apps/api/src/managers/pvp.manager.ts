@@ -61,6 +61,7 @@ import {
 } from '@tq/shared';
 import { AppError, type GameContext } from '../context.ts';
 import { iso } from '../utils.ts';
+import { invalidatePlayers } from '../cache.ts';
 import { findUserRow, type UserRow } from '../repositories/user.repository.ts';
 import {
   findBattle,
@@ -449,6 +450,8 @@ export function saveTeam(ctx: GameContext, userId: number, units: PvpUnitDto[], 
   const sorted = [...units]
     .sort((a, b) => a.slot - b.slot)
     .map((u) => ({ ...u, lc: pvpUnitLc(u.generalId, u.level, gem) }));
+  // Đội hình đổi => tổng quan Đấu trường và bảng xếp hạng (LC) đều đổi.
+  invalidatePlayers(ctx.cache, userId);
   return { units: sorted, gems, lc: teamLc(sorted, gem) };
 }
 
@@ -504,6 +507,8 @@ export function challenge(ctx: GameContext, userId: number, opponentId: number):
       now,
     ),
   );
+  // Thành tích thắng/thua đổi => xoá cache tổng quan Đấu trường của người chơi.
+  invalidatePlayers(ctx.cache, userId);
 
   return {
     id,

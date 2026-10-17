@@ -25,6 +25,7 @@ import {
 } from '@tq/game-config';
 import { AppError, type GameContext } from '../context.ts';
 import { iso, sha256 } from '../utils.ts';
+import { invalidatePlayers } from '../cache.ts';
 import { tx } from '../db.ts';
 import { applyTicketDelta, readBalances } from '../repositories/ticket.repository.ts';
 import { insertCard } from '../repositories/card.repository.ts';
@@ -131,5 +132,7 @@ export function draw(
 
   // Dữ liệu tướng trả về khớp roster hiện tại
   const results = stored.results.map((r) => ({ ...r, general: GENERALS_BY_ID.get(r.card.generalId) ?? r.general }));
+  // Thẻ/Ngọc mới => bộ sưu tập, đội hình tự động và bảng xếp hạng đều đổi.
+  invalidatePlayers(ctx.cache, userId);
   return { ...stored, results, tickets: getTickets(ctx, userId) };
 }
