@@ -33,10 +33,12 @@ import type {
   PvpBattleDto,
   PvpBattleSummaryDto,
   PvpCombatDto,
+  PvpEffectType,
   PvpOpponentDto,
   PvpOverviewDto,
   PvpSkill,
   PvpStyle,
+  PvpTargeting,
   PvpTeamDto,
   PvpUnitDto,
   PvpHeroAdminDto,
@@ -168,7 +170,7 @@ export const api = {
     gems: (q: { userId?: number; element?: GemElement; level?: number; sort?: string; page?: number; pageSize?: number }) =>
       call<Page<AdminGemDto>>('GET', '/api/admin/gems?' + qs(q)),
     // Cấu hình PvP (Tướng & Ngọc Ngũ Hành) — server lưu DB rồi nạp lại cache, engine áp dụng ngay.
-    pvpHeroes: (q: { faction?: Faction; style?: PvpStyle; q?: string }) =>
+    pvpHeroes: (q: { faction?: Faction; style?: PvpStyle; effect?: PvpEffectType; target?: PvpTargeting; q?: string }) =>
       call<PvpHeroesAdminDto>('GET', '/api/admin/pvp/heroes?' + qs(q)),
     pvpHeroCreate: (body: { name: string; faction: Faction }) => call<PvpHeroAdminDto>('POST', '/api/admin/pvp/heroes', body),
     pvpHeroUpdate: (id: string, body: Omit<PvpHeroAdminDto, 'id'>) =>

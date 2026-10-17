@@ -68,6 +68,8 @@ main { max-width: 1360px; margin: 0 auto; padding: 20px; display: grid; gap: 16p
 .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .filters input, .filters select, .login input { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
 .filters input { flex: 1 1 200px; }
+/* Nhãn hiệu ứng kỹ năng / mục tiêu dài (vd "Đao phủ (tăng ST lên mục tiêu Debuff)") — chặn bề rộng để không phá hàng lọc. */
+.filters select.f-effect, .filters select.f-target { max-width: 260px; }
 
 /* ---------- login ---------- */
 .login { max-width: 380px; margin: 10vh auto; padding: 16px; text-align: center; }

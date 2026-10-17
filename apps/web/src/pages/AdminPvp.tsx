@@ -129,12 +129,12 @@ function ConfigModal(props: { title: string; wide?: boolean; onClose: () => void
 // ======================= Tab 1: Quản lý Tướng PvP =======================
 
 /**
- * Danh sách cấu hình Tướng kèm bộ lọc Phe / Phong cách / Tìm theo tên.
+ * Danh sách cấu hình Tướng kèm bộ lọc Phe / Phong cách / Hiệu ứng kỹ năng / Mục tiêu / Tìm theo tên.
  * "Thêm Tướng Mới" chỉ cần Tên + Phe; mọi cấu hình khác lấy mặc định mức sàn ở server.
  */
 export function PvpHeroesPane(props: { alive: () => boolean; ctl: (c: Ctl) => void }) {
   let loaded = false;
-  const f = { faction: '', style: '', q: '' };
+  const f = { faction: '', style: '', effect: '', target: '', q: '' };
   let seq = 0;
   const [items, setItems] = createSignal<PvpHeroAdminDto[]>([]);
   const [listState, setListState] = createSignal<Load>({ kind: 'loading' });
@@ -158,6 +158,8 @@ export function PvpHeroesPane(props: { alive: () => boolean; ctl: (c: Ctl) => vo
       const dto = await api.admin.pvpHeroes({
         faction: (f.faction || undefined) as Faction | undefined,
         style: (f.style || undefined) as PvpStyle | undefined,
+        effect: (f.effect || undefined) as PvpEffectType | undefined,
+        target: (f.target || undefined) as PvpTargeting | undefined,
         q: f.q || undefined,
       });
       if (!props.alive() || my !== seq) return;
@@ -170,7 +172,7 @@ export function PvpHeroesPane(props: { alive: () => boolean; ctl: (c: Ctl) => vo
 
   let t: number | undefined;
   onCleanup(() => clearTimeout(t));
-  const onFilter = (key: 'faction' | 'style' | 'q', value: string) => {
+  const onFilter = (key: 'faction' | 'style' | 'effect' | 'target' | 'q', value: string) => {
     const apply = () => {
       f[key] = value;
       void load();
@@ -264,6 +266,20 @@ export function PvpHeroesPane(props: { alive: () => boolean; ctl: (c: Ctl) => vo
         <select data-f="style" aria-label="Phong cách" onInput={(e) => onFilter('style', e.currentTarget.value)}>
           <option value="">Mọi phong cách</option>
           <For each={PVP_STYLES}>{(x) => <option value={x}>{PVP_STYLE_LABELS[x]}</option>}</For>
+        </select>
+        <select class="f-effect" data-f="effect" aria-label="Hiệu ứng kỹ năng" onInput={(e) => onFilter('effect', e.currentTarget.value)}>
+          <option value="">Mọi hiệu ứng kỹ năng</option>
+          <For each={EFFECT_GROUPS}>
+            {(g) => (
+              <optgroup label={g.label}>
+                <For each={g.types}>{(t) => <option value={t}>{PVP_EFFECT_LABELS[t]}</option>}</For>
+              </optgroup>
+            )}
+          </For>
+        </select>
+        <select class="f-target" data-f="target" aria-label="Mục tiêu kỹ năng" onInput={(e) => onFilter('target', e.currentTarget.value)}>
+          <option value="">Mọi mục tiêu</option>
+          <For each={PVP_TARGETINGS}>{(x) => <option value={x}>{PVP_TARGETING_LABELS[x]}</option>}</For>
         </select>
       </div>
       <div class="adm-summary muted small">{listState().kind === 'ready' ? `${num(items().length)} tướng PvP` : ''}</div>

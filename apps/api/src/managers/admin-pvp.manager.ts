@@ -11,6 +11,7 @@ import {
   type PvpSkill,
   type PvpSkillEffectDto,
   type PvpStyle,
+  type PvpTargeting,
 } from '@tq/shared';
 import { AppError, type GameContext } from '../context.ts';
 import { tx } from '../db.ts';
@@ -153,17 +154,21 @@ function uniqueHeroId(ctx: GameContext, name: string): string {
 export interface AdminPvpHeroesQuery {
   faction?: Faction;
   style?: PvpStyle;
+  effect?: PvpEffectType;
+  target?: PvpTargeting;
   q?: string;
 }
 
-/** Danh sách cấu hình Tướng PvP kèm bộ lọc Phe / Phong cách / Tìm theo tên (mục 4.1). */
+/** Danh sách cấu hình Tướng PvP kèm bộ lọc Phe / Phong cách / Hiệu ứng kỹ năng / Mục tiêu / Tìm theo tên (mục 4.1). */
 export function adminListPvpHeroes(ctx: GameContext, query: AdminPvpHeroesQuery): PvpHeroesAdminDto {
   const keyword = query.q?.trim().toLowerCase();
   const items = listHeroRows(ctx.db)
-    .filter((r) => !query.faction || r.faction === query.faction)
-    .filter((r) => !query.style || r.style === query.style)
-    .filter((r) => !keyword || r.name.toLowerCase().includes(keyword) || r.id.includes(keyword))
-    .map(heroToDto);
+    .map(heroToDto)
+    .filter((h) => !query.faction || h.faction === query.faction)
+    .filter((h) => !query.style || h.style === query.style)
+    .filter((h) => !query.effect || h.skillEffects.some((e) => e.type === query.effect))
+    .filter((h) => !query.target || h.targetType === query.target)
+    .filter((h) => !keyword || h.name.toLowerCase().includes(keyword) || h.id.includes(keyword));
   return { items, total: items.length };
 }
 

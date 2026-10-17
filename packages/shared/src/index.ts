@@ -991,6 +991,10 @@ export const schemas = {
     properties: {
       faction: { type: 'string', enum: [...FACTIONS] },
       style: { type: 'string', enum: [...PVP_STYLES] },
+      /** Lọc theo hiệu ứng kỹ năng: chỉ trả tướng có ít nhất 1 hiệu ứng thuộc loại này. */
+      effect: { type: 'string', enum: [...PVP_EFFECT_TYPES] },
+      /** Lọc theo cách chọn mục tiêu của kỹ năng (mục 2.4). */
+      target: { type: 'string', enum: [...PVP_TARGETINGS] },
       q: { type: 'string', maxLength: 64 },
     },
   },

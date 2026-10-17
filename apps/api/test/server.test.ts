@@ -397,6 +397,42 @@ test('HTTP: giftcode — người chơi nhập code, admin tạo/tắt code; ng�
   await app.close();
 });
 
+test('HTTP: admin lọc Tướng PvP theo hiệu ứng kỹ năng và mục tiêu', async () => {
+  const { app, adminAuth } = await setup(false);
+  type Effect = { type: string };
+  type Row = { id: string; style: string; targetType: string; skillEffects: Effect[] };
+  const all = (await app.inject({ method: 'GET', url: '/api/admin/pvp/heroes', headers: adminAuth })).json() as { items: Row[] };
+  assert.ok(all.items.length > 0);
+
+  // Chọn một loại hiệu ứng CHỈ có ở một phần roster để phép lọc có ý nghĩa.
+  const count = new Map<string, number>();
+  for (const h of all.items) for (const e of h.skillEffects) count.set(e.type, (count.get(e.type) ?? 0) + 1);
+  const picked = [...count].find(([, n]) => n > 0 && n < all.items.length);
+  assert.ok(picked, 'roster phải có loại hiệu ứng chỉ xuất hiện ở một phần tướng');
+  const [type, expected] = picked;
+
+  const filtered = (await app.inject({ method: 'GET', url: `/api/admin/pvp/heroes?effect=${type}`, headers: adminAuth })).json() as { items: Row[] };
+  assert.equal(filtered.items.length, expected);
+  assert.ok(filtered.items.every((h) => h.skillEffects.some((e) => e.type === type)));
+  assert.ok(!filtered.items.some((h) => !all.items.find((a) => a.id === h.id)));
+
+  // Lọc theo mục tiêu: số kết quả = số tướng có đúng targetType đó
+  const target = all.items.find((h) => all.items.filter((x) => x.targetType === h.targetType).length < all.items.length)!.targetType;
+  const byTarget = (await app.inject({ method: 'GET', url: `/api/admin/pvp/heroes?target=${target}`, headers: adminAuth })).json() as { items: Row[] };
+  assert.equal(byTarget.items.length, all.items.filter((x) => x.targetType === target).length);
+  assert.ok(byTarget.items.every((h) => h.targetType === target));
+
+  // Kết hợp với lọc phong cách: kết quả là giao của hai tiêu chí
+  const combo = (await app.inject({ method: 'GET', url: `/api/admin/pvp/heroes?effect=${type}&style=defense`, headers: adminAuth })).json() as { items: Row[] };
+  assert.ok(combo.items.every((h) => h.style === 'defense' && h.skillEffects.some((e) => e.type === type)));
+  assert.ok(combo.items.length <= filtered.items.length);
+
+  // Tham số không hợp lệ bị schema chặn
+  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/pvp/heroes?effect=KHONG-CO', headers: adminAuth })).statusCode, 400);
+  assert.equal((await app.inject({ method: 'GET', url: '/api/admin/pvp/heroes?target=KHONG-CO', headers: adminAuth })).statusCode, 400);
+  await app.close();
+});
+
 test('HTTP: cài đặt Duyệt tài khoản tắt (mặc định) => đăng ký là được duyệt ngay, có token, nhận 100 vé, không phải admin', async () => {
   const { app } = await setup(false, false);
   const r = await app.inject({ method: 'POST', url: '/api/auth/register', payload: { username: 'quick_user', password: 'secret123' } });
