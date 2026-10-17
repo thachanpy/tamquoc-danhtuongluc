@@ -1229,6 +1229,7 @@ Tất cả API phải có schema validation, authentication phù hợp và đị
 - `GET /api/generals`: danh mục 140 tướng + `styles` (phong cách chiến đấu `attack`/`defense`/`support` của từng tướng — client hiện nhãn Tấn công/Phòng thủ/Hỗ trợ trên mọi thẻ tướng) + `skills` (kỹ năng chiến đấu của từng tướng — client hiện kỹ năng khi chọn tướng vào đội hình; mục 6.7).
 - `GET /api/cards`: bộ sưu tập, filter và pagination (`faction`, `level`, `q`, `sort`, `page`, `pageSize` ≤ 500).
 - `GET /api/cards/all`: TOÀN BỘ thẻ active của người chơi trong một request (`{ items }`, mới nhất trước). Client dùng endpoint này thay vì lặp qua từng trang — mỗi vòng lặp tốn thêm một lượt mạng mà trình duyệt chỉ mở tối đa 6 kết nối/origin (HTTP/1.1), nên người chơi hàng chục nghìn thẻ trước đây phải chờ rất lâu (đo 20.000 thẻ: 1 request ≈ 25 ms so với 40 request ≈ 230 ms). Truy vấn bỏ được `COUNT(*)` và `JOIN generals`; cache chung nhóm `tq:col:<userId>:` (TTL 30s) nên tự xoá ở mọi thao tác đổi bộ sưu tập.
+  - `?best=true`: mỗi tướng chỉ trả MỘT thẻ — bản cấp cao nhất đang sở hữu (`ROW_NUMBER() OVER (PARTITION BY general_id ORDER BY level DESC, id DESC)`, cùng cấp thì lấy thẻ mới nhất); thẻ `consumed` không tính. Đây là thứ màn chọn tướng PvP cần (mỗi tướng một lựa chọn), nên không phải tải hết các bản sao: đo 20.000 thẻ → payload thô 1,7 MB / 108 KB nén còn 12 KB thô / 1,8 KB nén (140 tướng ≈ 140 dòng). Cache khoá riêng `tq:col:<userId>:cards:all:best` nhưng vẫn nằm trong nhóm `tq:col:<userId>:` nên tự xoá chung.
 
 ### 8.2. Vé
 

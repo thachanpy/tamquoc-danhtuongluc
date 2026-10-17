@@ -645,3 +645,34 @@ test('HTTP: GET /api/cards/all trả cả bộ sưu tập trong 1 request; cần
   assert.equal(unauth.statusCode, 401);
   await app.close();
 });
+
+test('HTTP: GET /api/cards/all?best=true chỉ trả thẻ cấp cao nhất của mỗi tướng', async () => {
+  const { app, auth, ctx } = await setup(false, false, false);
+  const uid = (ctx.db.prepare(`SELECT id FROM users WHERE username = 'tester'`).get() as { id: number }).id;
+  // Cấp thẻ trực tiếp vào DB để chắc chắn có bản sao cùng tướng ở nhiều cấp khác nhau
+  const add = (generalId: string, level: number) =>
+    ctx.db.prepare('INSERT INTO user_cards (user_id, general_id, level, created_at, updated_at) VALUES (?,?,?,?,?)').run(uid, generalId, level, 'x', 'x');
+  add('liu-bei', 1);
+  add('liu-bei', 1);
+  add('liu-bei', 4);
+  add('cao-cao', 2);
+  add('cao-cao', 3);
+  add('guan-yu', 7);
+
+  type Card = { id: number; generalId: string; level: number };
+  const all = (await app.inject({ method: 'GET', url: '/api/cards/all', headers: auth })).json().items as Card[];
+  assert.equal(all.length, 6);
+  const best = (await app.inject({ method: 'GET', url: '/api/cards/all?best=true', headers: auth })).json().items as Card[];
+  // Mỗi tướng còn đúng một thẻ — và đúng là thẻ cấp cao nhất đang sở hữu
+  assert.deepEqual(
+    best.map((c) => `${c.generalId}@${c.level}`).sort(),
+    ['cao-cao@3', 'guan-yu@7', 'liu-bei@4'],
+  );
+  assert.ok(best.every((c) => all.some((x) => x.id === c.id)));
+  assert.ok(best.every((c) => c.level === Math.max(...all.filter((x) => x.generalId === c.generalId).map((x) => x.level))));
+  // Thẻ đã tiêu thụ (đi ghép) không tính là đang sở hữu
+  ctx.db.prepare(`UPDATE user_cards SET status = 'consumed', consumed_at = 'x' WHERE user_id = ? AND general_id = 'guan-yu'`).run(uid);
+  const after = (await app.inject({ method: 'GET', url: '/api/cards/all?best=true', headers: auth })).json().items as Card[];
+  assert.equal(after.length, 2);
+  await app.close();
+});

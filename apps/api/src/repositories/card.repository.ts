@@ -120,21 +120,34 @@ export function listUserCards(
   return { rows, total };
 }
 
+/** Cả bộ sưu tập active của một người chơi, mới nhất trước. */
+const OWNED_CARDS_SQL = `SELECT id, general_id, level, created_at FROM user_cards
+   WHERE user_id = ? AND status = 'active' ORDER BY id DESC`;
+/** Mỗi tướng một thẻ: `ROW_NUMBER` lấy thẻ cấp cao nhất (cùng cấp thì lấy thẻ mới nhất). */
+const BEST_OWNED_CARDS_SQL = `SELECT id, general_id, level, created_at FROM (
+     SELECT id, general_id, level, created_at,
+            ROW_NUMBER() OVER (PARTITION BY general_id ORDER BY level DESC, id DESC) AS rn
+     FROM user_cards WHERE user_id = ? AND status = 'active')
+   WHERE rn = 1 ORDER BY id DESC`;
+
 /**
  * Toàn bộ thẻ active của một người chơi trong MỘT lượt — dùng cho `/api/cards/all`.
  * Không phân trang nên bỏ được `COUNT(*)` và `JOIN generals` (client tự lọc/sắp theo tên);
  * đổi lại phải quét hết bảng một lần thay vì quét lại ở từng trang.
+ * `bestOnly`: lọc ngay trong SQL, mỗi tướng chỉ giữ một thẻ cấp cao nhất — màn chọn tướng PvP
+ * chỉ cần cấp cao nhất nên payload giảm từ hàng chục nghìn dòng xuống còn vài trăm.
  */
 export function listOwnedCards(
   db: DB,
   userId: number,
+  bestOnly = false,
 ): { id: number; general_id: string; level: number; created_at: string }[] {
-  return db
-    .prepare(
-      `SELECT id, general_id, level, created_at FROM user_cards
-       WHERE user_id = ? AND status = 'active' ORDER BY id DESC`,
-    )
-    .all(userId) as { id: number; general_id: string; level: number; created_at: string }[];
+  return db.prepare(bestOnly ? BEST_OWNED_CARDS_SQL : OWNED_CARDS_SQL).all(userId) as {
+    id: number;
+    general_id: string;
+    level: number;
+    created_at: string;
+  }[];
 }
 
 export interface AdminCardsFilter {

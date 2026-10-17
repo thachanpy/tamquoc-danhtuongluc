@@ -44,9 +44,11 @@ export function listCards(ctx: GameContext, userId: number, query: CardsQuery): 
  * Toàn bộ thẻ người chơi sở hữu trong một lượt (`/api/cards/all`) — mới nhất trước.
  * Client tải cả bộ sưu tập một lần thay vì lặp qua từng trang: mỗi vòng request phải chờ thêm
  * một lượt mạng, mà trình duyệt chỉ mở tối đa 6 kết nối/origin (HTTP/1.1) nên số vòng càng ít càng tốt.
+ * `bestOnly` (`/api/cards/all?best=true`): mỗi tướng chỉ giữ thẻ cấp cao nhất — màn chọn tướng PvP
+ * chỉ dùng tới con số này nên không cần tải hết các bản sao.
  */
-export function listOwnedCards(ctx: GameContext, userId: number): CardDto[] {
-  return repoListOwnedCards(ctx.db, userId).map((r) => ({
+export function listOwnedCards(ctx: GameContext, userId: number, bestOnly = false): CardDto[] {
+  return repoListOwnedCards(ctx.db, userId, bestOnly).map((r) => ({
     id: r.id,
     generalId: r.general_id,
     level: r.level,

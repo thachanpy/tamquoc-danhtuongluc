@@ -209,7 +209,7 @@ thay ảnh thật bằng cách map `artKey` → file ảnh trong `apps/web/src/a
 | GET | `/api/me` | Người chơi + số dư vé + trạng thái hồi |
 | GET | `/api/generals` | 100 tướng |
 | GET | `/api/cards` | Bộ sưu tập (`faction`, `level`, `q`, `sort`, `page`, `pageSize` ≤ 500) |
-| GET | `/api/cards/all` | Toàn bộ thẻ đang sở hữu trong 1 request (`{ items }`) — client dùng thay vì lặp từng trang |
+| GET | `/api/cards/all` | Toàn bộ thẻ đang sở hữu trong 1 request (`{ items }`) — client dùng thay vì lặp từng trang; `?best=true` chỉ trả thẻ cấp cao nhất của mỗi tướng (màn chọn tướng PvP) |
 | GET | `/api/tickets` | Số dư, tổng, mốc đã xử lý, thời gian đến mốc kế |
 | POST | `/api/tickets/claim-recovery` | Xử lý các mốc hồi chưa xử lý |
 | POST | `/api/tickets/dev-topup` | `{ idempotencyKey }` — +50 vé thử nghiệm (404 nếu `ENABLE_DEV_TOPUP` tắt) |

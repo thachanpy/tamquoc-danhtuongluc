@@ -129,7 +129,8 @@ export const api = {
       '/api/generals',
     ),
   // Cả bộ sưu tập trong 1 request (xem `fetchAllCards`); bản phân trang là `/api/cards`.
-  cardsAll: () => call<{ items: CardDto[] }>('GET', '/api/cards/all'),
+  // `best=true`: mỗi tướng chỉ lấy thẻ cấp cao nhất (xem `fetchBestCards`).
+  cardsAll: (best?: boolean) => call<{ items: CardDto[] }>('GET', `/api/cards/all${best ? '?best=true' : ''}`),
   tickets: () => call<TicketsDto>('GET', '/api/tickets'),
   claimRecovery: () => call<ClaimRecoveryDto>('POST', '/api/tickets/claim-recovery'),
   devTopup: (idempotencyKey: string) => call<DevTopupDto>('POST', '/api/tickets/dev-topup', { idempotencyKey }),
@@ -214,15 +215,18 @@ export const api = {
 /** Hạn dùng của cache thẻ ở client (khớp TTL.collection 30s của server) — hết hạn thì tải lại. */
 const CARDS_TTL = 30_000;
 
-/** Thẻ đã tải — dùng chung cho Bộ sưu tập / Nâng cấp / Đấu trường để không tải lại mỗi lần đổi tab. */
-let cardsCache: CardDto[] | null = null;
-let cardsCachedAt = 0;
-/** Request đang chạy dở; nhiều trang cùng gọi thì dùng chung một lượt tải. */
-let cardsPending: Promise<CardDto[]> | null = null;
+/** Thẻ đã tải theo từng biến thể: `all` = cả bộ sưu tập, `best` = mỗi tướng một thẻ cấp cao nhất. */
+const cardsCache: Record<'all' | 'best', { list: CardDto[] | null; at: number; pending: Promise<CardDto[]> | null }> = {
+  all: { list: null, at: 0, pending: null },
+  best: { list: null, at: 0, pending: null },
+};
 
 /** Xoá cache thẻ — gọi sau mọi thao tác làm thay đổi bộ sưu tập (xem `mutateCards`). */
 export function invalidateCards(): void {
-  cardsCache = null;
+  for (const k of ['all', 'best'] as const) {
+    cardsCache[k].list = null;
+    cardsCache[k].at = 0;
+  }
 }
 
 /** Chạy request rồi xoá cache thẻ (quay thẻ, ghép, tặng, nhập giftcode đều đổi bộ sưu tập). */
@@ -233,20 +237,37 @@ async function mutateCards<T>(p: Promise<T>): Promise<T> {
 }
 
 /**
+ * Tải thẻ theo biến thể, có cache + gộp request trùng: nhiều trang cùng gọi thì dùng chung một lượt tải
+ * (cache dùng chung cho Bộ sưu tập / Nâng cấp / Đấu trường nên không tải lại mỗi lần đổi tab).
+ */
+function loadCards(kind: 'all' | 'best'): Promise<CardDto[]> {
+  const c = cardsCache[kind];
+  if (c.list && Date.now() - c.at < CARDS_TTL) return Promise.resolve(c.list);
+  if (c.pending) return c.pending;
+  c.pending = (async () => {
+    const { items } = await api.cardsAll(kind === 'best');
+    c.list = items;
+    c.at = Date.now();
+    return items;
+  })().finally(() => {
+    c.pending = null;
+  });
+  return c.pending;
+}
+
+/**
  * Tải toàn bộ thẻ đang sở hữu bằng MỘT request (`/api/cards/all`).
  * Trước đây lặp qua từng trang 500 thẻ: mỗi vòng tốn thêm một lượt mạng, mà trình duyệt chỉ mở
  * tối đa 6 kết nối/origin (HTTP/1.1) nên người chơi hàng chục nghìn thẻ phải chờ rất lâu.
  */
 export function fetchAllCards(): Promise<CardDto[]> {
-  if (cardsCache && Date.now() - cardsCachedAt < CARDS_TTL) return Promise.resolve(cardsCache);
-  if (cardsPending) return cardsPending;
-  cardsPending = (async () => {
-    const { items } = await api.cardsAll();
-    cardsCache = items;
-    cardsCachedAt = Date.now();
-    return items;
-  })().finally(() => {
-    cardsPending = null;
-  });
-  return cardsPending;
+  return loadCards('all');
+}
+
+/**
+ * Mỗi tướng MỘT thẻ: bản cấp cao nhất đang sở hữu (`/api/cards/all?best=true`) — màn chọn tướng PvP
+ * mỗi tướng chỉ cần một lựa chọn nên lọc ngay ở server, payload còn vài trăm dòng thay vì hàng chục nghìn.
+ */
+export function fetchBestCards(): Promise<CardDto[]> {
+  return loadCards('best');
 }

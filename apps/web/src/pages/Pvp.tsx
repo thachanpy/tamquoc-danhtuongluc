@@ -22,7 +22,7 @@ import type {
   PvpUnitStateDto,
 } from '@tq/shared';
 import { FACTIONS, FACTION_LABELS, GEM_ELEMENTS, GEM_ELEMENT_LABELS, GEM_STAT_LABELS, PVP_BUFF_SCOPE_LABELS, PVP_PASSIVE_LABELS, PVP_SKILL_LABELS, PVP_STYLES, PVP_STYLE_LABELS, PVP_TEAM_GEM_COUNT } from '@tq/shared';
-import { api, fetchAllCards } from '../api.ts';
+import { api, fetchBestCards } from '../api.ts';
 import { gen, genStyle, pvpTarget, setPvpTarget } from '../state.ts';
 import { Avatar } from '../components/Avatar.tsx';
 import { CombatDetailModal } from '../components/CombatDetailModal.tsx';
@@ -2236,22 +2236,12 @@ export function PvpPage() {
   const options = createMemo<GenOpt[]>(() => {
     const cs = cards();
     if (!cs) return [];
-    // Mỗi tướng chỉ cần một lựa chọn: cấp cao nhất đang sở hữu
-    const best = new Map<string, number>();
-    for (const c of cs) {
-      const cur = best.get(c.generalId);
-      if (cur === undefined || c.level > cur) best.set(c.generalId, c.level);
-    }
-    return [...best.entries()]
-      .map(([id, lv]) => ({
-        id,
-        name: gen(id).name,
-        faction: gen(id).faction,
-        artKey: gen(id).artKey,
-        style: genStyle(id),
-        best: lv,
-        lc: unitLc(id),
-      }))
+    // Server đã lọc sẵn (`/api/cards/all?best=1`): mỗi tướng một thẻ, `level` là cấp cao nhất đang sở hữu.
+    return cs
+      .map((c) => {
+        const g = gen(c.generalId);
+        return { id: g.id, name: g.name, faction: g.faction, artKey: g.artKey, style: genStyle(g.id), best: c.level, lc: unitLc(g.id) };
+      })
       .sort((a, b) => b.lc - a.lc || b.best - a.best || a.name.localeCompare(b.name));
   });
 
@@ -2301,7 +2291,8 @@ export function PvpPage() {
   }
   async function loadCards() {
     try {
-      const list = await fetchAllCards();
+      // Mỗi tướng chỉ cần cấp cao nhất => server lọc sẵn, không tải hết các bản sao.
+      const list = await fetchBestCards();
       if (alive) setCards(list);
     } catch {
       if (alive) setCards([]);

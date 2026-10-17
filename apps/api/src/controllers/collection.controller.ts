@@ -50,9 +50,12 @@ export function registerCollectionRoutes(app: FastifyInstance, ctx: GameContext)
   // Cả bộ sưu tập trong MỘT request: client tải hết thẻ một lượt thay vì lặp qua từng trang (mỗi
   // vòng lặp tốn thêm một lượt mạng, mà trình duyệt chỉ mở tối đa 6 kết nối/origin với HTTP/1.1).
   // Cache 30s chung nhóm `tq:col:<userId>:` nên tự xoá ở mọi thao tác đổi bộ sưu tập.
-  app.get('/api/cards/all', { preHandler: auth }, async (req) => {
-    const items = await ctx.cache.readThrough(PREFIX.collection(req.userId, 'cards', 'all'), TTL.collection, () =>
-      listOwnedCards(ctx, req.userId),
+  // `?best=true`: mỗi tướng chỉ trả thẻ cấp cao nhất — màn chọn tướng PvP chỉ cần tới cấp cao nhất
+  // nên payload giảm từ hàng chục nghìn dòng xuống vài trăm (cache khoá riêng `all:best`).
+  app.get('/api/cards/all', { preHandler: auth, schema: { querystring: schemas.cardsAllQuery } }, async (req) => {
+    const { best } = req.query as { best: boolean };
+    const items = await ctx.cache.readThrough(PREFIX.collection(req.userId, 'cards', best ? 'all:best' : 'all'), TTL.collection, () =>
+      listOwnedCards(ctx, req.userId, best),
     );
     return { items };
   });

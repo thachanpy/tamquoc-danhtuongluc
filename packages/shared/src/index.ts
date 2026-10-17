@@ -915,6 +915,12 @@ export const schemas = {
       pageSize: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
     },
   },
+  /** `/api/cards/all`: `best=1` chỉ trả thẻ cấp cao nhất của mỗi tướng (màn chọn tướng PvP). */
+  cardsAllQuery: {
+    type: 'object',
+    additionalProperties: false,
+    properties: { best: { type: 'boolean', default: false } },
+  },
   idParams: {
     type: 'object',
     required: ['id'],
