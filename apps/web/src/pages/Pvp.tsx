@@ -867,6 +867,9 @@ const MAXHP_GAIN_HEAL = 0.25;
 /** Hệ số 100% (bps) — khớp `BPS_SCALE` của server (dùng cho hệ số nhân sát thương sau Hồi sinh). */
 const BPS_SCALE = 10000;
 
+/** Trần cộng dồn "giảm sát thương nhận vào" — khớp `PVP_TAKEN_DOWN_MAX_BPS` của server (60%). */
+const TAKEN_DOWN_MAX_BPS = 6000;
+
 /**
  * Đồng bộ máu theo trần HP mới (khớp `syncMaxHp` của engine): trần TĂNG thì chỉ hồi **1/4 lượng tăng**
  * (buff tăng trần HP không phải đòn hồi máu), trần GIẢM thì kẹp máu hiện tại xuống trần mới.
@@ -892,7 +895,8 @@ function effectChips(s: CV): { icon?: IconId; text: string; tone: 'buff' | 'debu
   const bHp = sum(s.buffs, (b) => b.hpFlat);
   const bCrit = sum(s.buffs, (b) => b.critBps);
   const bCritD = sum(s.buffs, (b) => b.critDamageBps);
-  const bTaken = sum(s.buffs, (b) => b.takenDownBps);
+  // Kẹp trần 60% cho khớp hiệu lực thật của engine (chồng nhiều tướng hỗ trợ không vượt trần).
+  const bTaken = Math.min(TAKEN_DOWN_MAX_BPS, sum(s.buffs, (b) => b.takenDownBps));
   const bLifesteal = sum(s.buffs, (b) => b.lifestealBps);
   if (bDmg > 0) out.push({ icon: 'attack', text: `+${num(bDmg)}`, tone: 'buff' });
   if (bHp > 0) out.push({ icon: 'heart', text: `+${num(bHp)}`, tone: 'buff' });
@@ -1455,8 +1459,8 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         defPenBps: Math.max(0, u.defPenBps + s.buffs.reduce((acc, b) => acc + b.defPenBps, 0) - s.debuffs.reduce((acc, d) => acc + d.defPenDownBps, 0)),
         // Hút máu hiện tại = chỉ số nền + lớp buff (không có debuff giảm hút máu)
         lifestealBps: Math.max(0, u.lifestealBps + s.buffs.reduce((acc, b) => acc + b.lifestealBps, 0)),
-        // Giảm sát thương nhận vào — chỉ đến từ buff trong trận nên nền luôn 0
-        takenDownBps: Math.max(0, s.buffs.reduce((acc, b) => acc + b.takenDownBps, 0)),
+        // Giảm sát thương nhận vào — chỉ đến từ buff trong trận nên nền luôn 0 (kẹp trần như engine)
+        takenDownBps: Math.min(TAKEN_DOWN_MAX_BPS, Math.max(0, s.buffs.reduce((acc, b) => acc + b.takenDownBps, 0))),
         // Chỉ số CƠ BẢN (đã cộng hết buff nền: cùng phe, hàng trước/sau, phong cách — nhưng chưa
         // tính lớp buff/debuff trong trận) theo ĐÚNG thứ tự icon trên ô (INFO_ITEMS của arena.ts)
         // để arena tô màu từng chỉ số. Giảm ST nhận không có chỉ số nền nên mốc so sánh là 0.

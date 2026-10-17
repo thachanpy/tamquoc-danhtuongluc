@@ -63,6 +63,15 @@ function ledgerSum(ctx: GameContext, userId: number): Record<string, number> {
   return out;
 }
 
+/** Số dòng sổ cái ghi cho VÉ HỒI THEO MỐC — luôn 0 vì vé hồi không lưu lịch sử. */
+function recoveryLedgerRows(ctx: GameContext, userId: number): number {
+  return (
+    ctx.db
+      .prepare("SELECT COUNT(*) AS n FROM ticket_transactions WHERE user_id = ? AND reason = 'time_recovery'")
+      .get(userId) as { n: number }
+  ).n;
+}
+
 const errCode = (code: string) => (e: unknown) => e instanceof AppError && e.code === code;
 
 // ================= Database =================
@@ -380,10 +389,8 @@ test('ví dụ đặc tả: xử lý 10:00, offline đến 10:10 => đúng 10 v�
   assert.equal(claimRecovery(h.ctx, userId).grantedTotal, 10);
   assert.equal(claimRecovery(h.ctx, userId).grantedTotal, 0);
   assert.equal(getTickets(h.ctx, userId).total, BONUS + 10);
-  const slots = (h.ctx.db
-    .prepare("SELECT reference_id FROM ticket_transactions WHERE reason = 'time_recovery' ORDER BY id")
-    .all() as { reference_id: string }[]).map((r) => r.reference_id);
-  assert.deepEqual(slots, ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10'].map((m) => `2026-10-14T10:${m}:00.000Z`));
+  // Vé hồi KHÔNG lưu lịch sử: chỉ số dư tăng, sổ cái không có dòng nào.
+  assert.equal(recoveryLedgerRows(h.ctx, userId), 0, 'vé hồi không ghi sổ cái');
 });
 
 test('qua giờ mới / ngày mới / offline dài (30 ngày, nhiều batch): vé hồi lấp đầy tới trần mỗi loại rồi dừng', () => {
@@ -398,7 +405,7 @@ test('qua giờ mới / ngày mới / offline dài (30 ngày, nhiều batch): v�
   assert.equal(r.skippedFull, 43200 - r.grantedTotal); // các mốc còn lại bỏ, không cộng bù
   assert.deepEqual(readBalances(h.ctx.db, userId), { normal: 5000, shu: 2000, wei: 2000, wu: 2000, qun: 2000 });
   assert.deepEqual(r.recoveryCap, RECOVERY_CAP_PER_TYPE);
-  assert.deepEqual(ledgerSum(h.ctx, userId), readBalances(h.ctx.db, userId));
+  assert.equal(recoveryLedgerRows(h.ctx, userId), 0, 'vé hồi không ghi sổ cái dù cấp hàng nghìn vé');
   // Đã xử lý hết các mốc (không xử lý lại khi gọi tiếp)
   assert.equal(claimRecovery(h.ctx, userId).grantedTotal, 0);
 });
@@ -421,23 +428,21 @@ test('trần vé hồi theo loại (thường 5000, phe 2000): chỉ random tron
   assert.equal(r.granted.normal, 0);
   assert.equal(r.grantedTotal, 20);
   assert.equal(readBalances(h.ctx.db, userId).normal, 5010); // giữ nguyên 5010, không bị cắt
-  // Cả 5 loại đầy => mốc không cấp vé, không ghi ledger
+  // Cả 5 loại đầy => mốc không cấp vé, không ghi sổ cái
   for (const t of ['shu', 'wei', 'wu', 'qun'] as const) {
     const cur = readBalances(h.ctx.db, userId)[t];
     applyTicketDelta(h.ctx.db, userId, t, 2000 - cur, 'admin_grant', `admin:test:${t}`, null, nowIso());
   }
-  const before = (h.ctx.db.prepare("SELECT COUNT(*) AS n FROM ticket_transactions WHERE reason='time_recovery'").get() as { n: number }).n;
   h.advance(5 * SLOT);
   const full = claimRecovery(h.ctx, userId);
   assert.equal(full.grantedTotal, 0);
   assert.equal(full.skippedFull, 5);
-  const after = (h.ctx.db.prepare("SELECT COUNT(*) AS n FROM ticket_transactions WHERE reason='time_recovery'").get() as { n: number }).n;
-  assert.equal(after, before);
+  assert.equal(recoveryLedgerRows(h.ctx, userId), 0, 'vé hồi không ghi sổ cái');
   // Dùng bớt 1 Vé Thục => mốc kế tiếp cấp đúng Vé Thục (loại duy nhất còn chỗ)
   applyTicketDelta(h.ctx.db, userId, 'shu', -1, 'gacha_draw', null, null, nowIso());
   h.advance(SLOT);
   assert.deepEqual(claimRecovery(h.ctx, userId).granted, { normal: 0, shu: 1, wei: 0, wu: 0, qun: 0 });
-  assert.deepEqual(ledgerSum(h.ctx, userId), readBalances(h.ctx.db, userId));
+  assert.equal(recoveryLedgerRows(h.ctx, userId), 0, 'vé hồi không ghi sổ cái dù có cấp vé');
 });
 
 test('loại vé roll độc lập theo RNG server cho từng mốc', () => {
@@ -450,15 +455,17 @@ test('loại vé roll độc lập theo RNG server cho từng mốc', () => {
   assert.deepEqual(r.granted, { normal: 1, shu: 1, wei: 1, wu: 1, qun: 1 });
 });
 
-test('unique index chặn cấp trùng mốc kể cả khi state bị lùi', () => {
+test('chống cấp trùng mốc dựa vào tiến trạng thái: gọi lại không cấp thêm, vé hồi không ghi sổ cái', () => {
   const h = makeCtx(Date.UTC(2026, 9, 14, 10, 0, 0));
   const { userId } = register(h.ctx, 'alice', 'secret123');
   h.setNow(Date.UTC(2026, 9, 14, 10, 10, 0));
   syncRecovery(h.ctx, userId);
-  // Giả lập lỗi: lùi state về 10:00 => lần sync tiếp phải lỗi (rollback), không cấp trùng
-  h.ctx.db.prepare("UPDATE ticket_recovery_state SET last_processed_recovery_at = '2026-10-14T10:00:00.000Z'").run();
-  assert.throws(() => syncRecovery(h.ctx, userId));
   assert.equal(getTickets(h.ctx, userId).total, BONUS + 10);
+  assert.equal(getTickets(h.ctx, userId).lastProcessedRecoveryAt, '2026-10-14T10:10:00.000Z');
+  // Trạng thái đã ở mốc mới nhất => gọi lại không cấp mốc nào
+  assert.deepEqual(syncRecovery(h.ctx, userId), { normal: 0, shu: 0, wei: 0, wu: 0, qun: 0 });
+  assert.equal(getTickets(h.ctx, userId).total, BONUS + 10);
+  assert.equal(recoveryLedgerRows(h.ctx, userId), 0, 'vé hồi không ghi sổ cái');
 });
 
 test('batch lỗi giữa chừng: batch đã commit giữ nguyên, lần sau tiếp tục không mất/không trùng', () => {
@@ -477,8 +484,7 @@ test('batch lỗi giữa chừng: batch đã commit giữ nguyên, lần sau ti�
   h.ctx.rand = realRand;
   syncRecovery(h.ctx, userId);
   assert.equal(getTickets(h.ctx, userId).total, BONUS + 1800);
-  const distinct = (h.ctx.db.prepare("SELECT COUNT(DISTINCT reference_id) AS n FROM ticket_transactions WHERE reason='time_recovery'").get() as { n: number }).n;
-  assert.equal(distinct, 1800);
+  assert.equal(recoveryLedgerRows(h.ctx, userId), 0, 'vé hồi không ghi sổ cái');
 });
 
 test('khởi động lại server (mở lại file DB) không mất mốc, không reset dữ liệu', async () => {
@@ -549,7 +555,9 @@ test('quay: tiêu đúng 1 vé, tạo 1 thẻ, ledger khớp; retry cùng key tr
   assert.deepEqual(r2.results, r1.results);
   assert.equal(r2.tickets.balances.normal, before - 1);
   assert.equal(listCards(h.ctx, h.userId, {}).total, 1);
-  assert.deepEqual(ledgerSum(h.ctx, h.userId), readBalances(h.ctx.db, h.userId));
+  // 2 vé hồi (loại thường) không ghi sổ cái => sổ cái thấp hơn số dư đúng 2 ở loại 'normal'
+  const bal = readBalances(h.ctx.db, h.userId);
+  assert.deepEqual(ledgerSum(h.ctx, h.userId), { ...bal, normal: bal.normal - 2 });
   // Cùng key nhưng request khác => từ chối
   assert.throws(() => draw(h.ctx, h.userId, 'shu', 'key-00000001'), errCode('IDEMPOTENCY_KEY_REUSED'));
 });
@@ -1019,15 +1027,16 @@ test('lọc bộ sưu tập theo phe/level/tên không dấu', () => {
   assert.equal(listCards(h.ctx, userId, { q: 'tao thao' }).total, 1);
 });
 
-test('lịch sử gồm vé hồi, vé đã dùng, gacha', () => {
+test('lịch sử gồm vé đã dùng, gacha (vé hồi không còn trong lịch sử)', () => {
   const h = userWithTickets(2, [0, 0]);
   draw(h.ctx, h.userId, 'normal', 'key-00000001');
   const signupRows = (h.ctx.db
     .prepare("SELECT COUNT(*) AS n FROM ticket_transactions WHERE reason = 'signup_bonus'")
     .get() as { n: number }).n;
   const all = listHistory(h.ctx, h.userId, { pageSize: 50 });
-  assert.equal(all.total, signupRows + 4); // quà đăng ký + 2 vé hồi + 1 vé dùng + 1 gacha
+  assert.equal(all.total, signupRows + 2); // quà đăng ký + 1 vé dùng + 1 gacha (2 vé hồi KHÔNG lưu)
   assert.ok(all.items.some((e) => e.kind === 'ticket' && e.reason === 'signup_bonus'))
+  assert.ok(!all.items.some((e) => e.kind === 'ticket' && e.reason === 'time_recovery'));
   assert.equal(listHistory(h.ctx, h.userId, { kind: 'gacha' }).total, 1);
 });
 

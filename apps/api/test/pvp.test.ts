@@ -35,6 +35,7 @@ import {
   PVP_SKILL_BUFF_LIFESTEAL_BPS,
   PVP_TEAM_LIFESTEAL_BPS_PER_LEVEL,
   PVP_SKILL_DEF,
+  PVP_TAKEN_DOWN_MAX_BPS,
   PVP_VS_DEBUFF_BONUS_BPS,
   ROSTER,
   pvpArmorDrBps,
@@ -1372,6 +1373,49 @@ test('engine: BƯỚC 2/3 — Xuyên giáp ăn theo % Giáp địch; Giáp nền
   assert.ok(lu.hit.amount < lu.raw, 'Giáp mặc định phải cản lại một phần sát thương');
   assert.equal(lu.hit.amount, mitigated(lu.raw, pvpArmorDrBps(pvpDefArmor(10))), 'chỉ nhận ~70% sát thương gốc');
   assert.equal(lu.hit.mitigated, lu.raw - lu.hit.amount, 'hiệu số ghi vào sự kiện đúng bằng phần bị Giáp cản lại');
+});
+
+test('engine: "Giảm sát thương nhận vào" bị kẹp trần CỘNG DỒN 60% (PVP_TAKEN_DOWN_MAX_BPS)', () => {
+  // Ba Trấn Cơ (kỹ năng HỒI MÁU, không gây sát thương) cùng ban "Giảm ST nhận 10%" cho toàn đội.
+  // Mỗi nguồn cộng dồn tối đa PVP_BUFF_MAX_LAYERS = 3 lớp → tới vòng 3 mục tiêu gánh 3 × 3 × 10% = 90%
+  // nếu KHÔNG có trần; theo trần mới thì chỉ còn 60%. Lữ Mông đánh đơn để đo sát thương nhận vào.
+  const level = 10;
+  const res = simulatePvp(
+    [
+      one('a', [
+        { slot: 1, generalId: 'zhen-ji', level },
+        { slot: 2, generalId: 'zhen-ji', level },
+        { slot: 3, generalId: 'zhen-ji', level },
+      ]),
+      one('b', [{ slot: 1, generalId: 'lu-meng', level }]),
+    ],
+    never,
+  );
+
+  // Tiền đề: buff "Giảm ST nhận" thực sự chồng VƯỢT trần (nếu không thì test vô nghĩa).
+  const perLayer = skillDef('zhen-ji').buffs[0]!.buff.takenDownBps;
+  const stacks = res.events.filter(
+    (e): e is Extract<PvpEventDto, { t: 'buff' }> => e.t === 'buff' && e.idx === 0 && (e.takenDownBps ?? 0) > 0,
+  );
+  assert.ok(stacks.length * perLayer > PVP_TAKEN_DOWN_MAX_BPS, 'phải chồng đủ lớp buff để vượt trần 60%');
+
+  // Sát thương nhận vào của mục tiêu idx 0 do Lữ Mông (bên B, slot 1 → idx 6) gây ra.
+  const hits = res.events.filter(
+    (e): e is Extract<PvpEventDto, { t: 'damage' }> => e.t === 'damage' && e.from === 6 && e.idx === 0,
+  );
+  assert.ok(hits.length >= 3, 'phải có đòn ở các vòng sau khi buff đã chồng đủ lớp');
+
+  const atk = res.units.find((u) => u.idx === 6)!;
+  const defFinal = defFinalBps(res, 6, 0);
+  const raw = Math.round((atk.damage * skillDef('lu-meng').damageBps) / BPS_SCALE);
+  // Engine áp "giảm ST nhận" TRƯỚC bước Giáp (pvp.engine — đòn đánh chính): Raw × takenMul rồi mới qua Phòng thủ.
+  const afterTaken = (takenDown: number) => Math.round((raw * (BPS_SCALE - takenDown)) / BPS_SCALE);
+  // Đòn nhỏ nhất trong trận = đòn lúc buff đạt trạng thái ổn định (90% → bị kẹp còn 60%).
+  const cappedHit = mitigated(afterTaken(PVP_TAKEN_DOWN_MAX_BPS), defFinal);
+  assert.equal(Math.min(...hits.map((e) => e.amount)), cappedHit, 'sát thương nhận vào chỉ giảm tối đa 60%');
+  // Chứng minh trần thực sự "cắt": nếu không kẹp thì sát thương phải nhỏ hơn hẳn (giảm tới 90%).
+  const uncappedHit = mitigated(afterTaken(9000), defFinal);
+  assert.ok(cappedHit > uncappedHit, 'trần 60% phải chặn phần giảm thừa (không cho giảm tới 90%)');
 });
 
 test('engine: BƯỚC 1 — Trúng/Né theo công thức chia trọng số K = 1.35, kẹp biên [55%, 99%] (mục 18)', () => {

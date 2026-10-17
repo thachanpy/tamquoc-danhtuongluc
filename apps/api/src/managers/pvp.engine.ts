@@ -19,6 +19,7 @@ import {
   PVP_PASSIVE_EFFECT,
   PVP_REVIVE_DAMAGE_DOWN_BPS,
   PVP_SHIELD_BREAK_REMOVE_BPS,
+  PVP_TAKEN_DOWN_MAX_BPS,
   PVP_VS_DEBUFF_MIN_LAYERS,
   isAllyTargeting,
   pvpArmorDrBps,
@@ -622,10 +623,15 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
   const critDamageBpsOf = (u: Unit) =>
     Math.max(0, u.critDamageBps + buffCritDamage(u) - debuffCritDamageDown(u) + dodgeReactCritDamage(u));
   /**
+   * Tổng % sát thương gánh chịu được giảm (buff kỹ năng + aura Ngọc Ngũ Hành hệ Kim), kẹp trần
+   * cộng dồn toàn hệ thống `PVP_TAKEN_DOWN_MAX_BPS` (60%) — chồng nhiều tướng hỗ trợ vẫn không vượt trần.
+   */
+  const takenDownBps = (u: Unit) => Math.min(PVP_TAKEN_DOWN_MAX_BPS, buffTakenDown(u) + u.gemTakenDownBps);
+  /**
    * Hệ số nhân sát thương gánh chịu sau khi trừ lớp buff giảm ST nhận và aura Ngọc Ngũ Hành (Kim).
    * Aura Ngọc là chỉ số nền đầu trận nên KHÔNG thể bị Xóa Buff.
    */
-  const takenMulBps = (u: Unit) => Math.max(0, BPS_SCALE - buffTakenDown(u) - u.gemTakenDownBps);
+  const takenMulBps = (u: Unit) => BPS_SCALE - takenDownBps(u);
   /**
    * Hút máu hiệu dụng = hút máu theo cấp của bản thân + hút máu do kỹ năng hỗ trợ đồng minh ban
    * (kênh buff `lifestealBps`, trần 20% nên `maxLayers: 1`). Tướng hỗ trợ không tự hút máu.

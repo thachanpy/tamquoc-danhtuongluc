@@ -107,11 +107,11 @@ Tướng được gán theo **hướng kỹ năng** (thiên phòng thủ/hồi s
 
 ### Danh mục 20 Hiệu ứng được phép sử dụng
 
-> **Quy tắc cộng dồn chung**: Mọi trần "Max cộng dồn" bên dưới đều tính **theo TỪNG nguồn (từng tướng thi triển)**, KHÔNG có trần toàn hệ thống trên một mục tiêu.
+> **Quy tắc cộng dồn chung**: Mọi trần "Max cộng dồn" bên dưới đều tính **theo TỪNG nguồn (tướng thi triển)**, KHÔNG có trần toàn hệ thống trên một mục tiêu — **trừ hai ngoại lệ ghi rõ**: tổng **Giảm sát thương nhận vào** (mục 2, trần 60%) và tổng **Giảm máu tối đa** (mục 5, trần 30%).
 > **Quy tắc số lượt mặc định**: Hiệu ứng nào **không ghi rõ số lượt** thì mặc định **3 lượt** (buff/debuff/phản kích/khiên). Riêng Thiêu đốt duy trì `4 lượt`.
 
 1. **Buff sát thương**: Tăng % sát thương gây ra (10% – 30%, 3 lượt). **Max cộng dồn: 3 lớp/nguồn**.
-2. **Giảm sát thương**: Giảm % sát thương gánh chịu (10% – 25%) hoặc giảm % sát thương đối thủ gây ra (**10% – 20%**, 3 lượt). **Max cộng dồn: 3 lớp**. Hệ số debuff giảm ST được giữ ở mức cao trong khung để bù cho rủi ro đánh trượt / bị giải hiệu ứng.
+2. **Giảm sát thương**: Giảm % sát thương gánh chịu (10% – 25%) hoặc giảm % sát thương đối thủ gây ra (**10% – 20%**, 3 lượt). **Max cộng dồn: 3 lớp**. Hệ số debuff giảm ST được giữ ở mức cao trong khung để bù cho rủi ro đánh trượt / bị giải hiệu ứng. Riêng **giảm sát thương gánh chịu** (buff kỹ năng + aura Ngọc Ngũ Hành hệ Kim) chịu **trần toàn hệ thống: tổng giảm sát thương nhận vào trên một mục tiêu tối đa 60%** (`PVP_TAKEN_DOWN_MAX_BPS`) — chồng nhiều tướng hỗ trợ không thể thành miễn nhiễm sát thương.
 3. **Hồi máu**: Hồi HP ngay lập tức (hoặc hồi mỗi lượt - HoT) theo % HP tối đa hoặc % ST cơ bản của người thi triển. Hồi máu toàn đội của **Tướng Hỗ trợ** dùng hệ số **120% – 140% ST cơ bản** (tùy tướng). *HoT* hồi vào **ĐẦU mỗi lượt** cho mọi đồng minh còn sống trong phạm vi, lượng hồi snapshot theo ST của người thi triển lúc phát, **không ăn Chí mạng**; mặc định **3 lớp/nguồn** — riêng **Cát Huyền** không cộng dồn lớp (chỉ làm mới).
 4. **Tăng máu tối đa**: Tăng trần HP tối đa (10% – 20%), chỉ hồi 1/4 lượng trần HP tăng lên. **Max cộng dồn: 3 lớp**.
 5. **Giảm máu tối đa**: Giảm trần HP tối đa của đối thủ (5% – 15%, 3 lượt). Chạy qua **bước rollHit tiêu chuẩn** như mọi chiêu khác (vẫn tính Né/Trượt 1% – 15%); trượt thì bỏ qua toàn bộ hiệu ứng. **Max cộng dồn: 3 lớp**, đồng thời chịu **trần toàn hệ thống: tổng giảm Max HP trên một mục tiêu tối đa 30%** (`PVP_MAXHP_DOWN_CAP_BPS`).

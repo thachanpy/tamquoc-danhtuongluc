@@ -19,6 +19,7 @@ import { iso } from '../utils.ts';
 import { DROP } from '../cache.ts';
 import { tx } from '../db.ts';
 import {
+  addTicketBalance,
   applyTicketDelta,
   readBalances,
   emptyBalances,
@@ -78,9 +79,10 @@ export function devTopup(ctx: GameContext, userId: number, idempotencyKey: strin
 /**
  * Xử lý toàn bộ mốc hồi vé chưa xử lý (mục 3.6, 8.2).
  * - Mỗi mốc hồi (RECOVERY_INTERVAL_MS, hiện 1 phút) UTC = đúng 1 vé, loại vé roll độc lập.
- * - Chia batch nội bộ; mỗi batch là 1 transaction: cấp vé + ledger + cập nhật mốc.
+ * - Chia batch nội bộ; mỗi batch là 1 transaction: cấp vé + cập nhật mốc.
  *   Nếu lỗi giữa chừng, các batch đã commit được giữ, lần gọi sau tiếp tục từ mốc đã lưu.
- * - Unique index (user_id, reference_id) cho reason=time_recovery chặn cấp trùng mốc.
+ * - Vé hồi KHÔNG ghi sổ cái/lịch sử (mỗi phút 1 dòng là nhiễu vô ích): chỉ số dư tăng, còn việc
+ *   chống cấp trùng mốc dựa vào `last_processed_recovery_at` cập nhật có điều kiện trong transaction.
  * - Trần RECOVERY_CAP_PER_TYPE theo loại CHỈ cho vé hồi: mỗi mốc random trong các loại còn dưới trần;
  *   cả 5 loại đã đầy thì mốc đó được đánh dấu đã xử lý mà không cấp vé (không cộng bù).
  */
@@ -109,8 +111,7 @@ export function syncRecoveryDetailed(ctx: GameContext, userId: number): { grante
           skippedFull++; // cả 5 loại đã đầy: mốc này không cấp vé
           continue;
         }
-        const slotIso = iso(last + i * RECOVERY_INTERVAL_MS);
-        applyTicketDelta(ctx.db, userId, type, 1, 'time_recovery', slotIso, null, nowIso);
+        addTicketBalance(ctx.db, userId, type, 1, nowIso);
         bal[type]++;
         granted[type]++;
       }
@@ -121,8 +122,6 @@ export function syncRecoveryDetailed(ctx: GameContext, userId: number): { grante
     });
     if (done) break;
   }
-  // Vé hồi ghi thêm dòng sổ cái => lịch sử của người chơi phải đọc lại (cache 30s coi như trượt).
-  if (TICKET_TYPES.some((t) => granted[t] > 0)) ctx.cache.drop([DROP.history(userId)]);
   return { granted, skippedFull };
 }
 

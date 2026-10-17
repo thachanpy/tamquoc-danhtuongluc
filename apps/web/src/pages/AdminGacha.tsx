@@ -1,4 +1,5 @@
 import { For, Match, Show, Switch, createSignal, type JSX } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import {
   GACHA_ADMIN_MAX_LEVEL,
   GEM_ELEMENTS,
@@ -34,7 +35,9 @@ export function GachaRatesPane(props: { alive: () => boolean; ctl: (c: Ctl) => v
   let loaded = false;
   const [listState, setListState] = createSignal<Load>({ kind: 'loading' });
   const [notice, setNotice] = createSignal<Notice>(null);
-  const [draft, setDraft] = createSignal<Draft | null>(null);
+  // Bản nháp đang sửa (`v: null` = chưa tải xong). Dùng STORE (không phải signal) để ghi tại chỗ:
+  // giữ nguyên danh tính từng dòng `<For>` — thay object mới sẽ dựng lại DOM mỗi phím gõ → mất focus.
+  const [draft, setDraft] = createStore<{ v: Draft | null }>({ v: null });
   const [levelScale, setLevelScale] = createSignal(100_000);
   const [bpsScale, setBpsScale] = createSignal(10_000);
   const [updatedAt, setUpdatedAt] = createSignal<string | null>(null);
@@ -43,7 +46,7 @@ export function GachaRatesPane(props: { alive: () => boolean; ctl: (c: Ctl) => v
   const say = (text: string, ok = true) => setNotice(text ? { ok, text } : null);
 
   function apply(dto: GachaRatesAdminDto) {
-    setDraft({
+    setDraft('v', {
       levelRates: dto.levelRates.map((e) => ({ ...e })),
       gemDropBps: dto.gemDropBps,
       gemTypeWeights: { ...dto.gemTypeWeights },
@@ -69,25 +72,31 @@ export function GachaRatesPane(props: { alive: () => boolean; ctl: (c: Ctl) => v
   props.ctl({ ensureLoaded: () => !loaded && void load() });
   void load();
 
-  const levelTotal = () => draft()?.levelRates.reduce((s, e) => s + e.bps, 0) ?? 0;
-  const weightTotal = () => (draft() ? GEM_ELEMENTS.reduce((s, e) => s + (draft()!.gemTypeWeights[e] ?? 0), 0) : 0);
-  const valid = () => !!draft() && levelTotal() === levelScale() && weightTotal() === bpsScale();
+  const levelTotal = () => draft.v?.levelRates.reduce((s, e) => s + e.bps, 0) ?? 0;
+  const weightTotal = () => {
+    const d = draft.v;
+    return d ? GEM_ELEMENTS.reduce((s, e) => s + (d.gemTypeWeights[e] ?? 0), 0) : 0;
+  };
+  const valid = () => !!draft.v && levelTotal() === levelScale() && weightTotal() === bpsScale();
 
+  /** Ghi tại chỗ theo `level` (giữ danh tính dòng) để `<For>` không dựng lại DOM khi đang gõ. */
   function setLevel(level: number, bps: number) {
-    setDraft((d) => (d ? { ...d, levelRates: d.levelRates.map((e) => (e.level === level ? { ...e, bps } : e)) } : d));
+    const i = draft.v?.levelRates.findIndex((e) => e.level === level) ?? -1;
+    if (i < 0) return;
+    setDraft('v', 'levelRates', i, 'bps', bps);
     setDirty(true);
   }
   function setWeight(element: GemElement, value: number) {
-    setDraft((d) => (d ? { ...d, gemTypeWeights: { ...d.gemTypeWeights, [element]: value } } : d));
+    setDraft('v', 'gemTypeWeights', element, value);
     setDirty(true);
   }
   function setDrop(value: number) {
-    setDraft((d) => (d ? { ...d, gemDropBps: value } : d));
+    setDraft('v', 'gemDropBps', value);
     setDirty(true);
   }
 
   async function save() {
-    const d = draft();
+    const d = draft.v;
     if (!d || saving()) return;
     if (!valid()) return say('Tổng mỗi bảng tỉ lệ phải bằng 100% mới lưu được.', false);
     setSaving(true);
@@ -123,7 +132,7 @@ export function GachaRatesPane(props: { alive: () => boolean; ctl: (c: Ctl) => v
         <Match when={listState().kind === 'error'}>
           <div class="state-msg error">{(listState() as { text: string }).text}</div>
         </Match>
-        <Match when={draft()}>
+        <Match when={draft.v}>
           {(d) => (
             <>
               <h3>Tỉ lệ cấp tướng khi quay</h3>

@@ -164,7 +164,7 @@ apps/web               Vite + SolidJS: quay thẻ, bộ sưu tập, nâng cấp,
 
 - **Server quyết định mọi thứ**: RNG (`crypto.randomInt`), số vé, loại vé, tướng, level, kết quả ghép.
 - **Hồi vé** theo mốc 1 phút UTC (`RECOVERY_INTERVAL_MS`, 1440 vé/ngày); offline vẫn tích lũy đủ; xử lý theo batch, mỗi batch 1 transaction;
-  unique index `(user_id, reference_id)` cho `time_recovery` chặn cấp trùng mốc. Vé hồi dừng ở trần: Vé thường 5000,
+  vé hồi chỉ tăng số dư, KHÔNG ghi sổ cái/lịch sử (chống cấp trùng mốc dựa vào `last_processed_recovery_at` cập nhật có điều kiện). Vé hồi dừng ở trần: Vé thường 5000,
   mỗi vé phe 2000 (`RECOVERY_CAP_PER_TYPE`); nguồn khác (nhiệm vụ, giftcode, admin…) vẫn cộng vượt trần.
 - **Gacha / nâng cấp** chạy trong `BEGIN IMMEDIATE` transaction, có idempotency key gắn với người dùng + thao tác.
   Retry trả lại kết quả cũ; dùng cùng key cho yêu cầu khác → 409.

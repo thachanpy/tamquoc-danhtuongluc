@@ -694,6 +694,13 @@ export const PVP_DEF_PEN_BPS = 0;
 /** Trần Xuyên giáp: 50%. */
 export const PVP_DEF_PEN_MAX_BPS = 5000;
 
+/**
+ * Trần CỘNG DỒN giảm sát thương nhận vào trên một mục tiêu: mọi nguồn (nhiều lớp buff kỹ năng của
+ * nhiều tướng hỗ trợ + aura Ngọc Ngũ Hành hệ Kim) cộng lại tối đa **60%** — khác quy tắc "không trần
+ * toàn hệ thống" của các buff khác, để nhiều tướng hỗ trợ chồng nhau không thành miễn nhiễm sát thương.
+ */
+export const PVP_TAKEN_DOWN_MAX_BPS = 6000;
+
 /** Chính xác của một tướng ở cấp hiện tại: 80% (cấp 1) → 100% (cấp 10). */
 export const pvpHitBps = (level: number) => pvpLevelSpanBps(PVP_HIT_BPS_MIN, PVP_HIT_BPS, level);
 /** Né tránh của một tướng ở cấp hiện tại: 2% (cấp 1) → 20% (cấp 10). */

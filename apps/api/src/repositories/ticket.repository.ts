@@ -28,19 +28,10 @@ export function readBalances(db: DB, userId: number): TicketBalances {
 }
 
 /**
- * Thay đổi số dư 1 loại vé + ghi ledger. PHẢI gọi bên trong transaction.
- * Chống số âm và overflow. Trả về id dòng ledger.
+ * Thay đổi số dư 1 loại vé, KHÔNG ghi sổ cái. PHẢI gọi bên trong transaction.
+ * Chống số âm và overflow. Dành cho vé HỒI THEO MỐC: mỗi phút 1 vé nên không lưu lịch sử.
  */
-export function applyTicketDelta(
-  db: DB,
-  userId: number,
-  ticketType: TicketType,
-  delta: number,
-  reason: TicketReason,
-  referenceId: string | null,
-  idempotencyKey: string | null,
-  nowIso: string,
-): number {
+export function addTicketBalance(db: DB, userId: number, ticketType: TicketType, delta: number, nowIso: string): void {
   if (!Number.isSafeInteger(delta) || delta === 0) throw new AppError(500, 'INVALID_DELTA', 'Delta vé không hợp lệ.');
   const row = db.prepare('SELECT balance FROM user_tickets WHERE user_id = ? AND ticket_type = ?').get(userId, ticketType) as
     | { balance: number }
@@ -53,6 +44,23 @@ export function applyTicketDelta(
     .prepare('UPDATE user_tickets SET balance = ?, updated_at = ? WHERE user_id = ? AND ticket_type = ? AND balance = ?')
     .run(next, nowIso, userId, ticketType, row.balance);
   if (upd.changes !== 1) throw new AppError(409, 'CONCURRENT_UPDATE', 'Số dư vé vừa thay đổi, hãy thử lại.');
+}
+
+/**
+ * Thay đổi số dư 1 loại vé + ghi ledger (lịch sử). PHẢI gọi bên trong transaction.
+ * Trả về id dòng ledger.
+ */
+export function applyTicketDelta(
+  db: DB,
+  userId: number,
+  ticketType: TicketType,
+  delta: number,
+  reason: TicketReason,
+  referenceId: string | null,
+  idempotencyKey: string | null,
+  nowIso: string,
+): number {
+  addTicketBalance(db, userId, ticketType, delta, nowIso);
   const ins = db
     .prepare(
       `INSERT INTO ticket_transactions (user_id, ticket_type, amount_delta, reason, reference_id, idempotency_key, created_at)
