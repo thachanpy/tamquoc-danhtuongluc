@@ -8,26 +8,32 @@ import { castKindOf, spawnSkillFx, type Fx, type FxKind } from './skillsfx.ts';
  * Sân đấu PvP vẽ bằng PixiJS (mục 6.7).
  * Canvas chỉ HIỂN THỊ lại dữ liệu server đã mô phỏng sẵn: mỗi sự kiện phát lại trong
  * `BattleReplay` được đẩy sang đây qua `sync()` / `float()`, không tính toán gì thêm.
- * Bố cục: bên mình nửa trái, đối thủ nửa phải, ngăn giữa bằng dải phân cách; mỗi bên 2 cột
- * (hàng sau ở ngoài, hàng trước sát vạch giữa) × 3 hàng, khớp đúng sơ đồ 6 ô của engine.
+ * Bố cục NGANG (màn rộng): bên mình nửa trái, đối thủ nửa phải, ngăn giữa bằng dải phân cách;
+ * mỗi bên 2 cột (hàng sau ở ngoài, hàng trước sát vạch giữa) × 3 hàng. Bố cục DỌC (màn hẹp):
+ * mỗi bên 3 cột × 2 hàng, hai đội xếp trên/dưới vạch ngang — khung chỉ rộng đúng 3 ô nên ô tướng
+ * to hơn hẳn khi xem trên mobile. Cả hai đều khớp sơ đồ 6 ô của engine (hàng trước sát vạch giữa).
  */
 
-const W = 900;
+/** Bố cục sân đấu (xem docblock đầu tệp): `landscape` cho màn rộng, `portrait` cho màn hẹp. */
+export type ArenaLayout = 'landscape' | 'portrait';
+
+/** Bề rộng khung vẽ bố cục NGANG: 2 đội × 2 cột ô. */
+const LAND_W = 900;
 /**
- * Chiều cao sân: 3 hàng ô + khoảng cách, cộng lề trên `ROW_Y0` (chừa chỗ cho nhãn tên chiêu của
- * hàng đầu) và 7px lề đáy — canh sao cho canvas giữ tỉ lệ 900:560 khi lấp hết bề ngang khung.
+ * Chiều cao khung vẽ bố cục NGANG: 3 hàng ô + khoảng cách, cộng lề trên `ROW_Y0` (chừa chỗ cho nhãn
+ * tên chiêu của hàng đầu) và 7px lề đáy — canh sao cho canvas giữ tỉ lệ 900:560 khi lấp hết bề ngang.
  */
-const H = 560;
+const LAND_H = 560;
 /** Bề rộng dải phân cách giữa hai đội. */
 const DIV_W = 28;
 const SIDE_GAP = 10;
-const SIDE_W = (W - DIV_W) / 2 - SIDE_GAP;
+const SIDE_W = (LAND_W - DIV_W) / 2 - SIDE_GAP;
 const PAD = 6;
 const COL_GAP = 14;
 const COL_W = (SIDE_W - PAD * 2 - COL_GAP) / 2;
 /**
  * Ô tướng cao rộng rãi (164px) để chân dung, thanh máu, số máu và BA hàng chỉ số không còn
- * chen chúc; 3 hàng ô cộng khoảng cách vẫn nằm gọn trong chiều cao sân `H`.
+ * chen chúc; 3 hàng ô cộng khoảng cách vẫn nằm gọn trong chiều cao khung vẽ bố cục ngang.
  */
 const TILE_H = 164;
 /** Khoảng cách DỌC giữa hai ô liền kề trong cùng một cột (ô 1–2, 2–3) — lấy ĐÚNG bằng khoảng cách
@@ -38,6 +44,20 @@ const ROW_GAP = COL_GAP;
  * (đúng `topY - 8` như mọi hàng khác) mà không bị kẹp xuống đè lên chân dung.
  */
 const ROW_Y0 = 33;
+
+const PORT_COLS = 3;
+/** Khoảng hở giữa hai đội ở bố cục dọc — đủ chỗ cho vạch ngang và pill "VS" ở giữa. */
+const PORT_DIV_GAP = 30;
+/** Bố cục DỌC: khung rộng ĐÚNG 3 ô (không còn lề thừa hai bên) nên ô tướng phóng to hơn hẳn. */
+const PORT_W = PORT_COLS * COL_W + (PORT_COLS - 1) * COL_GAP + PAD * 2;
+/** 4 hàng ô (2 hàng mỗi đội) + khoảng hở vạch ngang + lề trên/dưới. */
+const PORT_H = ROW_Y0 + 4 * TILE_H + 3 * ROW_GAP + PORT_DIV_GAP + 7;
+
+/** Kích thước khung vẽ theo từng bố cục. */
+const ARENA_SIZE: Record<ArenaLayout, { w: number; h: number }> = {
+  landscape: { w: LAND_W, h: LAND_H },
+  portrait: { w: PORT_W, h: PORT_H },
+};
 /** Vòng chân dung trong ô (56px, khớp ô tướng ở trang chuẩn bị chiến). */
 const ART_R = 28;
 const ART_CY = 14 + ART_R;
@@ -250,7 +270,7 @@ export interface ArenaHandle {
 }
 
 const colXLeft = (col: number) => PAD + col * (COL_W + COL_GAP);
-const colXRight = (col: number) => W - SIDE_W + colXLeft(col);
+const colXRight = (col: number) => LAND_W - SIDE_W + colXLeft(col);
 
 /** Băm artKey thành số dương ổn định — làm "sắc thái riêng" cho hiệu ứng kỹ năng của từng tướng (FNV-1a). */
 function seedOf(s: string): number {
@@ -262,12 +282,25 @@ function seedOf(s: string): number {
   return h >>> 0;
 }
 
-/** Toạ độ ô tướng: bên mình ở nửa trái, hàng trước luôn sát vạch giữa. */
-function tilePos(side: PvpSide, slot: number, mySide: PvpSide) {
+/**
+ * Toạ độ ô tướng theo bố cục.
+ * - `landscape`: bên mình ở nửa trái, hàng trước (slot 1–3) luôn sát vạch giữa; slot 4–6 ra ngoài.
+ * - `portrait`: mỗi đội là 3 cột (slot 1–3 / 4–6 theo thứ tự trái→phải) × 2 hàng; đội mình ở TRÊN,
+ *   hàng trước sát vạch giữa — khớp sơ đồ `4 5 6 / 1 2 3 — VS — 1 2 3 / 4 5 6`.
+ */
+function tilePos(side: PvpSide, slot: number, mySide: PvpSide, layout: ArenaLayout) {
   const mine = side === mySide;
-  const col = mine === (slot <= 3) ? 1 : 0;
-  const row = (slot - 1) % 3;
-  return { x: mine ? colXLeft(col) : colXRight(col), y: ROW_Y0 + row * (TILE_H + ROW_GAP) };
+  const idx = (slot - 1) % 3;
+  if (layout === 'landscape') {
+    const col = mine === (slot <= 3) ? 1 : 0;
+    return { x: mine ? colXLeft(col) : colXRight(col), y: ROW_Y0 + idx * (TILE_H + ROW_GAP) };
+  }
+  const front = slot <= 3;
+  const row = mine ? (front ? 1 : 0) : front ? 2 : 3;
+  return {
+    x: PAD + idx * (COL_W + COL_GAP),
+    y: ROW_Y0 + row * (TILE_H + ROW_GAP) + (row >= 2 ? PORT_DIV_GAP : 0),
+  };
 }
 
 /** Bảng chân dung đã nạp (Assets tự cache theo URL nên mở nhiều trận vẫn dùng chung). */
@@ -305,12 +338,12 @@ class FloatFx {
   private readonly climb: number;
   private t = 0;
 
-  constructor(parent: Container, x: number, y: number, parts: FloatPart[], crit: boolean, heal: boolean, reduce: boolean) {
+  constructor(parent: Container, w: number, x: number, y: number, parts: FloatPart[], crit: boolean, heal: boolean, reduce: boolean) {
     this.crit = crit;
     this.reduce = reduce;
     this.y0 = y;
     this.ms = reduce ? 500 : crit ? 1050 : 950;
-    const size = crit ? 54 : 36;
+    const size = crit ? 74 : 36;
     const fill = crit ? C.crit : heal ? C.heal : C.dmg;
     // Mỗi mảnh là một dòng chữ; mảnh có icon thì icon đứng ngay trước số (cùng cỡ, cùng màu).
     const texts = parts.map((p) => {
@@ -343,7 +376,7 @@ class FloatFx {
     // Kẹp NGANG: canh giữa quanh ô tướng nhưng không cho số tràn ra ngoài khung sân
     // (cỡ chữ lớn + tên dài như "HỒI SINH +5000" rất dễ vượt mép trái/phải).
     const halfW = total / 2;
-    const cx = total + FLOAT_PAD * 2 <= W ? Math.min(Math.max(x, halfW + FLOAT_PAD), W - halfW - FLOAT_PAD) : W / 2;
+    const cx = total + FLOAT_PAD * 2 <= w ? Math.min(Math.max(x, halfW + FLOAT_PAD), w - halfW - FLOAT_PAD) : w / 2;
     this.c.position.set(cx, y);
     parent.addChild(this.c);
   }
@@ -403,11 +436,11 @@ class Tile {
   private shieldShown = 0;
   private shieldTarget = 0;
 
-  constructor(u: ArenaUnit, mySide: PvpSide) {
+  constructor(u: ArenaUnit, mySide: PvpSide, layout: ArenaLayout) {
     this.u = u;
     const mine = u.side === mySide;
     this.mine = mine;
-    const { x, y } = tilePos(u.side, u.slot, mySide);
+    const { x, y } = tilePos(u.side, u.slot, mySide, layout);
     this.baseY = y;
     this.root.position.set(x, y);
 
@@ -865,6 +898,11 @@ class Arena implements ArenaHandle {
   private readonly reduce = prefersReducedMotion();
   private readonly units: ArenaUnit[];
   private readonly mySide: PvpSide;
+  /** Bố cục sân (ngang/dọc) — chọn theo bề rộng khung lúc dựng sân. */
+  private readonly layout: ArenaLayout;
+  /** Kích thước khung vẽ của bố cục đang dùng (dùng để kẹp số bay, dò toạ độ chuột, vẽ vạch giữa). */
+  private readonly W: number;
+  private readonly H: number;
   /** Mô tả hiệu ứng đang có của từng tướng — ghép vào chú thích khi rê chuột lên ô. */
   private readonly fxInfo = new Map<number, string>();
   /**
@@ -892,34 +930,39 @@ class Arena implements ArenaHandle {
   private time = 0;
   private dead = false;
 
-  constructor(units: ArenaUnit[], mySide: PvpSide) {
+  constructor(units: ArenaUnit[], mySide: PvpSide, layout: ArenaLayout) {
     this.units = units;
     this.mySide = mySide;
+    this.layout = layout;
+    const { w, h } = ARENA_SIZE[layout];
+    this.W = w;
+    this.H = h;
   }
 
   async init(host: HTMLElement): Promise<void> {
     await this.app.init({
-      width: W,
-      height: H,
+      width: this.W,
+      height: this.H,
       backgroundAlpha: 0,
       antialias: true,
       resolution: Math.min(window.devicePixelRatio || 1, 2),
       autoDensity: true,
     });
-    this.app.canvas.style.width = '100%';
+    // Kích thước do CSS quyết định (`.rp-canvas canvas`): co VỪA KHUNG theo cả bề ngang lẫn chiều cao
+    // mà vẫn giữ tỉ lệ 900:560 — nên ép về `auto` để `max-width/max-height: 100%` phát huy tác dụng.
+    this.app.canvas.style.width = 'auto';
     this.app.canvas.style.height = 'auto';
     this.app.stage.addChild(this.root);
-    host.style.aspectRatio = `${W} / ${H}`;
     host.appendChild(this.app.canvas);
     // Canvas tự vẽ nên phải tự dò toạ độ: rê chuột lên ô tướng => hiện chú thích chỉ số đầy đủ.
     const canvas = this.app.canvas;
     canvas.addEventListener('pointermove', (e) => {
       const r = canvas.getBoundingClientRect();
-      const x = ((e.clientX - r.left) * W) / r.width;
-      const y = ((e.clientY - r.top) * H) / r.height;
+      const x = ((e.clientX - r.left) * this.W) / r.width;
+      const y = ((e.clientY - r.top) * this.H) / r.height;
       let title = '';
       for (const u of this.units) {
-        const p = tilePos(u.side, u.slot, this.mySide);
+        const p = tilePos(u.side, u.slot, this.mySide, this.layout);
         if (x >= p.x && x <= p.x + COL_W && y >= p.y && y <= p.y + TILE_H) {
           title = [u.info ?? '', this.fxInfo.get(u.idx) ?? ''].filter(Boolean).join('\n');
           break;
@@ -929,7 +972,7 @@ class Arena implements ArenaHandle {
     });
     this.drawChrome();
     for (const u of this.units) {
-      const t = new Tile(u, this.mySide);
+      const t = new Tile(u, this.mySide, this.layout);
       this.tiles.set(u.idx, t);
       this.root.addChild(t.root);
     }
@@ -952,13 +995,26 @@ class Arena implements ArenaHandle {
 
   /** Vạch phân cách giữa hai đội (tên đội đã có ở header nên sân đấu không lặp lại). */
   private drawChrome(): void {
-    const mid = W / 2;
-    const line = new Graphics().roundRect(mid - 1, 8, 2, H - 16, 1).fill({ color: C.gold, alpha: 0.35 });
-    const pill = new Graphics().roundRect(mid - 15, H / 2 - 11, 30, 22, 11).fill({ color: C.panel });
-    pill.stroke({ width: 1, color: C.gold, alpha: 0.45 });
+    const line = new Graphics();
     const vs = new Text({ text: 'VS', style: { fontFamily: NUM_FONT, fontSize: 11, fontWeight: '800', fill: C.gold2 } });
     vs.anchor.set(0.5);
-    vs.position.set(mid, H / 2);
+    let px: number;
+    let py: number;
+    if (this.layout === 'portrait') {
+      // Bố cục dọc: vạch NGANG nằm đúng giữa hai hàng trước (đội mình ở trên, đội địch ở dưới)
+      const top = ROW_Y0 + 2 * TILE_H + ROW_GAP;
+      const bottom = ROW_Y0 + 2 * (TILE_H + ROW_GAP) + PORT_DIV_GAP;
+      px = this.W / 2;
+      py = (top + bottom) / 2;
+      line.roundRect(8, py - 1, this.W - 16, 2, 1).fill({ color: C.gold, alpha: 0.35 });
+    } else {
+      px = this.W / 2;
+      py = this.H / 2;
+      line.roundRect(px - 1, 8, 2, this.H - 16, 1).fill({ color: C.gold, alpha: 0.35 });
+    }
+    const pill = new Graphics().roundRect(px - 15, py - 11, 30, 22, 11).fill({ color: C.panel });
+    pill.stroke({ width: 1, color: C.gold, alpha: 0.45 });
+    vs.position.set(px, py);
     this.root.addChild(line, pill, vs);
   }
 
@@ -1000,11 +1056,11 @@ class Arena implements ArenaHandle {
         .stroke({ width: 2, color: C.gold2, alpha: 0.95 });
     }
     // Ghim trong sân: tên chiêu dài không được tràn ra ngoài khung canvas
-    const x = Math.min(Math.max(tile.centerX, this.skillW / 2 + 4), W - this.skillW / 2 - 4);
+    const x = Math.min(Math.max(tile.centerX, this.skillW / 2 + 4), this.W - this.skillW / 2 - 4);
     // Nhãn luôn nằm NGAY TRÊN ô tướng (`topY - 8`) cho mọi slot, kể cả hàng đầu (1/4) nhờ lề trên
     // `ROW_Y0` đã chừa sẵn chỗ; hai đầu kẹp chỉ còn là chốt an toàn khi tên chiêu quá dài.
     const halfH = (this.skillH / 2 + 6) * 1.14;
-    const y = Math.min(Math.max(tile.topY - 8, halfH), H - halfH);
+    const y = Math.min(Math.max(tile.topY - 8, halfH), this.H - halfH);
     this.skillC.visible = true;
     this.skillC.position.set(x, y);
   }
@@ -1013,7 +1069,7 @@ class Arena implements ArenaHandle {
     if (this.dead) return;
     const t = this.tiles.get(idx);
     if (!t) return;
-    this.fx.push(new FloatFx(this.fxLayer, t.centerX, t.topY + 34, parts, crit, heal, this.reduce));
+    this.fx.push(new FloatFx(this.fxLayer, this.W, t.centerX, t.topY + 34, parts, crit, heal, this.reduce));
   }
 
   /** Hiệu ứng niệm chiêu ở người thi triển (kiểu theo nhóm kỹ năng; màu + sắc thái theo tướng). */
@@ -1087,9 +1143,17 @@ class Arena implements ArenaHandle {
   }
 }
 
+/** Bố cục phù hợp cho khung rộng `px`: khung hẹp (mobile) dùng sân DỌC để ô tướng phóng to hơn hẳn. */
+export const arenaLayoutFor = (px: number): ArenaLayout => (px <= 640 ? 'portrait' : 'landscape');
+
 /** Tạo sân đấu PixiJS trong `host`. Trả về handle để đẩy trạng thái/hiệu ứng và dọn khi đóng. */
-export async function createArena(host: HTMLElement, units: ArenaUnit[], mySide: PvpSide): Promise<ArenaHandle> {
-  const arena = new Arena(units, mySide);
+export async function createArena(
+  host: HTMLElement,
+  units: ArenaUnit[],
+  mySide: PvpSide,
+  layout: ArenaLayout = 'landscape',
+): Promise<ArenaHandle> {
+  const arena = new Arena(units, mySide, layout);
   await arena.init(host);
   return arena;
 }

@@ -167,10 +167,11 @@ button.chip { cursor: pointer; margin: 4px 4px 0 0; }
 .run-cards { display: flex; flex-wrap: wrap; gap: 14px 12px; padding: 8px 6px 10px; }
 /* Khung Lv.6+ tràn rộng hơn: nới ô chứa để khung không đè thẻ bên cạnh */
 .run-cards .pick:has(.tq-card.tier-6, .tq-card.tier-7, .tq-card.tier-8, .tq-card.tier-9, .tq-card.tier-10) { margin: 0 14px; }
-/* Căn giữa thẻ trong ô; mọi ô cùng hàng cao bằng nhau => thân thẻ các cấp thẳng hàng.
+/* Canh TRÁI thẻ trong ô (không canh giữa) để dòng cuối khi thẻ xuống hàng không bị lệch vào giữa;
+   vẫn canh giữa theo chiều DỌC (align-items) nên mọi ô cùng hàng cao bằng nhau => thân thẻ các cấp thẳng hàng.
    Nhóm tướng có thẻ Lv.6+ thì mọi ô trong nhóm cùng nới đệm (giữ thẳng hàng, khung không đè nhãn). */
 .lv-run { display: flex; flex-direction: column; }
-.run-cards { flex: 1; align-items: center; justify-content: center; }
+.run-cards { flex: 1; align-items: center; justify-content: flex-start; }
 .gen-runs:has(.tq-card.tier-6, .tq-card.tier-7, .tq-card.tier-8, .tq-card.tier-9, .tq-card.tier-10) .run-cards { padding: 18px 12px 16px; }
 .run-cards .pick { width: 104px; }
 @media (max-width: 640px) { .run-cards .pick { width: 92px; } }

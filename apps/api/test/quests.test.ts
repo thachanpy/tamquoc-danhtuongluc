@@ -57,6 +57,29 @@ function addBattle(ctx: GameContext, attackerId: number, defenderId: number, win
     .run(attackerId, defenderId, winner, 3, 100, 100, '{}', new Date(at).toISOString());
 }
 
+/** Tạo 1 viên Ngọc "rớt kèm" (không phải kết quả ghép) — tính vào "Ngọc nhận được". */
+function addGem(ctx: GameContext, userId: number, element: string, level: number, at: number): number {
+  const t = new Date(at).toISOString();
+  return Number(
+    ctx.db
+      .prepare(`INSERT INTO user_gems (user_id, element, level, status, created_at, updated_at) VALUES (?,?,?, 'active', ?, ?)`)
+      .run(userId, element, level, t, t).lastInsertRowid,
+  );
+}
+
+/** Ghi 1 lần ghép Ngọc: tạo viên kết quả (được đánh dấu là kết quả ghép nên KHÔNG tính "Ngọc nhận"). */
+function addGemMerge(ctx: GameContext, userId: number, element: string, inputLevel: number, outcome: 'success' | 'failure', at: number) {
+  const resultLevel = outcome === 'success' ? inputLevel + 1 : inputLevel;
+  const resultId = addGem(ctx, userId, element, resultLevel, at);
+  ctx.db
+    .prepare(
+      `INSERT INTO gem_merge_history (user_id, input_gem_ids_snapshot, element, input_level, result_gem_id, result_level,
+         success_chance, failure_chance, outcome, failure_distribution_snapshot, idempotency_key, created_at)
+       VALUES (?, '[]', ?, ?, ?, ?, 9000, 1000, ?, '[]', ?, ?)`,
+    )
+    .run(userId, element, inputLevel, resultId, resultLevel, outcome, `gm-${++refSeq}`, new Date(at).toISOString());
+}
+
 const ledger = (ctx: GameContext, userId: number, reason: string) =>
   (ctx.db.prepare('SELECT COALESCE(SUM(amount_delta),0) AS s FROM ticket_transactions WHERE user_id = ? AND reason = ?').get(userId, reason) as {
     s: number;
@@ -74,6 +97,7 @@ test('quests: ngày game reset lúc 05:00 giờ Việt Nam; ngày dương lịch
   assert.equal(DAILY_MAX.general, 52);
   assert.equal(DAILY_MAX.perFaction, 14);
   assert.equal(DAILY_MAX.pvp, 88);
+  assert.equal(DAILY_MAX.gem, 60);
   assert.equal(RESET, 25);
 });
 
@@ -296,3 +320,75 @@ test('quests: điểm danh theo ngày trong tháng; sang tháng mới tự nhậ
   assert.equal(q.login.days[1]!.reward, 11);
   assert.equal(q.login.days[1]!.status, 'claimable');
 });
+
+test('quests: nhiệm vụ Ngọc — nhận Ngọc rớt kèm và ghép Ngọc; thưởng vé thường', () => {
+  const { ctx } = makeCtx();
+  const u = newUser(ctx, 'gemquest');
+  touchDaily(ctx, u);
+  // 10 viên Ngọc rớt kèm: đạt "Thu nhận Ngọc" (3) và "Tích lũy Ngọc" (10)
+  for (let i = 0; i < 10; i++) addGem(ctx, u, 'kim', 1, ctx.now() + i);
+  // 3 lần ghép: 2 thành công, 1 thất bại (Ngọc tạo ra khi ghép KHÔNG tính "nhận Ngọc")
+  addGemMerge(ctx, u, 'kim', 1, 'success', ctx.now() + 100);
+  addGemMerge(ctx, u, 'kim', 2, 'success', ctx.now() + 200);
+  addGemMerge(ctx, u, 'moc', 1, 'failure', ctx.now() + 300);
+  const q = getQuests(ctx, u);
+  const st = (id: string) => q.gem.find((d) => d.key.endsWith(`:${id}`))!;
+  assert.equal(st('gem3').status, 'claimable');
+  assert.equal(st('gem10').status, 'claimable');
+  assert.equal(st('gemmerge3').status, 'claimable');
+  assert.equal(st('gemmerge10').progress, 3);
+  assert.equal(st('gemmerge10').status, 'progress');
+  assert.equal(st('gemsucc2').status, 'claimable');
+  assert.equal(st('gemsucc5').progress, 2);
+  assert.equal(st('gemsucc5').status, 'progress');
+  const before = readBalances(ctx.db, u).normal;
+  claimQuests(ctx, u, [st('gem3').key, st('gem10').key, st('gemmerge3').key, st('gemsucc2').key]);
+  assert.equal(readBalances(ctx.db, u).normal - before, 6 + 12 + 6 + 8);
+  assert.equal(ledger(ctx, u, 'mission'), 32);
+});
+
+test('quests: nhiệm vụ Ngọc đạt mà chưa nhận được tự nhận khi sang ngày mới', () => {
+  const { ctx, advance } = makeCtx();
+  const u = newUser(ctx, 'gemday');
+  touchDaily(ctx, u);
+  for (let i = 0; i < 3; i++) addGem(ctx, u, 'thuy', 1, ctx.now() + i);
+  const day1 = getQuests(ctx, u).gameDay;
+  advance(DAY);
+  const ev = touchDaily(ctx, u)!;
+  assert.ok(ev.autoClaimed.some((a) => a.key === `g:${day1}:gem3` && a.count === 6));
+});
+
+test('quests: thành tựu Ngọc — nhận, ghép, ghép thành công, sở hữu, cấp theo Ngũ Hành', () => {
+  const { ctx } = makeCtx();
+  const u = newUser(ctx, 'gemach');
+  // 5 viên Ngọc kim Lv.1 rớt kèm
+  for (let i = 0; i < 5; i++) addGem(ctx, u, 'kim', 1, ctx.now() + i);
+  // 3 lần ghép: 2 thành công (ra Lv.2) + 1 thất bại (ra Lv.1)
+  addGemMerge(ctx, u, 'kim', 1, 'success', ctx.now() + 100);
+  addGemMerge(ctx, u, 'kim', 1, 'success', ctx.now() + 200);
+  addGemMerge(ctx, u, 'kim', 1, 'failure', ctx.now() + 300);
+  const q = getQuests(ctx, u);
+  const g = (id: string) => q.achievements.find((a) => a.id === id)!;
+  // Kho đang sở hữu: 6 viên Lv.1 (5 rớt + 1 thất bại) + 2 viên Lv.2 (2 thành công)
+  assert.equal(g('gem-received').progress, 5);
+  assert.deepEqual(g('gem-received').items.filter((i) => i.status === 'claimable').map((i) => i.target), [5]);
+  assert.equal(g('gem-merge').progress, 3);
+  assert.equal(g('gem-merge-success').progress, 2);
+  assert.equal(g('gem-own').progress, 8);
+  assert.equal(g('gem-elem-kim').progress, 2);
+  assert.equal(g('gem-ownlv-1').progress, 6);
+  assert.equal(g('gem-ownlv-2').progress, 2);
+  const gemGroups = q.achievements.filter((a) => a.id.startsWith('gem-'));
+  const claimable = gemGroups.flatMap((a) => a.items).filter((i) => i.status === 'claimable');
+  // Không mốc nào ngoài nhóm Ngọc được nhận
+  assert.deepEqual(
+    q.achievements.filter((a) => !a.id.startsWith('gem-')).flatMap((a) => a.items.filter((i) => i.status === 'claimable')),
+    [],
+  );
+  const expected = claimable.reduce((s, i) => s + i.reward.count, 0);
+  claimQuests(ctx, u, claimable.map((i) => i.key));
+  assert.equal(ledger(ctx, u, 'achievement'), expected);
+  // Nhận lại không cộng thêm
+  assert.throws(() => claimQuests(ctx, u, claimable.map((i) => i.key)), (e: AppError) => e.code === 'NOTHING_TO_CLAIM');
+});
+

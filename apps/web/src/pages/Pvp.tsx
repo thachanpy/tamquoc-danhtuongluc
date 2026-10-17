@@ -31,7 +31,7 @@ import { StatIcon } from '../components/StatIcon.tsx';
 import { FACTION_STYLE, STYLE_COLOR, gemUrl, initials, levelTier, pct, portraitUrl } from '../art.ts';
 import { preBattleNote } from '../combat-notes.ts';
 import type { IconId } from '../icons.ts';
-import { createArena, type ArenaHandle, type ArenaUnit, type ArenaView, type FloatPart } from '../pixi/arena.ts';
+import { arenaLayoutFor, createArena, type ArenaHandle, type ArenaLayout, type ArenaUnit, type ArenaView, type FloatPart } from '../pixi/arena.ts';
 import type { FxKind } from '../pixi/skillsfx.ts';
 import { toast } from '../ui.ts';
 import { playSfx, sfxPrefs, stopAllSfx, toggleSfx, type SfxName } from '../sfx.ts';
@@ -1378,6 +1378,8 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   const [targets, setTargets] = createSignal<number[]>([]);
   /** Diễn biến chi tiết hiện dần trong lúc đang đánh (cùng nội dung với bảng kết quả). */
   const [detail, setDetail] = createSignal<DetailRow[]>([]);
+  /** Hiện/ẩn khung diễn biến khi đang đánh — mặc định THU GỌN để sân đấu rộng tối đa. */
+  const [showDetail, setShowDetail] = createSignal(false);
   const [done, setDone] = createSignal(false);
   /** Đang xem bảng kết quả trận (bấm "Kết quả" hoặc trận kết thúc tự động). */
   const [report, setReport] = createSignal(false);
@@ -1390,6 +1392,8 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   /** Ô chứa canvas sân đấu PixiJS (chỉ hiển thị lại dữ liệu server đã mô phỏng). */
   let field!: HTMLDivElement;
   let arena: ArenaHandle | undefined;
+  /** Bố cục sân đấu: màn hẹp (≤640px) dùng sân DỌC để ô tướng phóng to, màn rộng dùng sân NGANG. */
+  const [layout, setLayout] = createSignal<ArenaLayout>(arenaLayoutFor(window.innerWidth));
 
   const upd = (idx: number, fn: (s: CV) => CV) =>
     setView((v) => {
@@ -1797,6 +1801,8 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   });
 
   let disposed = false;
+  /** Bố cục đã dùng để dựng sân hiện tại — đổi bố cục thì phải dựng lại canvas. */
+  let builtLayout: ArenaLayout | undefined;
   onCleanup(() => {
     disposed = true;
     clearTimeout(timer);
@@ -1804,16 +1810,33 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     arena?.destroy();
   });
   // Canvas PixiJS dựng bất đồng bộ; xong thì đẩy trạng thái đầu trận rồi tự phát lại
-  onMount(() => {
-    void createArena(field, arenaUnits, props.battle.mySide).then((a) => {
+  const mountArena = (restart: boolean) => {
+    arena?.destroy();
+    arena = undefined;
+    builtLayout = layout();
+    void createArena(field, arenaUnits, props.battle.mySide, builtLayout).then((a) => {
       if (disposed) {
         a.destroy();
         return;
       }
       arena = a;
       pushArena();
-      setTimeout(play, 300);
+      if (restart) setTimeout(play, 300);
     });
+  };
+  onMount(() => mountArena(true));
+  // Đổi bề rộng qua mốc 640px (xoay màn hình, kéo cửa sổ) thì cập nhật bố cục sân
+  onMount(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const onChange = () => setLayout(mq.matches ? 'portrait' : 'landscape');
+    mq.addEventListener('change', onChange);
+    onCleanup(() => mq.removeEventListener('change', onChange));
+  });
+  // Xoay màn hình / đổi bề rộng cửa sổ làm đổi bố cục sân (ngang ↔ dọc): dựng lại sân theo bố cục
+  // mới và đẩy lại đúng trạng thái đang phát — không phát lại từ đầu.
+  createEffect(() => {
+    const l = layout();
+    if (builtLayout !== undefined && builtLayout !== l) mountArena(false);
   });
 
   return (
@@ -1839,7 +1862,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         </div>
 
         {/* Sân đấu + diễn biến: luôn nằm trong DOM để canvas PixiJS không bị hủy khi mở bảng kết quả */}
-        <div class="rp-live" hidden={report()}>
+        <div class="rp-live" classList={{ 'no-detail': !showDetail() }} hidden={report()}>
           {/* Tên kỹ năng đang thi triển: keyed để mỗi lần ra chiêu khối được dựng lại -> chạy lại hoạt ảnh bật nảy */}
           <div class="rp-cast" classList={{ on: !!actingSkill() }}>
             <Show
@@ -1860,8 +1883,22 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
           {/* Sân đấu vẽ bằng PixiJS: 2 đội 2 bên, ngăn bằng dải phân cách giữa (dựng trong arena.ts) */}
           <div class="rp-canvas" ref={field} />
 
-          {/* Diễn biến chi tiết hiện dần trong lúc đang đánh (giống hệt bảng kết quả sau trận) */}
-          <DetailList rows={detail()} units={units} mySide={props.battle.mySide} follow />
+          {/* Diễn biến chi tiết hiện dần trong lúc đang đánh (giống hệt bảng kết quả sau trận).
+              Bấm vào thanh viền trái để thu gọn / mở lại. */}
+          <div class="rp-detail" classList={{ 'has-list': showDetail() }}>
+            <button
+              class="rp-detail-handle"
+              onClick={() => setShowDetail((v) => !v)}
+              title={showDetail() ? 'Thu gọn diễn biến' : 'Mở diễn biến'}
+              aria-label={showDetail() ? 'Thu gọn diễn biến' : 'Mở diễn biến'}
+              aria-expanded={showDetail() ? 'true' : 'false'}
+            >
+              <span class="rp-detail-chev">{showDetail() ? '‹' : '›'}</span>
+            </button>
+            <Show when={showDetail()}>
+              <DetailList rows={detail()} units={units} mySide={props.battle.mySide} follow />
+            </Show>
+          </div>
 
           <div class="rp-progress">
             <i style={{ width: `${props.battle.events.length ? (cursor() / props.battle.events.length) * 100 : 0}%` }} />

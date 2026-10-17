@@ -1,6 +1,8 @@
 import {
   FACTIONS,
   FACTION_LABELS,
+  GEM_ELEMENTS,
+  GEM_ELEMENT_LABELS,
   MAX_LEVEL,
   TICKET_TYPES,
   type AchievementGroupDto,
@@ -19,6 +21,12 @@ import {
   ACH_COLLECT,
   ACH_DRAWS,
   ACH_FACTION_COLLECT,
+  ACH_GEM_ELEMENT_LEVEL,
+  ACH_GEM_MERGES,
+  ACH_GEM_MERGE_SUCCESS,
+  ACH_GEMS_RECEIVED,
+  ACH_GEM_OWN,
+  ACH_GEM_OWN_MAX,
   ACH_OWN_MAX,
   ACH_PVP_BATTLES,
   ACH_PVP_WINS,
@@ -26,6 +34,7 @@ import {
   DAILY_RESET_BONUS,
   DAILY_RESET_HOUR,
   FACTION_MISSIONS,
+  GEM_DAILY_MISSIONS,
   PVP_DAILY_MISSIONS,
   VN_UTC_OFFSET_MS,
   loginDayReward,
@@ -53,6 +62,10 @@ import {
   sumLegacyGiftCodeCards,
   countCollectedByFaction,
   countOwnedByLevel,
+  countGemsReceived,
+  countGemMerges,
+  countOwnedGemsByLevel,
+  countOwnedGemsByElement,
   findDailyState,
   upsertDailyState,
 } from '../repositories/quest.repository.ts';
@@ -69,9 +82,11 @@ import { getTickets } from './ticket.manager.ts';
  *
  * Khoá phần thưởng:
  *   d:{ngày}:{id}            nhiệm vụ chung       f:{ngày}:{phe}:{id}   nhiệm vụ phe
- *   p:{ngày}:{id}            nhiệm vụ đấu trường  reset:{ngày}          thưởng reset 05:00
+ *   p:{ngày}:{id}            nhiệm vụ đấu trường  g:{ngày}:{id}         nhiệm vụ Ngọc
+ *   reset:{ngày}             thưởng reset 05:00
  *   login:{YYYY-MM-DD}       điểm danh ngày trong tháng
  *   a:draws:{n} a:collect:{n} a:fcollect:{phe}:{n} a:own:{lv}:{n} a:cards:{n} a:pvp:{n} a:pvpw:{n}   thành tựu
+ *   a:gems:{n} a:gmerge:{n} a:gmsucc:{n} a:gown:{n} a:gelem:{phần tử}:{n} a:gownlv:{lv}:{n}          thành tựu Ngọc
  */
 
 const DAY_MS = 86_400_000;
@@ -115,6 +130,12 @@ interface DayMetrics {
   pvpBattles: number;
   /** Số trận thắng trong đó. */
   pvpWins: number;
+  /** Số Ngọc nhận từ chiêu mộ (rớt kèm) trong ngày. */
+  gemsReceived: number;
+  /** Số lần ghép Ngọc trong ngày (mọi kết quả). */
+  gemMerges: number;
+  /** Số lần ghép Ngọc thành công trong ngày. */
+  gemMergeSuccess: number;
 }
 
 const zeroFactions = (): Record<Faction, number> => ({ wei: 0, shu: 0, wu: 0, qun: 0 });
@@ -122,6 +143,7 @@ const zeroFactions = (): Record<Faction, number> => ({ wei: 0, shu: 0, wu: 0, qu
 function dayMetrics(db: DB, userId: number, day: string): DayMetrics {
   const start = iso(gameDayStart(day));
   const end = iso(gameDayStart(day) + DAY_MS);
+  const gems = countGemMerges(db, userId, start, end);
   const m: DayMetrics = {
     login: hasLoginDay(db, userId, 'game', day),
     draws: 0,
@@ -131,6 +153,9 @@ function dayMetrics(db: DB, userId: number, day: string): DayMetrics {
     factionCards: zeroFactions(),
     pvpBattles: 0,
     pvpWins: 0,
+    gemsReceived: countGemsReceived(db, userId, start, end),
+    gemMerges: gems.merges,
+    gemMergeSuccess: gems.successes,
   };
   for (const r of countDrawsByTicketType(db, userId, start, end)) {
     m.draws += r.n;
@@ -151,7 +176,12 @@ function dailyItems(
   m: DayMetrics,
   day: string,
   claimed: Set<string>,
-): { general: QuestItemDto[]; faction: Record<Faction, QuestItemDto[]>; pvp: QuestItemDto[] } {
+): {
+  general: QuestItemDto[];
+  faction: Record<Faction, QuestItemDto[]>;
+  pvp: QuestItemDto[];
+  gem: QuestItemDto[];
+} {
   const value = (metric: string): number =>
     metric === 'login' ? (m.login ? 1 : 0) : metric === 'draws' ? m.draws : metric === 'upgradeSuccess' ? m.upgradeSuccess : m.cardsReceived;
   const base = DAILY_MISSIONS.filter((d) => d.metric !== 'dailyDone').map((d) => ({ d, progress: value(d.metric) }));
@@ -198,7 +228,20 @@ function dailyItems(
       status: status(progress >= d.target, claimed.has(key)),
     };
   });
-  return { general, faction, pvp };
+  const gem = GEM_DAILY_MISSIONS.map((d) => {
+    const progress = m[d.metric];
+    const key = `g:${day}:${d.id}`;
+    return {
+      key,
+      name: d.name,
+      desc: d.desc,
+      progress: Math.min(progress, d.target),
+      target: d.target,
+      reward: { pool: 'normal' as TicketType, count: d.reward },
+      status: status(progress >= d.target, claimed.has(key)),
+    };
+  });
+  return { general, faction, pvp, gem };
 }
 
 // ======================= Điểm danh theo tháng =======================
@@ -257,6 +300,12 @@ function achievementView(db: DB, userId: number, claimed: Set<string>): Achievem
   const owned = new Map(countOwnedByLevel(db, userId).map((r) => [r.level, r.n]));
   // Đấu trường: thành tựu tính toàn bộ lịch sử (chỉ trận người chơi chủ động khiêu chiến)
   const pvpTotal = countPvpAttacks(db, userId, null, null);
+  // Ngọc: tính toàn bộ lịch sử + kho Ngọc đang sở hữu (chỉ viên active)
+  const gemsReceived = countGemsReceived(db, userId, null, null);
+  const gemMerges = countGemMerges(db, userId, null, null);
+  const ownedGemsByLevel = new Map(countOwnedGemsByLevel(db, userId).map((r) => [r.level, r.n]));
+  const gemsOwned = [...ownedGemsByLevel.values()].reduce((s, n) => s + n, 0);
+  const topGemLevel = new Map(countOwnedGemsByElement(db, userId).map((r) => [r.element, r.top]));
 
   const groups: AchievementGroupDto[] = [
     {
@@ -313,6 +362,56 @@ function achievementView(db: DB, userId: number, claimed: Set<string>): Achievem
       progress: pvpTotal.wins,
       items: milestoneItems('a:pvpw', (n) => `Thắng ${n.toLocaleString('vi-VN')} trận đấu trường`, ACH_PVP_WINS, pvpTotal.wins, 'normal', claimed),
     },
+    {
+      id: 'gem-received',
+      title: 'Ngọc — thu nhận',
+      desc: 'Tổng số Ngọc nhận được từ chiêu mộ (rớt kèm; không tính Ngọc tạo ra khi ghép)',
+      progress: gemsReceived,
+      items: milestoneItems('a:gems', (n) => `Nhận ${n.toLocaleString('vi-VN')} Ngọc`, ACH_GEMS_RECEIVED, gemsReceived, 'normal', claimed),
+    },
+    {
+      id: 'gem-merge',
+      title: 'Ngọc — ghép Ngọc',
+      desc: 'Tổng số lần ghép Ngọc (tính cả lần thất bại)',
+      progress: gemMerges.merges,
+      items: milestoneItems('a:gmerge', (n) => `Ghép Ngọc ${n.toLocaleString('vi-VN')} lần`, ACH_GEM_MERGES, gemMerges.merges, 'normal', claimed),
+    },
+    {
+      id: 'gem-merge-success',
+      title: 'Ngọc — ghép thành công',
+      desc: 'Tổng số lần ghép Ngọc thành công',
+      progress: gemMerges.successes,
+      items: milestoneItems('a:gmsucc', (n) => `Ghép thành công ${n.toLocaleString('vi-VN')} lần`, ACH_GEM_MERGE_SUCCESS, gemMerges.successes, 'normal', claimed),
+    },
+    {
+      id: 'gem-own',
+      title: 'Ngọc — sở hữu',
+      desc: 'Số viên Ngọc đang sở hữu (mọi loại, mọi cấp; tính cả Ngọc tạo ra khi ghép)',
+      progress: gemsOwned,
+      items: milestoneItems('a:gown', (n) => `Sở hữu ${n.toLocaleString('vi-VN')} viên Ngọc`, ACH_GEM_OWN, gemsOwned, 'normal', claimed),
+    },
+    ...GEM_ELEMENTS.map((e) => {
+      const top = topGemLevel.get(e) ?? 0;
+      return {
+        id: `gem-elem-${e}`,
+        title: `Ngọc ${GEM_ELEMENT_LABELS[e]} — cấp cao nhất`,
+        desc: `Cấp cao nhất của Ngọc ${GEM_ELEMENT_LABELS[e]} đang sở hữu`,
+        progress: top,
+        items: milestoneItems(`a:gelem:${e}`, (n) => `Ngọc ${GEM_ELEMENT_LABELS[e]} đạt cấp ${n}`, ACH_GEM_ELEMENT_LEVEL, top, 'normal', claimed),
+      };
+    }),
+    ...Array.from({ length: MAX_LEVEL }, (_, i) => {
+      const lv = i + 1;
+      const have = ownedGemsByLevel.get(lv) ?? 0;
+      const ms: [number, number][] = Array.from({ length: ACH_GEM_OWN_MAX }, (_, k) => [k + 1, ownLevelReward(lv, k + 1)]);
+      return {
+        id: `gem-ownlv-${lv}`,
+        title: `Sở hữu Ngọc Lv.${lv}`,
+        desc: `Số viên Ngọc Lv.${lv} đang sở hữu`,
+        progress: have,
+        items: milestoneItems(`a:gownlv:${lv}`, (n) => `Sở hữu ${n} viên Ngọc Lv.${lv}`, ms, have, 'normal', claimed),
+      };
+    }),
   ];
   return groups;
 }
@@ -328,6 +427,7 @@ function buildView(ctx: GameContext, userId: number): QuestsDto {
     ...claimedSet(db, userId, `d:${day}:%`),
     ...claimedSet(db, userId, `f:${day}:%`),
     ...claimedSet(db, userId, `p:${day}:%`),
+    ...claimedSet(db, userId, `g:${day}:%`),
   ]));
   const login = loginView(db, userId, today, claimedSet(db, userId, `login:${today.slice(0, 7)}-%`));
   const achievements = achievementView(db, userId, claimedSet(db, userId, 'a:%'));
@@ -335,6 +435,7 @@ function buildView(ctx: GameContext, userId: number): QuestsDto {
     ...daily.general,
     ...FACTIONS.flatMap((f) => daily.faction[f]),
     ...daily.pvp,
+    ...daily.gem,
     ...achievements.flatMap((g) => g.items),
   ];
   const claimable = all.filter((i) => i.status === 'claimable').length + login.days.filter((d) => d.status === 'claimable').length;
@@ -349,6 +450,7 @@ function buildView(ctx: GameContext, userId: number): QuestsDto {
     daily: daily.general,
     faction: daily.faction,
     pvp: daily.pvp,
+    gem: daily.gem,
     login,
     achievements,
     claimable,
@@ -364,6 +466,7 @@ function claimableGrants(view: QuestsDto): Grant[] {
   view.daily.forEach((i) => add(i, 'mission'));
   FACTIONS.forEach((f) => view.faction[f].forEach((i) => add(i, 'mission')));
   view.pvp.forEach((i) => add(i, 'mission'));
+  view.gem.forEach((i) => add(i, 'mission'));
   for (const d of view.login.days) {
     if (d.status === 'claimable') out.push({ key: `login:${d.date}`, name: `Điểm danh ngày ${d.day}`, pool: 'normal', count: d.reward, reason: 'achievement' });
   }
@@ -428,9 +531,10 @@ export function touchDaily(ctx: GameContext, userId: number): DailyEventsDto | n
           ...claimedSet(db, userId, `d:${prev}:%`),
           ...claimedSet(db, userId, `f:${prev}:%`),
           ...claimedSet(db, userId, `p:${prev}:%`),
+          ...claimedSet(db, userId, `g:${prev}:%`),
         ]);
         const v = dailyItems(dayMetrics(db, userId, prev), prev, claimed);
-        for (const i of [...v.general, ...FACTIONS.flatMap((f) => v.faction[f]), ...v.pvp]) {
+        for (const i of [...v.general, ...FACTIONS.flatMap((f) => v.faction[f]), ...v.pvp, ...v.gem]) {
           if (i.status !== 'claimable') continue;
           const g: Grant = { key: i.key, name: i.name, pool: i.reward.pool, count: i.reward.count, reason: 'mission' };
           grant(db, userId, g, true, nowIso);

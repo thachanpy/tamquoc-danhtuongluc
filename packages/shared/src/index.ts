@@ -907,6 +907,8 @@ export interface QuestsDto {
   faction: Record<Faction, QuestItemDto[]>;
   /** Nhiệm vụ đấu trường PvP trong ngày (chỉ tính trận người chơi chủ động khiêu chiến). */
   pvp: QuestItemDto[];
+  /** Nhiệm vụ Ngọc Ngũ Hành trong ngày (nhận Ngọc khi chiêu mộ, ghép Ngọc). */
+  gem: QuestItemDto[];
   login: { month: string; days: LoginDayDto[] };
   achievements: AchievementGroupDto[];
   /** Số phần thưởng đang chờ bấm Nhận (badge tab). */

@@ -1,4 +1,4 @@
-import type { Faction, TicketType } from '@tq/shared';
+import type { Faction, GemElement, TicketType } from '@tq/shared';
 import type { DB } from '../db.ts';
 
 /**
@@ -151,6 +151,59 @@ export function countPvpAttacks(
          FROM pvp_battles WHERE attacker_id = ?${range}`,
     )
     .get(...args) as { battles: number; wins: number };
+}
+
+/**
+ * Số Ngọc người chơi NHẬN được từ chiêu mộ (rớt kèm) trong khoảng thời gian.
+ * Ngọc tạo ra khi ghép cũng là 1 dòng `user_gems` nhưng có `gem_merge_history.result_gem_id` nên bị loại.
+ * `from`/`to` để trống (null) = tính toàn bộ lịch sử (dùng cho thành tựu).
+ */
+export function countGemsReceived(db: DB, userId: number, from: string | null, to: string | null): number {
+  const range = from && to ? ' AND g.created_at >= ? AND g.created_at < ?' : '';
+  const args: (string | number)[] = from && to ? [userId, from, to] : [userId];
+  return (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM user_gems g
+          WHERE g.user_id = ?${range}
+            AND NOT EXISTS (SELECT 1 FROM gem_merge_history m WHERE m.result_gem_id = g.id)`,
+      )
+      .get(...args) as { n: number }
+  ).n;
+}
+
+/** Số lần ghép Ngọc trong khoảng thời gian, kèm số lần thành công. Bỏ trống mốc = toàn bộ lịch sử. */
+export function countGemMerges(
+  db: DB,
+  userId: number,
+  from: string | null,
+  to: string | null,
+): { merges: number; successes: number } {
+  const range = from && to ? ' AND created_at >= ? AND created_at < ?' : '';
+  const args: (string | number)[] = from && to ? [userId, from, to] : [userId];
+  return db
+    .prepare(
+      `SELECT COUNT(*) AS merges, COALESCE(SUM(CASE WHEN outcome = 'success' THEN 1 ELSE 0 END), 0) AS successes
+         FROM gem_merge_history WHERE user_id = ?${range}`,
+    )
+    .get(...args) as { merges: number; successes: number };
+}
+
+/** Số Ngọc đang sở hữu theo cấp (chỉ Ngọc active) — thành tựu "Sở hữu Ngọc Lv.X". */
+export function countOwnedGemsByLevel(db: DB, userId: number): { level: number; n: number }[] {
+  return db
+    .prepare(`SELECT level, COUNT(*) AS n FROM user_gems WHERE user_id = ? AND status = 'active' GROUP BY level`)
+    .all(userId) as { level: number; n: number }[];
+}
+
+/** Cấp cao nhất và tổng số Ngọc đang sở hữu của từng loại Ngũ Hành (chỉ Ngọc active). */
+export function countOwnedGemsByElement(db: DB, userId: number): { element: GemElement; top: number; n: number }[] {
+  return db
+    .prepare(
+      `SELECT element, MAX(level) AS top, COUNT(*) AS n FROM user_gems
+        WHERE user_id = ? AND status = 'active' GROUP BY element`,
+    )
+    .all(userId) as { element: GemElement; top: number; n: number }[];
 }
 
 export function findDailyState(db: DB, userId: number): { last_game_day: string; last_cal_date: string } | undefined {

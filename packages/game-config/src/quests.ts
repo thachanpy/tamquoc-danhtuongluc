@@ -87,6 +87,50 @@ export const PVP_DAILY_MISSIONS: PvpMissionDef[] = [
   { id: 'pvpwin10', name: 'Vô địch đấu trường', desc: 'Thắng 10 trận đấu trường trong ngày', metric: 'pvpWins', target: 10, reward: 20 },
 ];
 
+// ======================= Nhiệm vụ Ngọc Ngũ Hành =======================
+
+/** Chỉ số tính tiến trình nhiệm vụ Ngọc trong ngày game. */
+export type GemMetric = 'gemsReceived' | 'gemMerges' | 'gemMergeSuccess';
+
+export interface GemMissionDef {
+  id: string;
+  name: string;
+  desc: string;
+  metric: GemMetric;
+  target: number;
+  reward: number;
+}
+
+/**
+ * Nhiệm vụ Ngọc — thưởng vé thường. Ngọc chỉ đến từ 2 nguồn: rớt kèm khi chiêu mộ và tạo ra khi ghép
+ * ("nhận Ngọc" chỉ tính nguồn rớt kèm; Ngọc tạo ra khi ghép vẫn cộng vào thành tựu sở hữu).
+ */
+export const GEM_DAILY_MISSIONS: GemMissionDef[] = [
+  { id: 'gem3', name: 'Thu nhận Ngọc', desc: 'Nhận 3 viên Ngọc rớt kèm khi chiêu mộ', metric: 'gemsReceived', target: 3, reward: 6 },
+  { id: 'gem10', name: 'Tích lũy Ngọc', desc: 'Nhận 10 viên Ngọc rớt kèm khi chiêu mộ', metric: 'gemsReceived', target: 10, reward: 12 },
+  { id: 'gemmerge3', name: 'Ghép Ngọc', desc: 'Ghép Ngọc 3 lần (tính cả lần thất bại)', metric: 'gemMerges', target: 3, reward: 6 },
+  { id: 'gemmerge10', name: 'Luyện Ngọc chuyên cần', desc: 'Ghép Ngọc 10 lần (tính cả lần thất bại)', metric: 'gemMerges', target: 10, reward: 12 },
+  { id: 'gemsucc2', name: 'Ngọc kết tinh', desc: 'Ghép Ngọc thành công 2 lần', metric: 'gemMergeSuccess', target: 2, reward: 8 },
+  { id: 'gemsucc5', name: 'Tay nghề luyện Ngọc', desc: 'Ghép Ngọc thành công 5 lần', metric: 'gemMergeSuccess', target: 5, reward: 16 },
+];
+
+/** Tổng số Ngọc đã NHẬN từ chiêu mộ (rớt kèm, toàn bộ lịch sử; không tính Ngọc tạo ra khi ghép) — vé thường. */
+export const ACH_GEMS_RECEIVED: Milestones = [[5, 10], [25, 30], [100, 80], [500, 200], [2_000, 600], [10_000, 2_000]];
+/** Tổng số lần ghép Ngọc (mọi kết quả, toàn bộ lịch sử) — vé thường. */
+export const ACH_GEM_MERGES: Milestones = [[5, 10], [25, 30], [100, 60], [500, 150], [2_000, 400]];
+/** Tổng số lần ghép Ngọc THÀNH CÔNG (toàn bộ lịch sử) — vé thường. */
+export const ACH_GEM_MERGE_SUCCESS: Milestones = [[3, 10], [15, 25], [50, 50], [250, 120], [1_000, 300]];
+/** Cấp cao nhất đạt được của MỘT loại Ngọc (xét kho Ngọc đang sở hữu) — vé thường. */
+export const ACH_GEM_ELEMENT_LEVEL: Milestones = [[2, 5], [3, 10], [5, 20], [7, 40], [9, 80], [10, 150]];
+/** Số viên Ngọc đang sở hữu (mọi loại, mọi cấp; tính cả Ngọc tạo ra khi ghép) — vé thường. */
+export const ACH_GEM_OWN: Milestones = [[1, 5], [5, 15], [10, 25], [25, 50], [50, 100], [100, 200], [250, 400]];
+
+/**
+ * Số viên Ngọc đang sở hữu theo cấp: mỗi cấp 1–10 có `ACH_GEM_OWN_MAX` mốc (1…10 viên active cùng cấp).
+ * Dùng CHUNG bảng thưởng `ownLevelReward` với thành tựu "Sở hữu thẻ cấp" (chỉ khác số mốc).
+ */
+export const ACH_GEM_OWN_MAX = 10;
+
 /** Tổng số trận đã chủ động khiêu chiến (toàn bộ lịch sử) — vé thường. */
 export const ACH_PVP_BATTLES: Milestones = [[10, 10], [50, 30], [100, 50], [500, 150], [1_000, 250], [5_000, 800]];
 /** Tổng số trận đấu trường đã thắng khi chủ động khiêu chiến (toàn bộ lịch sử) — vé thường. */
@@ -132,7 +176,7 @@ export function validateQuestConfig(assert: (cond: unknown, msg: string) => void
     assert(Number.isSafeInteger(n) && n >= 0, `DAILY_RESET_BONUS.${t} không hợp lệ`);
   }
   const ids = new Set<string>();
-  for (const m of [...DAILY_MISSIONS, ...FACTION_MISSIONS, ...PVP_DAILY_MISSIONS]) {
+  for (const m of [...DAILY_MISSIONS, ...FACTION_MISSIONS, ...PVP_DAILY_MISSIONS, ...GEM_DAILY_MISSIONS]) {
     assert(!ids.has(m.id) && /^[a-z0-9]+$/.test(m.id), `id nhiệm vụ trùng/không hợp lệ: ${m.id}`);
     ids.add(m.id);
     assert(Number.isSafeInteger(m.target) && m.target >= 1, `target nhiệm vụ ${m.id} không hợp lệ`);
@@ -154,10 +198,16 @@ export function validateQuestConfig(assert: (cond: unknown, msg: string) => void
   checkMs('ACH_COLLECT', ACH_COLLECT, ROSTER_SIZE);
   checkMs('ACH_FACTION_COLLECT', ACH_FACTION_COLLECT, GENERALS_PER_FACTION);
   checkMs('ACH_CARDS_RECEIVED', ACH_CARDS_RECEIVED, Number.MAX_SAFE_INTEGER);
+  checkMs('ACH_GEMS_RECEIVED', ACH_GEMS_RECEIVED, Number.MAX_SAFE_INTEGER);
+  checkMs('ACH_GEM_MERGES', ACH_GEM_MERGES, Number.MAX_SAFE_INTEGER);
+  checkMs('ACH_GEM_MERGE_SUCCESS', ACH_GEM_MERGE_SUCCESS, Number.MAX_SAFE_INTEGER);
+  checkMs('ACH_GEM_ELEMENT_LEVEL', ACH_GEM_ELEMENT_LEVEL, MAX_LEVEL);
+  checkMs('ACH_GEM_OWN', ACH_GEM_OWN, Number.MAX_SAFE_INTEGER);
   checkMs('ACH_PVP_BATTLES', ACH_PVP_BATTLES, Number.MAX_SAFE_INTEGER);
   checkMs('ACH_PVP_WINS', ACH_PVP_WINS, Number.MAX_SAFE_INTEGER);
   for (let lv = 1; lv <= MAX_LEVEL; lv++) {
     for (let n = 1; n <= ACH_OWN_MAX; n++) assert(ownLevelReward(lv, n) >= 1, `ownLevelReward(${lv}, ${n}) không hợp lệ`);
+    for (let n = 1; n <= ACH_GEM_OWN_MAX; n++) assert(ownLevelReward(lv, n) >= 1, `ownLevelReward Ngọc (${lv}, ${n}) không hợp lệ`);
   }
   assert(FACTIONS.length === 4, 'cần đúng 4 phe');
 }
@@ -167,4 +217,5 @@ export const DAILY_MAX = {
   general: DAILY_MISSIONS.reduce((s, m) => s + m.reward, 0),
   perFaction: FACTION_MISSIONS.reduce((s, m) => s + m.reward, 0),
   pvp: PVP_DAILY_MISSIONS.reduce((s, m) => s + m.reward, 0),
+  gem: GEM_DAILY_MISSIONS.reduce((s, m) => s + m.reward, 0),
 };
