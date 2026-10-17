@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@fastify/compress": "^9.2.2",
     "@fastify/rate-limit": "^10.2.1",
     "@tq/game-config": "workspace:*",
     "@tq/shared": "workspace:*",

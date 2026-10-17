@@ -40,6 +40,8 @@ File cấu hình ở gốc repo:
 - `nginx.conf` — site nginx: phục vụ `apps/web/dist`, proxy `/api/`, gzip, cache ảnh/JS.
 - `pm2.config.json` — chạy API (`apps/api/src/index.ts`) bằng Node, tự khởi động lại khi lỗi.
 
+API tự nén response (`@fastify/compress`, br/gzip) nên payload lớn như nhật ký/chi tiết trận PvP gọn hơn nhiều cả khi không qua nginx (ví dụ chạy dev); gzip ở nginx chỉ là lớp bổ sung.
+
 Ví dụ dưới đây dùng Ubuntu/Debian và đặt repo ở `/opt/tamquoc-gacha`.
 
 ### 1. Cài phần mềm (1 lần)

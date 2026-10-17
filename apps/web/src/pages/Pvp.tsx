@@ -74,7 +74,7 @@ function sfxOf(ev: PvpEventDto): SfxName | null {
     case 'heal':
       return ev.lifesteal ? 'lifesteal' : 'heal';
     case 'buff':
-      return ev.damageFlat > 0 ? 'buff' : 'heal';
+      return (ev.damageFlat ?? 0) > 0 ? 'buff' : 'heal';
     case 'burn':
       return 'burn';
     case 'miss':
@@ -1104,12 +1104,12 @@ function createDetailBuilder(units: PvpUnitStateDto[]) {
       case 'buff': {
         if (actor !== undefined) at(actor).buffs += 1;
         const gains = [
-          ev.damageFlat > 0 ? `+${num(ev.damageFlat)} sát thương` : '',
-          ev.hpFlat > 0 ? `+${num(ev.hpFlat)} HP tối đa` : '',
-          ev.critBps > 0 ? `+${ev.critBps / 100} điểm chí mạng` : '',
-          ev.critDamageBps > 0 ? `+${pct(ev.critDamageBps)} ST chí mạng` : '',
-          ev.takenDownBps > 0 ? `−${pct(ev.takenDownBps)} sát thương gánh chịu` : '',
-          ev.lifestealBps > 0 ? `+${pct(ev.lifestealBps)} hút máu` : '',
+          (ev.damageFlat ?? 0) > 0 ? `+${num(ev.damageFlat ?? 0)} sát thương` : '',
+          (ev.hpFlat ?? 0) > 0 ? `+${num(ev.hpFlat ?? 0)} HP tối đa` : '',
+          (ev.critBps ?? 0) > 0 ? `+${(ev.critBps ?? 0) / 100} điểm chí mạng` : '',
+          (ev.critDamageBps ?? 0) > 0 ? `+${pct(ev.critDamageBps ?? 0)} ST chí mạng` : '',
+          (ev.takenDownBps ?? 0) > 0 ? `−${pct(ev.takenDownBps ?? 0)} sát thương gánh chịu` : '',
+          (ev.lifestealBps ?? 0) > 0 ? `+${pct(ev.lifestealBps ?? 0)} hút máu` : '',
           (ev.burnUpBps ?? 0) > 0 ? `+${pct(ev.burnUpBps ?? 0)} sát thương Thiêu đốt` : '',
         ]
           .filter(Boolean)
@@ -1125,11 +1125,11 @@ function createDetailBuilder(units: PvpUnitStateDto[]) {
       case 'debuff': {
         // Hiệu ứng bất lợi: actor là tướng vừa thi triển (đặt ở sự kiện 'act' trước đó).
         const parts = [
-          ev.damageFlat > 0 ? `−${num(ev.damageFlat)} sát thương` : '',
-          ev.hpFlat > 0 ? `−${num(ev.hpFlat)} HP tối đa` : '',
-          ev.critBps > 0 ? `−${ev.critBps / 100} điểm chí mạng` : '',
-          ev.critDamageBps > 0 ? `−${pct(ev.critDamageBps)} ST chí mạng` : '',
-          ev.burnFlat > 0 ? `thiêu đốt ${num(ev.burnFlat)}/lượt` : '',
+          (ev.damageFlat ?? 0) > 0 ? `−${num(ev.damageFlat ?? 0)} sát thương` : '',
+          (ev.hpFlat ?? 0) > 0 ? `−${num(ev.hpFlat ?? 0)} HP tối đa` : '',
+          (ev.critBps ?? 0) > 0 ? `−${(ev.critBps ?? 0) / 100} điểm chí mạng` : '',
+          (ev.critDamageBps ?? 0) > 0 ? `−${pct(ev.critDamageBps ?? 0)} ST chí mạng` : '',
+          (ev.burnFlat ?? 0) > 0 ? `thiêu đốt ${num(ev.burnFlat ?? 0)}/lượt` : '',
         ]
           .filter(Boolean)
           .join(' · ');
@@ -1576,12 +1576,12 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
             {
               sourceIdx: ev.from,
               channel: ev.channel,
-              flat: ev.damageFlat,
-              hpFlat: ev.hpFlat,
-              critBps: ev.critBps,
-              critDamageBps: ev.critDamageBps,
-              takenDownBps: ev.takenDownBps,
-              lifestealBps: ev.lifestealBps,
+              flat: ev.damageFlat ?? 0,
+              hpFlat: ev.hpFlat ?? 0,
+              critBps: ev.critBps ?? 0,
+              critDamageBps: ev.critDamageBps ?? 0,
+              takenDownBps: ev.takenDownBps ?? 0,
+              lifestealBps: ev.lifestealBps ?? 0,
               hitBps: ev.hitBps ?? 0,
               dodgeBps: ev.dodgeBps ?? 0,
               defArmor: ev.defArmor ?? 0,
@@ -1598,9 +1598,9 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
           return syncHp({ ...s, buffed: true, buffs });
         });
         const gains: FloatPart[] = [
-          ...(ev.damageFlat > 0 ? [{ text: `+${num(ev.damageFlat)}` }] : []),
-          ...(ev.hpFlat > 0 ? [{ text: `+${num(ev.hpFlat)}` }] : []),
-          ...(ev.lifestealBps > 0 ? [{ icon: 'blood' as const, text: `+${pct(ev.lifestealBps)}` }] : []),
+          ...((ev.damageFlat ?? 0) > 0 ? [{ text: `+${num(ev.damageFlat ?? 0)}` }] : []),
+          ...((ev.hpFlat ?? 0) > 0 ? [{ text: `+${num(ev.hpFlat ?? 0)}` }] : []),
+          ...((ev.lifestealBps ?? 0) > 0 ? [{ icon: 'blood' as const, text: `+${pct(ev.lifestealBps ?? 0)}` }] : []),
         ];
         if (gains.length) addFloat(ev.idx, gains, ev.crit, 'heal');
         addFx(ev.idx, 'buff');
@@ -1614,15 +1614,15 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
             ...s.debuffs,
             {
               sourceIdx: ev.from,
-              damageFlat: ev.damageFlat,
-              hpFlat: ev.hpFlat,
-              critBps: ev.critBps,
-              critDamageBps: ev.critDamageBps,
+              damageFlat: ev.damageFlat ?? 0,
+              hpFlat: ev.hpFlat ?? 0,
+              critBps: ev.critBps ?? 0,
+              critDamageBps: ev.critDamageBps ?? 0,
               hitDownBps: ev.hitDownBps ?? 0,
               dodgeDownBps: ev.dodgeDownBps ?? 0,
               defArmorDown: ev.defArmorDown ?? 0,
               defPenDownBps: ev.defPenDownBps ?? 0,
-              burnFlat: ev.burnFlat,
+              burnFlat: ev.burnFlat ?? 0,
               expiresRound: ev.expiresRound,
             },
           ];

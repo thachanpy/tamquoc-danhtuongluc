@@ -701,7 +701,7 @@ test('engine: hàng mục tiêu trống thì quay sang hàng còn lại (mục 2
     [one('a', [{ slot: 1, generalId: 'yuan-shu', level: 3 }]), one('b', [{ slot: 4, generalId: 'da-qiao', level: 10 }])],
     never,
   );
-  assert.ok(frontDebuff.events.some((e) => e.t === 'debuff' && e.hpFlat > 0), 'hàng trước địch trống → áp hiệu ứng sang hàng sau');
+  assert.ok(frontDebuff.events.some((e) => e.t === 'debuff' && (e.hpFlat ?? 0) > 0), 'hàng trước địch trống → áp hiệu ứng sang hàng sau');
 });
 
 test('engine: đánh hàng ngang quét theo thứ tự gần mình nhất (ô 1 → 1 2 3, ô 2 → 2 1 3, ô 3 → 3 2 1), luôn ưu tiên hàng TRƯỚC (mục 2.4)', () => {
@@ -788,7 +788,7 @@ test('engine: Lục Tốn hút máu từ cả sát thương Thiêu đốt và gi
   const ev = res.events;
   // Sát thương thiêu đốt lên địch, kèm giảm HP tối đa.
   assert.ok(ev.some((e) => e.t === 'burn'), 'phải có sát thương thiêu đốt');
-  assert.ok(ev.some((e) => e.t === 'debuff' && e.hpFlat > 0), 'Lục Tốn phải giảm HP tối đa của địch');
+  assert.ok(ev.some((e) => e.t === 'debuff' && (e.hpFlat ?? 0) > 0), 'Lục Tốn phải giảm HP tối đa của địch');
   // Hút máu từ thiêu đốt: ngay sau đòn thiêu đốt đầu tiên, Lục Tốn được hồi máu TRƯỚC lượt hành động kế tiếp của mình.
   const burnAt = ev.findIndex((e) => e.t === 'burn');
   const healAt = ev.findIndex((e, i) => i > burnAt && e.t === 'heal' && e.from === lx);
@@ -960,9 +960,9 @@ test('engine: buff tăng sát thương Thiêu đốt của Cố Ung cộng dồn
     Math.round((zhu.damage * burnBps * (BPS_SCALE + layers * PVP_SKILL_BUFF_BURN_UP_BPS)) / (BPS_SCALE * BPS_SCALE));
   const flats = res.events
     .filter(
-      (e): e is Extract<PvpEventDto, { t: 'debuff' }> => e.t === 'debuff' && e.from === zhu.idx && e.burnFlat > 0,
+      (e): e is Extract<PvpEventDto, { t: 'debuff' }> => e.t === 'debuff' && e.from === zhu.idx && (e.burnFlat ?? 0) > 0,
     )
-    .map((e) => e.burnFlat);
+    .map((e) => e.burnFlat ?? 0);
   assert.deepEqual(flats.slice(0, 2), [flat(1), flat(2)], 'lượt 1 = 1 lớp (+10%), lượt 2 = 2 lớp (+20%)');
 });
 
@@ -999,7 +999,7 @@ test('engine: Thanh tẩy gỡ debuff theo tỉ lệ — cấp 1 (7.5%) hụt, c
       never,
     );
   const low = setup(1);
-  assert.ok(low.events.some((e) => e.t === 'debuff' && e.hpFlat > 0), 'địch phải giảm HP tối đa đồng minh ta');
+  assert.ok(low.events.some((e) => e.t === 'debuff' && (e.hpFlat ?? 0) > 0), 'địch phải giảm HP tối đa đồng minh ta');
   assert.equal(low.events.some((e) => e.t === 'purify'), false, 'cấp 1 (7.5%) không gỡ được lớp nào khi roll 50%');
   const high = setup(10);
   assert.ok(high.events.some((e) => e.t === 'purify'), 'cấp 10 (75%) gỡ được khi roll 50% < 75%');
@@ -1727,6 +1727,27 @@ test('HTTP: khiêu chiến mô phỏng trọn trận, lưu lịch sử và xem l
     assert.equal(ovMe.draws, 1);
     assert.equal(ovFoe.draws, 1);
   }
+  await app.close();
+});
+
+test('HTTP: trận cũ lưu `data` dạng TEXT JSON (trước khi nén blob) vẫn xem lại được', async () => {
+  const { ctx, app, auth, adminAuth, testerId } = await setup();
+  const rival = await regApproved(app, adminAuth, 'rival');
+  addCard(ctx, testerId, ROSTER[0]!.id, 3);
+  addCard(ctx, rival.userId, ROSTER[1]!.id, 3);
+  const legacy = '{"units":[],"events":[{"t":"end","winner":"draw","rounds":0,"reason":"timeout"}]}';
+  const id = Number(
+    ctx.db
+      .prepare(
+        `INSERT INTO pvp_battles (attacker_id, defender_id, winner, rounds, attacker_lc, defender_lc, data, created_at)
+         VALUES (?,?,?,?,?,?,?,?)`,
+      )
+      .run(testerId, rival.userId, 'draw', 0, 100, 100, legacy, '2026-01-01T00:00:00.000Z').lastInsertRowid,
+  );
+
+  const r = await app.inject({ method: 'GET', url: `/api/pvp/battles/${id}`, headers: auth });
+  assert.equal(r.statusCode, 200);
+  assert.deepEqual(r.json().events, [{ t: 'end', winner: 'draw', rounds: 0, reason: 'timeout' }]);
   await app.close();
 });
 

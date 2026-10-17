@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import compress from '@fastify/compress';
 import rateLimit from '@fastify/rate-limit';
 import { AppError, type GameContext } from './context.ts';
 import { registerAdminRoutes } from './controllers/admin.controller.ts';
@@ -32,6 +33,13 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
   });
 
   await app.register(rateLimit, { global: false });
+
+  // Nén body trả về (br/gzip) khi client gửi Accept-Encoding. Đây là mấu chốt cho các
+  // payload lớn (nhật ký PvP + dữ liệu phát lại trận đấu ~200KB–1MB): giảm ~95% dung lượng
+  // truyền, đặc biệt khi chạy dev qua Vite proxy (không có nginx nén hộ như production).
+  // Ngưỡng 1KB để bỏ qua các response nhỏ (nén không đáng kể mà lại tốn CPU).
+  await app.register(compress, { global: true, threshold: 1024 });
+
   app.decorateRequest('userId', 0);
 
   // Định dạng lỗi thống nhất: { error: { code, message } }

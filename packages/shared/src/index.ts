@@ -1435,7 +1435,13 @@ export interface PvpUnitStateDto {
   selfBurn?: boolean;
 }
 
-/** Sự kiện trong trận, theo thứ tự phát lại. */
+/**
+ * Sự kiện trong trận, theo thứ tự phát lại.
+ *
+ * Quy ước truyền tải: các field SỐ mang giá trị MẶC ĐỊNH 0 của sự kiện `buff`/`debuff` sẽ
+ * BỊ LƯỢC BỎ khỏi JSON (hai loại này chiếm ~70% dung lượng phát lại nhưng mỗi lớp thường chỉ
+ * cộng 1–2 chỉ số, phần còn lại bằng 0). Client đọc field thiếu như giá trị 0.
+ */
 export type PvpEventDto =
   | { t: 'round'; round: number }
   | { t: 'act'; idx: number; skill: PvpSkill; targets: number[] }
@@ -1472,16 +1478,18 @@ export type PvpEventDto =
    * `from` = idx người thi triển; `channel` = kênh buff trong kỹ năng của nguồn (trần `maxLayers` tính
    * riêng theo từng (nguồn, kênh)). `maxLayers` = số lớp cộng dồn tối đa THEO TỪNG (nguồn, kênh) (client
    * bỏ lớp cũ nhất cùng `from` + `channel` khi vượt trần; nguồn/kênh khác vẫn cộng dồn).
+   * Mọi field số ở đây đều là TUỲ CHỌN: bằng 0 thì bị lược bỏ khỏi JSON (đọc thiếu = 0).
    */
-  | { t: 'buff'; from: number; channel: number; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; takenDownBps: number; lifestealBps: number; hitBps?: number; dodgeBps?: number; defArmor?: number; defPenBps?: number; burnUpBps?: number; crit: boolean; expiresRound: number; maxLayers: number }
+  | { t: 'buff'; from: number; channel: number; idx: number; damageFlat?: number; hpFlat?: number; critBps?: number; critDamageBps?: number; takenDownBps?: number; lifestealBps?: number; hitBps?: number; dodgeBps?: number; defArmor?: number; defPenBps?: number; burnUpBps?: number; crit: boolean; expiresRound: number; maxLayers: number }
   /**
    * Áp một lớp hiệu ứng bất lợi lên mục tiêu địch: giảm sát thương gây ra (`damageFlat`),
    * giảm trần HP (`hpFlat`), giảm chí mạng (`critBps`), giảm ST chí mạng (`critDamageBps`),
    * giảm Chính xác/Né tránh/Giáp/Xuyên giáp (`hitDownBps`/`dodgeDownBps`/`defArmorDown`/`defPenDownBps`)
    * và/hoặc thiêu đốt mỗi lượt (`burnFlat`). `from` = idx người thi triển;
    * `maxLayers` = số lớp cộng dồn tối đa THEO TỪNG nguồn.
+   * Mọi field số ở đây đều là TUỲ CHỌN: bằng 0 thì bị lược bỏ khỏi JSON (đọc thiếu = 0).
    */
-  | { t: 'debuff'; from: number; idx: number; damageFlat: number; hpFlat: number; critBps: number; critDamageBps: number; hitDownBps?: number; dodgeDownBps?: number; defArmorDown?: number; defPenDownBps?: number; burnFlat: number; expiresRound: number; maxLayers: number }
+  | { t: 'debuff'; from: number; idx: number; damageFlat?: number; hpFlat?: number; critBps?: number; critDamageBps?: number; hitDownBps?: number; dodgeDownBps?: number; defArmorDown?: number; defPenDownBps?: number; burnFlat?: number; expiresRound: number; maxLayers: number }
   /**
    * Thiêu đốt: gây sát thương vào đầu mỗi lượt cho tướng đang bị thiêu đốt (có thể ăn chí mạng).
    * `amount` = sát thương THỰC nhận sau Phòng thủ; `mitigated` = phần bị Phòng thủ cản lại (mục 18).

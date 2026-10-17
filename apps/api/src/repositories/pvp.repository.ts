@@ -1,3 +1,4 @@
+import { deflateSync, inflateSync } from 'node:zlib';
 import type { DB } from '../db.ts';
 
 /** Truy vấn đội hình và nhật ký trận PvP (mục 6.7 — PVP.md). */
@@ -47,14 +48,26 @@ export interface PvpBattleInsert {
   data: string;
 }
 
+/**
+ * Ghi dữ liệu phát lại đã NÉN (deflate) thay vì JSON thuần: một trận 6v6 ~190KB JSON chỉ còn
+ * ~12KB trên đĩa (giảm ~94%), tránh `pvp_battles` phình theo số trận. Cột `data` lưu BLOB;
+ * bản ghi cũ (TEXT JSON) vẫn đọc được nhờ `decodeBattleData`.
+ */
 export function insertBattle(db: DB, b: PvpBattleInsert, nowIso: string): number {
   const r = db
     .prepare(
       `INSERT INTO pvp_battles (attacker_id, defender_id, winner, rounds, attacker_lc, defender_lc, data, created_at)
        VALUES (?,?,?,?,?,?,?,?)`,
     )
-    .run(b.attackerId, b.defenderId, b.winner, b.rounds, b.attackerLc, b.defenderLc, b.data, nowIso);
+    .run(b.attackerId, b.defenderId, b.winner, b.rounds, b.attackerLc, b.defenderLc, deflateSync(b.data), nowIso);
   return Number(r.lastInsertRowid);
+}
+
+/** Cột `data` đọc từ DB: TEXT (bản ghi cũ) hoặc BLOB nén (bản ghi mới). */
+type BattleData = string | Uint8Array;
+
+function decodeBattleData(raw: BattleData): string {
+  return typeof raw === 'string' ? raw : inflateSync(raw).toString('utf8');
 }
 
 export interface PvpBattleRow {
@@ -75,29 +88,32 @@ export interface PvpBattleRow {
   defender_avatar: string | null;
 }
 
-const BATTLE_SELECT = `SELECT b.id, b.attacker_id, b.defender_id, b.winner, b.rounds, b.attacker_lc, b.defender_lc,
-         b.data, b.created_at,
+/** Dòng nhật ký (không kèm `data`): trang lịch sử chỉ cần phần tóm tắt nên bỏ qua blob phát lại. */
+export type PvpBattleSummaryRow = Omit<PvpBattleRow, 'data'>;
+
+const BATTLE_COLUMNS = `b.id, b.attacker_id, b.defender_id, b.winner, b.rounds, b.attacker_lc, b.defender_lc, b.created_at,
          ua.username AS attacker_username, ua.display_name AS attacker_display_name, ua.avatar AS attacker_avatar,
-         ud.username AS defender_username, ud.display_name AS defender_display_name, ud.avatar AS defender_avatar
-    FROM pvp_battles b
+         ud.username AS defender_username, ud.display_name AS defender_display_name, ud.avatar AS defender_avatar`;
+const BATTLE_FROM = `FROM pvp_battles b
     JOIN users ua ON ua.id = b.attacker_id
     JOIN users ud ON ud.id = b.defender_id`;
 
 /** Nhật ký trận của người chơi (cả khi khiêu chiến lẫn khi bị khiêu chiến), mới nhất trước. */
-export function listBattles(db: DB, userId: number, limit: number, offset: number): { rows: PvpBattleRow[]; total: number } {
+export function listBattles(db: DB, userId: number, limit: number, offset: number): { rows: PvpBattleSummaryRow[]; total: number } {
   const where = 'WHERE b.attacker_id = ? OR b.defender_id = ?';
   const total = (db.prepare(`SELECT COUNT(*) AS n FROM pvp_battles b ${where}`).get(userId, userId) as { n: number }).n;
   const rows = db
-    .prepare(`${BATTLE_SELECT} ${where} ORDER BY b.id DESC LIMIT ? OFFSET ?`)
-    .all(userId, userId, limit, offset) as unknown as PvpBattleRow[];
+    .prepare(`SELECT ${BATTLE_COLUMNS} ${BATTLE_FROM} ${where} ORDER BY b.id DESC LIMIT ? OFFSET ?`)
+    .all(userId, userId, limit, offset) as unknown as PvpBattleSummaryRow[];
   return { rows, total };
 }
 
-/** Một trận theo id; chỉ trả khi người gọi là một trong hai bên. */
+/** Một trận theo id; chỉ trả khi người gọi là một trong hai bên. `data` được giải nén về JSON. */
 export function findBattle(db: DB, id: number, userId: number): PvpBattleRow | undefined {
-  return db.prepare(`${BATTLE_SELECT} WHERE b.id = ? AND (b.attacker_id = ? OR b.defender_id = ?)`).get(id, userId, userId) as
-    | PvpBattleRow
-    | undefined;
+  const row = db
+    .prepare(`SELECT ${BATTLE_COLUMNS}, b.data ${BATTLE_FROM} WHERE b.id = ? AND (b.attacker_id = ? OR b.defender_id = ?)`)
+    .get(id, userId, userId) as unknown as (Omit<PvpBattleRow, 'data'> & { data: BattleData }) | undefined;
+  return row ? { ...row, data: decodeBattleData(row.data) } : undefined;
 }
 
 export interface PvpRecord {

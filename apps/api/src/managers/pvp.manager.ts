@@ -177,6 +177,33 @@ interface StoredBattle {
   events: PvpEventDto[];
 }
 
+/** Field số của sự kiện `buff` — bỏ khỏi JSON khi bằng 0 (xem `compactEvents`). */
+const BUFF_ZERO_KEYS = [
+  'damageFlat', 'hpFlat', 'critBps', 'critDamageBps', 'takenDownBps', 'lifestealBps',
+  'hitBps', 'dodgeBps', 'defArmor', 'defPenBps', 'burnUpBps',
+] as const;
+/** Field số của sự kiện `debuff` — bỏ khỏi JSON khi bằng 0 (xem `compactEvents`). */
+const DEBUFF_ZERO_KEYS = [
+  'damageFlat', 'hpFlat', 'critBps', 'critDamageBps',
+  'hitDownBps', 'dodgeDownBps', 'defArmorDown', 'defPenDownBps', 'burnFlat',
+] as const;
+
+/**
+ * Lược bỏ các field số bằng 0 khỏi sự kiện `buff`/`debuff` (đo được: −44% dung lượng phát lại).
+ * Hai loại này chiếm ~70% tổng bytes của một trận vì mỗi lượt phát buff cho từng đồng minh, mà
+ * mỗi lớp thường chỉ cộng 1–2 chỉ số — phần field còn lại luôn 0 nên mang theo là vô ích.
+ * Dữ liệu lưu và trả về dùng CHUNG bản đã rút gọn (một nguồn sự thật); client đọc field thiếu = 0.
+ */
+function compactEvents(events: PvpEventDto[]): PvpEventDto[] {
+  for (const ev of events) {
+    const keys = ev.t === 'buff' ? BUFF_ZERO_KEYS : ev.t === 'debuff' ? DEBUFF_ZERO_KEYS : null;
+    if (!keys) continue;
+    const bag = ev as unknown as Record<string, number | undefined>;
+    for (const k of keys) if (!bag[k]) delete bag[k];
+  }
+  return events;
+}
+
 function toBattleDto(row: PvpBattleRow, userId: number): PvpBattleDto {
   const data = JSON.parse(row.data) as StoredBattle;
   const side = mySideOf(row, userId);
@@ -487,10 +514,12 @@ export function challenge(ctx: GameContext, userId: number, opponentId: number):
     { side: 'b', units: theirs.units, gems: theirs.gems },
   ];
   const sim = simulatePvp(sides, ctx.rand);
+  // Rút gọn sự kiện trước khi lưu: bản lưu và bản trả về dùng chung (một nguồn sự thật).
+  const events = compactEvents(sim.events);
 
   const myLc = teamLc(mine.units, mine.gem);
   const oppLc = teamLc(theirs.units, theirs.gem);
-  const stored: StoredBattle = { units: sim.units, events: sim.events };
+  const stored: StoredBattle = { units: sim.units, events };
   const now = iso(ctx.now());
   const id = tx(ctx.db, () =>
     insertBattle(
@@ -520,7 +549,7 @@ export function challenge(ctx: GameContext, userId: number, opponentId: number):
     result: outcomeOf(sim.winner, 'a'),
     rounds: sim.rounds,
     units: sim.units,
-    events: sim.events,
+    events,
   };
 }
 

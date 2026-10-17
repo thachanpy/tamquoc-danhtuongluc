@@ -48,7 +48,7 @@ Công nghệ mục tiêu:
 
 - Monorepo TypeScript.
 - Frontend: **SolidJS** cho toàn bộ UI; riêng sân khấu mở thẻ/nâng cấp và sân đấu PvP dùng **PixiJS** (engine đồ hoạ ngoài) vì hiệu ứng SolidJS + CSS không đạt yêu cầu trực quan.
-- Backend: Fastify REST API.
+- Backend: Fastify REST API. Response được **nén tự động** (`@fastify/compress`, br/gzip theo `Accept-Encoding`, ngưỡng 1KB) — mấu chốt cho payload lớn như nhật ký/chi tiết trận PvP (~200KB–1MB), đặc biệt khi chạy dev qua Vite proxy (production đã có nginx nén hộ).
 - Database: SQLite.
 - Cache (tùy chọn): **Redis/Dragonfly** qua client `redis` (node-redis). Mặc định dùng `REDIS_URL` (không đặt thì `redis://127.0.0.1:6379`); đặt `REDIS_URL=off` để tắt, hoặc khi kết nối lỗi thì chạy không cache (đọc thẳng SQLite) — xem mục 7.11.
 - Shared package: types, schema validation, DTO và enum dùng chung.
@@ -1154,7 +1154,9 @@ Lịch sử tặng thẻ (migration v5).
 ### 7.8g. Đấu trường PvP (migration v14, v15) và Ngọc Ngũ Hành (migration v16)
 
 - `pvp_teams`: `user_id`, `slot` (1–6, CHECK), `general_id`, `level` (1–10, CHECK), `updated_at`; PK (`user_id`, `slot`). Lưu cặp (tướng, cấp) chứ không lưu `card_id` để đội hình không hỏng khi thẻ bị tiêu thụ lúc ghép (mục 6.7).
-- `pvp_battles`: `id`, `attacker_id`, `defender_id`, `winner` (`a`|`b`|`draw`), `rounds`, `attacker_lc`, `defender_lc` (tổng Lực chiến từng đội trong trận — migration 15 đổi tên từ `attacker_power`/`defender_power`), `data` (JSON: seed + `units` + `events` để phát lại), `created_at`. Index `(attacker_id, id)`, `(defender_id, id)`.
+- `pvp_battles`: `id`, `attacker_id`, `defender_id`, `winner` (`a`|`b`|`draw`), `rounds`, `attacker_lc`, `defender_lc` (tổng Lực chiến từng đội trong trận — migration 15 đổi tên từ `attacker_power`/`defender_power`), `data` (dữ liệu phát lại: seed + `units` + `events`), `created_at`. Index `(attacker_id, id)`, `(defender_id, id)`.
+  - `data` lưu **BLOB nén deflate** (không phải TEXT JSON): một trận 6v6 ~190KB JSON chỉ còn ~12KB trên đĩa (giảm ~94%), tránh bảng phình theo số trận. Ghi bằng `deflateSync`, đọc bằng `inflateSync` (`pvp.repository.ts`); bản ghi cũ dạng TEXT JSON vẫn đọc được (`decodeBattleData` đọc theo `typeof raw === 'string'`). Trang lịch sử không đọc cột này (`listBattles` chọn cột tường minh, bỏ `data`).
+  - Sự kiện `buff`/`debuff` trong `events` được **lược các field số bằng 0** trước khi lưu và trả về (`compactEvents` trong `pvp.manager.ts`; các field này là tùy chọn trong `PvpEventDto`, client đọc field thiếu như 0). Riêng việc lược field là để giảm payload/đĩa — không đổi logic engine.
 - Không thêm bảng/ledger vé: PvP không tiêu vé, không tạo thẻ.
 - **Ngọc Ngũ Hành (v16)** — `user_gems`: `id`, `user_id`, `element` (`kim|moc|thuy|hoa|tho`), `level` (1–10), `status` (`active|consumed`), `consumed_at`, `consumed_by_merge_id`, `updated_at`, `created_at` (ràng buộc status ↔ consumed_at nhất quán). Index `(user_id, status)`, `(user_id, element, level)`.
 - **`gem_merge_history`** (v16): nhật ký từng lần ghép Ngọc — `input_gem_ids_snapshot`, `element`, `input_level` (1–9), `result_gem_id` (viên kết quả, cấp `input_level+1`), `success_chance`, `failure_chance`, `outcome` (`success|failure`), `failure_distribution_snapshot`, `idempotency_key`, `created_at`; UNIQUE `(user_id, idempotency_key)`.

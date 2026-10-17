@@ -68,16 +68,16 @@ export const DROP = {
 
 /** Thời gian sống của từng nhóm cache (giây). Ngắn cho dữ liệu hay đổi, dài cho dữ liệu ít đổi. */
 export const TTL = {
-  leaderboard: 30,
+  leaderboard: 5 * 60,
   user: 60,
   session: 60,
-  settings: 300,
+  settings: 5 * 60,
   collection: 30,
   pvp: 30,
   quests: 15,
   history: 30,
   battles: 15,
-  battleDetail: 300,
+  battleDetail: 7 * 24 * 60 * 60,
   opponent: 30,
   combat: 60,
   admin: 15,
