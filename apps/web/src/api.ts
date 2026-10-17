@@ -38,6 +38,10 @@ import type {
   PvpStyle,
   PvpTeamDto,
   PvpUnitDto,
+  PvpHeroAdminDto,
+  PvpHeroesAdminDto,
+  PvpGemAdminDto,
+  PvpGemsAdminDto,
   QuickUpgradeResultDto,
   RecipientDto,
   TicketType,
@@ -161,6 +165,15 @@ export const api = {
       call<Page<AdminCardDto>>('GET', '/api/admin/cards?' + qs(q)),
     gems: (q: { userId?: number; element?: GemElement; level?: number; sort?: string; page?: number; pageSize?: number }) =>
       call<Page<AdminGemDto>>('GET', '/api/admin/gems?' + qs(q)),
+    // Cấu hình PvP (Tướng & Ngọc Ngũ Hành) — server lưu DB rồi nạp lại cache, engine áp dụng ngay.
+    pvpHeroes: (q: { faction?: Faction; style?: PvpStyle; q?: string }) =>
+      call<PvpHeroesAdminDto>('GET', '/api/admin/pvp/heroes?' + qs(q)),
+    pvpHeroCreate: (body: { name: string; faction: Faction }) => call<PvpHeroAdminDto>('POST', '/api/admin/pvp/heroes', body),
+    pvpHeroUpdate: (id: string, body: Omit<PvpHeroAdminDto, 'id'>) =>
+      call<PvpHeroAdminDto>('PUT', `/api/admin/pvp/heroes/${encodeURIComponent(id)}`, body),
+    pvpHeroDelete: (id: string) => call<{ ok: true }>('DELETE', `/api/admin/pvp/heroes/${encodeURIComponent(id)}`),
+    pvpGems: () => call<PvpGemsAdminDto>('GET', '/api/admin/pvp/gems'),
+    pvpGemUpdate: (body: PvpGemAdminDto) => call<PvpGemAdminDto>('PUT', '/api/admin/pvp/gems', body),
   },
   quests: () => call<QuestsDto>('GET', '/api/quests'),
   claimQuests: (keys?: string[]) => call<QuestClaimResultDto>('POST', '/api/quests/claim', keys ? { keys } : {}),

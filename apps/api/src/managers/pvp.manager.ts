@@ -1,6 +1,5 @@
 import {
   BPS_SCALE,
-  GENERALS_BY_ID,
   PVP_BACK_DAMAGE_BPS,
   PVP_CRIT_BPS_PER_LEVEL,
   PVP_DEF_PEN_BPS,
@@ -13,14 +12,14 @@ import {
   PVP_TEAM_GEM_COUNT,
   PVP_TEAM_SIZE,
   autoTeamGemElements,
-  pvpBaseDamage,
-  pvpBaseHp,
   pvpCleanseBps,
   pvpCounterChanceBps,
   pvpCritDamageBps,
-  pvpDefArmor,
   pvpDispelBps,
   pvpDodgeBps,
+  pvpHeroBaseDamage,
+  pvpHeroBaseHp,
+  pvpHeroDefArmor,
   pvpHitBps,
   pvpGemTeamStats,
   pvpLc,
@@ -35,6 +34,7 @@ import {
   pvpTeamLc,
   pvpUnitLc,
   ROSTER,
+  type PvpProfile,
   type PvpRow,
 } from '@tq/game-config';
 import {
@@ -242,17 +242,16 @@ export function ownedGemStats(ctx: GameContext, userId: number, elements: GemEle
   return pvpGemTeamStats(resolveTeamGems(elements, ownedGemPairs(ctx, userId)));
 }
 
-/** Phong cách chiến đấu của mọi tướng trong roster (ổn định theo id) — client hiện nhãn trên mọi thẻ tướng. */
-const ROSTER_STYLES: Record<string, PvpStyle> = Object.fromEntries(ROSTER.map((g) => [g.id, pvpProfile(g.id).style]));
-export const rosterStyles = (): Record<string, PvpStyle> => ROSTER_STYLES;
+/** Phong cách chiến đấu của mọi tướng trong roster — đọc cấu hình ĐANG hiệu lực (Admin sửa là đổi ngay). */
+const rosterMapOf = <T>(pick: (p: PvpProfile) => T): Record<string, T> =>
+  Object.fromEntries(ROSTER.map((g) => [g.id, pick(pvpProfile(g.id))]));
+export const rosterStyles = (): Record<string, PvpStyle> => rosterMapOf((p) => p.style);
 
 /** Kỹ năng của mọi tướng trong roster (ổn định theo id) — client hiện kỹ năng khi chọn tướng vào đội. */
-const ROSTER_SKILLS: Record<string, PvpSkill> = Object.fromEntries(ROSTER.map((g) => [g.id, pvpProfile(g.id).skill]));
-export const rosterSkills = (): Record<string, PvpSkill> => ROSTER_SKILLS;
+export const rosterSkills = (): Record<string, PvpSkill> => rosterMapOf((p) => p.skill);
 
 /** Tên kỹ năng thật của mọi tướng (theo SKILLS.md) — client hiện tên chiêu thay cho nhãn chung. */
-const ROSTER_SKILL_NAMES: Record<string, string> = Object.fromEntries(ROSTER.map((g) => [g.id, pvpProfile(g.id).skillName]));
-export const rosterSkillNames = (): Record<string, string> => ROSTER_SKILL_NAMES;
+export const rosterSkillNames = (): Record<string, string> => rosterMapOf((p) => p.skillName);
 
 /**
  * Chi tiết chiến đấu của một tướng ở một cấp (mục 6.7) — modal xem thẻ ở Bộ sưu tập.
@@ -265,8 +264,8 @@ export function getCombatStats(generalId: string, level: number, squad?: string[
   // Hệ số kỹ năng TẠI CẤP hiện tại: mọi hiệu ứng (buff/hồi/debuff/…) đã quy theo cấp — khớp engine.
   const def = pvpSkillDefAtLevel(profile.def, level);
   const passive = PVP_PASSIVE_EFFECT[profile.passive];
-  const baseHp = pvpBaseHp(level);
-  const baseDamage = pvpBaseDamage(level);
+  const baseHp = pvpHeroBaseHp(profile, level);
+  const baseDamage = pvpHeroBaseDamage(profile, level);
   // Chỉ số của riêng tướng: chỉ áp nội tại (mục 10.1). Buff theo hàng và buff đồng minh phát
   // mỗi lượt KHÔNG cộng sẵn ở đây — chỉ số đó do engine áp khi vào trận.
   const hpBps = passive.stat === 'maxHp' ? passive.bps : 0;
@@ -313,7 +312,7 @@ export function getCombatStats(generalId: string, level: number, squad?: string[
       // Bộ chỉ số Trao đổi đòn (mục 18): Chính xác/Né tránh scale theo cấp; buff/debuff cộng trừ thêm trong trận.
       hitBps: pvpHitBps(level),
       dodgeBps: pvpDodgeBps(level),
-      defArmor: pvpDefArmor(level) + (passive.stat === 'def' ? passive.armor : 0),
+      defArmor: pvpHeroDefArmor(profile, level) + (passive.stat === 'def' ? passive.armor : 0),
       defPenBps: PVP_DEF_PEN_BPS,
     },
     passiveEffect: { ...passive },
@@ -378,11 +377,12 @@ function buildPreBattle(
   passiveDamageBps: number,
   gem: PvpGemStats,
 ): NonNullable<PvpCombatDto['preBattle']> {
-  const faction = GENERALS_BY_ID.get(generalId)?.faction ?? '';
+  // Phe lấy từ hồ sơ ĐANG hiệu lực (DB) — không đọc bảng cứng để Admin đổi Phe là áp dụng ngay.
+  const faction = pvpProfile(generalId).faction;
   // Cổng Đồng Phe chỉ buff tướng CÙNG PHE: đếm số tướng trong đội có cùng faction với tướng này.
-  const factionCount = squad.reduce((n, id) => n + ((GENERALS_BY_ID.get(id)?.faction ?? '') === faction ? 1 : 0), 0);
+  const factionCount = squad.reduce((n, id) => n + (pvpProfile(id).faction === faction ? 1 : 0), 0);
   // Aura Hỗ trợ: mỗi tướng Hỗ trợ trong đội là một lớp (trần 6 lớp).
-  const supportLayers = squad.reduce((n, id) => n + (ROSTER_STYLES[id] === 'support' ? 1 : 0), 0);
+  const supportLayers = squad.reduce((n, id) => n + (pvpProfile(id).style === 'support' ? 1 : 0), 0);
   // Vị trí đội hình: slot 1-3 hàng trước (+5% Máu), slot 4-6 hàng sau (+5% Sát thương).
   const slot = squad.indexOf(generalId);
   const row: PvpRow = slot >= PVP_LANES ? 'back' : 'front';

@@ -1,7 +1,6 @@
 import type { GemElement, PvpBuffScope, PvpEventDto, PvpSide, PvpUnitStateDto, PvpWinner } from '@tq/shared';
 import {
   BPS_SCALE,
-  GENERALS_BY_ID,
   PVP_BACK_DAMAGE_BPS,
   PVP_BURN_BPS,
   PVP_BURN_LIFESTEAL_BPS,
@@ -22,17 +21,17 @@ import {
   PVP_SHIELD_BREAK_REMOVE_BPS,
   PVP_VS_DEBUFF_MIN_LAYERS,
   isAllyTargeting,
-  pvpBaseDamage,
-  pvpBaseHp,
   pvpArmorDrBps,
   pvpArmorEffective,
   pvpCleanseBps,
   pvpCritDamageBps,
-  pvpDefArmor,
   pvpDispelBps,
   pvpDodgeBps,
   pvpFactionBonus,
   pvpGemTeamStats,
+  pvpHeroBaseDamage,
+  pvpHeroBaseHp,
+  pvpHeroDefArmor,
   pvpHitBps,
   pvpLc,
   pvpLevelSpanBps,
@@ -298,8 +297,8 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
   for (const s of sides) {
     for (const u of s.units) {
       const profile = pvpProfile(u.generalId);
-      const baseHp = pvpBaseHp(u.level);
-      const baseDamage = pvpBaseDamage(u.level);
+      const baseHp = pvpHeroBaseHp(profile, u.level);
+      const baseDamage = pvpHeroBaseDamage(profile, u.level);
       units.push({
         idx: idxOf(s.side, u.slot),
         side: s.side,
@@ -324,7 +323,7 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
         dispelBps: 0,
         hitBps: pvpHitBps(u.level),
         dodgeBps: pvpDodgeBps(u.level),
-        defArmor: pvpDefArmor(u.level),
+        defArmor: pvpHeroDefArmor(profile, u.level),
         defPenBps: PVP_DEF_PEN_BPS,
         gemTakenDownBps: 0,
         lifestealBps: 0,
@@ -351,14 +350,14 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
   //    Buff tăng sức mạnh theo kỹ năng KHÔNG áp trước trận mà phát dần mỗi lượt trong act().
   const supportLayersOf = (side: PvpSide) =>
     units.reduce((n, x) => n + (x.side === side && x.profile.style === 'support' ? 1 : 0), 0);
-  /** Số tướng CÙNG PHE trong mỗi đội (theo faction của tướng) — dùng cho Cổng Đồng Phe. */
+  /** Số tướng CÙNG PHE trong mỗi đội (theo `profile.faction` — Admin sửa Phe là áp dụng ngay). */
   const factionCountOf = (side: PvpSide, faction: string) =>
-    units.reduce((n, x) => n + (x.side === side && (GENERALS_BY_ID.get(x.generalId)?.faction ?? '') === faction ? 1 : 0), 0);
+    units.reduce((n, x) => n + (x.side === side && x.profile.faction === faction ? 1 : 0), 0);
   for (const u of units) {
     const passiveEffect = PVP_PASSIVE_EFFECT[u.profile.passive];
     const style = pvpStyleBonus(u.profile.style, supportLayersOf(u.side));
     // Cổng Đồng Phe: mỗi tướng nhận mốc theo số tướng CÙNG PHE của chính mình (không dùng mốc phe đông nhất).
-    const faction = pvpFactionBonus(factionCountOf(u.side, GENERALS_BY_ID.get(u.generalId)?.faction ?? ''));
+    const faction = pvpFactionBonus(factionCountOf(u.side, u.profile.faction));
     // Aura Ngọc Ngũ Hành: cộng thẳng vào chỉ số nền của MỌI tướng trong đội (không thể bị Xóa Buff).
     const gem = gemStats[u.side];
     const damageBps =
@@ -1185,8 +1184,11 @@ export function simulatePvp(sides: PvpSideInput[], rand: RandomInt): PvpSimResul
       db.defArmorDown > 0 ||
       db.defPenDownBps > 0;
     if (weaken || db.burnBps > 0) {
+      // Tướng vừa hỗ trợ đồng minh vừa gây bất lợi (Gia Cát Chiêm — mục 35) thì debuff vẫn
+      // nhắm vào ĐỊCH, giống dispel (mục 14) và Xóa Khiên (mục 17) ở trên.
+      const weakenTargets = isAllyTargeting(def.targeting) ? enemiesOf(u) : targets;
       const expiresRound = round + db.rounds - 1;
-      for (const t of targets) {
+      for (const t of weakenTargets) {
         if (!t.alive) continue;
         // Né thành công thì mục tiêu không dính bất kỳ lớp suy yếu/thiêu đốt nào của chiêu (mục 18) —
         // dùng chung roll Trúng/Trượt với đòn sát thương và choáng ở trên.

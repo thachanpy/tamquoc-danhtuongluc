@@ -7,6 +7,7 @@ export * from './roster.ts';
 export * from './rates.ts';
 export * from './quests.ts';
 export * from './pvp.ts';
+export * from './pvp-codec.ts';
 export * from './gems.ts';
 export { validateGameConfig } from './validate.ts';
 

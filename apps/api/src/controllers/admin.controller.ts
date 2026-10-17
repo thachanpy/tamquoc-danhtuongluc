@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { schemas, type GiftCodeReward, type TicketType } from '@tq/shared';
+import { schemas, type GiftCodeReward, type PvpGemAdminDto, type TicketType } from '@tq/shared';
 import type { GameContext } from '../context.ts';
 import {
   adminGrantTickets,
@@ -15,6 +15,17 @@ import {
 } from '../managers/admin.manager.ts';
 import { getSettings, setRequireApproval } from '../managers/settings.manager.ts';
 import { adminCreateGiftCode, adminListGiftCodes, adminSetGiftCodeActive } from '../managers/giftcode.manager.ts';
+import {
+  adminCreatePvpHero,
+  adminDeletePvpHero,
+  adminListPvpHeroes,
+  adminListPvpGems,
+  adminUpdatePvpHero,
+  adminUpdatePvpGem,
+  type AdminPvpHeroCreateInput,
+  type AdminPvpHeroUpdateInput,
+  type AdminPvpHeroesQuery,
+} from '../managers/admin-pvp.manager.ts';
 import { adminGuard, LIMIT_120 } from '../middleware/guards.ts';
 
 /** Routes trang quản trị (mục 3.7, 3.8, 3.9) — mọi route yêu cầu quyền admin. */
@@ -63,5 +74,33 @@ export function registerAdminRoutes(app: FastifyInstance, ctx: GameContext): voi
     '/api/admin/giftcodes/:id/active',
     { preHandler: admin, schema: { params: schemas.idParams, body: schemas.adminGiftCodeActiveBody }, config: LIMIT_120 },
     async (req) => adminSetGiftCodeActive(ctx, (req.params as { id: number }).id, (req.body as { isActive: boolean }).isActive),
+  );
+
+  // ===== Cấu hình PvP: Tướng & Ngọc Ngũ Hành (mục 6.7) =====
+  // Mọi route ghi đều bị giới hạn tần suất; manager lưu DB rồi reload() cache để engine áp dụng ngay.
+  app.get('/api/admin/pvp/heroes', { preHandler: admin, schema: { querystring: schemas.adminPvpHeroesQuery } }, async (req) =>
+    adminListPvpHeroes(ctx, req.query as AdminPvpHeroesQuery),
+  );
+  app.post(
+    '/api/admin/pvp/heroes',
+    { preHandler: admin, schema: { body: schemas.adminPvpHeroCreateBody }, config: LIMIT_120 },
+    async (req) => adminCreatePvpHero(ctx, req.body as AdminPvpHeroCreateInput),
+  );
+  app.put(
+    '/api/admin/pvp/heroes/:id',
+    { preHandler: admin, schema: { params: schemas.pvpIdParams, body: schemas.adminPvpHeroUpdateBody }, config: LIMIT_120 },
+    async (req) => adminUpdatePvpHero(ctx, (req.params as { id: string }).id, req.body as AdminPvpHeroUpdateInput),
+  );
+  app.delete(
+    '/api/admin/pvp/heroes/:id',
+    { preHandler: admin, schema: { params: schemas.pvpIdParams }, config: LIMIT_120 },
+    async (req) => adminDeletePvpHero(ctx, (req.params as { id: string }).id),
+  );
+
+  app.get('/api/admin/pvp/gems', { preHandler: admin }, async () => adminListPvpGems(ctx));
+  app.put(
+    '/api/admin/pvp/gems',
+    { preHandler: admin, schema: { body: schemas.adminPvpGemsUpdateBody }, config: LIMIT_120 },
+    async (req) => adminUpdatePvpGem(ctx, req.body as PvpGemAdminDto),
   );
 }

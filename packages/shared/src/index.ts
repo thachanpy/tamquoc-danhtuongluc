@@ -51,6 +51,20 @@ export const GEM_STAT_LABELS: Record<keyof PvpGemStats, string> = {
   defPenBps: 'Xuyên giáp',
 };
 
+/** Danh sách khóa chỉ số Ngọc hợp lệ (dùng cho schema + dropdown Admin). */
+export const PVP_GEM_STAT_KEYS = [
+  'damageBps',
+  'takenDownBps',
+  'hpBps',
+  'lifestealBps',
+  'hitBps',
+  'dodgeBps',
+  'critBps',
+  'critDamageBps',
+  'defArmor',
+  'defPenBps',
+] as const;
+
 /** Một viên Ngọc Ngũ Hành người chơi đang sở hữu (vật phẩm rời theo loại + cấp). */
 export interface GemDto {
   id: number;
@@ -514,9 +528,280 @@ export interface ApiErrorBody {
   error: { code: string; message: string };
 }
 
+// ===== Danh mục hiệu ứng kỹ năng PvP (trang Admin — SKILLS.md "Danh mục 20 Hiệu ứng") =====
+//
+// Mỗi hiệu ứng là một dòng dữ liệu cấu hình được; `PvpConfigRegistry` (apps/api) dựng lại
+// `PvpSkillDef` của engine từ danh sách này nên Admin sửa là trận PvP áp dụng ngay.
+
+/** Phạm vi nhận hiệu ứng có lợi (buff/hồi máu) của kỹ năng. */
+export const PVP_BUFF_SCOPES = ['none', 'self', 'all_allies', 'same_row_allies', 'lowest_ally', 'front_allies', 'back_allies', 'burn_allies'] as const;
+export type PvpBuffScope = (typeof PVP_BUFF_SCOPES)[number];
+
+export const PVP_BUFF_SCOPE_LABELS: Record<PvpBuffScope, string> = {
+  none: 'không nhắm ai',
+  self: 'bản thân',
+  all_allies: 'toàn bộ đồng minh (kể cả bản thân)',
+  same_row_allies: 'đồng minh cùng hàng (kể cả bản thân)',
+  lowest_ally: 'đồng minh thấp máu nhất',
+  front_allies: 'các tướng hàng trước',
+  back_allies: 'các tướng hàng sau',
+  burn_allies: 'các đồng minh có khả năng Thiêu đốt',
+};
+
+/** Hiệu ứng tăng sức mạnh phát cho bản thân/đồng minh (mục 1, 4, 9, 11, 13, 16, 20). */
+export const PVP_BUFF_EFFECT_TYPES = [
+  'BUFF_DAMAGE',
+  'BUFF_HP',
+  'BUFF_CRIT',
+  'BUFF_CRIT_DAMAGE',
+  'BUFF_TAKEN_DOWN',
+  'BUFF_LIFESTEAL',
+  'BUFF_SHIELD',
+  'BUFF_HIT',
+  'BUFF_DODGE',
+  'BUFF_DEF_ARMOR',
+  'BUFF_DEF_PEN',
+  'BUFF_HOT',
+  'BUFF_BURN_UP',
+] as const;
+
+/** Hiệu ứng bất lợi áp lên địch (mục 2, 5, 8, 10, 11, 17, 20). */
+export const PVP_DEBUFF_EFFECT_TYPES = [
+  'DEBUFF_DAMAGE_DOWN',
+  'DEBUFF_HP_DOWN',
+  'DEBUFF_CRIT_DOWN',
+  'DEBUFF_CRIT_DAMAGE_DOWN',
+  'DEBUFF_HIT_DOWN',
+  'DEBUFF_DODGE_DOWN',
+  'DEBUFF_DEF_ARMOR_DOWN',
+  'DEBUFF_DEF_PEN_DOWN',
+  'DEBUFF_BURN',
+] as const;
+
+/**
+ * Hiệu ứng tức thì / cờ kỹ năng / nội tại bị động (mục 3, 6, 7, 12, 13, 14, 15, 17, 18, 19).
+ * LƯU Ý: "Sát thương kỹ năng" (mục 1) KHÔNG nằm trong danh mục này — nó dùng riêng ô `damage_rate`
+ * của Tướng để tránh trùng lặp dữ liệu.
+ */
+export const PVP_ACTIVE_EFFECT_TYPES = [
+  'HEAL',
+  'HEAL_SELF',
+  'STUN',
+  'CLEANSE',
+  'PURIFY',
+  'DISPEL',
+  'LIFESTEAL',
+  'TEAM_LIFESTEAL',
+  'COUNTER',
+  'SHIELD_BREAK',
+  'REVIVE',
+  'VS_DEBUFF_BONUS',
+  'SELF_BURN',
+  'BURN_CRIT_MUL',
+  'BURN_CRIT_DAMAGE',
+  'BURN_LIFESTEAL',
+  'DODGE_REACT_COUNTER',
+  'DODGE_REACT_CRIT_DAMAGE',
+  'GUARANTEED_HIT_BELOW_HP',
+] as const;
+
+export const PVP_EFFECT_TYPES = [
+  ...PVP_ACTIVE_EFFECT_TYPES,
+  ...PVP_BUFF_EFFECT_TYPES,
+  ...PVP_DEBUFF_EFFECT_TYPES,
+] as const;
+export type PvpEffectType = (typeof PVP_EFFECT_TYPES)[number];
+
+export const PVP_EFFECT_LABELS: Record<PvpEffectType, string> = {
+  HEAL: 'Hồi máu đồng minh',
+  HEAL_SELF: 'Tự hồi máu',
+  STUN: 'Choáng',
+  CLEANSE: 'Giải choáng & Thiêu đốt',
+  PURIFY: 'Thanh tẩy hiệu ứng bất lợi',
+  DISPEL: 'Xóa hiệu ứng có lợi của địch',
+  LIFESTEAL: 'Hút máu (bản thân)',
+  TEAM_LIFESTEAL: 'Hút máu đội',
+  COUNTER: 'Phản kích',
+  SHIELD_BREAK: 'Xóa Khiên',
+  REVIVE: 'Hồi sinh',
+  VS_DEBUFF_BONUS: 'Đao phủ (tăng ST lên mục tiêu Debuff)',
+  SELF_BURN: 'Tự thiêu đốt',
+  BURN_CRIT_MUL: 'Nhân chí mạng cho đòn Thiêu đốt',
+  BURN_CRIT_DAMAGE: 'ST chí mạng thêm khi đánh mục tiêu cháy',
+  BURN_LIFESTEAL: 'Hút máu từ đòn Thiêu đốt',
+  DODGE_REACT_COUNTER: 'Né thành công → phản kích',
+  DODGE_REACT_CRIT_DAMAGE: 'Né thành công → tích ST chí mạng',
+  GUARANTEED_HIT_BELOW_HP: 'Chắc chắn trúng khi mục tiêu thấp máu',
+  BUFF_DAMAGE: 'Buff sát thương',
+  BUFF_HP: 'Tăng máu tối đa',
+  BUFF_CRIT: 'Tăng tỷ lệ chí mạng',
+  BUFF_CRIT_DAMAGE: 'Tăng sát thương chí mạng',
+  BUFF_TAKEN_DOWN: 'Giảm sát thương nhận',
+  BUFF_LIFESTEAL: 'Ban Hút máu cho đồng minh',
+  BUFF_SHIELD: 'Tạo Khiên',
+  BUFF_HIT: 'Tăng Chính xác',
+  BUFF_DODGE: 'Tăng Né tránh',
+  BUFF_DEF_ARMOR: 'Tăng Giáp',
+  BUFF_DEF_PEN: 'Tăng Xuyên giáp',
+  BUFF_HOT: 'Hồi máu theo lượt (HoT)',
+  BUFF_BURN_UP: 'Tăng sát thương Thiêu đốt',
+  DEBUFF_DAMAGE_DOWN: 'Giảm sát thương địch gây ra',
+  DEBUFF_HP_DOWN: 'Giảm máu tối đa địch',
+  DEBUFF_CRIT_DOWN: 'Giảm tỷ lệ chí mạng địch',
+  DEBUFF_CRIT_DAMAGE_DOWN: 'Giảm ST chí mạng địch',
+  DEBUFF_HIT_DOWN: 'Giảm Chính xác địch',
+  DEBUFF_DODGE_DOWN: 'Giảm Né tránh địch',
+  DEBUFF_DEF_ARMOR_DOWN: 'Giảm Giáp địch',
+  DEBUFF_DEF_PEN_DOWN: 'Giảm Xuyên giáp địch',
+  DEBUFF_BURN: 'Thiêu đốt',
+};
+
+/** Công thức quy đổi giá trị hiệu ứng theo CẤP của tướng (khớp `packages/game-config/src/pvp.ts`). */
+export const PVP_FORMULA_TYPES = [
+  'FIXED',
+  'FIXED_CAP_MINUS_10',
+  'PER_LEVEL_LINEAR',
+  'LEVEL_SPAN',
+  'DEF_ARMOR_RAMP',
+] as const;
+export type PvpFormulaType = (typeof PVP_FORMULA_TYPES)[number];
+
+export const PVP_FORMULA_LABELS: Record<PvpFormulaType, string> = {
+  FIXED: 'Cố định (không đổi theo cấp)',
+  FIXED_CAP_MINUS_10: 'Chốt cấp 10 − 10 điểm % tại Cấp 1',
+  PER_LEVEL_LINEAR: 'Tuyến tính (Cấp × X%)',
+  LEVEL_SPAN: 'Nội suy Cấp 1 → Cấp 10',
+  DEF_ARMOR_RAMP: 'Thang dốc Giáp nguyên (Cấp 1 = 10%)',
+};
+
+/** Phong cách chiến đấu (PVP.md mục 4). */
+export const PVP_STYLES = ['attack', 'defense', 'support'] as const;
+export type PvpStyle = (typeof PVP_STYLES)[number];
+
+export const PVP_STYLE_LABELS: Record<PvpStyle, string> = {
+  attack: 'Tấn công',
+  defense: 'Phòng thủ',
+  support: 'Hỗ trợ',
+};
+
+/** Cách chọn mục tiêu của kỹ năng (PVP.md mục 2.4). */
+export const PVP_TARGETINGS = ['single', 'lane', 'back_row', 'back_single', 'highest_damage_enemy', 'front_enemies', 'all_enemies', 'all_allies', 'lowest_ally', 'front_allies', 'back_allies'] as const;
+export type PvpTargeting = (typeof PVP_TARGETINGS)[number];
+
+export const PVP_TARGETING_LABELS: Record<PvpTargeting, string> = {
+  single: 'một mục tiêu (ưu tiên hàng trước)',
+  lane: 'toàn bộ hàng ngang',
+  back_row: 'các tướng ở hàng sau',
+  back_single: 'một tướng ở hàng sau',
+  highest_damage_enemy: 'tướng địch có sát thương cao nhất',
+  front_enemies: 'các tướng ở hàng trước (hết hàng trước thì đánh hàng sau)',
+  all_enemies: 'toàn bộ tướng địch',
+  all_allies: 'toàn bộ đồng minh',
+  lowest_ally: 'đồng minh thấp máu nhất',
+  front_allies: 'các tướng hàng trước',
+  back_allies: 'các tướng hàng sau',
+};
+
+/**
+ * Nội tại tướng (SKILLS.md — mục "Nội tại tướng"). Chỉ có 4 nội tại và được RẢI ĐỀU trên toàn roster
+ * (mỗi nội tại ~1/4 số tướng); tướng được gán theo hướng kỹ năng nhưng luôn giữ số lượng cân bằng.
+ */
+export const PVP_PASSIVES = ['CRIT_5', 'DAMAGE_10', 'HP_10', 'DEF_5'] as const;
+export type PvpPassive = (typeof PVP_PASSIVES)[number];
+
+export const PVP_PASSIVE_LABELS: Record<PvpPassive, string> = {
+  CRIT_5: '+5% tỷ lệ chí mạng',
+  DAMAGE_10: '+10% sát thương',
+  HP_10: '+10% HP tối đa',
+  DEF_5: '+5% phòng thủ',
+};
+
+// ===== DTO cấu hình PvP cho trang Admin =====
+
+/** Một dòng hiệu ứng kỹ năng (lưu JSON trong `pvp_heroes.skill_effects`). */
+export interface PvpSkillEffectDto {
+  type: PvpEffectType;
+  /** Giá trị CHỐT (bps hoặc điểm Giáp) hoặc hệ số mỗi cấp khi `formulaType = PER_LEVEL_LINEAR`. */
+  value: number;
+  /** Giá trị tại Cấp 1 (chỉ dùng cho `LEVEL_SPAN`). */
+  minValue?: number;
+  /** Số lượt duy trì. */
+  duration: number;
+  /** Số lớp cộng dồn tối đa. */
+  maxLayers: number;
+  /** Tỉ lệ kích hoạt (bps) hoặc hệ số phụ. */
+  rate: number;
+  formulaType: PvpFormulaType;
+  /** Phạm vi nhận hiệu ứng (buff). */
+  scope?: PvpBuffScope;
+  /** Hình dạng hiệu ứng: đơn mục tiêu / hàng / toàn bộ. */
+  mode?: 'single' | 'row' | 'all';
+}
+
+/** Cấu hình đầy đủ của MỘT tướng PvP trong Admin. */
+export interface PvpHeroAdminDto {
+  id: string;
+  name: string;
+  faction: Faction;
+  isHot: boolean;
+  style: PvpStyle;
+  passiveType: PvpPassive;
+  baseHp: number;
+  baseAtk: number;
+  baseDef: number;
+  skillName: string;
+  skillDescription: string;
+  targetType: PvpTargeting;
+  damageRate: number;
+  skillEffects: PvpSkillEffectDto[];
+}
+
+export interface PvpHeroesAdminDto {
+  items: PvpHeroAdminDto[];
+  total: number;
+}
+
+/** Cấu hình MỘT hệ Ngọc Ngũ Hành trong Admin (2 chỉ số × Cấp 1/Cấp 10). */
+export interface PvpGemAdminDto {
+  element: GemElement;
+  stat1Type: keyof PvpGemStats;
+  stat1Min: number;
+  stat1Max: number;
+  stat2Type: keyof PvpGemStats;
+  stat2Min: number;
+  stat2Max: number;
+}
+
+export interface PvpGemsAdminDto {
+  items: PvpGemAdminDto[];
+}
+
 // ===== JSON Schemas (Fastify validate) =====
 
 const idempotencyKey = { type: 'string', minLength: 8, maxLength: 100, pattern: '^[A-Za-z0-9_-]+$' } as const;
+
+/** Schema một dòng hiệu ứng kỹ năng (dùng chung cho create/update Tướng PvP). */
+const pvpSkillEffect = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['type', 'value'],
+  properties: {
+    type: { type: 'string', enum: [...PVP_EFFECT_TYPES] },
+    /** Giá trị CHỐT (cap): bps (10000 = 100%) hoặc điểm Giáp nguyên. */
+    value: { type: 'integer', minimum: 0, maximum: 1000000 },
+    /** Chỉ dùng cho LEVEL_SPAN: giá trị tại Cấp 1 (bỏ trống = suy từ `value`). */
+    minValue: { type: 'integer', minimum: 0, maximum: 1000000 },
+    /** Số lượt duy trì (buff/debuff/thiêu đốt/phản kích). */
+    duration: { type: 'integer', minimum: 0, maximum: 50, default: 3 },
+    /** Số lớp cộng dồn tối đa. */
+    maxLayers: { type: 'integer', minimum: 1, maximum: 10, default: 3 },
+    /** Tỉ lệ kích hoạt (bps) hoặc hệ số mỗi cấp của hiệu ứng. */
+    rate: { type: 'integer', minimum: 0, maximum: 1000000, default: 0 },
+    formulaType: { type: 'string', enum: [...PVP_FORMULA_TYPES], default: 'FIXED_CAP_MINUS_10' },
+    scope: { type: 'string', enum: [...PVP_BUFF_SCOPES] },
+    mode: { type: 'string', enum: ['single', 'row', 'all'] },
+  },
+} as const;
 
 export const schemas = {
   credentials: {
@@ -611,6 +896,12 @@ export const schemas = {
     required: ['id'],
     properties: { id: { type: 'integer', minimum: 1 } },
   },
+  /** Định danh tướng PvP (khoá chữ) dùng trên đường dẫn Admin. */
+  pvpIdParams: {
+    type: 'object',
+    required: ['id'],
+    properties: { id: { type: 'string', minLength: 1, maxLength: 64, pattern: '^[a-z0-9_-]+$' } },
+  },
   adminUsersQuery: {
     type: 'object',
     additionalProperties: false,
@@ -662,6 +953,62 @@ export const schemas = {
       sort: { type: 'string', enum: ['newest', 'level_desc', 'level_asc', 'owner'] },
       page: { type: 'integer', minimum: 1, default: 1 },
       pageSize: { type: 'integer', minimum: 1, maximum: 500, default: 60 },
+    },
+  },
+  adminPvpHeroesQuery: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      faction: { type: 'string', enum: [...FACTIONS] },
+      style: { type: 'string', enum: [...PVP_STYLES] },
+      q: { type: 'string', maxLength: 64 },
+    },
+  },
+  /** Tạo Tướng PvP: chỉ cần Tên + Phe (mọi cấu hình khác lấy mặc định mức sàn ở server). */
+  adminPvpHeroCreateBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['name', 'faction'],
+    properties: {
+      name: { type: 'string', minLength: 1, maxLength: 64 },
+      faction: { type: 'string', enum: [...FACTIONS] },
+      id: { type: 'string', minLength: 1, maxLength: 64, pattern: '^[a-z0-9_-]+$' },
+    },
+  },
+  adminPvpHeroUpdateBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['name', 'faction', 'style', 'passiveType', 'baseHp', 'baseAtk', 'baseDef', 'skillName', 'targetType', 'damageRate', 'skillEffects'],
+    properties: {
+      name: { type: 'string', minLength: 1, maxLength: 64 },
+      faction: { type: 'string', enum: [...FACTIONS] },
+      isHot: { type: 'boolean', default: false },
+      style: { type: 'string', enum: [...PVP_STYLES] },
+      passiveType: { type: 'string', enum: [...PVP_PASSIVES] },
+      baseHp: { type: 'integer', minimum: 1, maximum: 10000000 },
+      baseAtk: { type: 'integer', minimum: 1, maximum: 10000000 },
+      baseDef: { type: 'integer', minimum: 0, maximum: 100000 },
+      skillName: { type: 'string', minLength: 1, maxLength: 64 },
+      skillDescription: { type: 'string', maxLength: 1000, default: '' },
+      targetType: { type: 'string', enum: [...PVP_TARGETINGS] },
+      /** % Sát thương kỹ năng gốc, đơn vị bps (10000 = 100%). */
+      damageRate: { type: 'integer', minimum: 0, maximum: 1000000 },
+      skillEffects: { type: 'array', maxItems: 40, items: pvpSkillEffect },
+    },
+  },
+  /** Cập nhật bảng Ngọc Ngũ Hành: chỉ 2 chỉ số × (Cấp 1, Cấp 10) cho từng hệ. */
+  adminPvpGemsUpdateBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['element', 'stat1Type', 'stat1Min', 'stat1Max', 'stat2Type', 'stat2Min', 'stat2Max'],
+    properties: {
+      element: { type: 'string', enum: [...GEM_ELEMENTS] },
+      stat1Type: { type: 'string', enum: [...PVP_GEM_STAT_KEYS] },
+      stat1Min: { type: 'integer', minimum: 0, maximum: 1000000 },
+      stat1Max: { type: 'integer', minimum: 0, maximum: 1000000 },
+      stat2Type: { type: 'string', enum: [...PVP_GEM_STAT_KEYS] },
+      stat2Min: { type: 'integer', minimum: 0, maximum: 1000000 },
+      stat2Max: { type: 'integer', minimum: 0, maximum: 1000000 },
     },
   },
   questClaimBody: {
@@ -940,16 +1287,6 @@ export interface DailyEventsDto {
 export const PVP_SIDES = ['a', 'b'] as const;
 export type PvpSide = (typeof PVP_SIDES)[number];
 
-/** Phong cách chiến đấu (PVP.md mục 4). */
-export const PVP_STYLES = ['attack', 'defense', 'support'] as const;
-export type PvpStyle = (typeof PVP_STYLES)[number];
-
-export const PVP_STYLE_LABELS: Record<PvpStyle, string> = {
-  attack: 'Tấn công',
-  defense: 'Phòng thủ',
-  support: 'Hỗ trợ',
-};
-
 /**
  * Nhóm kỹ năng chiến đấu (SKILLS.md — mỗi tướng có một bộ hiệu ứng tường minh trong game-config).
  * Nhóm chỉ dùng để phân loại/nhãn dự phòng trên UI; tên chiêu thật hiển thị qua `skillName`.
@@ -967,53 +1304,6 @@ export const PVP_SKILL_LABELS: Record<PvpSkill, string> = {
   DISPEL: 'Xóa hiệu ứng có lợi',
   PURIFY: 'Thanh tẩy hiệu ứng bất lợi',
   CLEANSE: 'Giải choáng',
-};
-
-/** Cách chọn mục tiêu của kỹ năng (PVP.md mục 2.4). */
-export const PVP_TARGETINGS = ['single', 'lane', 'back_row', 'back_single', 'highest_damage_enemy', 'front_enemies', 'all_enemies', 'all_allies', 'lowest_ally', 'front_allies', 'back_allies'] as const;
-export type PvpTargeting = (typeof PVP_TARGETINGS)[number];
-
-export const PVP_TARGETING_LABELS: Record<PvpTargeting, string> = {
-  single: 'một mục tiêu (ưu tiên hàng trước)',
-  lane: 'toàn bộ hàng ngang',
-  back_row: 'các tướng ở hàng sau',
-  back_single: 'một tướng ở hàng sau',
-  highest_damage_enemy: 'tướng địch có sát thương cao nhất',
-  front_enemies: 'các tướng ở hàng trước (hết hàng trước thì đánh hàng sau)',
-  all_enemies: 'toàn bộ tướng địch',
-  all_allies: 'toàn bộ đồng minh',
-  lowest_ally: 'đồng minh thấp máu nhất',
-  front_allies: 'các tướng hàng trước',
-  back_allies: 'các tướng hàng sau',
-};
-
-/** Phạm vi nhận hiệu ứng có lợi (buff/hồi máu) của kỹ năng. */
-export const PVP_BUFF_SCOPES = ['none', 'self', 'all_allies', 'same_row_allies', 'lowest_ally', 'front_allies', 'back_allies', 'burn_allies'] as const;
-export type PvpBuffScope = (typeof PVP_BUFF_SCOPES)[number];
-
-export const PVP_BUFF_SCOPE_LABELS: Record<PvpBuffScope, string> = {
-  none: 'không nhắm ai',
-  self: 'bản thân',
-  all_allies: 'toàn bộ đồng minh (kể cả bản thân)',
-  same_row_allies: 'đồng minh cùng hàng (kể cả bản thân)',
-  lowest_ally: 'đồng minh thấp máu nhất',
-  front_allies: 'các tướng hàng trước',
-  back_allies: 'các tướng hàng sau',
-  burn_allies: 'các đồng minh có khả năng Thiêu đốt',
-};
-
-/**
- * Nội tại tướng (SKILLS.md — mục "Nội tại tướng"). Chỉ có 4 nội tại và được RẢI ĐỀU trên toàn roster
- * (mỗi nội tại ~1/4 số tướng); tướng được gán theo hướng kỹ năng nhưng luôn giữ số lượng cân bằng.
- */
-export const PVP_PASSIVES = ['CRIT_5', 'DAMAGE_10', 'HP_10', 'DEF_5'] as const;
-export type PvpPassive = (typeof PVP_PASSIVES)[number];
-
-export const PVP_PASSIVE_LABELS: Record<PvpPassive, string> = {
-  CRIT_5: '+5% tỷ lệ chí mạng',
-  DAMAGE_10: '+10% sát thương',
-  HP_10: '+10% HP tối đa',
-  DEF_5: '+5% phòng thủ',
 };
 
 /** Một tướng trong đội hình: slot 1–3 hàng trước (trên → dưới), slot 4–6 hàng sau. */

@@ -600,6 +600,51 @@ UPDATE users SET avatar = replace(avatar, '.jpg', '.webp')
   WHERE avatar LIKE '/generals/%.jpg';
 `,
   },
+  {
+    // Cấu hình PvP chỉnh được trên trang Quản trị (mục 6.7 — PVP.md).
+    // pvp_heroes: hồ sơ chiến đấu từng tướng (phong cách, nội tại, chỉ số nền Cấp 1, kỹ năng, hiệu ứng).
+    // pvp_gems:  bảng Ngũ Hành (chỉ số 1 & 2, giá trị Cấp 1 → Cấp 10) cho từng hệ.
+    // Dữ liệu ban đầu do seedPvpConfig() nạp từ config cứng trong game-config.
+    version: 20,
+    name: 'pvp_config',
+    sql: `
+CREATE TABLE pvp_heroes (
+  id               TEXT PRIMARY KEY,
+  name             TEXT NOT NULL,
+  faction          TEXT NOT NULL CHECK (faction IN ('wei','shu','wu','qun')),
+  is_hot           INTEGER NOT NULL DEFAULT 0 CHECK (is_hot IN (0,1)),
+  style            TEXT NOT NULL CHECK (style IN ('attack','defense','support')),
+  passive_type     TEXT NOT NULL CHECK (passive_type IN ('CRIT_5','DAMAGE_10','HP_10','DEF_5')),
+  base_hp          INTEGER NOT NULL,
+  base_atk         INTEGER NOT NULL,
+  base_def         INTEGER NOT NULL,
+  skill_name       TEXT NOT NULL,
+  skill_description TEXT NOT NULL DEFAULT '',
+  -- Loại kỹ năng dùng cho hiệu ứng PixiJS/SFX phía client (PvpSkill trong @tq/shared).
+  skill            TEXT NOT NULL DEFAULT 'ATTACK' CHECK (skill IN ('ATTACK','STUN','BUFF','HEAL','DEBUFF','BURN','DISPEL','PURIFY','CLEANSE')),
+  target_type      TEXT NOT NULL CHECK (target_type IN ('single','lane','back_row','back_single','highest_damage_enemy','front_enemies','all_enemies','all_allies','lowest_ally','front_allies','back_allies')),
+  damage_rate      INTEGER NOT NULL,
+  skill_effects    TEXT NOT NULL DEFAULT '[]',
+  updated_at       TEXT NOT NULL
+);
+CREATE INDEX idx_pvp_heroes_faction ON pvp_heroes(faction);
+
+CREATE TABLE pvp_gems (
+  element     TEXT PRIMARY KEY CHECK (element IN ('kim','moc','thuy','hoa','tho')),
+  stat1_type  TEXT NOT NULL,
+  stat1_min   INTEGER NOT NULL,
+  stat1_max   INTEGER NOT NULL,
+  stat2_type  TEXT NOT NULL,
+  stat2_min   INTEGER NOT NULL,
+  stat2_max   INTEGER NOT NULL,
+  -- Bảng giá trị ĐẦY ĐỦ 10 cấp dạng JSON [[chỉ số 1, chỉ số 2] × 10] (index 0 = Cấp 1).
+  -- Admin chỉ sửa 2 mốc Cấp 1/Cấp 10; cột này giữ nguyên đường cong giữa các cấp của config
+  -- gốc (không nội suy tuyến tính) cho tới khi mốc bị đổi thật sự.
+  levels      TEXT NOT NULL DEFAULT '[]',
+  updated_at  TEXT NOT NULL
+);
+`,
+  },
 ];
 
 /** target: chỉ chạy tới version này (dùng khi test migration). */

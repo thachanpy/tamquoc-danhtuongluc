@@ -130,11 +130,35 @@ const GEM_TABLE: Record<GemElement, { stats: [keyof PvpGemStats, keyof PvpGemSta
   },
 };
 
+/** Kiểu bảng chỉ số Ngọc thô: 2 chỉ số + giá trị từng cấp (index 0 = cấp 1 … index 9 = cấp 10). */
+export type PvpGemRowTable = Record<GemElement, { stats: [keyof PvpGemStats, keyof PvpGemStats]; levels: readonly [number, number][] }>;
+
+/**
+ * Bảng chỉ số Ngọc thô (nguồn sự thật cứng hiện tại) — dùng cho script seed chèn vào DB
+ * và cho `PvpConfigRegistry` dựng lại bảng khi DB chưa có dữ liệu.
+ */
+export function pvpGemTable(): PvpGemRowTable {
+  return GEM_TABLE;
+}
+
+/**
+ * Bảng chỉ số Ngọc ĐANG có hiệu lực. `PvpConfigRegistry` (apps/api) ghi đè bằng dữ liệu đọc từ DB
+ * khi Admin sửa Cấp 1/Cấp 10 của từng hệ Ngọc — nhờ vậy trận PvP áp dụng ngay không cần restart.
+ */
+let gemTableOverride: PvpGemRowTable | undefined;
+
+/** Ghi đè bảng chỉ số Ngọc (truyền `undefined` để quay về bảng cứng trong code). */
+export function setPvpGemTableOverride(table: PvpGemRowTable | undefined): void {
+  gemTableOverride = table;
+}
+
+const activeGemTable = (): PvpGemRowTable => gemTableOverride ?? GEM_TABLE;
+
 const clampLevel = (level: number) => Math.min(Math.max(Math.floor(level), MIN_LEVEL), MAX_LEVEL);
 
 /** Chỉ số của MỘT viên Ngọc (loại, cấp) — mọi trường khác 0. */
 export function pvpGemStats(element: GemElement, level: number): PvpGemStats {
-  const { stats, levels } = GEM_TABLE[element];
+  const { stats, levels } = activeGemTable()[element];
   const [a, b] = levels[clampLevel(level) - 1]!;
   const out: PvpGemStats = { ...PVP_NO_GEM_STATS };
   out[stats[0]] = a;
@@ -153,10 +177,12 @@ export function pvpGemTeamStats(gems: readonly { element: GemElement; level: num
   return out;
 }
 
-/** Bảng chỉ số công khai của mọi loại Ngọc ở mọi cấp (để UI hiển thị bảng & tra cứu). */
-export const PVP_GEM_STAT_TABLE: Record<GemElement, PvpGemStats[]> = Object.fromEntries(
-  PVP_GEM_ELEMENTS.map((e) => [e, Array.from({ length: MAX_LEVEL }, (_, i) => pvpGemStats(e, i + 1))]),
-) as Record<GemElement, PvpGemStats[]>;
+/** Bảng chỉ số công khai của mọi loại Ngọc ở mọi cấp (dựng từ bảng ĐANG có hiệu lực — có thể bị Admin ghi đè). */
+export function pvpGemStatTable(): Record<GemElement, PvpGemStats[]> {
+  return Object.fromEntries(
+    PVP_GEM_ELEMENTS.map((e) => [e, Array.from({ length: MAX_LEVEL }, (_, i) => pvpGemStats(e, i + 1))]),
+  ) as Record<GemElement, PvpGemStats[]>;
+}
 
 /** Cấu hình Ngọc công khai cho client (bảng chỉ số + tỷ lệ ghép/rớt). */
 export function pvpGemConfig(): GemConfigDto {
@@ -166,7 +192,7 @@ export function pvpGemConfig(): GemConfigDto {
     dropBps: PVP_GEM_DROP_BPS,
     typeWeightBps: PVP_GEM_TYPE_WEIGHT_BPS,
     elements: [...PVP_GEM_ELEMENTS],
-    table: PVP_GEM_STAT_TABLE,
+    table: pvpGemStatTable(),
     rates: upgradeRateTable(),
   };
 }

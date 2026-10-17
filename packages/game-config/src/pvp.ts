@@ -656,6 +656,26 @@ export const PVP_ARMOR_BY_LEVEL = [14, 16, 19, 22, 25, 28, 32, 35, 39, 43] as co
 /** Giáp nền của một tướng ở cấp hiện tại (số nguyên; mục 1). */
 export const pvpDefArmor = (level: number) =>
   PVP_ARMOR_BY_LEVEL[Math.min(Math.max(Math.floor(level), 1), MAX_LEVEL) - 1]!;
+
+/**
+ * Chỉ số nền Cấp 1 CHUẨN của toàn hệ thống — dùng làm mốc quy đổi khi Admin chỉnh chỉ số nền
+ * riêng cho từng tướng (`pvp_heroes.base_hp/base_atk/base_def`). Vì chỉ số nền thật vẫn lớn dần
+ * theo cấp, chỉ số Admin nhập được hiểu là "giá trị ở Cấp 1" và engine nhân theo đúng hệ số tăng cấp
+ * của mốc chuẩn ⇒ tướng để mặc định cho ra con số y hệt trước đây.
+ */
+export const PVP_BASE_ATK_L1 = pvpBaseDamage(1);
+export const PVP_BASE_HP_L1 = pvpBaseHp(1);
+export const PVP_BASE_DEF_L1 = PVP_ARMOR_BY_LEVEL[0];
+
+/** HP nền của MỘT tướng ở cấp hiện tại: mốc chuẩn theo cấp × tỉ lệ chỉ số nền Cấp 1 của tướng. */
+export const pvpHeroBaseHp = (profile: PvpProfile, level: number) =>
+  Math.round((pvpBaseHp(level) * profile.baseHp) / PVP_BASE_HP_L1);
+/** Sát thương nền của MỘT tướng ở cấp hiện tại. */
+export const pvpHeroBaseDamage = (profile: PvpProfile, level: number) =>
+  Math.round((pvpBaseDamage(level) * profile.baseAtk) / PVP_BASE_ATK_L1);
+/** Giáp nền của MỘT tướng ở cấp hiện tại. */
+export const pvpHeroDefArmor = (profile: PvpProfile, level: number) =>
+  Math.round((pvpDefArmor(level) * profile.baseDef) / PVP_BASE_DEF_L1);
 /** Tỷ lệ giảm sát thương (bps) từ một lượng Giáp: `DR = Giáp / (Giáp + 100)`, kẹp trần 75% (mục 1). */
 export function pvpArmorDrBps(armor: number): number {
   const a = Math.max(0, armor);
@@ -829,14 +849,24 @@ export const PVP_LC_STYLE_MUL_BPS: Record<PvpStyle, number> = { attack: 10000, s
  * KHÔNG tính Chỉ số Nền Ra Trận (vị trí · cổng đồng phe · aura Hỗ trợ) để con số hiện ở bảng chọn
  * tướng / ô đội hình luôn khớp con số dùng trong trận (LC không phụ thuộc tướng xếp ở ô nào).
  */
-export function pvpLc(style: PvpStyle, level: number, passive: PvpPassive, gem?: PvpGemStats): number {
+export function pvpLc(
+  style: PvpStyle,
+  level: number,
+  passive: PvpPassive,
+  gem?: PvpGemStats,
+  /** Chỉ số nền riêng của tướng (do Admin chỉnh). Bỏ trống = dùng mốc chuẩn toàn hệ thống. */
+  base?: { baseHp: number; baseAtk: number; baseDef: number },
+): number {
   const e = PVP_PASSIVE_EFFECT[passive];
-  const hp = pvpBaseHp(level) * (1 + ((e.stat === 'maxHp' ? e.bps : 0) + (gem?.hpBps ?? 0)) / BPS_SCALE);
-  const damage = pvpBaseDamage(level) * (1 + ((e.stat === 'damage' ? e.bps : 0) + (gem?.damageBps ?? 0)) / BPS_SCALE);
+  const hpMul = base ? base.baseHp / PVP_BASE_HP_L1 : 1;
+  const dmgMul = base ? base.baseAtk / PVP_BASE_ATK_L1 : 1;
+  const defMul = base ? base.baseDef / PVP_BASE_DEF_L1 : 1;
+  const hp = pvpBaseHp(level) * hpMul * (1 + ((e.stat === 'maxHp' ? e.bps : 0) + (gem?.hpBps ?? 0)) / BPS_SCALE);
+  const damage = pvpBaseDamage(level) * dmgMul * (1 + ((e.stat === 'damage' ? e.bps : 0) + (gem?.damageBps ?? 0)) / BPS_SCALE);
   const critBps =
     pvpPerLevelEffectBps(PVP_CRIT_BPS_PER_LEVEL, level) + (e.stat === 'crit' ? e.pointsBps : 0) + (gem?.critBps ?? 0);
   const critDamageBps = pvpCritDamageBps(level) + (gem?.critDamageBps ?? 0);
-  const defArmor = pvpDefArmor(level) + (e.stat === 'def' ? e.armor : 0) + (gem?.defArmor ?? 0);
+  const defArmor = pvpDefArmor(level) * defMul + (e.stat === 'def' ? e.armor : 0) + (gem?.defArmor ?? 0);
   const expectedDamage = damage * (1 + (critBps / BPS_SCALE) * (critDamageBps / BPS_SCALE));
   const defense = (damage * pvpArmorDrBps(defArmor)) / BPS_SCALE;
   return Math.round(((hp / 10 + expectedDamage + defense) * PVP_LC_STYLE_MUL_BPS[style]) / BPS_SCALE);
@@ -845,7 +875,7 @@ export function pvpLc(style: PvpStyle, level: number, passive: PvpPassive, gem?:
 /** LC của MỘT tướng theo (id, cấp) — tiện cho nơi chỉ có cặp dữ liệu này (đội hình, bảng xếp hạng). */
 export function pvpUnitLc(generalId: string, level: number, gem?: PvpGemStats): number {
   const p = pvpProfile(generalId);
-  return pvpLc(p.style, level, p.passive, gem);
+  return pvpLc(p.style, level, p.passive, gem, p);
 }
 
 /**
@@ -906,7 +936,7 @@ export const isHotGeneral = (generalId: string) => HOT_GENERALS.has(generalId);
 // ===== Bảng hồ sơ chiến đấu tường minh theo SKILLS.md =====
 
 /** Một dòng tướng: mã hoá tường minh bộ hiệu ứng kỹ năng theo SKILLS.md (đã gồm hot). */
-interface RosterPvpRow {
+export interface RosterPvpRow {
   id: string;
   /** Tên kỹ năng hiển thị — nguyên văn phần trước dấu hai chấm của SKILLS.md. */
   skillName: string;
@@ -1130,6 +1160,14 @@ const QUN_PVP: RosterPvpRow[] = [
 /** Toàn bộ bảng phong cách + kỹ năng tường minh của roster (SKILLS.md). */
 export const PVP_ROSTER_ROWS: readonly RosterPvpRow[] = [...WEI_PVP, ...SHU_PVP, ...WU_PVP, ...QUN_PVP];
 
+/** Phe của từng tướng trong roster (suy từ nhóm bảng: Ngụy/Thục/Ngô/Quần) — dùng cho Cổng Đồng Phe. */
+export const PVP_HERO_FACTION: ReadonlyMap<string, Faction> = new Map<string, Faction>([
+  ...WEI_PVP.map((r) => [r.id, 'wei'] as const),
+  ...SHU_PVP.map((r) => [r.id, 'shu'] as const),
+  ...WU_PVP.map((r) => [r.id, 'wu'] as const),
+  ...QUN_PVP.map((r) => [r.id, 'qun'] as const),
+]);
+
 /** Targeting nhắm vào ĐỊCH (cho hiệu ứng bất lợi/thiêu đốt/xóa buff). */
 const ENEMY_TARGETINGS: readonly PvpTargeting[] = ['single', 'lane', 'back_row', 'back_single', 'highest_damage_enemy', 'front_enemies', 'all_enemies'];
 /** Targeting nhắm vào ĐỒNG MINH (cho hồi máu/thanh tẩy/buff đồng minh). */
@@ -1201,6 +1239,8 @@ export interface PvpProfile {
   skill: PvpSkill;
   /** Tên kỹ năng hiển thị (nguyên văn SKILLS.md) — dùng cho nhãn "bay lên" khi tướng ra đòn. */
   skillName: string;
+  /** Phe của tướng — dùng cho Cổng Đồng Phe khi vào trận. */
+  faction: Faction;
   passive: PvpPassive;
   /** Tướng hot (hệ số kỹ năng trong bảng đã cộng sẵn +10%). */
   hot: boolean;
@@ -1208,6 +1248,12 @@ export interface PvpProfile {
   lifestealPerLevelBps: number;
   /** Hút máu ĐỘI: hồi cả bản thân lẫn đồng minh theo `cấp × hệ số` trên tổng sát thương (bps mỗi cấp). */
   teamLifestealPerLevelBps: number;
+  /** Mô tả kỹ năng hiển thị trong trang Admin (không ảnh hưởng engine). */
+  skillDescription: string;
+  /** Chỉ số nền Cấp 1 của tướng (Admin chỉnh) — mặc định bằng mốc chuẩn toàn hệ thống. */
+  baseHp: number;
+  baseAtk: number;
+  baseDef: number;
   /** Định nghĩa kỹ năng tường minh (hệ số sát thương/hồi máu là giá trị chốt, đã gồm hot). */
   def: PvpSkillDef;
 }
@@ -1251,10 +1297,15 @@ function buildProfile(row: RosterPvpRow): PvpProfile {
     style: row.style,
     skill: row.skill,
     skillName: row.skillName,
+    faction: PVP_HERO_FACTION.get(row.id) ?? 'qun',
     passive: PASSIVE_BY_ID.get(row.id)!,
     hot: HOT_GENERALS.has(row.id),
     lifestealPerLevelBps: row.lifestealPerLevelBps ?? 0,
     teamLifestealPerLevelBps: row.teamLifestealPerLevelBps ?? 0,
+    skillDescription: '',
+    baseHp: PVP_BASE_HP_L1,
+    baseAtk: PVP_BASE_ATK_L1,
+    baseDef: PVP_BASE_DEF_L1,
     def: buildDef(row),
   };
 }
@@ -1264,9 +1315,22 @@ const PASSIVE_BY_ID = assignPassives(PVP_ROSTER_ROWS);
 
 const PROFILES = new Map<string, PvpProfile>(PVP_ROSTER_ROWS.map((row) => [row.id, buildProfile(row)]));
 
-/** Hồ sơ chiến đấu của tướng theo bảng tường minh (SKILLS.md). */
+/**
+ * Nguồn hồ sơ tướng ĐANG có hiệu lực. `PvpConfigRegistry` (apps/api) cài nguồn đọc từ DB khi Admin
+ * sửa cấu hình Tướng — nhờ vậy engine/tính LC/UI đọc cấu hình mới ngay mà KHÔNG cần restart server.
+ * Trả `undefined` cho id không có trong DB ⇒ tự động quay về bảng cứng trong code.
+ */
+type PvpProfileProvider = (generalId: string) => PvpProfile | undefined;
+let profileOverride: PvpProfileProvider | undefined;
+
+/** Cài/ bỏ ghi đè nguồn hồ sơ tướng (truyền `undefined` để quay về bảng cứng). */
+export function setPvpProfileOverride(fn: PvpProfileProvider | undefined): void {
+  profileOverride = fn;
+}
+
+/** Hồ sơ chiến đấu của tướng theo bảng tường minh (SKILLS.md) hoặc theo cấu hình Admin đang hiệu lực. */
 export function pvpProfile(generalId: string): PvpProfile {
-  const p = PROFILES.get(generalId);
+  const p = profileOverride?.(generalId) ?? PROFILES.get(generalId);
   if (!p) throw new Error(`pvpProfile: không có hồ sơ cho tướng ${generalId}`);
   return p;
 }
@@ -1314,7 +1378,14 @@ export function validatePvpConfig(assert: (cond: unknown, msg: string) => void):
       db.defArmorDown > 0 ||
       db.defPenDownBps > 0 ||
       db.burnBps > 0;
-    if (hasDebuffEffect) assert(isEnemyTargeting(def.targeting), `Tướng ${row.id}: hiệu ứng bất lợi phải nhắm vào địch`);
+    // Ngoại lệ: tướng vừa hỗ trợ đồng minh (thanh tẩy/hồi máu/buff) vừa gây bất lợi thì debuff
+    // vẫn nhắm vào ĐỊCH (Gia Cát Chiêm — mục 35), giống dispel (mục 14) và Xóa Khiên (mục 17) bên dưới.
+    if (hasDebuffEffect)
+      assert(
+        isEnemyTargeting(def.targeting) ||
+          (isAllyTargeting(def.targeting) && (def.purify || def.healBps > 0 || def.buffs.length > 0)),
+        `Tướng ${row.id}: hiệu ứng bất lợi phải nhắm vào địch`,
+      );
     // Xóa Khiên (mục 17) bẻ gãy khiên của mục tiêu bị đánh trúng nên nhắm vào ĐỊCH.
     // Ngoại lệ: tướng vừa thanh tẩy/buff đồng minh vừa phá khiên thì dùng toàn bộ địch (đồng minh không có khiên địch).
     if (db.shieldBreakPerLevelBps > 0)

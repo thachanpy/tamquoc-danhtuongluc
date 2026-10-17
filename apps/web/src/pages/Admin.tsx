@@ -21,6 +21,7 @@ import { openCardViewer, openGemViewer } from '../viewer.tsx';
 import { rewardText } from '../giftcode-text.ts';
 import { Card } from '../components/Card.tsx';
 import { GemCard } from '../components/GemCard.tsx';
+import { PvpHeroesPane, PvpGemsPane } from './AdminPvp.tsx';
 
 const fmt = (iso: string) => new Date(iso).toLocaleString('vi-VN');
 
@@ -63,7 +64,7 @@ function Pager(props: { info: PagerInfo; onPrev: () => void; onNext: () => void 
   );
 }
 
-type Sub = 'users' | 'cards' | 'gems' | 'giftcode';
+type Sub = 'users' | 'cards' | 'gems' | 'giftcode' | 'pvpheros' | 'pvpgems';
 type PaneCtl = { ensureLoaded: () => void };
 type CardsCtl = PaneCtl & { showUser: (userId: number) => void };
 
@@ -73,6 +74,7 @@ type CardsCtl = PaneCtl & { showUser: (userId: number) => void };
  * - Thẻ tướng: mọi thẻ của mọi người chơi, lọc theo người chơi/phe/level/tên.
  * - Ngọc Ngũ Hành (mục 6.8): mọi viên Ngọc của mọi người chơi, lọc theo người chơi/loại/cấp.
  * - Giftcode (mục 3.9): tạo code (vé quay nhiều loại + số lượng, hạn sử dụng tuỳ chọn), bật/tắt code.
+ * - Cấu hình PvP (mục 6.7): Tướng (chỉ số nền + kỹ năng + hiệu ứng) và Ngọc Ngũ Hành (2 chỉ số × Cấp 1/Cấp 10).
  */
 export function AdminPage(): JSX.Element {
   let alive = true;
@@ -82,18 +84,24 @@ export function AdminPage(): JSX.Element {
   let cards: CardsCtl | undefined;
   let gems: PaneCtl | undefined;
   let giftcodes: PaneCtl | undefined;
+  let pvpHeroes: PaneCtl | undefined;
+  let pvpGems: PaneCtl | undefined;
 
   function switchTo(id: Sub) {
     setSub(id);
     if (id === 'cards') cards?.ensureLoaded();
     if (id === 'gems') gems?.ensureLoaded();
     if (id === 'giftcode') giftcodes?.ensureLoaded();
+    if (id === 'pvpheros') pvpHeroes?.ensureLoaded();
+    if (id === 'pvpgems') pvpGems?.ensureLoaded();
   }
   const tabs: [Sub, string][] = [
     ['users', 'Người chơi'],
     ['cards', 'Thẻ tướng'],
     ['gems', 'Ngọc'],
     ['giftcode', 'Giftcode'],
+    ['pvpheros', 'Cấu hình Tướng'],
+    ['pvpgems', 'Cấu hình Ngọc'],
   ];
 
   return (
@@ -124,6 +132,12 @@ export function AdminPage(): JSX.Element {
       </div>
       <div data-pane="giftcode" hidden={sub() !== 'giftcode'}>
         <GiftCodePane alive={isAlive} ctl={(c) => (giftcodes = c)} />
+      </div>
+      <div data-pane="pvpheros" hidden={sub() !== 'pvpheros'}>
+        <PvpHeroesPane alive={isAlive} ctl={(c) => (pvpHeroes = c)} />
+      </div>
+      <div data-pane="pvpgems" hidden={sub() !== 'pvpgems'}>
+        <PvpGemsPane alive={isAlive} ctl={(c) => (pvpGems = c)} />
       </div>
     </section>
   );

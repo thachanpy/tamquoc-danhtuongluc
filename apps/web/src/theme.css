@@ -1112,3 +1112,85 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
   .rp-t-num { font-size: 13px; }
   .rp-close { margin-left: 0; }
 }
+
+/* =========================================================================
+   CẤU HÌNH PVP (trang Quản trị): Tướng & Ngọc Ngũ Hành
+   ========================================================================= */
+
+/* Khung modal nhập liệu: nền tối trung tính + làm mờ, bấm vùng nền để đóng. */
+.cfg-modal { position: fixed; inset: 0; z-index: 65; display: flex; align-items: flex-start; justify-content: center;
+  padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain;
+  background: radial-gradient(70% 70% at 50% 40%, rgba(24, 22, 20, .82), rgba(3, 3, 4, .95));
+  backdrop-filter: blur(5px) saturate(.85); animation: viewer-in .18s ease-out; }
+.cfg-box { width: min(720px, 100%); margin: auto; display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.cfg-box.wide { width: min(1080px, 100%); }
+.cfg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cfg-head h3 { margin: 0; font-size: 16px; }
+
+.cfg-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.cfg-form { display: flex; flex-direction: column; gap: 8px; }
+.cfg-form h4 { margin: 6px 0 0; font-size: 14px; color: var(--gold-2); }
+.cfg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 12px; }
+.cfg-field { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+.cfg-field > span { color: var(--muted); }
+.cfg-field input, .cfg-field select, .cfg-field textarea {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font: inherit; }
+.cfg-field input:focus, .cfg-field select:focus, .cfg-field textarea:focus { border-color: var(--gold); outline: none; }
+.cfg-field textarea { resize: vertical; }
+.cfg-field-full { grid-column: 1 / -1; }
+.cfg-check { flex-direction: row; align-items: center; gap: 8px; }
+.cfg-check input { width: 17px; height: 17px; accent-color: var(--gold); }
+.cfg-help { line-height: 1.5; }
+
+/* Ảnh thu nhỏ (chân dung tướng / viên Ngọc): chữ viết tắt làm nền, ảnh thật phủ lên khi có. */
+.cfg-thumb { position: relative; display: inline-grid; place-items: center; flex: none; overflow: hidden;
+  width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: linear-gradient(160deg, #2a2112, var(--panel-2)); }
+.cfg-thumb.hero { border-radius: 50%; }
+.cfg-thumb.big { width: 64px; height: 64px; font-size: 20px; }
+.cfg-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+.cfg-thumb.gem img { object-fit: contain; padding: 2px; }
+.cfg-thumb-ini { font-weight: 800; color: var(--gold-2); font-size: 12px; letter-spacing: .5px; }
+
+/* Danh sách Tướng PvP: bảng 6 cột, thu gọn trên màn hẹp. */
+.cfg-hero-head, .cfg-hero-row { display: grid; gap: 10px; align-items: center;
+  grid-template-columns: minmax(140px, 1.2fr) 76px minmax(150px, 1.3fr) minmax(150px, 1.2fr) minmax(190px, 1.6fr) minmax(150px, 1fr); }
+.cfg-hero-head { padding: 0 10px 6px; border-bottom: 1px solid var(--line); }
+.cfg-hero-row { padding: 10px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.cfg-name { display: flex; align-items: center; gap: 9px; }
+.cfg-name-txt { min-width: 0; }
+.cfg-name b { font-size: 14.5px; }
+.cfg-hero-preview { display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: rgba(10, 6, 4, .45); }
+.cfg-hero-preview-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cfg-hero-preview-txt b { font-size: 16px; }
+.cfg-style { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.cfg-fac { font-weight: 700; }
+.cfg-fac.f-wei { color: var(--wei); } .cfg-fac.f-shu { color: var(--shu); }
+.cfg-fac.f-wu { color: var(--wu); } .cfg-fac.f-qun { color: var(--qun); }
+.cfg-fac.e-kim { color: #cbb26a; } .cfg-fac.e-moc { color: #63b95e; }
+.cfg-fac.e-thuy { color: #4f9de0; } .cfg-fac.e-hoa { color: #ef6b3a; } .cfg-fac.e-tho { color: #c9963f; }
+.cfg-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Skill Effects Builder: mỗi hiệu ứng một khối, lưới field tự co. */
+.cfg-effects { display: flex; flex-direction: column; gap: 10px; }
+.cfg-effect { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 12px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(10, 6, 4, .45); }
+.cfg-effect .cfg-field-full { grid-column: 1 / -1; }
+.cfg-effect-actions { display: flex; align-items: flex-end; }
+
+/* Bảng Ngọc Ngũ Hành: mỗi hệ một khối, 2 chỉ số × (Cấp 1, Cấp 10). */
+.cfg-gems { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+.cfg-gem { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(10, 6, 4, .4); }
+.cfg-gem-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cfg-gem-head b { font-size: 15px; }
+.cfg-gem-head .btn { margin-left: auto; }
+.cfg-gem-art { display: flex; align-items: center; gap: 4px; }
+.cfg-gem-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 12px; align-items: end; }
+
+@media (max-width: 640px) {
+  .cfg-box, .cfg-box.wide { padding: 12px; }
+  .cfg-hero-head { display: none; }
+  .cfg-hero-row { grid-template-columns: 1fr auto; }
+  .cfg-hero-row .cfg-style, .cfg-hero-row .cfg-actions { grid-column: 1 / -1; }
+}
