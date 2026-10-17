@@ -1227,7 +1227,8 @@ Tất cả API phải có schema validation, authentication phù hợp và đị
 
 - `GET /api/me`: thông tin người chơi, số dư từng loại vé và trạng thái hồi vé.
 - `GET /api/generals`: danh mục 140 tướng + `styles` (phong cách chiến đấu `attack`/`defense`/`support` của từng tướng — client hiện nhãn Tấn công/Phòng thủ/Hỗ trợ trên mọi thẻ tướng) + `skills` (kỹ năng chiến đấu của từng tướng — client hiện kỹ năng khi chọn tướng vào đội hình; mục 6.7).
-- `GET /api/cards`: bộ sưu tập, filter và pagination.
+- `GET /api/cards`: bộ sưu tập, filter và pagination (`faction`, `level`, `q`, `sort`, `page`, `pageSize` ≤ 500).
+- `GET /api/cards/all`: TOÀN BỘ thẻ active của người chơi trong một request (`{ items }`, mới nhất trước). Client dùng endpoint này thay vì lặp qua từng trang — mỗi vòng lặp tốn thêm một lượt mạng mà trình duyệt chỉ mở tối đa 6 kết nối/origin (HTTP/1.1), nên người chơi hàng chục nghìn thẻ trước đây phải chờ rất lâu (đo 20.000 thẻ: 1 request ≈ 25 ms so với 40 request ≈ 230 ms). Truy vấn bỏ được `COUNT(*)` và `JOIN generals`; cache chung nhóm `tq:col:<userId>:` (TTL 30s) nên tự xoá ở mọi thao tác đổi bộ sưu tập.
 
 ### 8.2. Vé
 

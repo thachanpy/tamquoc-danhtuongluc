@@ -128,25 +128,25 @@ export const api = {
       'GET',
       '/api/generals',
     ),
-  cards: (q: { faction?: Faction; level?: number; q?: string; sort?: string; page?: number; pageSize?: number }) =>
-    call<Page<CardDto>>('GET', '/api/cards?' + qs(q)),
+  // Cả bộ sưu tập trong 1 request (xem `fetchAllCards`); bản phân trang là `/api/cards`.
+  cardsAll: () => call<{ items: CardDto[] }>('GET', '/api/cards/all'),
   tickets: () => call<TicketsDto>('GET', '/api/tickets'),
   claimRecovery: () => call<ClaimRecoveryDto>('POST', '/api/tickets/claim-recovery'),
   devTopup: (idempotencyKey: string) => call<DevTopupDto>('POST', '/api/tickets/dev-topup', { idempotencyKey }),
   gachaConfig: () => call<GachaConfigDto>('GET', '/api/gacha/config'),
   draw: (ticketType: TicketType, count: number, idempotencyKey: string) =>
-    call<DrawResultDto>('POST', '/api/gacha/draw', { ticketType, count, idempotencyKey }),
+    mutateCards(call<DrawResultDto>('POST', '/api/gacha/draw', { ticketType, count, idempotencyKey })),
   upgradePreview: (cardIds: number[]) => call<UpgradePreviewDto>('POST', '/api/upgrades/preview', { cardIds }),
   users: (q = '') => call<{ items: RecipientDto[] }>('GET', '/api/users?' + qs({ q, limit: 500 })),
   gift: (toUsername: string, cardIds: number[], idempotencyKey: string) =>
-    call<GiftResultDto>('POST', '/api/gifts', { toUsername, cardIds, idempotencyKey }),
+    mutateCards(call<GiftResultDto>('POST', '/api/gifts', { toUsername, cardIds, idempotencyKey })),
   upgradeQuick: (idempotencyKey: string, levels: number[]) =>
-    call<QuickUpgradeResultDto>('POST', '/api/upgrades/quick', { idempotencyKey, levels }),
+    mutateCards(call<QuickUpgradeResultDto>('POST', '/api/upgrades/quick', { idempotencyKey, levels })),
   upgradeAttempt: (cardIds: number[], idempotencyKey: string) =>
-    call<UpgradeResultDto>('POST', '/api/upgrades/attempt', { cardIds, idempotencyKey }),
+    mutateCards(call<UpgradeResultDto>('POST', '/api/upgrades/attempt', { cardIds, idempotencyKey })),
   giftcodes: () =>
     call<{ featured: GiftCodePublicDto[]; redeemed: { code: string; cardCount: number; ticketCount: number; createdAt: string }[] }>('GET', '/api/giftcodes'),
-  redeemGiftCode: (code: string) => call<GiftCodeRedemptionDto>('POST', '/api/giftcodes/redeem', { code }),
+  redeemGiftCode: (code: string) => mutateCards(call<GiftCodeRedemptionDto>('POST', '/api/giftcodes/redeem', { code })),
   admin: {
     settings: () => call<AppSettingsDto>('GET', '/api/admin/settings'),
     setSettings: (body: AppSettingsDto) => call<AppSettingsDto>('POST', '/api/admin/settings', body),
@@ -211,12 +211,42 @@ export const api = {
   history: (q: { kind?: string; page?: number; pageSize?: number }) => call<Page<HistoryEntryDto>>('GET', '/api/history?' + qs(q)),
 };
 
-/** Tải toàn bộ thẻ đang sở hữu (lặp qua các trang). */
-export async function fetchAllCards(): Promise<CardDto[]> {
-  const out: CardDto[] = [];
-  for (let page = 1; ; page++) {
-    const p = await api.cards({ page, pageSize: 500, sort: 'newest' });
-    out.push(...p.items);
-    if (out.length >= p.total || p.items.length === 0) return out;
-  }
+/** Hạn dùng của cache thẻ ở client (khớp TTL.collection 30s của server) — hết hạn thì tải lại. */
+const CARDS_TTL = 30_000;
+
+/** Thẻ đã tải — dùng chung cho Bộ sưu tập / Nâng cấp / Đấu trường để không tải lại mỗi lần đổi tab. */
+let cardsCache: CardDto[] | null = null;
+let cardsCachedAt = 0;
+/** Request đang chạy dở; nhiều trang cùng gọi thì dùng chung một lượt tải. */
+let cardsPending: Promise<CardDto[]> | null = null;
+
+/** Xoá cache thẻ — gọi sau mọi thao tác làm thay đổi bộ sưu tập (xem `mutateCards`). */
+export function invalidateCards(): void {
+  cardsCache = null;
+}
+
+/** Chạy request rồi xoá cache thẻ (quay thẻ, ghép, tặng, nhập giftcode đều đổi bộ sưu tập). */
+async function mutateCards<T>(p: Promise<T>): Promise<T> {
+  const r = await p;
+  invalidateCards();
+  return r;
+}
+
+/**
+ * Tải toàn bộ thẻ đang sở hữu bằng MỘT request (`/api/cards/all`).
+ * Trước đây lặp qua từng trang 500 thẻ: mỗi vòng tốn thêm một lượt mạng, mà trình duyệt chỉ mở
+ * tối đa 6 kết nối/origin (HTTP/1.1) nên người chơi hàng chục nghìn thẻ phải chờ rất lâu.
+ */
+export function fetchAllCards(): Promise<CardDto[]> {
+  if (cardsCache && Date.now() - cardsCachedAt < CARDS_TTL) return Promise.resolve(cardsCache);
+  if (cardsPending) return cardsPending;
+  cardsPending = (async () => {
+    const { items } = await api.cardsAll();
+    cardsCache = items;
+    cardsCachedAt = Date.now();
+    return items;
+  })().finally(() => {
+    cardsPending = null;
+  });
+  return cardsPending;
 }

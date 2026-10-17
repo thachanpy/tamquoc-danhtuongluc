@@ -625,3 +625,23 @@ test('HTTP: tặng thẻ tạm tắt (ENABLE_GIFT tắt) => /api/gifts và /api/
   assert.ok((mine.items as { id: number }[]).some((c) => c.id === d.results[0].card.id));
   await app.close();
 });
+
+test('HTTP: GET /api/cards/all trả cả bộ sưu tập trong 1 request; cần đăng nhập', async () => {
+  const { app, auth } = await setup(false, false, false);
+  for (let i = 0; i < 12; i++) {
+    await app.inject({ method: 'POST', url: '/api/gacha/draw', headers: auth, payload: { ticketType: 'normal', idempotencyKey: `all-draw-${i}` } });
+  }
+  const paged = (await app.inject({ method: 'GET', url: '/api/cards?pageSize=1', headers: auth })).json();
+  assert.ok(paged.total > 1);
+  // Một request trả đủ số thẻ mà bản phân trang phải chia nhiều trang
+  const all = await app.inject({ method: 'GET', url: '/api/cards/all', headers: auth });
+  assert.equal(all.statusCode, 200);
+  const items = all.json().items as { id: number; generalId: string; level: number }[];
+  assert.equal(items.length, paged.total);
+  // Thẻ mới nhất đứng đầu (khớp `sort=newest` của bản phân trang)
+  assert.equal(items[0]!.id, Math.max(...items.map((c) => c.id)));
+  assert.ok(items.every((c) => typeof c.generalId === 'string' && c.level >= 1));
+  const unauth = await app.inject({ method: 'GET', url: '/api/cards/all' });
+  assert.equal(unauth.statusCode, 401);
+  await app.close();
+});

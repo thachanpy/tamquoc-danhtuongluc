@@ -238,6 +238,8 @@ button.slot:disabled { cursor: not-allowed; }
 
 /* ---------- bộ sưu tập + tặng thẻ ---------- */
 .coll-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+/* Nút "Xem thêm" cuối lưới thẻ: chỉ vẽ dần để không treo trang khi sở hữu quá nhiều thẻ. */
+.coll-more { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 0 4px; flex-wrap: wrap; }
 .gift-panel { border: 1px solid var(--gold); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; background: rgba(212,168,74,.06); }
 .pick.view { cursor: default; }
 .combo { position: relative; display: grid; gap: 4px; font-size: 13px; color: var(--muted); }

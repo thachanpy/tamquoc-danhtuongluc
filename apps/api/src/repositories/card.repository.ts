@@ -120,6 +120,23 @@ export function listUserCards(
   return { rows, total };
 }
 
+/**
+ * Toàn bộ thẻ active của một người chơi trong MỘT lượt — dùng cho `/api/cards/all`.
+ * Không phân trang nên bỏ được `COUNT(*)` và `JOIN generals` (client tự lọc/sắp theo tên);
+ * đổi lại phải quét hết bảng một lần thay vì quét lại ở từng trang.
+ */
+export function listOwnedCards(
+  db: DB,
+  userId: number,
+): { id: number; general_id: string; level: number; created_at: string }[] {
+  return db
+    .prepare(
+      `SELECT id, general_id, level, created_at FROM user_cards
+       WHERE user_id = ? AND status = 'active' ORDER BY id DESC`,
+    )
+    .all(userId) as { id: number; general_id: string; level: number; created_at: string }[];
+}
+
 export interface AdminCardsFilter {
   /** Danh sách id tướng khớp tìm kiếm tên; [] = không khớp tướng nào. */
   generalIds?: string[];

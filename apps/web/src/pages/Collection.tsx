@@ -1,4 +1,4 @@
-import { For, Match, Show, Switch, createMemo, createSignal, onCleanup, type JSX } from 'solid-js';
+import { For, Match, Show, Switch, createEffect, createMemo, createSignal, onCleanup, type JSX } from 'solid-js';
 import {
   FACTIONS,
   FACTION_LABELS,
@@ -17,10 +17,13 @@ import { gen, genStyle, state } from '../state.ts';
 import { pct } from '../art.ts';
 import { Card } from '../components/Card.tsx';
 import { GemCard } from '../components/GemCard.tsx';
-import { groupCardsByGeneral, type UpgradeSort } from '../upgrade-groups.ts';
+import { groupCardsByGeneral, type GeneralGroup, type LevelRun, type UpgradeSort } from '../upgrade-groups.ts';
 import { openCardViewer, openGemViewer } from '../viewer.tsx';
 
 const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase();
+
+/** Số thẻ vẽ thêm mỗi lần bấm "Xem thêm" ở tab Tướng (xem `shown`). */
+const RENDER_STEP = 600;
 
 /** "5 phút trước", "3 giờ trước", "2 ngày trước". */
 function ago(iso: string): string {
@@ -99,6 +102,31 @@ export function CollectionPage(): JSX.Element {
   const filtered = createMemo(() => cards().filter((c) => matchGeneral(c.generalId) && (!level() || c.level === Number(level()))));
   // Gom theo tướng; inputCount rất lớn để không đánh dấu "đủ ghép" ở trang này
   const groups = createMemo(() => groupCardsByGeneral(filtered(), (id) => gen(id).name, sort(), Number.MAX_SAFE_INTEGER));
+
+  // Bộ sưu tập có thể lên tới hàng chục nghìn thẻ; vẽ hết một lượt sẽ treo trang (hàng trăm nghìn
+  // DOM node) nên chỉ vẽ dần RENDER_STEP thẻ, phần còn lại bấm "Xem thêm".
+  const [limit, setLimit] = createSignal(RENDER_STEP);
+  // Đổi bộ lọc thì quay về lượt đầu (bộ lọc mới thường ít thẻ hơn, không cần giữ lượt xem cũ).
+  createEffect(() => {
+    filtered();
+    setLimit(RENDER_STEP);
+  });
+
+  /** Nhóm đã cắt theo `limit`: nhãn vẫn hiện ĐÚNG tổng số thẻ, chỉ giới hạn số thẻ được vẽ. */
+  const shown = createMemo(() => {
+    let left = limit();
+    const out: { group: GeneralGroup; runs: { run: LevelRun; shown: number }[] }[] = [];
+    for (const g of groups()) {
+      if (left <= 0) break;
+      const runs = g.runs.map((r) => {
+        const n = Math.min(left, r.cards.length);
+        left -= n;
+        return { run: r, shown: n };
+      });
+      out.push({ group: g, runs });
+    }
+    return out;
+  });
 
   function toggleCard(id: number) {
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id].slice(0, MAX)));
@@ -504,22 +532,26 @@ export function CollectionPage(): JSX.Element {
             <div class="state-msg">Không có thẻ phù hợp bộ lọc.</div>
           </Match>
           <Match when={true}>
-            <For each={groups()}>
-              {(g) => {
-                const f = gen(g.generalId).faction;
+            <For each={shown()}>
+              {(v) => {
+                const f = gen(v.group.generalId).faction;
                 return (
                   <div class={`gen-group f-${f}`}>
                     <div class="gen-head">
-                      <b>{g.name}</b>
-                      <span class="muted small">{`${FACTION_LABELS[f]} · ${g.total} thẻ`}</span>
+                      <b>{v.group.name}</b>
+                      <span class="muted small">{`${FACTION_LABELS[f]} · ${v.group.total} thẻ`}</span>
                     </div>
                     <div class="gen-runs">
-                      <For each={g.runs}>
-                        {(r) => (
+                      <For each={v.runs}>
+                        {(x) => (
                           <div class="lv-run">
-                            <div class="run-label">{`Lv.${r.level} ×${r.cards.length}`}</div>
+                            <div class="run-label">
+                              {x.shown < x.run.cards.length
+                                ? `Lv.${x.run.level} ×${x.shown}/${x.run.cards.length}`
+                                : `Lv.${x.run.level} ×${x.run.cards.length}`}
+                            </div>
                             <div class="run-cards">
-                              <For each={r.cards}>{(c) => <CardButton card={c} />}</For>
+                              <For each={x.run.cards.slice(0, x.shown)}>{(c) => <CardButton card={c} />}</For>
                             </div>
                           </div>
                         )}
@@ -529,6 +561,20 @@ export function CollectionPage(): JSX.Element {
                 );
               }}
             </For>
+            <Show when={filtered().length > limit() || limit() > RENDER_STEP}>
+              <div class="coll-more">
+                <Show when={filtered().length > limit()}>
+                  <button class="btn primary small" onClick={() => setLimit((n) => n + RENDER_STEP)}>
+                    {`Xem thêm (đang hiện ${limit()}/${filtered().length} thẻ)`}
+                  </button>
+                </Show>
+                <Show when={limit() > RENDER_STEP}>
+                  <button class="btn ghost small" onClick={() => setLimit(RENDER_STEP)}>
+                    Thu gọn
+                  </button>
+                </Show>
+              </div>
+            </Show>
           </Match>
         </Switch>
       </div>

@@ -7,7 +7,7 @@ import { memoByConfig } from '../utils.ts';
 import { pvpConfigRegistry } from '../pvp-config.registry.ts';
 import { getProfile, getUsername, isAdmin } from '../managers/auth.manager.ts';
 import { getTickets, syncRecovery } from '../managers/ticket.manager.ts';
-import { listCards, listHistory, type CardsQuery, type HistoryQuery } from '../managers/collection.manager.ts';
+import { listCards, listHistory, listOwnedCards, type CardsQuery, type HistoryQuery } from '../managers/collection.manager.ts';
 import { rosterSkillNames, rosterSkills, rosterStyles } from '../managers/pvp.manager.ts';
 import { authGuard } from '../middleware/guards.ts';
 
@@ -46,6 +46,15 @@ export function registerCollectionRoutes(app: FastifyInstance, ctx: GameContext)
     return ctx.cache.readThrough(PREFIX.collection(req.userId, 'cards', queryKey(query)), TTL.collection, () =>
       listCards(ctx, req.userId, query),
     );
+  });
+  // Cả bộ sưu tập trong MỘT request: client tải hết thẻ một lượt thay vì lặp qua từng trang (mỗi
+  // vòng lặp tốn thêm một lượt mạng, mà trình duyệt chỉ mở tối đa 6 kết nối/origin với HTTP/1.1).
+  // Cache 30s chung nhóm `tq:col:<userId>:` nên tự xoá ở mọi thao tác đổi bộ sưu tập.
+  app.get('/api/cards/all', { preHandler: auth }, async (req) => {
+    const items = await ctx.cache.readThrough(PREFIX.collection(req.userId, 'cards', 'all'), TTL.collection, () =>
+      listOwnedCards(ctx, req.userId),
+    );
+    return { items };
   });
   app.get('/api/history', { preHandler: auth, schema: { querystring: schemas.historyQuery } }, async (req) => {
     const query = req.query as HistoryQuery;
