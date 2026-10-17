@@ -858,7 +858,7 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
   60% { transform: scale(1.12); }
   100% { transform: scale(1); opacity: 1; }
 }
-/* Sân đấu vẽ bằng PixiJS (pixi/arena.ts): canvas tự giữ tỉ lệ 900:500, lấp hết bề ngang khung */
+/* Sân đấu vẽ bằng PixiJS (pixi/arena.ts): canvas tự giữ tỉ lệ 900:560, lấp hết bề ngang khung */
 .rp-live { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .rp-live[hidden] { display: none; }
 .rp-canvas { position: relative; width: 100%; border-radius: 12px; overflow: hidden; }

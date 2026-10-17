@@ -13,7 +13,11 @@ import { castKindOf, spawnSkillFx, type Fx, type FxKind } from './skillsfx.ts';
  */
 
 const W = 900;
-const H = 532;
+/**
+ * Chiều cao sân: 3 hàng ô + khoảng cách, cộng lề trên `ROW_Y0` (chừa chỗ cho nhãn tên chiêu của
+ * hàng đầu) và 7px lề đáy — canh sao cho canvas giữ tỉ lệ 900:560 khi lấp hết bề ngang khung.
+ */
+const H = 560;
 /** Bề rộng dải phân cách giữa hai đội. */
 const DIV_W = 28;
 const SIDE_GAP = 10;
@@ -29,7 +33,11 @@ const TILE_H = 164;
 /** Khoảng cách DỌC giữa hai ô liền kề trong cùng một cột (ô 1–2, 2–3) — lấy ĐÚNG bằng khoảng cách
     NGANG giữa ô 1 và ô 4 (`COL_GAP`) để các ô dàn đều, nhìn không bị lệch một chiều. */
 const ROW_GAP = COL_GAP;
-const ROW_Y0 = 6;
+/**
+ * Lề trên của hàng ô đầu tiên — chừa đủ chỗ cho nhãn tên chiêu của slot 1/4 nằm TRÊN ô
+ * (đúng `topY - 8` như mọi hàng khác) mà không bị kẹp xuống đè lên chân dung.
+ */
+const ROW_Y0 = 33;
 /** Vòng chân dung trong ô (56px, khớp ô tướng ở trang chuẩn bị chiến). */
 const ART_R = 28;
 const ART_CY = 14 + ART_R;
@@ -993,8 +1001,8 @@ class Arena implements ArenaHandle {
     }
     // Ghim trong sân: tên chiêu dài không được tràn ra ngoài khung canvas
     const x = Math.min(Math.max(tile.centerX, this.skillW / 2 + 4), W - this.skillW / 2 - 4);
-    // Kẹp DỌC: hàng tướng trên cùng (slot 1/4) không có chỗ phía trên nên nhãn sẽ bị cắt mất;
-    // đẩy xuống vừa đủ để cả khung (kể cả quầng sáng và lúc phóng to) nằm trong sân.
+    // Nhãn luôn nằm NGAY TRÊN ô tướng (`topY - 8`) cho mọi slot, kể cả hàng đầu (1/4) nhờ lề trên
+    // `ROW_Y0` đã chừa sẵn chỗ; hai đầu kẹp chỉ còn là chốt an toàn khi tên chiêu quá dài.
     const halfH = (this.skillH / 2 + 6) * 1.14;
     const y = Math.min(Math.max(tile.topY - 8, halfH), H - halfH);
     this.skillC.visible = true;
