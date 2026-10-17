@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { schemas, type GemElement, type PvpUnitDto } from '@tq/shared';
 import type { GameContext } from '../context.ts';
-import { PREFIX, TTL } from '../cache.ts';
+import { PREFIX, TTL, queryKey } from '../cache.ts';
 import {
   challenge,
   getBattle,
@@ -46,9 +46,12 @@ export function registerPvpRoutes(app: FastifyInstance, ctx: GameContext): void 
     return saveTeam(ctx, req.userId, units, gems ?? []);
   });
 
-  app.get('/api/pvp/opponent/:id', { preHandler: player, schema: { params: schemas.idParams }, config: LIMIT_60 }, async (req) =>
-    getOpponent(ctx, req.userId, (req.params as { id: number }).id),
-  );
+  app.get('/api/pvp/opponent/:id', { preHandler: player, schema: { params: schemas.idParams }, config: LIMIT_60 }, async (req) => {
+    const opponentId = (req.params as { id: number }).id;
+    // Dữ liệu đội hình đối thủ chỉ phụ thuộc người bị xem (không phụ thuộc người xem) => cache theo id đối thủ.
+    // Lỗi (tự khiêu chiến chính mình, không tìm thấy) ném ra trước khi lưu cache nên không bị cache lại.
+    return ctx.cache.readThrough(PREFIX.opponent(opponentId), TTL.opponent, () => getOpponent(ctx, req.userId, opponentId));
+  });
 
   // Khiêu chiến: server mô phỏng trọn trận rồi trả dữ liệu phát lại (không phần thưởng).
   app.post('/api/pvp/challenge', { preHandler: player, schema: { body: schemas.pvpChallengeBody }, config: LIMIT_20 }, async (req) =>
@@ -60,7 +63,9 @@ export function registerPvpRoutes(app: FastifyInstance, ctx: GameContext): void 
     { preHandler: player, schema: { querystring: schemas.pvpBattlesQuery }, config: LIMIT_60 },
     async (req) => {
       const { page, pageSize } = req.query as { page: number; pageSize: number };
-      return listBattleHistory(ctx, req.userId, page, pageSize);
+      return ctx.cache.readThrough(PREFIX.battles(req.userId, queryKey({ page, pageSize })), TTL.battles, () =>
+        listBattleHistory(ctx, req.userId, page, pageSize),
+      );
     },
   );
 

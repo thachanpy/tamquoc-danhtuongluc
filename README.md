@@ -87,7 +87,7 @@ Ghi chú:
 
 - Giữ `instances: 1` (fork mode): SQLite chỉ có một tiến trình ghi và rate limit lưu trong bộ nhớ.
 - Biến môi trường chỉnh trong `env` của `pm2.config.json`: `PORT`, `HOST`, `DB_PATH` (mặc định `data/tamquoc.db`), `LOG_LEVEL`, `TRUST_PROXY`, `ENABLE_GIFT` (tặng thẻ, mặc định tắt), `REDIS_URL` (cache, mặc định `redis://127.0.0.1:6379`; đặt `off` để tắt). (Bật/tắt duyệt tài khoản nằm ở trang Quản trị, không phải biến môi trường.) **Không** đặt `ENABLE_DEV_TOPUP` khi chạy thật. Sửa xong chạy `pm2 restart pm2.config.json --update-env`.
-- Cache: mặc định bật Redis/Dragonfly ở `redis://127.0.0.1:6379` cho bảng xếp hạng, phiên đăng nhập, cài đặt game, bộ sưu tập/đội hình và danh sách Quản trị. Đặt `REDIS_URL=off` để tắt hẳn; Redis chưa chạy hoặc lỗi kết nối thì API tự đọc thẳng SQLite như trước (cache hỏng không làm hỏng request). Xem chi tiết ở `CLAUDE.md` mục 7.11.
+- Cache: mặc định bật Redis/Dragonfly ở `redis://127.0.0.1:6379` cho bảng xếp hạng, phiên đăng nhập, cài đặt game, bộ sưu tập/đội hình, nhiệm vụ, lịch sử, nhật ký trận PvP và danh sách Quản trị. Đặt `REDIS_URL=off` để tắt hẳn; Redis chưa chạy hoặc lỗi kết nối thì API tự đọc thẳng SQLite như trước (cache hỏng không làm hỏng request). Xem chi tiết ở `CLAUDE.md` mục 7.11.
 - Migration chạy tự động khi API khởi động, không bao giờ xoá dữ liệu.
 
 ### 4. Cấu hình nginx

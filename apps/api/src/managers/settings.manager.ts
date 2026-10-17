@@ -21,6 +21,6 @@ export async function getSettings(ctx: GameContext): Promise<AppSettingsDto> {
 
 export function setRequireApproval(ctx: GameContext, value: boolean, adminId: number | null = null): AppSettingsDto {
   upsertSetting(ctx.db, 'require_approval', value ? '1' : '0', iso(ctx.now()), adminId);
-  ctx.cache.drop([DROP.settings]);
+  ctx.cache.del([DROP.settings]);
   return { requireApproval: value };
 }

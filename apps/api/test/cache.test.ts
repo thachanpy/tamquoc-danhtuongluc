@@ -14,14 +14,17 @@ import {
   type CacheStore,
 } from '../src/cache.ts';
 
-/** Cache giả ghi lại lời gọi drop để kiểm tra danh sách key bị xoá. */
-function recordingCache(): CacheStore & { dropped: string[] } {
+/** Cache giả ghi lại lời gọi del/drop để kiểm tra danh sách key bị xoá. */
+function recordingCache(): CacheStore & { deleted: string[]; dropped: string[] } {
+  const deleted: string[] = [];
   const dropped: string[] = [];
   return {
     enabled: true,
+    deleted,
     dropped,
     get: async () => null,
     set: async () => {},
+    del: (keys) => deleted.push(...keys),
     drop: (prefixes) => dropped.push(...prefixes),
     readThrough: async (_key, _ttl, load) => load(),
     close: async () => {},
@@ -39,6 +42,7 @@ test('noop cache: luôn trượt cache và đi thẳng vào nguồn dữ liệu'
   const load = () => ({ n: ++calls });
   assert.deepEqual(await cache.readThrough('tq:lb', 30, load), { n: 1 });
   assert.deepEqual(await cache.readThrough('tq:lb', 30, load), { n: 2 }); // không nhớ đệm
+  cache.del(['tq:lb']);
   cache.drop(['tq:lb']); // không lỗi
 });
 
@@ -49,28 +53,42 @@ test('queryKey: bỏ tham số undefined, sắp xếp theo tên nên cùng truy 
   assert.equal(queryKey({ page: 1, q: undefined }), 'page=1');
 });
 
-test('key builder: tiền tố tách namespace, DROP.collection khớp mọi truy vấn con', () => {
+test('key builder: mỗi nhóm có tiền tố riêng, tiền tố xoá khớp mọi key con', () => {
   assert.equal(PREFIX.user(7), 'tq:usr:7');
   assert.equal(PREFIX.collection(7, 'cards', 'page=1'), 'tq:col:7:cards:page=1');
   assert.equal(PREFIX.collection(7, 'gems'), 'tq:col:7:gems:');
-  // Mọi key con của bộ sưu tập đều bắt đầu bằng tiền tố xoá
+  // Mọi key con của bộ sưu tập/lịch sử/nhật ký trận đều bắt đầu bằng tiền tố xoá
   assert.ok(PREFIX.collection(7, 'cards', 'page=1').startsWith(DROP.collection(7)));
+  assert.ok(PREFIX.history(7, 'kind=gacha').startsWith(DROP.history(7)));
+  assert.ok(PREFIX.battles(7, 'page=1').startsWith(DROP.battles(7)));
+  assert.equal(PREFIX.quests(7), DROP.quests(7)); // nhiệm vụ là 1 key đúng, không có key con
+  assert.equal(PREFIX.opponent(7), DROP.opponent(7));
   assert.ok(PREFIX.admin('users', 'page=1').startsWith(DROP.admin));
-  assert.ok(TTL.leaderboard > 0 && TTL.session > 0 && TTL.settings > 0);
+  assert.ok(TTL.leaderboard > 0 && TTL.session > 0 && TTL.settings > 0 && TTL.quests > 0);
 });
 
-test('invalidatePlayers: xoá BXH + danh sách Quản trị + dữ liệu của mọi người chơi liên quan', () => {
+test('invalidatePlayers: xoá key đúng của từng người + BXH, xoá theo tiền tố nhóm nhiều key con', () => {
   const cache = recordingCache();
   invalidatePlayers(cache, 3, 9);
-  assert.deepEqual(cache.dropped, [
+  assert.deepEqual(cache.deleted, [
     DROP.leaderboard,
-    DROP.admin,
     DROP.user(3),
-    DROP.collection(3),
     DROP.pvp(3),
+    DROP.quests(3),
+    DROP.opponent(3),
     DROP.user(9),
-    DROP.collection(9),
     DROP.pvp(9),
+    DROP.quests(9),
+    DROP.opponent(9),
+  ]);
+  assert.deepEqual(cache.dropped, [
+    DROP.admin,
+    DROP.collection(3),
+    DROP.history(3),
+    DROP.battles(3),
+    DROP.collection(9),
+    DROP.history(9),
+    DROP.battles(9),
   ]);
 });
 

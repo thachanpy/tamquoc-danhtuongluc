@@ -9,6 +9,7 @@ import {
 import { GIFT_CODE_MAX_TICKETS } from '@tq/game-config';
 import { AppError, type GameContext } from '../context.ts';
 import { iso } from '../utils.ts';
+import { invalidatePlayers } from '../cache.ts';
 import { tx } from '../db.ts';
 import { applyTicketDelta } from '../repositories/ticket.repository.ts';
 import {
@@ -94,6 +95,8 @@ export function redeemGiftCode(ctx: GameContext, userId: number, rawCode: string
     insertRedemption(ctx.db, { codeId: row.id, userId, ticketsSnapshot: JSON.stringify(tickets), createdAt: nowIso });
     return { code: row.code, rewards, tickets, createdAt: nowIso };
   });
+  // Lượt nhập + vé vào sổ cái => lịch sử và danh sách Quản trị của người chơi đọc lại từ DB.
+  invalidatePlayers(ctx.cache, userId);
   return { ...stored, balances: getTickets(ctx, userId) };
 }
 

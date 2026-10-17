@@ -16,6 +16,7 @@ import {
 } from '@tq/game-config';
 import { AppError, type GameContext } from '../context.ts';
 import { iso } from '../utils.ts';
+import { DROP } from '../cache.ts';
 import { tx } from '../db.ts';
 import {
   applyTicketDelta,
@@ -69,6 +70,8 @@ export function devTopup(ctx: GameContext, userId: number, idempotencyKey: strin
     saveIdempotent(ctx.db, userId, 'dev_topup', idempotencyKey, requestHash, result, nowIso);
     return result;
   });
+  // Vé vào sổ cái => lịch sử của người chơi phải đọc lại.
+  ctx.cache.drop([DROP.history(userId)]);
   return { ...stored, tickets: getTickets(ctx, userId) };
 }
 
@@ -116,8 +119,11 @@ export function syncRecoveryDetailed(ctx: GameContext, userId: number): { grante
       if (changes !== 1) throw new AppError(409, 'CONCURRENT_UPDATE', 'Trạng thái hồi vé vừa thay đổi.');
       return n === pending;
     });
-    if (done) return { granted, skippedFull };
+    if (done) break;
   }
+  // Vé hồi ghi thêm dòng sổ cái => lịch sử của người chơi phải đọc lại (cache 30s coi như trượt).
+  if (TICKET_TYPES.some((t) => granted[t] > 0)) ctx.cache.drop([DROP.history(userId)]);
+  return { granted, skippedFull };
 }
 
 export function syncRecovery(ctx: GameContext, userId: number): TicketBalances {

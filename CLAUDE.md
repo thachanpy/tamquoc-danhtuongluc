@@ -1200,11 +1200,19 @@ Có thể dùng bảng idempotency riêng hoặc các unique constraint phù h�
 | Cài đặt game (bảng `app_settings`) | `tq:set` | 300 |
 | Bộ sưu tập thẻ / Ngọc (`?…` đã chuẩn hoá bằng `queryKey`) | `tq:col:<id>:<kind>:<query>` | 30 |
 | Đội hình PvP + chỉ số | `tq:pvp:<id>` | 30 |
+| Nhiệm vụ + thành tựu (hàng chục truy vấn đếm, client hỏi mỗi lần chuyển tab) | `tq:qst:<id>` | 15 |
+| Lịch sử gộp 5 bảng (UNION ALL + COUNT) | `tq:his:<id>:<query>` | 30 |
+| Nhật ký trận PvP phân trang | `tq:btl:<id>:<query>` | 15 |
+| Đội hình người chơi khi người khác xem trước khiêu chiến (không phụ thuộc người xem) | `tq:opp:<id>` | 30 |
 | Danh sách trang Quản trị (users/cards/gems) | `tq:adm:<kind>:<query>` | 15 |
 
-- Xoá cache ở mọi đường ghi bằng `invalidatePlayers(ctx.cache, ...userIds)`: xoá `tq:lb`, `tq:adm:*` (danh sách Quản trị hiển thị số thẻ/vé) và `tq:usr/col/pvp` của những người chơi liên quan. Đường ghi nằm trong transaction đồng bộ nên `drop()` là best-effort, không await (`SCAN` + `DEL` chạy nền).
-- `readThrough` gọi `load` trực tiếp (không phải hàm async bắt buộc) nên dùng được với repository đồng bộ của SQLite.
-- Đăng xuất xoá đúng key phiên; đổi cài đặt xoá `tq:set`; huỷ cache sai cũng không nguy hiểm vì mọi key đều có TTL.
+- Xoá cache ở mọi đường ghi bằng `invalidatePlayers(ctx.cache, ...userIds)` (gọi cả người bị tác động, ví dụ cả hai bên trong một trận PvP):
+  - `del()` cho key đúng — 1 lệnh `DEL`: `tq:lb` và `tq:usr` / `tq:pvp` / `tq:qst` / `tq:opp` của từng người.
+  - `drop()` cho nhóm nhiều key con — `SCAN` + `DEL`: `tq:adm:*` và `tq:col` / `tq:his` / `tq:btl` của từng người.
+  Đường ghi nằm trong transaction đồng bộ nên cả `del()` lẫn `drop()` đều best-effort, không await (chạy nền).
+- Một số đường ghi chỉ ảnh hưởng một nhóm thì xoá đúng nhóm đó thay vì `invalidatePlayers`: đăng xuất → `tq:sess`; đổi cài đặt → `tq:set`; nhận thưởng nhiệm vụ → `tq:qst` + `tq:his`; vé hồi / cộng vé thử nghiệm → `tq:his`.
+- `readThrough` gọi `load` trực tiếp (không phải hàm async bắt buộc) nên dùng được với repository đồng bộ của SQLite. `load` ném lỗi thì không lưu cache (lỗi như "không tìm thấy đối thủ" không bị cache lại).
+- Sổ cái vé hồi (`time_recovery`) thêm dòng mỗi phút; `tq:his` bị xoá ngay khi có vé hồi nên lịch sử luôn khớp. Huỷ cache sai cũng không nguy hiểm vì mọi key đều có TTL.
 
 ## 8. API Fastify
 

@@ -38,7 +38,11 @@ export function registerCollectionRoutes(app: FastifyInstance, ctx: GameContext)
       listCards(ctx, req.userId, query),
     );
   });
-  app.get('/api/history', { preHandler: auth, schema: { querystring: schemas.historyQuery } }, async (req) =>
-    listHistory(ctx, req.userId, req.query as HistoryQuery),
-  );
+  app.get('/api/history', { preHandler: auth, schema: { querystring: schemas.historyQuery } }, async (req) => {
+    const query = req.query as HistoryQuery;
+    // Lịch sử gộp 5 bảng bằng UNION ALL nên nặng; cache 30s, xoá ở mọi thao tác ghi (vé, quay, ghép, tặng).
+    return ctx.cache.readThrough(PREFIX.history(req.userId, queryKey(query)), TTL.history, () =>
+      listHistory(ctx, req.userId, query),
+    );
+  });
 }

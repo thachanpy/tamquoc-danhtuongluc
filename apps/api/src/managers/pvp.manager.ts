@@ -507,8 +507,8 @@ export function challenge(ctx: GameContext, userId: number, opponentId: number):
       now,
     ),
   );
-  // Thành tích thắng/thua đổi => xoá cache tổng quan Đấu trường của người chơi.
-  invalidatePlayers(ctx.cache, userId);
+  // Thành tích thắng/thua + nhật ký trận của CẢ HAI bên đổi => xoá cache cả người khiêu chiến lẫn người bị khiêu chiến.
+  invalidatePlayers(ctx.cache, userId, opponentId);
 
   return {
     id,

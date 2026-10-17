@@ -120,7 +120,7 @@ export function login(ctx: GameContext, username: string, password: string): { t
 export function logout(ctx: GameContext, token: string): void {
   const tokenHash = sha256(token);
   deleteSession(ctx.db, tokenHash);
-  ctx.cache.drop([DROP.session(tokenHash)]);
+  ctx.cache.del([DROP.session(tokenHash)]);
 }
 
 /**

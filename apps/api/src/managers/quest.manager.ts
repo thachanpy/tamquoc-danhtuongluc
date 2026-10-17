@@ -43,6 +43,7 @@ import {
 } from '@tq/game-config';
 import { AppError, type GameContext } from '../context.ts';
 import { iso } from '../utils.ts';
+import { DROP } from '../cache.ts';
 import { tx, type DB } from '../db.ts';
 import { applyTicketDelta } from '../repositories/ticket.repository.ts';
 import {
@@ -495,6 +496,9 @@ export function claimQuests(ctx: GameContext, userId: number, keys?: string[]): 
     for (const g of grants) grant(ctx.db, userId, g, false, nowIso);
     return grants.map(({ key, name, pool, count }) => ({ key, name, pool, count }));
   });
+  // Trạng thái nhiệm vụ đổi và vé thưởng vào sổ cái => đọc lại từ DB.
+  ctx.cache.del([DROP.quests(userId)]);
+  ctx.cache.drop([DROP.history(userId)]);
   return { claimed, balances: getTickets(ctx, userId) };
 }
 
@@ -514,7 +518,7 @@ export function touchDaily(ctx: GameContext, userId: number): DailyEventsDto | n
   const pre = read();
   if (pre && pre.last_game_day === day && pre.last_cal_date === today) return null;
 
-  return tx(ctx.db, () => {
+  const events = tx(ctx.db, () => {
     const st = read(); // đọc lại trong transaction (request đồng thời)
     if (st && st.last_game_day === day && st.last_cal_date === today) return null;
     const db = ctx.db;
@@ -565,4 +569,7 @@ export function touchDaily(ctx: GameContext, userId: number): DailyEventsDto | n
     upsertDailyState(db, userId, day, today, nowIso);
     return events.resetBonus || events.autoClaimed.length ? events : null;
   });
+  // Sang ngày mới có thể tự nhận thưởng => trạng thái nhiệm vụ đã đổi, đọc lại từ DB.
+  if (events) ctx.cache.del([DROP.quests(userId)]);
+  return events;
 }

@@ -13,6 +13,8 @@ export interface CacheStore {
   readonly enabled: boolean;
   get<T>(key: string): Promise<T | null>;
   set(key: string, value: unknown, ttlSeconds: number): Promise<void>;
+  /** Xoá best-effort ĐÚNG các key này. Không await — gọi được ở đường ghi trong transaction. */
+  del(keys: string[]): void;
   /** Xoá best-effort mọi key khớp tiền tố. Không await — gọi được ở đường ghi trong transaction. */
   drop(prefixes: string[]): void;
   /** Đọc qua cache: có sẵn thì trả về; chưa có thì gọi `load` rồi lưu với TTL. */
@@ -34,18 +36,30 @@ export const PREFIX = {
   collection: (userId: number, kind: string, query = '') => `tq:col:${userId}:${kind}:${query}`,
   /** Đội hình PvP + chỉ số của một người chơi. */
   pvp: (userId: number) => `tq:pvp:${userId}`,
+  /** Nhiệm vụ/thành tựu của một người chơi (truy vấn tổng hợp nặng). */
+  quests: (userId: number) => `tq:qst:${userId}`,
+  /** Lịch sử phân trang của một người chơi (gộp nhiều bảng) theo tham số truy vấn. */
+  history: (userId: number, query = '') => `tq:his:${userId}:${query}`,
+  /** Nhật ký trận PvP phân trang của một người chơi. */
+  battles: (userId: number, query = '') => `tq:btl:${userId}:${query}`,
+  /** Đội hình của một người chơi khi người khác xem trước khi khiêu chiến (không phụ thuộc người xem). */
+  opponent: (userId: number) => `tq:opp:${userId}`,
   /** Danh sách ở trang Quản trị (mọi phân trang/lọc). */
   admin: (kind: string, query = '') => `tq:adm:${kind}:${query}`,
 } as const;
 
-/** Tiền tố dùng khi xoá cache (khớp cả key và mọi key con). */
+/** Key dùng khi xoá cache: `del` cần key đúng, `drop` cần tiền tố (khớp cả key con). */
 export const DROP = {
   leaderboard: 'tq:lb',
   user: (userId: number) => `tq:usr:${userId}`,
   session: (tokenHash: string) => `tq:sess:${tokenHash}`,
   settings: 'tq:set',
-  collection: (userId: number) => `tq:col:${userId}:`,
   pvp: (userId: number) => `tq:pvp:${userId}`,
+  quests: (userId: number) => `tq:qst:${userId}`,
+  opponent: (userId: number) => `tq:opp:${userId}`,
+  collection: (userId: number) => `tq:col:${userId}:`,
+  history: (userId: number) => `tq:his:${userId}:`,
+  battles: (userId: number) => `tq:btl:${userId}:`,
   admin: 'tq:adm:',
 } as const;
 
@@ -57,6 +71,10 @@ export const TTL = {
   settings: 300,
   collection: 30,
   pvp: 30,
+  quests: 15,
+  history: 30,
+  battles: 15,
+  opponent: 30,
   admin: 15,
 } as const;
 
@@ -71,15 +89,19 @@ export function queryKey(query: object): string {
 }
 
 /**
- * Xoá cache phụ thuộc dữ liệu của người chơi: BXH, hồ sơ/cờ admin, bộ sưu tập, đội hình
- * và danh sách Quản trị (có hiển thị số thẻ/vé của người chơi). Gọi ở mọi đường ghi.
+ * Xoá cache phụ thuộc dữ liệu của người chơi: BXH, hồ sơ/cờ admin, bộ sưu tập, đội hình, nhiệm vụ,
+ * lịch sử, nhật ký trận, đội hình khi người khác xem và danh sách Quản trị (có số thẻ/vé).
+ * Gọi ở mọi đường ghi.
+ *
+ * Key đúng được xoá bằng `del` (1 lệnh DEL), key con (theo trang/lọc) xoá theo tiền tố bằng `drop`
+ * (`SCAN`) — chỉ dùng `SCAN` cho những nhóm thật sự có nhiều key con.
  */
 export function invalidatePlayers(cache: CacheStore, ...userIds: number[]): void {
-  cache.drop([
+  cache.del([
     DROP.leaderboard,
-    DROP.admin,
-    ...userIds.flatMap((id) => [DROP.user(id), DROP.collection(id), DROP.pvp(id)]),
+    ...userIds.flatMap((id) => [DROP.user(id), DROP.pvp(id), DROP.quests(id), DROP.opponent(id)]),
   ]);
+  cache.drop([DROP.admin, ...userIds.flatMap((id) => [DROP.collection(id), DROP.history(id), DROP.battles(id)])]);
 }
 
 /** Cache rỗng — mọi lượt đọc đều đi thẳng vào DB. */
@@ -88,6 +110,7 @@ export function createNoopCache(): CacheStore {
     enabled: false,
     get: async () => null,
     set: async () => {},
+    del: () => {},
     drop: () => {},
     readThrough: async (_key, _ttl, load) => load(),
     close: async () => {},
@@ -138,6 +161,13 @@ export async function createRedisCache(url: string, onError?: (err: unknown) => 
     set: async (key, value, ttlSeconds) => {
       await safe(async () => {
         await client.set(key, JSON.stringify(value), { expiration: { type: 'EX', value: ttlSeconds } });
+      }, undefined);
+    },
+    del: (keys) => {
+      if (!keys.length) return;
+      // Không await: giống `drop`, chỉ cần xoá best-effort.
+      void safe(async () => {
+        await client.del(keys);
       }, undefined);
     },
     drop: (prefixes) => {
