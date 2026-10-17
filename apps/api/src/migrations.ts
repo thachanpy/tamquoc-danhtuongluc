@@ -590,6 +590,16 @@ CREATE TABLE IF NOT EXISTS pvp_team_gems (
 );
 `,
   },
+  {
+    // Chuẩn hóa avatar chân dung tướng cũ: bộ ảnh đổi từ .jpg sang .webp.
+    // Chỉ chạm đường dẫn /generals/... (không đụng data URL ảnh tự tải của người chơi).
+    version: 19,
+    name: 'normalize_avatar_webp',
+    sql: `
+UPDATE users SET avatar = replace(avatar, '.jpg', '.webp')
+  WHERE avatar LIKE '/generals/%.jpg';
+`,
+  },
 ];
 
 /** target: chỉ chạy tới version này (dùng khi test migration). */
