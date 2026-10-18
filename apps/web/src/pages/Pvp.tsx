@@ -1429,6 +1429,11 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     const u = byIdx.get(idx);
     return u ? gen(u.generalId).name : `#${idx}`;
   };
+  /** artKey chân dung của tướng ở ô `idx` — gắn avatar người gây đòn vào số bay (nhãn "HẠ"). */
+  const artOf = (idx: number) => {
+    const u = byIdx.get(idx);
+    return u ? gen(u.generalId).artKey : undefined;
+  };
   /** Tên chiêu đang thi triển của tướng ở ô idx (ưu tiên tên thật trong snapshot). */
   const skillNameAt = (idx: number, fallback: PvpSkill) => byIdx.get(idx)?.skillName ?? PVP_SKILL_LABELS[fallback];
   const initView = () => {
@@ -1541,9 +1546,12 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
 
   /**
    * Số bay của một ĐÒN GÂY SÁT THƯƠNG (đòn thường / phản kích / thiêu đốt).
-   * - `kill` = đòn này lấy mạng mục tiêu (xem `killsNext`): hiện thêm chữ "HẠ GỤC" ngay trước con số
+   * - `kill` = đòn này lấy mạng mục tiêu (xem `killsNext`): hiện thêm chữ "HẠ" ngay trước con số
    *   sát thương cuối cùng và tô đỏ chu tước, cỡ lớn như chí mạng — nhìn là biết vừa hạ được tướng.
-   * - `lead` = nhãn đứng trước con số (phản kích), `icon` = icon hiệu ứng đi kèm con số.
+   *   Tướng còn lượt HỒI SINH thì đòn làm máu về 0 KHÔNG tính là hạ (client nhận `revive` thay vì
+   *   `down` nên `killsNext` trả về false), nên đòn đó không hiện nhãn "HẠ".
+   * - `icon` = icon hiệu ứng đi kèm con số.
+   * - `killerArt` = artKey người gây đòn — gắn avatar tròn ngay trước chữ "HẠ" để biết AI kết liễu.
    */
   const hitFloat = (
     idx: number,
@@ -1551,14 +1559,30 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     crit: boolean,
     kill: boolean,
     tone: FloatTone = 'damage',
-    opts: { lead?: string; icon?: IconId } = {},
+    opts: { icon?: IconId; killerArt?: string } = {},
   ) => {
     const parts: FloatPart[] = [];
-    if (opts.lead) parts.push({ text: opts.lead });
-    if (kill) parts.push({ text: 'HẠ' });
+    if (kill) parts.push(opts.killerArt ? { portrait: opts.killerArt, text: 'HẠ' } : { text: 'HẠ' });
     const dmg = `-${num(amount)}`;
     parts.push(opts.icon ? { icon: opts.icon, text: dmg } : { text: dmg });
     addFloat(idx, parts, crit, kill ? 'kill' : tone);
+  };
+
+  /**
+   * artKey tướng gây sát thương THIÊU ĐỐT lên ô `idx`: một mục tiêu có thể bị nhiều nguồn đốt nên lấy
+   * nguồn đóng góp nhiều nhất (`burnFlat` lớn nhất) làm người được tính công kết liễu.
+   */
+  const burnArtOf = (idx: number) => {
+    const ds = view()[idx]?.debuffs ?? [];
+    let best = -1;
+    let src = -1;
+    for (const d of ds) {
+      if (d.burnFlat > best) {
+        best = d.burnFlat;
+        src = d.sourceIdx;
+      }
+    }
+    return src >= 0 ? artOf(src) : undefined;
   };
 
   function apply(ev: PvpEventDto, at: number) {
@@ -1626,14 +1650,16 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         setActing(ev.from);
         // Khiên hấp thụ bớt phần sát thương `absorbed` (mục 16): trừ khiên rồi mới cập nhật HP.
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp, shields: absorbedOf(s, ev.absorbed) }));
-        hitFloat(ev.idx, ev.amount, ev.crit, killsNext(events, at, ev.idx));
+        hitFloat(ev.idx, ev.amount, ev.crit, killsNext(events, at, ev.idx), 'damage', { killerArt: artOf(ev.from) });
         addFx(ev.idx, 'damage');
         break;
       case 'counter':
         // Phản kích: `from` đánh trả `idx` (kẻ vừa gây sát thương chủ động cho `from`).
         setActing(ev.from);
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp, shields: absorbedOf(s, ev.absorbed) }));
-        hitFloat(ev.idx, ev.amount, ev.crit, killsNext(events, at, ev.idx), 'damage', { lead: 'PHẢN' });
+        // Ô ĂN đòn chỉ hiện con số; nhãn "PHẢN" gắn lên ô TƯỚNG ĐÁNH TRẢ để biết ai vừa phản kích.
+        hitFloat(ev.idx, ev.amount, ev.crit, killsNext(events, at, ev.idx), 'damage', { killerArt: artOf(ev.from) });
+        addFloat(ev.from, [{ text: 'PHẢN' }], false, 'damage');
         addFx(ev.idx, 'damage');
         break;
       case 'heal':
@@ -1720,9 +1746,9 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         break;
       }
       case 'burn':
-        // Thiêu đốt gây sát thương vào đầu mỗi lượt (có thể ăn chí mạng theo chỉ số người thi triển).
+        // Thiêu đốt gây sát thương vào đầu mỗi lượt (có thể ăn chí mạng theo chỉ số người thiêu).
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp, shields: absorbedOf(s, ev.absorbed) }));
-        hitFloat(ev.idx, ev.amount, ev.crit, killsNext(events, at, ev.idx), 'burn', { icon: 'burn' });
+        hitFloat(ev.idx, ev.amount, ev.crit, killsNext(events, at, ev.idx), 'burn', { icon: 'burn', killerArt: burnArtOf(ev.idx) });
         addFx(ev.idx, 'burn');
         break;
       case 'shield':

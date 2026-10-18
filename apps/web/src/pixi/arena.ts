@@ -344,9 +344,11 @@ async function loadPortraits(keys: string[]): Promise<void> {
   );
 }
 
-/** Một mảnh của số bay lên trên ô tướng: icon hiệu ứng (tuỳ chọn) + chữ. */
+/** Một mảnh của số bay lên trên ô tướng: chân dung/icon hiệu ứng (tuỳ chọn) + chữ. */
 export interface FloatPart {
   icon?: IconId;
+  /** artKey tướng — vẽ chân dung TRÒN ngay trước chữ (nhãn "HẠ" gắn avatar người kết liễu). */
+  portrait?: string;
   text: string;
 }
 
@@ -387,10 +389,32 @@ class FloatFx {
     });
     const gap = size * 0.18;
     const icoSize = size * 0.78;
-    const total = parts.reduce((a, p, i) => a + (i ? gap : 0) + (p.icon ? icoSize + gap * 0.4 : 0) + texts[i]!.width, 0);
+    /** Chân dung tròn gắn kèm (avatar người kết liễu) — cao bằng cỡ chữ nên không phình dòng. */
+    const portSize = size * 1.02;
+    const total = parts.reduce(
+      (a, p, i) => a + (i ? gap : 0) + (p.icon ? icoSize + gap * 0.4 : 0) + (p.portrait ? portSize + gap * 0.4 : 0) + texts[i]!.width,
+      0,
+    );
     let x0 = -total / 2;
     for (let i = 0; i < parts.length; i++) {
       if (i) x0 += gap;
+      if (parts[i]!.portrait) {
+        const tex = portraitTex.get(parts[i]!.portrait!);
+        if (tex) {
+          const sp = new Sprite(new Texture({ source: tex.source }));
+          const k = Math.max(portSize / tex.width, portSize / tex.height);
+          sp.width = tex.width * k;
+          sp.height = tex.height * k;
+          sp.anchor.set(0.5);
+          sp.position.set(x0 + portSize / 2, 0);
+          // Cắt tròn như chân dung trên ô tướng: ảnh gốc là chữ nhật, không mask sẽ tràn khỏi dòng chữ.
+          const mask = new Graphics().circle(x0 + portSize / 2, 0, portSize / 2).fill({ color: 0xffffff });
+          sp.mask = mask;
+          this.c.addChild(mask, sp);
+        }
+        // Thiếu ảnh thì vẫn chừa đúng khoảng trống để các mảnh sau không nhảy vị trí.
+        x0 += portSize + gap * 0.4;
+      }
       if (parts[i]!.icon) {
         const g = new Graphics();
         drawIcon(g, parts[i]!.icon!, icoSize, fill);
@@ -403,7 +427,7 @@ class FloatFx {
       x0 += texts[i]!.width;
     }
     this.climb = reduce ? 0 : this.big ? 36 : 26;
-    this.halfH = size / 2;
+    this.halfH = Math.max(size, portSize) / 2;
     // Kẹp NGANG: canh giữa quanh ô tướng nhưng không cho số tràn ra ngoài khung sân
     // (cỡ chữ lớn + tên dài như "HỒI SINH +5000" rất dễ vượt mép trái/phải).
     const halfW = total / 2;
