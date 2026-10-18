@@ -662,6 +662,46 @@ CREATE TABLE gacha_config (
 );
 `,
   },
+  {
+    // Chợ thẻ tướng (chủ dự án yêu cầu): người chơi đăng bán thẻ của mình cho người khác mua.
+    // - Một dòng = một tin đăng bán MỘT thẻ (tướng + cấp). Thẻ lên chợ bị tiêu thụ khỏi bộ sưu tập
+    //   (status 'consumed') nên không dùng được khi đang bán; huỷ tin/mua xong thì tạo lại thẻ cho chủ mới.
+    // - price: đơn vị tiền tệ Vàng. Hiện luôn 0 (chủ dự án: "chỉ bán giá 0đ", hệ thống Vàng làm sau)
+    //   nên chưa có bảng ví — cột này để sẵn cho lần nâng cấp tới.
+    // - status: active (đang bán) / sold (đã bán) / cancelled (người bán huỷ). CHECK giữ nhất quán
+    //   giữa status và các mốc thời gian + người mua.
+    // - Lịch sử mua/bán đọc thẳng từ bảng này (status='sold'), không cần bảng giao dịch riêng.
+    version: 22,
+    name: 'market_listings',
+    sql: `
+CREATE TABLE market_listings (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  seller_id       INTEGER NOT NULL REFERENCES users(id),
+  general_id      TEXT NOT NULL REFERENCES generals(id),
+  level           INTEGER NOT NULL CHECK (level BETWEEN 1 AND 10),
+  price           INTEGER NOT NULL DEFAULT 0 CHECK (price >= 0),
+  status          TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','sold','cancelled')),
+  buyer_id        INTEGER REFERENCES users(id),
+  idempotency_key TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  sold_at         TEXT,
+  cancelled_at    TEXT,
+  CHECK (
+    (status = 'active'    AND buyer_id IS NULL     AND sold_at IS NULL     AND cancelled_at IS NULL) OR
+    (status = 'sold'      AND buyer_id IS NOT NULL AND sold_at IS NOT NULL AND cancelled_at IS NULL) OR
+    (status = 'cancelled' AND buyer_id IS NULL     AND sold_at IS NULL     AND cancelled_at IS NOT NULL)
+  ),
+  CHECK (buyer_id IS NULL OR buyer_id <> seller_id)
+);
+-- Duyệt chợ: chỉ lấy tin đang bán, mới nhất trước.
+CREATE INDEX idx_market_status ON market_listings(status, id);
+CREATE INDEX idx_market_seller ON market_listings(seller_id, id);
+CREATE INDEX idx_market_buyer ON market_listings(buyer_id, id);
+-- Mỗi lần đăng bán (1 idempotency key) chỉ tạo 1 tin
+CREATE UNIQUE INDEX uq_market_seller_key ON market_listings(seller_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+`,
+  },
 ];
 
 /** target: chỉ chạy tới version này (dùng khi test migration). */

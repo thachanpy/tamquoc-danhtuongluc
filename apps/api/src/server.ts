@@ -10,6 +10,7 @@ import { registerGemRoutes } from './controllers/gem.controller.ts';
 import { registerGiftRoutes } from './controllers/gift.controller.ts';
 import { registerGiftCodeRoutes } from './controllers/giftcode.controller.ts';
 import { registerLeaderboardRoutes } from './controllers/leaderboard.controller.ts';
+import { registerMarketRoutes } from './controllers/market.controller.ts';
 import { registerProfileRoutes } from './controllers/profile.controller.ts';
 import { registerPvpRoutes } from './controllers/pvp.controller.ts';
 import { registerQuestRoutes } from './controllers/quest.controller.ts';
@@ -69,6 +70,7 @@ export async function buildServer(ctx: GameContext): Promise<FastifyInstance> {
   registerGiftCodeRoutes(app, ctx);
   registerQuestRoutes(app, ctx);
   registerLeaderboardRoutes(app, ctx);
+  registerMarketRoutes(app, ctx);
   registerPvpRoutes(app, ctx);
   registerAdminRoutes(app, ctx);
 

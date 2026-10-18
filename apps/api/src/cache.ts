@@ -48,6 +48,12 @@ export const PREFIX = {
   combat: (userId: number, query = '') => `tq:cbt:${userId}:${query}`,
   /** Danh sách ở trang Quản trị (mọi phân trang/lọc). */
   admin: (kind: string, query = '') => `tq:adm:${kind}:${query}`,
+  /** Chợ thẻ tướng: danh sách tin đang bán (dùng chung mọi người chơi) theo tham số truy vấn. */
+  marketList: (query = '') => `tq:mkt:list:${query}`,
+  /** Tin đăng bán của một người chơi theo tham số truy vấn. */
+  marketMine: (userId: number, query = '') => `tq:mkt:mine:${userId}:${query}`,
+  /** Lịch sử mua/bán của một người chơi theo tham số truy vấn. */
+  marketHistory: (userId: number, query = '') => `tq:mkt:his:${userId}:${query}`,
 } as const;
 
 /** Key dùng khi xoá cache: `del` cần key đúng, `drop` cần tiền tố (khớp cả key con). */
@@ -64,6 +70,9 @@ export const DROP = {
   battles: (userId: number) => `tq:btl:${userId}:`,
   combat: (userId: number) => `tq:cbt:${userId}:`,
   admin: 'tq:adm:',
+  marketList: 'tq:mkt:list:',
+  marketMine: (userId: number) => `tq:mkt:mine:${userId}:`,
+  marketHistory: (userId: number) => `tq:mkt:his:${userId}:`,
 } as const;
 
 /** Thời gian sống của từng nhóm cache (giây). Ngắn cho dữ liệu hay đổi, dài cho dữ liệu ít đổi. */
@@ -81,6 +90,9 @@ export const TTL = {
   opponent: 30,
   combat: 60,
   admin: 15,
+  marketList: 15,
+  marketMine: 15,
+  marketHistory: 30,
 } as const;
 
 /** Khoá phụ từ tham số truy vấn — sắp xếp theo tên để cùng truy vấn luôn ra cùng khoá. */
@@ -109,6 +121,18 @@ export function invalidatePlayers(cache: CacheStore, ...userIds: number[]): void
   cache.drop([
     DROP.admin,
     ...userIds.flatMap((id) => [DROP.collection(id), DROP.history(id), DROP.battles(id), DROP.combat(id)]),
+  ]);
+}
+
+/**
+ * Xoá cache Chợ thẻ tướng: danh sách chợ (dùng chung mọi người chơi) + tin đăng và lịch sử mua/bán
+ * của những người chơi liên quan. Gọi ở mọi đường ghi của chợ (đăng bán / mua / huỷ tin).
+ * Tách khỏi `invalidatePlayers` để các đường ghi khác (quay, ghép, tặng…) không phải quét lại chợ.
+ */
+export function invalidateMarket(cache: CacheStore, ...userIds: number[]): void {
+  cache.drop([
+    DROP.marketList,
+    ...userIds.flatMap((id) => [DROP.marketMine(id), DROP.marketHistory(id)]),
   ]);
 }
 

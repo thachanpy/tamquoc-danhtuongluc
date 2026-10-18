@@ -27,6 +27,9 @@ import type {
   GiftResultDto,
   QuickGemMergeResultDto,
   HistoryEntryDto,
+  MarketListingDto,
+  MarketListingStatus,
+  MarketPurchaseDto,
   MeDto,
   Page,
   ProfileDto,
@@ -211,6 +214,21 @@ export const api = {
       `/api/pvp/generals/${encodeURIComponent(generalId)}/combat?` +
         qs({ level, squad: squad?.length ? squad.join(',') : undefined, gems: gems?.length ? gems.join(',') : undefined }),
     ),
+  // Chợ thẻ tướng: duyệt chợ / tin của tôi / lịch sử (đọc) + đăng bán / mua / huỷ tin (ghi).
+  market: {
+    listings: (q: { faction?: Faction; level?: number; q?: string; sort?: string; onlyOthers?: boolean; page?: number; pageSize?: number }) =>
+      call<Page<MarketListingDto>>('GET', '/api/market/listings?' + qs(q)),
+    mine: (q: { status?: MarketListingStatus; page?: number; pageSize?: number }) =>
+      call<Page<MarketListingDto>>('GET', '/api/market/mine?' + qs(q)),
+    history: (q: { page?: number; pageSize?: number }) => call<Page<MarketListingDto>>('GET', '/api/market/history?' + qs(q)),
+    // Đăng bán / mua / huỷ đều đổi bộ sưu tập nên xoá cache thẻ client (xem `mutateCards`).
+    create: (cardId: number, idempotencyKey: string) =>
+      mutateCards(call<MarketListingDto>('POST', '/api/market/listings', { cardId, idempotencyKey })),
+    buy: (id: number, idempotencyKey: string) =>
+      mutateCards(call<MarketPurchaseDto>('POST', `/api/market/listings/${id}/buy`, { idempotencyKey })),
+    cancel: (id: number, idempotencyKey: string) =>
+      mutateCards(call<MarketListingDto>('POST', `/api/market/listings/${id}/cancel`, { idempotencyKey })),
+  },
   history: (q: { kind?: string; page?: number; pageSize?: number }) => call<Page<HistoryEntryDto>>('GET', '/api/history?' + qs(q)),
 };
 

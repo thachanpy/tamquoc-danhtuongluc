@@ -7,6 +7,8 @@ import type { GachaConfigDto, GeneralDto, ProfileDto, PvpSkill, PvpStyle, Ticket
  * phần thay đổi trong phiên chơi (số dư vé, badge) là signal của Solid để UI tự cập nhật.
  */
 export const state = {
+  /** Id người chơi (từ `/api/me`) — dùng để phân biệt vai mua/bán ở Chợ thẻ. */
+  userId: 0,
   username: '',
   isAdmin: false,
   features: { devTopup: false, devTopupAmount: 0, gift: false },

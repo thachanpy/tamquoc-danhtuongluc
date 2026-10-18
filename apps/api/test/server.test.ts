@@ -712,3 +712,81 @@ test('HTTP: GET /api/cards/all?best=true chỉ trả thẻ cấp cao nhất củ
   assert.equal(after.length, 2);
   await app.close();
 });
+
+test('HTTP: Chợ thẻ tướng — đăng bán / mua / huỷ tin, idempotent, thẻ đổi chủ', async () => {
+  const { app, auth, adminAuth } = await setup(false);
+  const bob = await regApproved(app, adminAuth, 'bob_mkt');
+  /** Quay 1 thẻ rồi đem lên chợ, trả về tin vừa tạo. */
+  const drawAndList = async (tag: string) => {
+    const d = (await app.inject({ method: 'POST', url: '/api/gacha/draw', headers: auth, payload: { ticketType: 'normal', idempotencyKey: `mkt-draw-${tag}` } })).json();
+    const cardId = d.results[0].card.id as number;
+    const r = await app.inject({ method: 'POST', url: '/api/market/listings', headers: auth, payload: { cardId, idempotencyKey: `mkt-list-${tag}` } });
+    assert.equal(r.statusCode, 200);
+    return { cardId, listing: r.json() as { id: number; generalId: string; level: number; price: number; status: string; sellerName: string } };
+  };
+
+  const { cardId, listing } = await drawAndList('01');
+  // Giá cố định 0 Vàng, tin đang bán, tên người bán lấy từ hồ sơ
+  assert.equal(listing.price, 0);
+  assert.equal(listing.status, 'active');
+  assert.equal(listing.sellerName, 'tester');
+
+  // Đăng bán = thẻ rời bộ sưu tập (bị tiêu thụ), người bán không dùng được nữa
+  const mine = (await app.inject({ method: 'GET', url: '/api/cards/all', headers: auth })).json().items as { id: number }[];
+  assert.ok(!mine.some((c) => c.id === cardId));
+
+  // Retry cùng idempotency key không tạo tin thứ hai
+  const again = await app.inject({ method: 'POST', url: '/api/market/listings', headers: auth, payload: { cardId, idempotencyKey: 'mkt-list-01' } });
+  assert.equal(again.json().id, listing.id);
+
+  // Chợ hiện tin cho người chơi khác
+  const browse = (await app.inject({ method: 'GET', url: '/api/market/listings', headers: bob })).json();
+  assert.ok((browse.items as { id: number }[]).some((x) => x.id === listing.id));
+
+  // Không mua được thẻ của chính mình
+  const own = await app.inject({ method: 'POST', url: `/api/market/listings/${listing.id}/buy`, headers: auth, payload: { idempotencyKey: 'mkt-buy-self' } });
+  assert.equal(own.statusCode, 400);
+  assert.equal(own.json().error.code, 'CANNOT_BUY_OWN');
+
+  // bob mua => bob nhận thẻ mới, tin chuyển sang 'sold'
+  const buy = await app.inject({ method: 'POST', url: `/api/market/listings/${listing.id}/buy`, headers: bob, payload: { idempotencyKey: 'mkt-buy-01' } });
+  assert.equal(buy.statusCode, 200);
+  assert.equal(buy.json().listingId, listing.id);
+  const bobCards = (await app.inject({ method: 'GET', url: '/api/cards/all', headers: bob })).json().items as { id: number }[];
+  assert.ok(bobCards.some((c) => c.id === buy.json().cardId));
+
+  // Tin đã bán thì không mua lại được
+  const buyAgain = await app.inject({ method: 'POST', url: `/api/market/listings/${listing.id}/buy`, headers: bob, payload: { idempotencyKey: 'mkt-buy-02' } });
+  assert.equal(buyAgain.statusCode, 409);
+  assert.equal(buyAgain.json().error.code, 'LISTING_NOT_ACTIVE');
+
+  // Lịch sử: người bán thấy giao dịch kèm tên người mua; người mua cũng thấy
+  const hSeller = (await app.inject({ method: 'GET', url: '/api/market/history', headers: auth })).json().items as { id: number; buyerName: string | null }[];
+  assert.ok(hSeller.some((h) => h.id === listing.id && h.buyerName === 'bob_mkt'));
+  const hBuyer = (await app.inject({ method: 'GET', url: '/api/market/history', headers: bob })).json().items as { id: number }[];
+  assert.ok(hBuyer.some((h) => h.id === listing.id));
+
+  // "Tin của tôi" lọc được theo trạng thái
+  const mineActive = (await app.inject({ method: 'GET', url: '/api/market/mine?status=active', headers: auth })).json().items as { id: number }[];
+  assert.equal(mineActive.length, 0);
+  const mineSold = (await app.inject({ method: 'GET', url: '/api/market/mine?status=sold', headers: auth })).json().items as { id: number }[];
+  assert.ok(mineSold.some((x) => x.id === listing.id));
+
+  // Huỷ tin => thẻ trở lại bộ sưu tập người bán với đúng tướng + cấp
+  const l2 = (await drawAndList('02')).listing;
+  const cancel = await app.inject({ method: 'POST', url: `/api/market/listings/${l2.id}/cancel`, headers: auth, payload: { idempotencyKey: 'mkt-cancel-01' } });
+  assert.equal(cancel.statusCode, 200);
+  assert.equal(cancel.json().status, 'cancelled');
+  const back = (await app.inject({ method: 'GET', url: '/api/cards/all', headers: auth })).json().items as { generalId: string; level: number }[];
+  assert.ok(back.some((c) => c.generalId === l2.generalId && c.level === l2.level));
+
+  // Người khác không huỷ được tin của mình
+  const l3 = (await drawAndList('03')).listing;
+  const steal = await app.inject({ method: 'POST', url: `/api/market/listings/${l3.id}/cancel`, headers: bob, payload: { idempotencyKey: 'mkt-cancel-bob' } });
+  assert.equal(steal.statusCode, 403);
+  assert.equal(steal.json().error.code, 'NOT_LISTING_OWNER');
+
+  // Chưa đăng nhập => 401
+  assert.equal((await app.inject({ method: 'GET', url: '/api/market/listings' })).statusCode, 401);
+  await app.close();
+});

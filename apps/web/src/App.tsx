@@ -15,6 +15,7 @@ import { QuestsPage } from './pages/Quests.tsx';
 import { LeaderboardPage } from './pages/Leaderboard.tsx';
 import { PvpPage } from './pages/Pvp.tsx';
 import { HistoryPage } from './pages/History.tsx';
+import { MarketPage } from './pages/Market.tsx';
 import { GiftCodePage } from './pages/GiftCode.tsx';
 import { ProfilePage } from './pages/Profile.tsx';
 import { AdminPage } from './pages/Admin.tsx';
@@ -25,6 +26,7 @@ const PAGES = {
   pvp: { label: 'Đấu trường', component: PvpPage },
   draw: { label: 'Quay thẻ', component: DrawPage },
   upgrade: { label: 'Nâng cấp', component: UpgradePage },
+  market: { label: 'Chợ thẻ', component: MarketPage },
   quests: { label: 'Nhiệm vụ', component: QuestsPage },
   leaderboard: { label: 'Xếp hạng', component: LeaderboardPage },
   history: { label: 'Lịch sử', component: HistoryPage },
@@ -68,6 +70,7 @@ export function App() {
       // Người chơi: nhận các mốc chưa xử lý ngay khi vào (offline vẫn tích lũy) — server quyết định.
       // Tài khoản quản trị không chơi game (server chặn ADMIN_NOT_PLAYER) nên bỏ qua.
       const claimed = me.isAdmin ? null : await api.claimRecovery();
+      state.userId = me.id;
       state.username = me.username;
       state.isAdmin = me.isAdmin;
       state.features = me.features;

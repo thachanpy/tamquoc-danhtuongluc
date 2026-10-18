@@ -1382,3 +1382,67 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
   .cfg-hero-row { grid-template-columns: 1fr auto; }
   .cfg-hero-row .cfg-style, .cfg-hero-row .cfg-actions { grid-column: 1 / -1; }
 }
+
+/* =========================================================================
+   CHỢ THẺ TƯỚNG (trang riêng)
+   Mỗi tin là một Ô NHỎ trong lưới (avatar tướng + tên + phe · cấp + giá);
+   mọi thao tác ghi đều qua modal (.mkt-modal).
+   ========================================================================= */
+
+/* Lưới ô tin: canh trái, khoảng cách đều; số cột tự co theo bề rộng khả dụng. */
+.mkt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 10px; }
+.mkt-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); text-align: center; }
+/* Avatar tròn của tướng: viền theo bậc cấp (--tc), nền mờ theo phe (--fc). */
+.mkt-art { position: relative; display: grid; place-items: center; width: 64px; height: 64px; flex: none;
+  border-radius: 50%; overflow: hidden; border: 2px solid var(--tc, var(--line));
+  background: linear-gradient(160deg, rgba(42, 33, 18, .95), var(--panel-2)); }
+.mkt-art.big { width: 84px; height: 84px; }
+.mkt-art-ini { font-family: var(--script); font-weight: 800; font-size: 22px; color: var(--gold-2); }
+.mkt-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+.mkt-art.view { cursor: zoom-in; transition: transform .15s ease, box-shadow .15s ease; }
+.mkt-art.view:hover { transform: scale(1.05); box-shadow: 0 0 0 2px rgba(243, 213, 138, .45); }
+.mkt-art.view:focus-visible { outline: 2px solid var(--gold-2); outline-offset: 2px; }
+
+.mkt-cell-name { font-weight: 700; font-size: 14px; line-height: 1.3; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mkt-cell-sub { display: flex; align-items: center; justify-content: center; gap: 5px; font-family: var(--num); font-size: 12.5px; }
+.mkt-cell-sub .dot { color: var(--muted); }
+/* Tô màu phe trong ô tin (các quy tắc `.fac.f-*` sẵn có chỉ áp dụng trong phạm vi popup chi tiết). */
+.mkt-cell-sub .f-wei { color: var(--wei); } .mkt-cell-sub .f-shu { color: var(--shu); }
+.mkt-cell-sub .f-wu { color: var(--wu); } .mkt-cell-sub .f-qun { color: var(--qun); }
+.mkt-cell-price { color: var(--gold-2); font-weight: 700; font-size: 14px; }
+.mkt-cell-seller { color: var(--muted); font-size: 11.5px; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Khe hành động: nút hành động cùng hàng với mốc thời gian, luôn chạm đáy ô cho thẳng hàng. */
+.mkt-cell-act { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+.mkt-cell-time { font-size: 11px; }
+.mkt-buy { min-width: 72px; }
+.mkt-pager { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 0 4px; flex-wrap: wrap; }
+
+/* Modal thao tác: nền tối trung tính + làm mờ, canh giữa; bấm vùng nền để đóng. */
+.mkt-modal { position: fixed; inset: 0; z-index: 65; display: flex; align-items: center; justify-content: center;
+  padding: 16px; background: radial-gradient(70% 70% at 50% 40%, rgba(24, 22, 20, .82), rgba(3, 3, 4, .95));
+  backdrop-filter: blur(5px) saturate(.85); animation: viewer-in .18s ease-out; outline: none; }
+.mkt-modal-box { width: min(420px, 92vw); display: grid; gap: 12px; padding: 16px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: 0 18px 48px rgba(0, 0, 0, .55); }
+.mkt-modal-head { font-family: var(--script); font-size: 20px; font-weight: 700; text-align: center; color: var(--gold-2); }
+.mkt-modal-body { display: flex; align-items: center; gap: 14px; }
+.mkt-modal-info { display: grid; gap: 4px; min-width: 0; }
+.mkt-modal-name { font-family: var(--script); font-size: 20px; font-weight: 700; display: flex; align-items: baseline; gap: 8px; }
+.mkt-modal-lv { font-family: var(--num); font-size: 15px; }
+.mkt-modal-price { color: var(--gold-2); font-weight: 700; font-size: 15px; }
+.mkt-modal-note { margin: 0; }
+.mkt-modal-act { display: flex; justify-content: flex-end; gap: 8px; }
+
+@media (max-width: 640px) {
+  .mkt-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
+  .mkt-cell { padding: 8px 6px; }
+  .mkt-art { width: 52px; height: 52px; }
+  .mkt-art.big { width: 68px; height: 68px; }
+  .mkt-cell-name { font-size: 13px; }
+  .mkt-modal { padding: 12px; backdrop-filter: none; }
+  .mkt-modal-box { padding: 12px; gap: 10px; }
+  .mkt-modal-head { font-size: 18px; }
+  .mkt-modal-name { font-size: 18px; }
+}

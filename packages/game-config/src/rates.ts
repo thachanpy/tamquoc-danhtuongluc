@@ -126,6 +126,15 @@ export const LEADERBOARD_TOP = 10;
 export const GIFT_MAX_CARDS = 20;
 
 /**
+ * Chợ thẻ tướng (chủ dự án yêu cầu): người chơi đăng bán thẻ của mình cho người khác mua.
+ * MARKET_PRICE: giá bán tính bằng Vàng — hiện CỐ ĐỊNH 0 ("chỉ bán giá 0đ"); hệ thống Vàng
+ *   (cách kiếm, ví tiền) sẽ làm ở lần nâng cấp sau, không cho người chơi tự đặt giá.
+ * MARKET_MAX_ACTIVE_LISTINGS: số tin đang bán tối đa mỗi người chơi (chống spam chợ).
+ */
+export const MARKET_PRICE = 0;
+export const MARKET_MAX_ACTIVE_LISTINGS = 20;
+
+/**
  * Nâng cấp nhanh (mục 5.5): người chơi tick chọn các level đầu vào muốn ghép (Lv.1–9).
  * QUICK_UPGRADE_MAX_LEVEL: mức level MẶC ĐỊNH được chọn sẵn (Lv.1–mức này) khi mở trang.
  * QUICK_UPGRADE_MAX_MERGES: số lần ghép tối đa trong 1 lần bấm (an toàn); còn nữa thì bấm lại.

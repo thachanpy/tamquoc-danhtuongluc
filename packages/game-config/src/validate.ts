@@ -11,6 +11,8 @@ import {
   UPGRADE_INPUT_COUNT,
   QUICK_UPGRADE_MAX_LEVEL,
   GIFT_MAX_CARDS,
+  MARKET_PRICE,
+  MARKET_MAX_ACTIVE_LISTINGS,
   RECOVERY_CAP_PER_TYPE,
   LEADERBOARD_SIZE,
   LEADERBOARD_TOP,
@@ -102,6 +104,12 @@ export function validateGameConfig(): void {
   );
   assert(Number.isInteger(QUICK_UPGRADE_MAX_MERGES) && QUICK_UPGRADE_MAX_MERGES >= 1, 'QUICK_UPGRADE_MAX_MERGES không hợp lệ');
   assert(Number.isInteger(GIFT_MAX_CARDS) && GIFT_MAX_CARDS >= 1 && GIFT_MAX_CARDS <= 100, 'GIFT_MAX_CARDS phải trong 1–100');
+  // Chợ thẻ tướng: giá cố định 0 (hệ thống Vàng làm sau) và trần số tin đang bán mỗi người chơi.
+  assert(MARKET_PRICE === 0, 'MARKET_PRICE hiện phải là 0 (chưa mở hệ thống Vàng)');
+  assert(
+    Number.isInteger(MARKET_MAX_ACTIVE_LISTINGS) && MARKET_MAX_ACTIVE_LISTINGS >= 1 && MARKET_MAX_ACTIVE_LISTINGS <= 100,
+    'MARKET_MAX_ACTIVE_LISTINGS phải trong 1–100',
+  );
   assert(DRAW_COUNT_OPTIONS.includes(1), 'DRAW_COUNT_OPTIONS phải có lựa chọn quay 1');
   assert(new Set(DRAW_COUNT_OPTIONS).size === DRAW_COUNT_OPTIONS.length, 'DRAW_COUNT_OPTIONS trùng giá trị');
   assert(

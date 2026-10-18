@@ -357,6 +357,47 @@ export interface GiftResultDto {
   createdAt: string;
 }
 
+// ===== Chợ thẻ tướng =====
+//
+// Người chơi đem thẻ (tướng + cấp) lên chợ bán cho người khác. Mỗi tin = MỘT thẻ.
+// Thẻ đang bán bị tiêu thụ khỏi bộ sưu tập người bán; huỷ tin/mua xong mới tạo lại thẻ cho chủ mới.
+
+/** Trạng thái một tin đăng bán. */
+export type MarketListingStatus = 'active' | 'sold' | 'cancelled';
+
+/**
+ * Một tin đăng bán trên Chợ thẻ tướng.
+ * - `price`: giá bán tính bằng Vàng. Hiện luôn 0 (chủ dự án: "chỉ bán giá 0đ") — hệ thống Vàng làm sau.
+ * - `buyerId`/`buyerName`/`soldAt` chỉ có khi `status = 'sold'`; `cancelledAt` chỉ có khi `status = 'cancelled'`.
+ */
+export interface MarketListingDto {
+  id: number;
+  generalId: string;
+  level: number;
+  price: number;
+  status: MarketListingStatus;
+  sellerId: number;
+  /** Tên hiển thị của người bán. */
+  sellerName: string;
+  buyerId: number | null;
+  /** Tên hiển thị của người mua (chỉ khi đã bán). */
+  buyerName: string | null;
+  createdAt: string;
+  soldAt: string | null;
+  cancelledAt: string | null;
+}
+
+/** Kết quả mua một tin trên Chợ: thẻ mới được tạo cho người mua. */
+export interface MarketPurchaseDto {
+  listingId: number;
+  generalId: string;
+  level: number;
+  price: number;
+  /** Id thẻ mới trong bộ sưu tập người mua. */
+  cardId: number;
+  soldAt: string;
+}
+
 export type HistoryEntryDto =
   | {
       kind: 'ticket';
@@ -1131,6 +1172,56 @@ export const schemas = {
     additionalProperties: false,
     properties: {
       kind: { type: 'string', enum: ['ticket', 'gacha', 'upgrade', 'gift', 'giftcode'] },
+      page: { type: 'integer', minimum: 1, default: 1 },
+      pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+    },
+  },
+  /** Duyệt Chợ thẻ tướng: lọc theo phe/cấp/tên + sắp xếp; `onlyOthers` ẩn tin của chính mình. */
+  marketListingsQuery: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      faction: { type: 'string', enum: [...FACTIONS] },
+      level: { type: 'integer', minimum: MIN_LEVEL, maximum: MAX_LEVEL },
+      q: { type: 'string', maxLength: 64 },
+      sort: { type: 'string', enum: ['newest', 'level_desc', 'level_asc', 'name'] },
+      onlyOthers: { type: 'boolean', default: false },
+      page: { type: 'integer', minimum: 1, default: 1 },
+      pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 100 },
+    },
+  },
+  /** Đăng bán một thẻ: chọn đúng MỘT thẻ từ bộ sưu tập. */
+  marketCreateBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['cardId', 'idempotencyKey'],
+    properties: {
+      cardId: { type: 'integer', minimum: 1 },
+      idempotencyKey,
+    },
+  },
+  /** Mọi thao tác ghi khác trên Chợ (mua / huỷ tin) chỉ cần idempotency key. */
+  marketActionBody: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['idempotencyKey'],
+    properties: { idempotencyKey },
+  },
+  /** Tin đăng bán của chính mình (đang bán / đã bán / đã huỷ). */
+  marketMineQuery: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      status: { type: 'string', enum: ['active', 'sold', 'cancelled'] },
+      page: { type: 'integer', minimum: 1, default: 1 },
+      pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 50 },
+    },
+  },
+  /** Lịch sử mua/bán của chính mình (đọc từ tin đã bán). */
+  marketHistoryQuery: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
       page: { type: 'integer', minimum: 1, default: 1 },
       pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
     },
