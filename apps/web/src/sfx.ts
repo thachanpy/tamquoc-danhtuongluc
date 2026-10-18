@@ -10,12 +10,8 @@
  * một trận bắn ra rất nhiều tiếng NGẮN liên tiếp, mà mỗi lần `HTMLAudioElement.play()` trên iOS Safari
  * đều phải đi qua tầng media của hệ điều hành — vừa trễ tiếng vừa chặn luồng chính, làm giật hoạt ảnh
  * sân đấu (chỉ thấy rõ trên mobile, máy tính thì không). Web Audio giải mã sẵn file thành buffer rồi
- * phát tức thì trên luồng âm thanh riêng, không đụng tới luồng vẽ.
- *
- * LƯU Ý về khung hình trên iOS (đã kiểm chứng trên iOS 26 — xem Babylon.js PR #18886): chỉ cần thiết
- * bị âm thanh còn HOẠT ĐỘNG trong lúc có tiếng phát ra là Safari hạ trang xuống 30 FPS — sân đấu
- * WebGL vì thế giật đều. Nên tiếng trận chỉ phát khi thật sự cần: `setSfxNeeded(true)` khi bắt đầu
- * phát lại trận, nhả thiết bị âm thanh ngay khi dừng/đóng.
+ * phát tức thì trên luồng âm thanh riêng, không đụng tới luồng vẽ. Ngữ cảnh âm thanh giữ HOẠT ĐỘNG
+ * suốt phiên chơi để tiếng bắn ra tức thì, không phải chờ đánh thức lại ở đầu trận.
  */
 import { createSignal } from 'solid-js';
 
@@ -72,11 +68,6 @@ const loading = new Set<SfxName>();
 const lastAt: Partial<Record<SfxName, number>> = {};
 /** Các nguồn đang phát (để dừng khi dựng lại trận đấu). */
 const live = new Set<AudioBufferSourceNode>();
-/**
- * Có đang trong lúc CẦN phát tiếng trận hay không (`setSfxNeeded`). Chỉ khi `true` mới giữ thiết bị
- * âm thanh hoạt động — xem lý do ở docblock đầu tệp (iOS Safari hạ trang xuống 30 FPS).
- */
-let needed = false;
 
 function ensureCtx(): AudioContext | null {
   if (ctx) return ctx;
@@ -149,27 +140,15 @@ export function stopAllSfx() {
 
 function sync() {
   if (master) master.gain.value = prefs.on ? prefs.volume : 0;
-  // Giữ/không giữ thiết bị âm thanh: chỉ mở khi đang xem trận VÀ tiếng đang bật; còn lại NGỦ ngữ cảnh
-  // để nhả thiết bị (tránh iOS Safari hạ khung hình — xem docblock đầu tệp).
   if (!unlocked) return;
-  const want = needed && prefs.on && prefs.volume > 0;
-  const c = want ? ensureCtx() : ctx;
+  const c = ensureCtx();
   if (!c) return;
   try {
-    if (want) {
-      if (c.state === 'suspended') void c.resume();
-    } else if (c.state === 'running') {
-      void c.suspend();
-    }
+    // Giữ ngữ cảnh LUÔN chạy để tiếng bắn ra tức thì ở đầu trận (không phải chờ đánh thức lại).
+    if (c.state === 'suspended') void c.resume();
   } catch {
     /* bỏ qua: trình duyệt không cho đổi trạng thái ngữ cảnh */
   }
-}
-
-/** Bật/tắt "nhu cầu phát tiếng trận": `true` khi bắt đầu xem trận, `false` khi dừng/đóng màn. */
-export function setSfxNeeded(on: boolean) {
-  needed = on;
-  sync();
 }
 
 /** Gọi 1 lần khi khởi động: chờ tương tác đầu tiên rồi mới cho phép phát. */

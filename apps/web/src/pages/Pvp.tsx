@@ -34,7 +34,7 @@ import type { IconId } from '../icons.ts';
 import { arenaLayoutFor, createArena, type ArenaHandle, type ArenaLayout, type ArenaUnit, type ArenaView, type FloatPart, type FloatTone } from '../pixi/arena.ts';
 import type { FxKind } from '../pixi/skillsfx.ts';
 import { toast } from '../ui.ts';
-import { playSfx, setSfxNeeded, sfxPrefs, stopAllSfx, toggleSfx, type SfxName } from '../sfx.ts';
+import { playSfx, sfxPrefs, stopAllSfx, toggleSfx, type SfxName } from '../sfx.ts';
 
 /**
  * Đấu trường PvP (mục 6.7 — PVP.md).
@@ -255,7 +255,9 @@ function StatLine(props: { stat?: UnitStat }) {
                 <em class="pvp-pre" title={s().pre!.damageNote}>{`(+${num(s().pre!.damagePlus)})`}</em>
               </Show>
             </span>
-            <span class="pvp-stat">
+            {/* `pvp-stat-hp`: ở màn hẹp chỉ số này được bày thành THANH MÁU trọn hàng trên cùng
+                (đúng kiểu ô tướng sân đấu) — xem `@media (max-width: 640px)` trong theme.css. */}
+            <span class="pvp-stat pvp-stat-hp">
               <StatIcon id="heart" size={11} /> {num(s().maxHp)}
               <Show when={s().pre && s().pre!.hpPlus > 0}>
                 <em class="pvp-pre" title={s().pre!.hpNote}>{`(+${num(s().pre!.hpPlus)})`}</em>
@@ -1776,14 +1778,6 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     setReport(false);
     pushArena();
   }
-  /**
-   * Chỉ giữ thiết bị âm thanh khi ĐANG phát lại trận và tiếng trận đang bật. Trên iOS Safari, để thiết
-   * bị âm thanh hoạt động lúc có tiếng phát ra là trang bị hạ xuống 30 FPS (xem `sfx.ts`). Nhạc nền vẫn
-   * phát bình thường trong lúc chiến đấu.
-   */
-  createEffect(() => {
-    setSfxNeeded(playing() && sfxPrefs().on && sfxPrefs().volume > 0);
-  });
   function toEnd() {
     pause();
     const evs = props.battle.events;
@@ -1845,8 +1839,6 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     disposed = true;
     clearTimeout(timer);
     stopAllSfx();
-    // Rời màn xem trận: nhả thiết bị âm thanh (nhạc nền giữ nguyên).
-    setSfxNeeded(false);
     arena?.destroy();
   });
   // Canvas PixiJS dựng bất đồng bộ; xong thì đẩy trạng thái đầu trận rồi tự phát lại
@@ -2087,8 +2079,10 @@ function GemBar(props: { gems: PvpTeamGemDto[]; config: GemConfigDto | null; com
  * Ba ô Ngọc của đội hình mình: chỉ vẽ `PVP_TEAM_GEM_COUNT` ô (loại đã gắn + ô trống nét đứt), bấm vào
  * BẤT KỲ ô nào để mở bảng chọn Ngọc (giống bấm ô tướng để mở bảng chọn tướng). Cấp dùng luôn là viên
  * cao nhất đang sở hữu; rê chuột lên một viên để xem chỉ số cộng toàn đội.
+ * `compact` = bỏ tên hệ (Kim/Mộc/…) vì màu viên Ngọc đã thể hiện hệ — dùng ở modal Chuẩn bị khiêu
+ * chiến cho gọn (tên hệ vẫn còn trong tooltip và trong bảng chọn Ngọc).
  */
-function GemSlots(props: { value: GemElement[]; best: (el: GemElement) => number; config: GemConfigDto | null; onOpen: () => void }) {
+function GemSlots(props: { value: GemElement[]; best: (el: GemElement) => number; config: GemConfigDto | null; onOpen: () => void; compact?: boolean }) {
   const slots = () => Array.from({ length: PVP_TEAM_GEM_COUNT }, (_, i) => props.value[i] ?? null);
   return (
     <div class="pvp-gems">
@@ -2098,7 +2092,7 @@ function GemSlots(props: { value: GemElement[]; best: (el: GemElement) => number
             <button
               type="button"
               class="gem-pill"
-              classList={{ empty: !el }}
+              classList={{ empty: !el, compact: !!props.compact }}
               title={el ? `${GEM_ELEMENT_LABELS[el]} · cấp ${props.best(el)} — bấm để đổi Ngọc` : 'Bấm để chọn Ngọc cho đội hình'}
               onClick={() => props.onOpen()}
             >
@@ -2106,7 +2100,7 @@ function GemSlots(props: { value: GemElement[]; best: (el: GemElement) => number
                 {(e) => (
                   <>
                     <img class="gem-dot" src={gemUrl(e(), props.best(e()) || 1)} alt={GEM_ELEMENT_LABELS[e()]} />
-                    {GEM_ELEMENT_LABELS[e()]}
+                    <Show when={!props.compact}>{GEM_ELEMENT_LABELS[e()]}</Show>
                     <b>{` L${props.best(e())}`}</b>
                     <GemTip gem={{ element: e(), level: props.best(e()) }} config={props.config} />
                   </>
@@ -2676,7 +2670,7 @@ export function PvpPage() {
                     </div>
                   </div>
                   <TeamBoard units={team()} combat={combat()} gemSig={gemSigOf(teamGems())} onSlot={openPicker} onMove={moveSlot} />
-                  <GemSlots value={teamGems()} best={gemBestLevel} config={gems()?.config ?? null} onOpen={() => setGemOpen(true)} />
+                  <GemSlots compact value={teamGems()} best={gemBestLevel} config={gems()?.config ?? null} onOpen={() => setGemOpen(true)} />
                 </div>
                 <div class="pvp-duel-vs" aria-hidden="true">
                   VS
