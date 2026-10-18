@@ -34,7 +34,8 @@ import type { IconId } from '../icons.ts';
 import { arenaLayoutFor, createArena, type ArenaHandle, type ArenaLayout, type ArenaUnit, type ArenaView, type FloatPart, type FloatTone } from '../pixi/arena.ts';
 import type { FxKind } from '../pixi/skillsfx.ts';
 import { toast } from '../ui.ts';
-import { playSfx, sfxPrefs, stopAllSfx, toggleSfx, type SfxName } from '../sfx.ts';
+import { playSfx, setSfxNeeded, sfxPrefs, stopAllSfx, toggleSfx, type SfxName } from '../sfx.ts';
+import { holdMusic } from '../music.ts';
 
 /**
  * Đấu trường PvP (mục 6.7 — PVP.md).
@@ -1770,6 +1771,16 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     setReport(false);
     pushArena();
   }
+  /**
+   * Chỉ giữ thiết bị âm thanh khi ĐANG phát lại trận và tiếng trận đang bật. Trên iOS Safari, để thiết
+   * bị âm thanh hoạt động lúc có tiếng phát ra là trang bị hạ xuống 30 FPS (xem `sfx.ts`); tạm nhường
+   * luôn cả nhạc nền trong lúc xem trận (chỉ trên mobile) để không bị hạ nặng thêm.
+   */
+  createEffect(() => {
+    const on = playing() && sfxPrefs().on && sfxPrefs().volume > 0;
+    setSfxNeeded(on);
+    holdMusic(on);
+  });
   function toEnd() {
     pause();
     const evs = props.battle.events;
@@ -1831,6 +1842,9 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     disposed = true;
     clearTimeout(timer);
     stopAllSfx();
+    // Rời màn xem trận: nhả thiết bị âm thanh và phát lại nhạc nền như trước khi vào.
+    setSfxNeeded(false);
+    holdMusic(false);
     arena?.destroy();
   });
   // Canvas PixiJS dựng bất đồng bộ; xong thì đẩy trạng thái đầu trận rồi tự phát lại
@@ -1838,17 +1852,27 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     arena?.destroy();
     arena = undefined;
     builtLayout = layout();
-    void createArena(field, arenaUnits, props.battle.mySide, builtLayout).then((a) => {
+    void createArena(field, arenaUnits, props.battle.mySide, builtLayout).then(async (a) => {
       if (disposed) {
         a.destroy();
         return;
       }
       arena = a;
       pushArena();
-      if (restart) setTimeout(play, 300);
+      if (!restart) return;
+      // Chờ chân dung nạp xong mới phát lại: ảnh tướng về muộn sẽ làm khựng đầu trận nếu phát ngay.
+      await a.ready;
+      // Trong lúc chờ có thể đã dựng sân mới (đổi bố cục) hoặc rời trang — chỉ phát khi còn đúng sân này.
+      if (!disposed && arena === a) play();
     });
   };
   onMount(() => mountArena(true));
+  // Đang mở sân đấu: tạm ẩn tia lửa trang trí ở nền. Chúng bị lớp phủ modal che gần hết nhưng vẫn
+  // được compositor vẽ lại mỗi khung (40 phần tử động) — tốn GPU vô ích trên mobile.
+  onMount(() => {
+    document.body.classList.add('battle-open');
+    onCleanup(() => document.body.classList.remove('battle-open'));
+  });
   // Đổi bề rộng qua mốc 640px (xoay màn hình, kéo cửa sổ) thì cập nhật bố cục sân
   onMount(() => {
     const mq = window.matchMedia('(max-width: 640px)');

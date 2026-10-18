@@ -280,6 +280,8 @@ export interface ArenaSnapshot {
 }
 
 export interface ArenaHandle {
+  /** Xong khi chân dung đã nạp và gắn vào các ô — chờ trước khi phát lại trận. */
+  ready: Promise<void>;
   sync(s: ArenaSnapshot): void;
   /** Số sát thương/hồi máu/buff bay lên trên ô tướng (mỗi mảnh có thể kèm icon hiệu ứng). */
   float(idx: number, parts: FloatPart[], crit: boolean, tone?: FloatTone): void;
@@ -427,6 +429,13 @@ class Tile {
   private readonly mine: boolean;
   private readonly baseY: number;
   private readonly artC = new Container();
+  /**
+   * Khối TĨNH của ô — không đổi suốt trận: nền bốn chip định danh (cấp/phe/phong cách/LC) + chữ
+   * của chúng + tên tướng + nền thanh máu. Gom lại rồi cache thành MỘT texture: trước đây mỗi chữ
+   * là một lượt vẽ riêng (mỗi Text là một texture riêng nên không gộp batch được) — cả khối giờ chỉ
+   * tốn đúng một lượt vẽ mỗi khung, phần chênh lệch lớn nhất khi xem trận trên mobile.
+   */
+  private readonly tagsC = new Container();
   /** Chữ viết tắt phe/tên hiện khi CHƯA có ảnh chân dung; có ảnh thì ẩn để không lộ qua ảnh trong suốt. */
   private readonly iniT: Text;
   private readonly hpFill = new Graphics();
@@ -444,6 +453,8 @@ class Tile {
   private readonly infoIcons: Graphics[] = [];
   /** Màu đang dùng của TỪNG icon chỉ số (khớp `INFO_ITEMS`) — chỉ vẽ lại icon nào đổi màu. */
   private readonly infoTones: number[] = INFO_ITEMS.map(() => -1);
+  /** Chữ ký nội dung ba hàng chỉ số — trùng thì bỏ qua toàn bộ việc đo chữ và canh giữa lại. */
+  private infoSig = '\u0000';
   private readonly buffFx: Graphics;
   /** Hàng chip hiệu ứng trạng thái ở góc trên phải ô: icon chỉ số + giá trị tăng/giảm. */
   private readonly fxC = new Container();
@@ -620,22 +631,18 @@ class Tile {
     this.turnC.addChild(turnBg, this.turnT);
     this.turnC.visible = false;
 
+    // Bốn chip định danh + tên + nền thanh máu là phần TĨNH: gom vào `tagsC` rồi cache thành một
+    // texture (xem `enableCache`). Vị trí trong danh sách con giữ NGUYÊN như trước để thứ tự vẽ
+    // (chip dưới chân dung, chân dung dưới thanh máu, thanh máu dưới hiệu ứng) không đổi.
+    this.tagsC.addChild(lvBg, lv, facBg, fac, stBg, stIcon, lcBg, lc, name, hpBg);
+
     this.root.addChild(
       body,
       this.tgtFx,
       this.actFx,
       this.artC,
       this.buffFx,
-      lvBg,
-      lv,
-      facBg,
-      fac,
-      stBg,
-      stIcon,
-      lcBg,
-      lc,
-      name,
-      hpBg,
+      this.tagsC,
       this.hpFill,
       this.shieldFill,
       this.hpIco,
@@ -645,6 +652,32 @@ class Tile {
       this.fxC,
       this.turnC,
     );
+  }
+
+  /**
+   * Bật cache texture cho khối TĨNH của ô (chip định danh). Phải gọi SAU khi ô đã nằm trong cây
+   * hiển thị (`Arena.init`) — Pixi cần biết render group cha ngay lúc bật cache.
+   * Hai khối còn lại (`infoC` ba hàng chỉ số, `fxC` hàng chip hiệu ứng) bật/tắt cache trong
+   * `syncCache` vì nội dung của chúng đổi trong trận.
+   */
+  enableCache(): void {
+    this.tagsC.cacheAsTexture(true);
+  }
+
+  /**
+   * Đồng bộ cache texture cho khối con đổi nội dung trong trận: đang hiện thì bảo Pixi vẽ lại
+   * texture (một lượt vẽ, các khung sau dùng lại), đang ẩn thì tắt cache hẳn — khối bị ẩn mà vẫn
+   * bật cache sẽ khiến Pixi cấp phát lại texture mỗi khung vì texture không bao giờ được vẽ nên
+   * không được đánh dấu "đã xong".
+   */
+  private syncCache(c: Container, shown: boolean): void {
+    c.visible = shown;
+    if (!shown) {
+      if (c.isCachedAsTexture) c.cacheAsTexture(false);
+      return;
+    }
+    if (c.isCachedAsTexture) c.updateCacheTexture();
+    else c.cacheAsTexture(true);
   }
 
   /** Gắn chân dung sau khi ảnh tải xong (thiếu ảnh thì giữ chữ viết tắt). */
@@ -730,6 +763,12 @@ class Tile {
    * Icon chỉ vẽ lại khi MÀU của chính nó đổi để không phải nạp lại SVG mỗi sự kiện.
    */
   private setInfoLine(values: number[], bases: number[], alive: boolean): void {
+    // Chỉ số + mốc so sánh y hệt lần trước (đa số sự kiện chỉ đổi máu 1–2 tướng) → không phải
+    // tính lại chữ, tô màu icon và canh giữa lại cả ba hàng. Mỗi lần canh giữa phải ĐO chữ
+    // (`.width`) 9 lần/ô nên bỏ qua được là tiết kiệm đáng kể khi sân chạy liên tục.
+    const sig = `${alive ? 1 : 0};${values.join(',')};${bases.join(',')}`;
+    if (sig === this.infoSig) return;
+    this.infoSig = sig;
     const texts = values.map((v) => num(v));
     // Sát thương (0) và Giáp (1) giữ số thô. Xuyên giáp (2) · Chính xác (5) · Né tránh (6) hiện theo
     // ĐIỂM (1 điểm = 1%, số thô, không kèm %); các chỉ số còn lại hiện theo %.
@@ -774,7 +813,7 @@ class Tile {
         x += row.vals[i]!.width;
       }
     }
-    this.infoC.visible = alive;
+    this.syncCache(this.infoC, alive);
   }
 
   /**
@@ -799,7 +838,7 @@ class Tile {
     }
     for (const chip of this.chips) chip.c.visible = false;
     if (!items.length) {
-      this.fxC.visible = false;
+      this.syncCache(this.fxC, false);
       return;
     }
 
@@ -869,7 +908,7 @@ class Tile {
         x += w + CHIP_GAP;
       }
     }
-    this.fxC.visible = true;
+    this.syncCache(this.fxC, true);
   }
 
   /**
@@ -940,6 +979,8 @@ class Tile {
 }
 
 class Arena implements ArenaHandle {
+  /** Xong khi chân dung đã nạp và gắn vào các ô — chờ trước khi phát lại trận (xem `init`). */
+  ready: Promise<void> = Promise.resolve();
   private readonly app = new Application();
   private readonly root = new Container();
   private readonly fxLayer = new Container();
@@ -999,13 +1040,17 @@ class Arena implements ArenaHandle {
   }
 
   async init(host: HTMLElement): Promise<void> {
+    const touch = isTouchDevice();
     await this.app.init({
       width: this.W,
       height: this.H,
       backgroundAlpha: 0,
-      antialias: true,
-      resolution: Math.min(window.devicePixelRatio || 1, 2),
+      // Máy cảm ứng: tắt khử răng cưa + hạ nhẹ độ phân giải (xem `isTouchDevice`) để GPU đỡ phải
+      // resolve MSAA mỗi khung — nguồn giật chính khi xem trận trên iPhone.
+      antialias: !touch,
+      resolution: Math.min(window.devicePixelRatio || 1, touch ? 1.5 : 2),
       autoDensity: true,
+      powerPreference: 'high-performance',
     });
     // Sân đấu là hoạt ảnh 2D đơn giản: khoá 60fps để trên máy tần số quét cao (iPhone ProMotion 120Hz)
     // không phải vẽ gấp đôi mỗi giây — nguồn gây giật chính trên mobile, còn laptop 60Hz giữ nguyên.
@@ -1040,6 +1085,8 @@ class Arena implements ArenaHandle {
       const t = new Tile(u, this.mySide, this.layout);
       this.tiles.set(u.idx, t);
       this.root.addChild(t.root);
+      // Ô đã nằm trong cây hiển thị → giờ mới gom phần tĩnh của ô thành một texture cache.
+      t.enableCache();
     }
     this.root.addChild(this.fxLayer);
     // Nhãn tên chiêu nằm trên cùng: luôn nổi rõ, không bị ô tướng hay hiệu ứng khác che
@@ -1058,8 +1105,9 @@ class Arena implements ArenaHandle {
       }
     };
     document.addEventListener('visibilitychange', this.onVis);
-    // Chân dung nạp nền: sân đấu dùng được ngay, ảnh xong thì gắn vào sau
-    void loadPortraits(this.units.map((u) => u.artKey)).then(() => {
+    // Chân dung nạp nền: sân đấu dùng được ngay, ảnh xong thì gắn vào sau. `ready` cho người gọi
+    // biết lúc nào ảnh đã lên ô để chờ trước khi phát lại trận (tránh khựng đầu trận).
+    this.ready = loadPortraits(this.units.map((u) => u.artKey)).then(() => {
       if (this.dead) return;
       for (const u of this.units) {
         const tex = portraitTex.get(u.artKey);
@@ -1241,6 +1289,14 @@ class Arena implements ArenaHandle {
 
 /** Bố cục phù hợp cho khung rộng `px`: khung hẹp (mobile) dùng sân DỌC để ô tướng phóng to hơn hẳn. */
 export const arenaLayoutFor = (px: number): ArenaLayout => (px <= 640 ? 'portrait' : 'landscape');
+
+/**
+ * Máy cảm ứng (điện thoại / máy tính bảng). GPU mobile xử lý WebGL chậm hơn hẳn laptop nên sân đấu
+ * hạ nhẹ chất lượng hình trên các máy này: tắt khử răng cưa (MSAA của Safari/iOS khá tốn) và hạ độ
+ * phân giải canvas — hình vẫn nét vì canvas vốn được thu nhỏ về vừa khung.
+ */
+const isTouchDevice = (): boolean =>
+  typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0);
 
 /** Tạo sân đấu PixiJS trong `host`. Trả về handle để đẩy trạng thái/hiệu ứng và dọn khi đóng. */
 export async function createArena(

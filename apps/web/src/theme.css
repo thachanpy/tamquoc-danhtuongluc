@@ -50,6 +50,9 @@ body {
   100% { transform: translateY(-110vh) scale(1.2); opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .sparks { display: none; } }
+/* Đang mở sân đấu: ẩn tia lửa nền. Modal phủ gần kín nên gần như không thấy khác, mà đỡ 40 lớp
+   động phải composite mỗi khung — giúp sân đấu PixiJS mượt hơn trên mobile. */
+body.battle-open .sparks { display: none; }
 h1, h2, h3, .brand, .login h1 { font-family: var(--serif); letter-spacing: .3px; }
 
 /* ---------- tiêu đề panel: thoi son + gạch vàng ---------- */
@@ -1072,6 +1075,15 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
      liên tục khiến iOS Safari phải blur lại mỗi frame — rất nặng. Nền vốn đã tối sẵn nên gần như
      không thấy khác về hình, nhưng mượt hơn hẳn. */
   .pvp-modal { padding: 10px; backdrop-filter: none; }
+  /* Khung panel của sân đấu cũng dính `backdrop-filter` (kế thừa từ `.panel`) và nó là TỔ TIÊN TRỰC
+     TIẾP của canvas WebGL. Trên iOS Safari, một tổ tiên có `backdrop-filter` buộc cả nhánh phải dựng
+     lại lớp đệm mỗi khung hình — đúng lúc canvas đang vẽ 60fps nên sân đấu giật dù chỉ vẽ vài ô tướng.
+     Nền panel vốn đục 84% nên bỏ đi gần như không thấy khác. */
+  .pvp-modal .panel { backdrop-filter: none; }
+  /* Khung canvas WebGL: bỏ bo góc + `overflow: hidden`. Trên iOS Safari, một khung CẮT nội dung
+     bo góc bao quanh canvas WebGL buộc compositor dựng lớp mask mỗi khung hình → giật. Canvas nền
+     trong suốt và luôn nằm gọn trong khung nên bỏ đi không đổi hình. */
+  .rp-canvas { border-radius: 0; overflow: visible; }
   .pvp-board { gap: 6px; }
   .pvp-cell { min-height: 92px; padding: 6px 4px 4px; }
   .pvp-art { width: 46px; height: 46px; }
