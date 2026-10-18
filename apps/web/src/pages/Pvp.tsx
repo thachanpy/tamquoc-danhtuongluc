@@ -34,6 +34,7 @@ import type { IconId } from '../icons.ts';
 import { arenaLayoutFor, createArena, type ArenaHandle, type ArenaLayout, type ArenaUnit, type ArenaView, type FloatPart, type FloatTone } from '../pixi/arena.ts';
 import type { FxKind } from '../pixi/skillsfx.ts';
 import { toast } from '../ui.ts';
+import { ensureMusicOn } from '../music.ts';
 import { ensureSfxOn, playSfx, sfxPrefs, stopAllSfx, toggleSfx, type SfxName } from '../sfx.ts';
 
 /**
@@ -1908,11 +1909,14 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     document.body.classList.add('battle-open');
     onCleanup(() => document.body.classList.remove('battle-open'));
   });
-  // Vào trận trên mobile (khung hẹp): BẬT SẴN tiếng chiến đấu để không phải tự bật lại mỗi trận —
-  // trước đây chỉ cần tắt một lần là các trận sau im lặng. Nút "Âm thanh" trong hàng điều khiển vẫn
-  // tắt/mở được cho riêng trận đang xem (và trận mới lại bật sẵn).
+  // Vào trận trên mobile (khung hẹp): BẬT SẴN tiếng chiến đấu + nhạc nền để không phải tự bật lại mỗi
+  // trận — trước đây chỉ cần tắt một lần là các trận sau im lặng. Nút "Âm thanh" trong hàng điều khiển
+  // và công tắc nhạc nền trên thanh trên vẫn tắt/mở được cho riêng trận đang xem (trận mới lại bật sẵn).
   onMount(() => {
-    if (layout() === 'portrait') ensureSfxOn();
+    if (layout() === 'portrait') {
+      ensureSfxOn();
+      ensureMusicOn();
+    }
   });
   // Đổi bề rộng qua mốc 640px (xoay màn hình, kéo cửa sổ) thì cập nhật bố cục sân
   onMount(() => {
@@ -2041,7 +2045,6 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
                 </g>
                 <path class="mute-slash" d="M4 28L28 4" stroke="#d8432f" stroke-width="3" stroke-linecap="round" />
               </svg>
-              {sfxPrefs().on ? 'Âm thanh' : 'Tắt tiếng'}
             </button>
             <button class="btn primary small" onClick={showResult}>
               Kết quả

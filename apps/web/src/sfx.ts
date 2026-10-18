@@ -105,6 +105,17 @@ function preload(): void {
   for (const name of NAMES) load(name);
 }
 
+/**
+ * Ngữ cảnh âm thanh DÙNG CHUNG cho cả tiếng trận đấu lẫn nhạc nền.
+ * iOS chỉ cấp MỘT phiên âm thanh cho mỗi trang: tiếng trận đấu (Web Audio) và nhạc nền (thẻ
+ * `<audio>`) mà mỗi thứ giữ một phiên riêng thì chúng giành nhau — tắt nhạc nền là tiếng trận đấu câm,
+ * và ngược lại nhạc nền không phát lại được. Nên nhạc nền được nối vào chính ngữ cảnh này (xem
+ * `attach()` trong `music.ts`) để cả hai trộn bên trong một phiên duy nhất, không tranh chấp.
+ */
+export function sharedAudioContext(): AudioContext | null {
+  return ensureCtx();
+}
+
 /** Phát một hiệu ứng. Bỏ qua khi: chưa mở khoá (chưa tương tác), đang tắt, âm lượng 0, hoặc vừa phát cùng clip. */
 export function playSfx(name: SfxName) {
   if (!unlocked || !prefs.on || prefs.volume <= 0) return;

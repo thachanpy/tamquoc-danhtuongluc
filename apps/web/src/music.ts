@@ -4,8 +4,12 @@
  *   không bắt đầu bằng bài vừa nghe lần trước.
  * - Bật/tắt và âm lượng được nhớ theo trình duyệt (localStorage).
  * - Trình duyệt chặn tự phát nhạc, nên nhạc chỉ bắt đầu sau lần chạm/bấm đầu tiên của người chơi.
+ * - Thẻ `<audio>` được NỐI VÀO ngữ cảnh âm thanh dùng chung của tiếng trận đấu (`attach()`): iOS chỉ
+ *   cấp một phiên âm thanh cho mỗi trang, hai thứ giữ hai phiên riêng sẽ giành nhau — nhạc nền và tiếng
+ *   trận đấu phải ĐỘC LẬP, tắt cái này không được làm câm cái kia.
  */
 import { createSignal } from 'solid-js';
+import { sharedAudioContext } from './sfx.ts';
 
 const KEY = 'tq.music';
 type Prefs = { on: boolean; volume: number };
@@ -71,7 +75,12 @@ function pickNext(): string {
 
 const prefs = loadPrefs();
 let audio: HTMLAudioElement | null = null;
+/** Âm lượng nhạc khi đã nối vào ngữ cảnh dùng chung (iOS bỏ qua `audio.volume`, phải chỉnh bằng gain). */
+let gain: GainNode | null = null;
 let unlocked = false;
+/** Số nhịp còn được thử phát lại (xem `retry`) và đồng hồ hẹn nhịp kế tiếp. */
+let retryLeft = 0;
+let retryTimer = 0;
 
 function getAudio(): HTMLAudioElement {
   if (!audio) {
@@ -80,26 +89,76 @@ function getAudio(): HTMLAudioElement {
     audio.volume = prefs.volume;
     // Hết bài: sang bài ngẫu nhiên khác
     audio.addEventListener('ended', () => {
-      const a = audio!;
-      a.src = pickNext();
-      if (prefs.on && prefs.volume > 0) void a.play().catch(() => {});
+      audio!.src = pickNext();
+      start();
     });
     // Bài lỗi/không tải được: thử bài khác (tránh vòng lặp vô hạn nếu chỉ có 1 bài)
     audio.addEventListener('error', () => {
       if (TRACKS.length < 2) return;
-      const a = audio!;
-      a.src = pickNext();
-      if (prefs.on && prefs.volume > 0) void a.play().catch(() => {});
+      audio!.src = pickNext();
+      start();
     });
   }
   return audio;
 }
 
+/**
+ * Nối thẻ nhạc vào NGỮ CẢNH ÂM THANH DÙNG CHUNG (xem `sharedAudioContext`) để nhạc nền và tiếng trận
+ * đấu nằm chung một phiên âm thanh — tắt cái này không làm câm cái kia. Chỉ nối khi ngữ cảnh đã CHẠY
+ * thật (nối vào ngữ cảnh đang treo thì nhạc im mà vẫn báo là đang phát); chưa chạy được thì giữ
+ * nguyên đường âm lượng của chính thẻ audio.
+ */
+function attach(): void {
+  if (gain) return;
+  const c = sharedAudioContext();
+  if (!c) return;
+  if (c.state !== 'running') {
+    void c.resume().catch(() => {});
+    return;
+  }
+  try {
+    const src = c.createMediaElementSource(getAudio());
+    const g = c.createGain();
+    g.gain.value = prefs.on ? prefs.volume : 0;
+    src.connect(g);
+    g.connect(c.destination);
+    gain = g;
+    audio!.volume = 1; // âm lượng đã do gain quyết định
+  } catch {
+    /* trình duyệt không cho nối (thẻ đã nối ở nơi khác): dùng âm lượng của thẻ */
+  }
+}
+
+/** Phát lại nhạc nếu đang bật (im lặng bỏ qua khi `play()` bị từ chối — có `retry` đỡ phía sau). */
+function tryPlay(): void {
+  if (!unlocked || !prefs.on || prefs.volume <= 0) return;
+  void getAudio().play().catch(retry);
+}
+
+/**
+ * Thử phát lại vài nhịp sau khi `play()` bị từ chối: iOS tạm treo trình phát khi phiên âm thanh vừa
+ * đổi trạng thái (vào trận, quay lại từ nền). Nhờ vậy nhạc tự hồi mà không phải bấm lại công tắc.
+ */
+function retry(): void {
+  if (retryLeft <= 0) return;
+  retryLeft -= 1;
+  window.clearTimeout(retryTimer);
+  retryTimer = window.setTimeout(tryPlay, 250);
+}
+
+/** Bắt đầu phát nhạc (kèm hạn thử lại) — dùng cho cả thao tác bật công tắc lẫn chuyển bài. */
+function start(): void {
+  retryLeft = 4;
+  tryPlay();
+}
+
 function sync() {
   if (!unlocked) return;
   const a = getAudio();
-  a.volume = prefs.volume;
-  if (prefs.on && prefs.volume > 0) void a.play().catch(() => {});
+  attach();
+  if (gain) gain.gain.value = prefs.on ? prefs.volume : 0;
+  else a.volume = prefs.volume;
+  if (prefs.on && prefs.volume > 0) start();
   else a.pause();
 }
 
@@ -136,5 +195,17 @@ export function toggleMusic() {
 /** Đặt âm lượng 0–1. */
 export function setMusicVolume(v: number) {
   prefs.volume = Math.min(1, Math.max(0, v));
+  apply();
+}
+
+/**
+ * Bật sẵn nhạc nền — gọi khi VÀO trận đấu trên mobile (song song `ensureSfxOn` của tiếng trận đấu) để
+ * nhạc vẫn chạy trong trận thay vì im lặng vì lần trước đã tắt. Âm lượng đang 0 thì đặt lại 40%; công
+ * tắc trên thanh trên vẫn tắt/mở được như thường (nhạc nền và tiếng trận đấu độc lập nhau).
+ */
+export function ensureMusicOn() {
+  if (prefs.on && prefs.volume > 0) return;
+  prefs.on = true;
+  if (prefs.volume === 0) prefs.volume = 0.4;
   apply();
 }
