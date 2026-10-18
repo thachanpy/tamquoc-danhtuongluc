@@ -963,6 +963,8 @@ class Arena implements ArenaHandle {
   private skillAge = 0;
   private time = 0;
   private dead = false;
+  /** Handler `visibilitychange` (dừng vẽ khi tab ẩn) — giữ lại để gỡ khi dọn sân. */
+  private onVis: (() => void) | undefined;
 
   constructor(units: ArenaUnit[], mySide: PvpSide, layout: ArenaLayout) {
     this.units = units;
@@ -982,6 +984,9 @@ class Arena implements ArenaHandle {
       resolution: Math.min(window.devicePixelRatio || 1, 2),
       autoDensity: true,
     });
+    // Sân đấu là hoạt ảnh 2D đơn giản: khoá 60fps để trên máy tần số quét cao (iPhone ProMotion 120Hz)
+    // không phải vẽ gấp đôi mỗi giây — nguồn gây giật chính trên mobile, còn laptop 60Hz giữ nguyên.
+    this.app.ticker.maxFPS = 60;
     // Kích thước do CSS quyết định (`.rp-canvas canvas`): co VỪA KHUNG theo cả bề ngang lẫn chiều cao
     // mà vẫn giữ tỉ lệ 900:560 — nên ép về `auto` để `max-width/max-height: 100%` phát huy tác dụng.
     this.app.canvas.style.width = 'auto';
@@ -1017,6 +1022,12 @@ class Arena implements ArenaHandle {
     this.skillC.visible = false;
     this.root.addChild(this.skillC);
     this.app.ticker.add((ticker) => this.tick(ticker.deltaMS));
+    // Tab bị ẩn (chuyển app / tắt màn hình trên mobile) thì dừng vẽ — không đốt GPU khi không ai xem.
+    this.onVis = () => {
+      if (document.visibilityState === 'hidden') this.app.ticker.stop();
+      else this.app.ticker.start();
+    };
+    document.addEventListener('visibilitychange', this.onVis);
     // Chân dung nạp nền: sân đấu dùng được ngay, ảnh xong thì gắn vào sau
     void loadPortraits(this.units.map((u) => u.artKey)).then(() => {
       if (this.dead) return;
@@ -1167,6 +1178,10 @@ class Arena implements ArenaHandle {
   destroy(): void {
     if (this.dead) return;
     this.dead = true;
+    if (this.onVis) {
+      document.removeEventListener('visibilitychange', this.onVis);
+      this.onVis = undefined;
+    }
     for (const e of this.effs) e.destroy();
     this.effs.length = 0;
     try {

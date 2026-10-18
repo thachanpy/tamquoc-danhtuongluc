@@ -1068,7 +1068,10 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
 .pvp-duel .gem-slot-empty { width: 40px; height: 40px; }
 
 @media (max-width: 640px) {
-  .pvp-modal { padding: 10px; }
+  /* Mobile: bỏ làm mờ nền modal đấu trường. `backdrop-filter` phủ quanh canvas WebGL đang cập nhật
+     liên tục khiến iOS Safari phải blur lại mỗi frame — rất nặng. Nền vốn đã tối sẵn nên gần như
+     không thấy khác về hình, nhưng mượt hơn hẳn. */
+  .pvp-modal { padding: 10px; backdrop-filter: none; }
   .pvp-board { gap: 6px; }
   .pvp-cell { min-height: 92px; padding: 6px 4px 4px; }
   .pvp-art { width: 46px; height: 46px; }
