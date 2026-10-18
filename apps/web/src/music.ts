@@ -197,15 +197,3 @@ export function setMusicVolume(v: number) {
   prefs.volume = Math.min(1, Math.max(0, v));
   apply();
 }
-
-/**
- * Bật sẵn nhạc nền — gọi khi VÀO trận đấu trên mobile (song song `ensureSfxOn` của tiếng trận đấu) để
- * nhạc vẫn chạy trong trận thay vì im lặng vì lần trước đã tắt. Âm lượng đang 0 thì đặt lại 40%; công
- * tắc trên thanh trên vẫn tắt/mở được như thường (nhạc nền và tiếng trận đấu độc lập nhau).
- */
-export function ensureMusicOn() {
-  if (prefs.on && prefs.volume > 0) return;
-  prefs.on = true;
-  if (prefs.volume === 0) prefs.volume = 0.4;
-  apply();
-}

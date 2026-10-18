@@ -34,7 +34,6 @@ import type { IconId } from '../icons.ts';
 import { arenaLayoutFor, createArena, type ArenaHandle, type ArenaLayout, type ArenaUnit, type ArenaView, type FloatPart, type FloatTone } from '../pixi/arena.ts';
 import type { FxKind } from '../pixi/skillsfx.ts';
 import { toast } from '../ui.ts';
-import { ensureMusicOn } from '../music.ts';
 import { ensureSfxOn, playSfx, sfxPrefs, stopAllSfx, toggleSfx, type SfxName } from '../sfx.ts';
 
 /**
@@ -248,13 +247,30 @@ const artThumb = (name: string, artKey: string) => (
   </>
 );
 
-/** Badge xanh "(+x)" cho phần Ngọc Ngũ Hành cộng thêm vào một chỉ số — cùng kiểu với badge (+) của HP.
- *  Mặc định định dạng % (bps); truyền `fmt` cho chỉ số dạng điểm nguyên (Giáp). */
-const GemPlus = (props: { v?: number; fmt?: (v: number) => string }) => (
-  <Show when={props.v}>
-    <em class="pvp-pre" title="Ngọc Ngũ Hành cộng thêm">{`(+${(props.fmt ?? pct)(props.v!)})`}</em>
-  </Show>
-);
+/**
+ * Phần GIÁ TRỊ của một chỉ số trong ô tướng (nằm ngay sau icon).
+ * - Màn rộng: số nền, rồi badge xanh "(+x)" cho phần cộng thêm (Chỉ số Nền Ra Trận / Ngọc Ngũ Hành).
+ *   `.pvp-base` dùng `display: contents` nên số và badge vẫn nằm y hệt như trước, không thêm lớp bọc.
+ * - Màn hẹp: ô tướng rất hẹp mà một tướng có thể được cộng nhiều chỉ số cùng lúc — badge sẽ đẩy tràn
+ *   sang ô bên cạnh, vỡ lưới chỉ số. Nên bỏ badge, CỘNG THẲNG phần cộng vào số và tô xanh lá để biết
+ *   chỉ số này đang được cộng (xem `@media (max-width: 640px)` trong theme.css).
+ */
+function StatVal(props: { base: number; plus?: number; fmt: (v: number) => string; note?: string }) {
+  const add = () => props.plus ?? 0;
+  return (
+    <>
+      <span class="pvp-base">
+        {props.fmt(props.base)}
+        <Show when={add() > 0}>
+          <em class="pvp-pre" title={props.note ?? 'Ngọc Ngũ Hành cộng thêm'}>{`(+${props.fmt(add())})`}</em>
+        </Show>
+      </span>
+      <span class="pvp-total" classList={{ up: add() > 0 }}>
+        {props.fmt(props.base + add())}
+      </span>
+    </>
+  );
+}
 
 /** Dòng chỉ số cơ bản hiện dưới mỗi ô tướng trong đội hình (không hiện chi tiết kỹ năng cho gọn). */
 function StatLine(props: { stat?: UnitStat }) {
@@ -267,54 +283,50 @@ function StatLine(props: { stat?: UnitStat }) {
               Mỗi chỉ số là một khối riêng nên tự xuống dòng khi ô hẹp, không tràn/cắt mất chữ. */}
           <span class="pvp-cell-num row1">
             <span class="pvp-stat">
-              <StatIcon id="attack" size={11} /> {num(s().damage)}
-              <Show when={s().pre && s().pre!.damagePlus > 0}>
-                <em class="pvp-pre" title={s().pre!.damageNote}>{`(+${num(s().pre!.damagePlus)})`}</em>
-              </Show>
+              <StatIcon id="attack" size={11} />
+              <StatVal base={s().damage} plus={s().pre?.damagePlus} fmt={num} note={s().pre?.damageNote} />
             </span>
             {/* `pvp-stat-hp`: ở màn hẹp chỉ số này được bày thành THANH MÁU trọn hàng trên cùng
                 (đúng kiểu ô tướng sân đấu) — xem `@media (max-width: 640px)` trong theme.css. */}
             <span class="pvp-stat pvp-stat-hp">
-              <StatIcon id="heart" size={11} /> {num(s().maxHp)}
-              <Show when={s().pre && s().pre!.hpPlus > 0}>
-                <em class="pvp-pre" title={s().pre!.hpNote}>{`(+${num(s().pre!.hpPlus)})`}</em>
-              </Show>
+              <StatIcon id="heart" size={11} />
+              <StatVal base={s().maxHp} plus={s().pre?.hpPlus} fmt={num} note={s().pre?.hpNote} />
             </span>
             <span class="pvp-stat">
-              <StatIcon id="armor" size={11} /> {num(s().defArmor)}
-              <GemPlus v={s().pre?.gem.defArmor} fmt={num} />
+              <StatIcon id="armor" size={11} />
+              <StatVal base={s().defArmor} plus={s().pre?.gem.defArmor} fmt={num} />
             </span>
             <span class="pvp-stat" title="Xuyên giáp — điểm bỏ qua Phòng thủ của mục tiêu">
-              <StatIcon id="bow-pen" size={11} /> {pt(s().defPenBps)}
-              <GemPlus v={s().pre?.gem.defPenBps} fmt={pt} />
+              <StatIcon id="bow-pen" size={11} />
+              <StatVal base={s().defPenBps} plus={s().pre?.gem.defPenBps} fmt={pt} />
             </span>
             <span class="pvp-stat" title="Giảm sát thương nhận vào (chỉ đến từ Ngọc/buff)">
-              <StatIcon id="shield-reduce" size={11} /> 0%
-              <GemPlus v={s().pre?.gem.takenDownBps} />
+              <StatIcon id="shield-reduce" size={11} />
+              <StatVal base={0} plus={s().pre?.gem.takenDownBps} fmt={pct} />
             </span>
           </span>
           {/* Hàng 2 (5 chỉ số): chí mạng · ST chí mạng · chính xác · né tránh · hút máu.
               Chỉ số không có nền (hút máu, giảm ST nhận) hiện 0%, phần Ngọc cộng thêm nằm ở badge xanh. */}
           <span class="pvp-cell-num row2">
             <span class="pvp-stat">
-              <StatIcon id="crit-rate" size={11} /> {pct(s().critBps)}
-              <GemPlus v={s().pre?.gem.critBps} />
+              <StatIcon id="crit-rate" size={11} />
+              <StatVal base={s().critBps} plus={s().pre?.gem.critBps} fmt={pct} />
             </span>
             <span class="pvp-stat">
-              <StatIcon id="crit-dmg" size={11} /> {pct(s().critDamageBps)}
-              <GemPlus v={s().pre?.gem.critDamageBps} />
+              <StatIcon id="crit-dmg" size={11} />
+              <StatVal base={s().critDamageBps} plus={s().pre?.gem.critDamageBps} fmt={pct} />
             </span>
             <span class="pvp-stat" title="Chính xác — số điểm đối chiếu với Né tránh của mục tiêu để tính tỷ lệ trúng">
-              <StatIcon id="eye" size={11} /> {pt(s().hitBps)}
-              <GemPlus v={s().pre?.gem.hitBps} fmt={pt} />
+              <StatIcon id="eye" size={11} />
+              <StatVal base={s().hitBps} plus={s().pre?.gem.hitBps} fmt={pt} />
             </span>
             <span class="pvp-stat" title="Né tránh — số điểm làm giảm tỷ lệ đánh trúng của địch">
-              <StatIcon id="dodge" size={11} /> {pt(s().dodgeBps)}
-              <GemPlus v={s().pre?.gem.dodgeBps} fmt={pt} />
+              <StatIcon id="dodge" size={11} />
+              <StatVal base={s().dodgeBps} plus={s().pre?.gem.dodgeBps} fmt={pt} />
             </span>
             <span class="pvp-stat" title="Hút máu — % sát thương gây ra được hồi lại cho bản thân">
-              <StatIcon id="blood" size={11} /> {pct(s().lifestealBps)}
-              <GemPlus v={s().pre?.gem.lifestealBps} />
+              <StatIcon id="blood" size={11} />
+              <StatVal base={s().lifestealBps} plus={s().pre?.gem.lifestealBps} fmt={pct} />
             </span>
           </span>
         </span>
@@ -1909,14 +1921,12 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     document.body.classList.add('battle-open');
     onCleanup(() => document.body.classList.remove('battle-open'));
   });
-  // Vào trận trên mobile (khung hẹp): BẬT SẴN tiếng chiến đấu + nhạc nền để không phải tự bật lại mỗi
-  // trận — trước đây chỉ cần tắt một lần là các trận sau im lặng. Nút "Âm thanh" trong hàng điều khiển
-  // và công tắc nhạc nền trên thanh trên vẫn tắt/mở được cho riêng trận đang xem (trận mới lại bật sẵn).
+  // Vào trận trên mobile (khung hẹp): BẬT SẴN tiếng chiến đấu để không phải tự bật lại mỗi trận —
+  // trước đây chỉ cần tắt một lần là các trận sau im lặng. Nút "Âm thanh" trong hàng điều khiển vẫn
+  // tắt/mở được cho riêng trận đang xem (và trận mới lại bật sẵn).
+  // Nhạc nền KHÔNG bật sẵn: đó là lựa chọn của người chơi, tắt rồi thì giữ nguyên là tắt.
   onMount(() => {
-    if (layout() === 'portrait') {
-      ensureSfxOn();
-      ensureMusicOn();
-    }
+    if (layout() === 'portrait') ensureSfxOn();
   });
   // Đổi bề rộng qua mốc 640px (xoay màn hình, kéo cửa sổ) thì cập nhật bố cục sân
   onMount(() => {

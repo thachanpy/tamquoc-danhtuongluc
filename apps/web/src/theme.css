@@ -736,6 +736,11 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
    Tông BÍCH NGỌC #6FBE73 — đúng nhóm "buff có lợi" của quy chuẩn màu Combat (mục 6.7), dùng chung cho
    cả bảng đội hình lẫn modal Chuẩn bị khiêu chiến vì cả hai đều đang cộng thêm chỉ số. */
 .pvp-cell-num .pvp-pre { margin-left: 2px; font-style: normal; font-weight: 700; color: #6FBE73; cursor: help; }
+/* Giá trị một chỉ số (xem `StatVal`): màn rộng bày số nền rồi badge "(+x)". `.pvp-base` dùng
+   `display: contents` để số và badge vẫn là hai phần tử con trực tiếp của `.pvp-stat` — bố cục y hệt
+   như khi không bọc. Bản "cộng thẳng" của màn hẹp (`.pvp-total`) ẩn đi. */
+.pvp-stat .pvp-base { display: contents; }
+.pvp-stat .pvp-total { display: none; }
 /* Hai hàng chỉ số trong ô, mỗi hàng đúng 5 chỉ số để luôn ngang hàng nhau: hàng 1 (sát thương ·
    HP · phòng thủ · xuyên giáp · giảm ST nhận) và hàng 2 (chí mạng · ST chí mạng · chính xác ·
    né tránh · hút máu). Mỗi chỉ số là một khối riêng nên ô hẹp thì tự xuống dòng,
@@ -1122,13 +1127,13 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
   .pvp-cell-stat { grid-area: stat; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 1px; font-size: 8px; }
   .pvp-cell-stat .row1, .pvp-cell-stat .row2 { display: contents; }
   .pvp-cell-stat .row2 { font-size: inherit; }
-  .pvp-cell-stat .pvp-stat { justify-content: center; min-width: 0; gap: 1px; }
-  /* Ô chỉ số hẹp (1/3 bề ngang ô tướng) mà badge "(+x)" của Ngọc cộng thêm có thể xuất hiện ở nhiều
-     chỉ số cùng lúc — để nguyên một dòng thì badge đẩy tràn sang ô bên cạnh, làm vỡ lưới chỉ số. Cho
-     badge xuống dòng ngay TRONG ô chỉ số (cả 3 ô cùng hàng dùng chung chiều cao hàng lưới nên vẫn
-     thẳng hàng nhau), kèm `overflow: hidden` chặn hẳn phần tràn nếu giá trị còn quá dài. */
-  .pvp-cell-stat .pvp-stat { flex-wrap: wrap; overflow: hidden; }
-  .pvp-cell-stat .pvp-stat .pvp-pre { margin-left: 0; font-size: 7.5px; line-height: 1.15; }
+  /* Ô tướng hẹp mà một tướng có thể được cộng nhiều chỉ số cùng lúc → bỏ badge "(+x)" (nguồn gây vỡ
+     lưới chỉ số), thay bằng CỘNG THẲNG phần cộng vào số và tô xanh lá để biết chỉ số đang được cộng.
+     Số vẫn `overflow: hidden` để giá trị quá dài không tràn sang ô bên cạnh. */
+  .pvp-cell-stat .pvp-stat { justify-content: center; min-width: 0; gap: 1px; overflow: hidden; }
+  .pvp-cell-stat .pvp-base { display: none; }
+  .pvp-cell-stat .pvp-total { display: inline; }
+  .pvp-cell-stat .pvp-total.up { color: #6FBE73; }
   /* Ô tướng hẹp nên icon chỉ số thu nhỏ cho vừa ô, không bị cắt chữ. */
   .pvp-cell-stat svg { width: 8px; height: 8px; }
   /* HP thành THANH MÁU trọn hàng trên cùng (như sân đấu): thanh xanh + số máu canh giữa ngay dưới. */
