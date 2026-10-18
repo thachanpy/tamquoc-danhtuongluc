@@ -904,6 +904,12 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
 .rp-speeds { display: flex; gap: 4px; }
 .rp-controls .btn.on { border-color: var(--gold); color: var(--gold-2); background: rgba(212, 168, 74, .12); }
 .rp-sfx { display: inline-flex; align-items: center; gap: 5px; }
+/* Nút Phát/Tạm dừng chỉ bày icon nên phải canh icon vào giữa nút (nút chữ thường dựa vào dòng chữ).
+   Hai hình nằm sẵn trong SVG, class `playing` quyết định hình nào hiện (xem nút trong Pvp.tsx). */
+.rp-play { display: inline-flex; align-items: center; justify-content: center; }
+.rp-play .rp-ic-pause { display: none; }
+.rp-play.playing .rp-ic-play { display: none; }
+.rp-play.playing .rp-ic-pause { display: inline; }
 .rp-sfx .mute-slash { display: none; }
 .rp-sfx.muted { color: var(--muted); }
 .rp-sfx.muted .mute-slash { display: inline; }
@@ -1226,8 +1232,12 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
   .rp-head { gap: 8px; }
   .rp-result { font-size: 20px; padding: 0 10px; }
   .rp-live { gap: 8px; }
-  .rp-controls { gap: 6px; }
-  .rp-controls .btn { min-height: 28px; padding: 2px 8px; font-size: 12.5px; }
+  /* Hàng điều khiển phát lại trận trên màn hẹp: GHIM đúng MỘT HÀNG (`nowrap`) để mọi nút luôn nằm
+     trong tầm mắt — không tốn thêm chiều cao khung. Nút Phát/Tạm dừng đã chuyển thành icon và nút
+     bấm siết đệm/cỡ chữ nên tổng bề ngang vừa một màn hình điện thoại. */
+  .rp-controls { flex-wrap: nowrap; gap: 4px; }
+  .rp-controls .btn { min-height: 28px; padding: 2px 7px; font-size: 12px; white-space: nowrap; }
+  .rp-speeds { gap: 3px; }
   .rp-report-wrap { min-height: 0; overflow-x: hidden; }
   /* Bảng tổng kết 11 cột phải cuộn NGANG mới xem hết — rất khó theo dõi trên màn hẹp (và cả khi
      đóng gói thành app mobile). Nên xếp lại thành THẺ: mỗi tướng một thẻ, đầu thẻ là chân dung +

@@ -2025,9 +2025,6 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
                 <button class="btn ghost small" onClick={() => setReport(false)}>
                   Xem diễn biến
                 </button>
-                <button class="btn ghost small" onClick={reset}>
-                  Chơi lại
-                </button>
                 <Show when={props.onRematch}>
                   <button class="btn primary small" onClick={() => props.onRematch?.(foe().id)}>
                     Khiêu chiến lại
@@ -2036,11 +2033,21 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
               </>
             }
           >
-            <button class="btn primary small" onClick={() => (playing() ? pause() : play())}>
-              {playing() ? 'Tạm dừng' : 'Phát'}
-            </button>
-            <button class="btn ghost small" onClick={reset}>
-              Chơi lại
+            {/* Nút Phát/Tạm dừng chỉ bày ICON (đổi theo trạng thái) thay cho chữ: hàng điều khiển
+                nhờ vậy lọt trọn MỘT hàng trên màn hẹp. Hai hình cùng nằm trong SVG, ẩn/hiện bằng class
+                `playing` (như nút loa) để không phải dựng lại node SVG mỗi lần đổi trạng thái.
+                `title`/`aria-label` vẫn giữ nguyên tên hành động cho người dùng và trình đọc màn hình. */}
+            <button
+              class="btn ghost small rp-play"
+              classList={{ playing: playing() }}
+              onClick={() => (playing() ? pause() : play())}
+              title={playing() ? 'Tạm dừng' : 'Phát'}
+              aria-label={playing() ? 'Tạm dừng' : 'Phát'}
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+                <path class="rp-ic-play" d="M8 5.2v13.6L19 12z" />
+                <path class="rp-ic-pause" d="M7 5h3.6v14H7zM13.4 5H17v14h-3.6z" />
+              </svg>
             </button>
             <span class="rp-speeds">
               <For each={[1, 2, 4]}>
