@@ -1109,10 +1109,10 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-rows: auto auto auto;
     grid-template-areas: 'tags art' 'tags name' 'stat stat';
-    column-gap: 3px;
+    column-gap: 2px;
     row-gap: 1px;
     min-height: 0;
-    padding: 3px;
+    padding: 2px;
     align-items: center;
     justify-items: stretch;
   }
@@ -1120,20 +1120,22 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
   .pvp-cell.empty { grid-template-columns: minmax(0, 1fr); grid-template-areas: none; place-items: center; }
   /* Số thứ tự ô dời sang góc phải trên để không đè lên cột chip (cột chip nằm ở góc trái). */
   .pvp-slot { left: auto; right: 4px; }
-  /* Bốn chip định danh xếp thành LƯỚI 2×2 (chip LC trải hết hàng cuối) thay vì 4 hàng dọc: chiều cao
-     cột chip giảm từ ~59px xuống ~35px — vừa khít chiều cao chân dung + tên nên KHÔNG tốn thêm chiều
-     cao ô, mà cột chip cũng hẹp lại (chỉ còn ~45px) nhường chỗ cho tên tướng. */
+  /* Bốn chip định danh xếp thành LƯỚI 2×2 (chip LC trải hết hàng cuối) thay vì 4 hàng dọc: cột chip
+     chỉ còn ~21px cao, THẤP HƠN chân dung + tên (~35px) nên KHÔNG tốn thêm chiều cao ô, mà cột chip
+     cũng hẹp lại (~40px) nhường chỗ cho tên tướng. */
   .pvp-cell-tags { grid-area: tags; display: grid; grid-template-columns: repeat(2, auto); gap: 1px; align-self: center; justify-content: center; }
-  .pvp-cell-lv, .pvp-cell-faction, .pvp-cell-style, .pvp-cell-lc { height: 11px; font-size: 7.5px; }
-  .pvp-cell-lv, .pvp-cell-faction { min-width: 22px; padding: 0 2px; }
+  .pvp-cell-lv, .pvp-cell-faction, .pvp-cell-style, .pvp-cell-lc { height: 10px; font-size: 7px; }
+  .pvp-cell-lv, .pvp-cell-faction { min-width: 20px; padding: 0 2px; }
   .pvp-cell-style { padding: 0 1px; }
   .pvp-cell-lc { grid-column: 1 / -1; padding: 0 2px; }
-  .pvp-art { grid-area: art; justify-self: center; width: 26px; height: 26px; }
-  .pvp-cell-name { grid-area: name; justify-self: center; font-size: 9.5px; }
+  .pvp-art { grid-area: art; justify-self: center; width: 22px; height: 22px; }
+  .pvp-cell-name { grid-area: name; justify-self: center; font-size: 9px; }
   /* Ba hàng chỉ số, mỗi hàng đúng 3 chỉ số như ô tướng sân đấu. Hai hàng cũ dùng `display: contents`
      để 10 chỉ số trở thành ô lưới trực tiếp; `order` xếp lại cho khớp THỨ TỰ sân đấu:
      [sát thương · phòng thủ · xuyên giáp] / [chí mạng · ST chí mạng · chính xác] / [né tránh · hút máu · giảm ST nhận]. */
-  .pvp-cell-stat { grid-area: stat; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; font-size: 7.5px; }
+  /* Chỉ số trong ô: hàng mảnh (`line-height` 1.15) — khối chỉ số là phần cao nhất của ô nên siết
+     dòng ở đây là cách giảm chiều cao ô hiệu quả nhất. */
+  .pvp-cell-stat { grid-area: stat; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; font-size: 7px; line-height: 1.15; }
   .pvp-cell-stat .row1, .pvp-cell-stat .row2 { display: contents; }
   .pvp-cell-stat .row2 { font-size: inherit; }
   /* Ô tướng hẹp mà một tướng có thể được cộng nhiều chỉ số cùng lúc → bỏ badge "(+x)" (nguồn gây vỡ
@@ -1146,8 +1148,8 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
   /* Ô tướng hẹp nên icon chỉ số thu nhỏ cho vừa ô, không bị cắt chữ. */
   .pvp-cell-stat svg { width: 7px; height: 7px; }
   /* HP thành THANH MÁU trọn hàng trên cùng (như sân đấu): thanh xanh + số máu canh giữa ngay dưới. */
-  .pvp-cell-stat .pvp-stat-hp { grid-column: 1 / -1; order: -1; position: relative; padding-top: 7px; }
-  .pvp-cell-stat .pvp-stat-hp::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px; border-radius: 2px; background: linear-gradient(90deg, #3f8f4a, #6FBE73); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
+  .pvp-cell-stat .pvp-stat-hp { grid-column: 1 / -1; order: -1; position: relative; padding-top: 6px; }
+  .pvp-cell-stat .pvp-stat-hp::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; border-radius: 2px; background: linear-gradient(90deg, #3f8f4a, #6FBE73); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
   /* "Giảm ST nhận" đẩy xuống cuối hàng 3 — đúng thứ tự ô tướng sân đấu. */
   .pvp-cell-stat .row1 .pvp-stat:nth-child(5) { order: 9; }
   .pvp-pick-art { width: 34px; height: 34px; }
@@ -1158,18 +1160,18 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
   .pvp-opp-row .btn { flex: 1 1 100%; }
   /* Màn hẹp: 2 đội xếp dọc thay vì trái/phải. Đội ĐỊCH lên TRÊN, đội MÌNH xuống DƯỚI cho khớp sân
      đấu (hàng trước hai bên đối diện nhau qua vạch "VS"). */
-  .pvp-duel { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .pvp-duel { grid-template-columns: minmax(0, 1fr); gap: 3px; }
   .pvp-duel-side.foe { order: 1; }
   .pvp-duel-vs { order: 2; justify-self: center; }
   .pvp-duel-side.mine { order: 3; }
-  .pvp-duel-side { padding: 5px; gap: 4px; }
+  .pvp-duel-side { padding: 4px; gap: 3px; }
   /* Bàn đội hình ở màn hẹp: dàn thành 3 CỘT × 2 HÀNG — hàng trước (1-2-3) ở TRÊN, hàng sau (4-5-6)
      ở dưới — thay cho 2 cột × 3 hàng; ô tướng rộng hơn hẳn. DOM đã xếp hàng trước rồi hàng sau nên
      chỉ cần `display: contents` cho cột để các ô thành ô lưới trực tiếp, và ẩn tiêu đề cột.
      Bàn đội địch nằm TRÊN vạch "VS" nên phải đảo hàng sau lên trên: hàng trước hai bên mới sát vạch
      giữa và đối diện nhau, khớp đúng sân đấu ở màn hình dọc. (`.pvp-duel .pvp-board` viết kèm để đè
      được quy tắc chia 3 hàng đều của bàn trong modal khiêu chiến ở màn rộng.) */
-  .pvp-board, .pvp-duel .pvp-board { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto; gap: 5px; }
+  .pvp-board, .pvp-duel .pvp-board { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto; gap: 4px; }
   .pvp-col { display: contents; }
   .pvp-col-title { display: none; }
   .pvp-board.foe .pvp-cell.back { order: -1; }
@@ -1185,8 +1187,8 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
   .pvp-team-actions .btn { width: auto; flex: none; }
   /* Màn hẹp: nút ở trang Đấu trường và modal Chuẩn bị khiêu chiến nhỏ gọn hơn để nhìn được nhiều
      nội dung hơn trong một màn hình (màn phát lại trận giữ nguyên cỡ nút để dễ bấm). */
-  .pvp-panel .btn, .pvp-challenge .btn { min-height: 32px; padding: 3px 10px; font-size: 13px; }
-  .pvp-panel .btn.small, .pvp-challenge .btn.small { min-height: 28px; padding: 2px 8px; font-size: 12.5px; }
+  .pvp-panel .btn, .pvp-challenge .btn { min-height: 30px; padding: 3px 9px; font-size: 12.5px; }
+  .pvp-panel .btn.small, .pvp-challenge .btn.small { min-height: 26px; padding: 2px 8px; font-size: 12px; }
   /* Dải Ngọc thu nhỏ trên màn hẹp: viên Ngọc 30px và nhãn gọn lại (gồm cả dải trong modal khiêu chiến). */
   .gem-cards { gap: 6px; }
   .gem-pill, .pvp-duel .gem-pill { padding: 2px 8px 2px 3px; font-size: 12px; gap: 5px; }
@@ -1194,19 +1196,22 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
   .gem-dot, .pvp-duel .gem-dot { width: 30px; height: 30px; }
   .gem-slot-empty, .pvp-duel .gem-slot-empty { width: 30px; height: 30px; }
   .gem-pill.empty .gem-slot-empty, .pvp-duel .gem-pill.empty .gem-slot-empty { font-size: 15px; }
-  .pvp-duel .pvp-gems { min-height: 34px; }
+  /* Dải Ngọc trong modal khiêu chiến: viên + dải thu nhỏ riêng (không đụng dải Ngọc ngoài trang
+     Đội hình) để hai khối đội thấp lại — modal còn chỗ cho hai bàn đấu 12 ô. */
+  .pvp-duel .pvp-gems { min-height: 26px; }
+  .pvp-duel .gem-dot, .pvp-duel .gem-slot-empty { width: 26px; height: 26px; }
   /* Modal chuẩn bị khiêu chiến: siết khoảng cách + thu gọn đầu modal để vừa một màn hình dọc.
-     Cho RIÊNG vùng hai bàn đấu co lại và tự cuộn (`min-height: 0` + `overflow-y`) nên đầu modal,
-     hàng quy tắc và nút "Khiêu chiến" luôn nằm trong tầm mắt — không phải cuộn cả modal mới tới nút.
-     Ô tướng + chip + chân dung đã thu nhỏ ở trên nên hai bàn đấu (12 ô) lọt trọn khung; `overflow-y`
-     chỉ còn là lưới an toàn cho máy màn hình quá thấp, bình thường không thấy thanh cuộn. */
-  .pvp-challenge { gap: 6px; padding: 8px; max-height: 96dvh; }
+     Trên điện thoại hai đội xếp DỌC nên tổng chiều cao = 2 khối đội + đầu modal + hàng quy tắc + nút
+     "Khiêu chiến": mọi thứ đã thu nhỏ (ô tướng ~80px, dải Ngọc 26px, chân dung 22px) để cả modal lọt
+     trọn MỘT màn hình, không phải cuộn. Vùng hai bàn đấu vẫn giữ `min-height: 0` + `overflow-y` chỉ
+     làm lưới an toàn cho máy màn hình quá thấp — bình thường không thấy thanh cuộn. */
+  .pvp-challenge { gap: 5px; padding: 6px; max-height: calc(100dvh - 12px); }
   .pvp-duel { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-  .pvp-picker-head h3 { font-size: 13px; }
-  .pvp-duel-head { min-height: 0; gap: 6px; }
-  .pvp-duel-head .muted { font-size: 10px; }
-  .pvp-duel-vs { font-size: 11px; }
-  .pvp-opp-avatar { width: 28px; height: 28px; font-size: 12px; }
+  .pvp-picker-head h3 { font-size: 12px; }
+  .pvp-duel-head { min-height: 0; gap: 5px; }
+  .pvp-duel-head .muted { font-size: 9px; }
+  .pvp-duel-vs { font-size: 10px; }
+  .pvp-opp-avatar { width: 24px; height: 24px; font-size: 11px; }
   .pvp-hist-row { grid-template-columns: 52px 30px minmax(0, 1fr) auto; grid-template-areas: 'res role name name' 'res av power time'; row-gap: 4px; column-gap: 8px; }
   .hist-res { grid-area: res; }
   .hist-role { grid-area: role; }
