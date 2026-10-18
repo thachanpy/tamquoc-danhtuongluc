@@ -13,10 +13,9 @@
  * phát tức thì trên luồng âm thanh riêng, không đụng tới luồng vẽ.
  *
  * LƯU Ý về khung hình trên iOS (đã kiểm chứng trên iOS 26 — xem Babylon.js PR #18886): chỉ cần thiết
- * bị âm thanh còn HOẠT ĐỘNG trong lúc có tiếng phát ra là Safari hạ trang xuống 30 FPS, và nếu lúc đó
- * nhạc nền (thẻ `<audio>`, xem `music.ts`) cũng đang phát thì mức hạ càng nặng và kéo dài — sân đấu
+ * bị âm thanh còn HOẠT ĐỘNG trong lúc có tiếng phát ra là Safari hạ trang xuống 30 FPS — sân đấu
  * WebGL vì thế giật đều. Nên tiếng trận chỉ phát khi thật sự cần: `setSfxNeeded(true)` khi bắt đầu
- * phát lại trận, nhả thiết bị âm thanh ngay khi dừng/đóng (xem thêm `music.ts#holdMusic`).
+ * phát lại trận, nhả thiết bị âm thanh ngay khi dừng/đóng.
  */
 import { createSignal } from 'solid-js';
 

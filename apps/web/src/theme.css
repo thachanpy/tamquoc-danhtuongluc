@@ -680,6 +680,10 @@ button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webk
    của hàng sau, dù tên tướng / số chỉ số dài ngắn khác nhau (không bị lệch hàng). */
 .pvp-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto repeat(3, auto); gap: 6px 10px; }
 .pvp-col { display: grid; grid-template-rows: subgrid; grid-row: 1 / -1; gap: 6px; }
+/* DOM của bàn đội mình xếp hàng trước rồi hàng sau (để màn hẹp dàn 3×2 đúng thứ tự 1-2-3 / 4-5-6).
+   Màn rộng vẫn giữ nguyên cột "Hàng sau | Hàng trước" như cũ bằng cách đẩy cột hàng trước sang phải;
+   bàn địch không đổi (hàng trước bên trái) nên hai bàn vẫn lật ngược nhau cho đối xứng. */
+.pvp-board:not(.foe) .pvp-col-front { order: 2; }
 /* Chuẩn bị khiêu chiến: đội mình và đội địch là HAI bàn riêng nên `subgrid` chỉ khớp hàng trong từng
    bàn — ô hàng 1 của bên này vẫn có thể cao/thấp hơn bên kia (tên và chip xuống dòng khác nhau).
    Cho bàn giãn kín chiều cao khung đấu (hai khung luôn cao bằng nhau) và chia đều 3 hàng tướng,
@@ -1084,7 +1088,6 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
      bo góc bao quanh canvas WebGL buộc compositor dựng lớp mask mỗi khung hình → giật. Canvas nền
      trong suốt và luôn nằm gọn trong khung nên bỏ đi không đổi hình. */
   .rp-canvas { border-radius: 0; overflow: visible; }
-  .pvp-board { gap: 6px; }
   .pvp-cell { min-height: 92px; padding: 6px 4px 4px; }
   .pvp-art { width: 46px; height: 46px; }
   .pvp-cell-name { font-size: 11.5px; }
@@ -1095,17 +1098,23 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
      nằm riêng một dòng và giãn hết cỡ (nếu để chung dòng, bề ngang còn quá ít cho cả hai). */
   .pvp-opp-row { flex-wrap: wrap; }
   .pvp-opp-row .btn { flex: 1 1 100%; }
-  /* Màn hẹp: 2 đội xếp dọc thay vì trái/phải */
+  /* Màn hẹp: 2 đội xếp dọc thay vì trái/phải. Đội ĐỊCH lên TRÊN, đội MÌNH xuống DƯỚI cho khớp sân
+     đấu (hàng trước hai bên đối diện nhau qua vạch "VS"). */
   .pvp-duel { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  .pvp-duel-vs { justify-self: center; }
+  .pvp-duel-side.foe { order: 1; }
+  .pvp-duel-vs { order: 2; justify-self: center; }
+  .pvp-duel-side.mine { order: 3; }
   .pvp-duel-side { padding: 8px; }
-  /* Bàn đội hình ở màn hẹp: mỗi đội dàn thành 3 CỘT × 2 HÀNG (hàng sau ở trên, hàng trước sát vạch
-     "VS" giữa hai đội) thay cho 2 cột × 3 hàng — ô tướng rộng hơn và hai hàng trước đối diện nhau,
-     nhìn rõ hơn hẳn. Thứ tự ô trong DOM đã đúng sẵn (mình: 4-5-6 rồi 1-2-3; địch: 1-2-3 rồi 4-5-6)
-     nên chỉ cần `display: contents` cho cột để các ô thành ô lưới trực tiếp, và ẩn tiêu đề cột. */
-  .pvp-duel .pvp-board { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto; gap: 6px; }
-  .pvp-duel .pvp-col { display: contents; }
-  .pvp-duel .pvp-col-title { display: none; }
+  /* Bàn đội hình ở màn hẹp: dàn thành 3 CỘT × 2 HÀNG — hàng trước (1-2-3) ở TRÊN, hàng sau (4-5-6)
+     ở dưới — thay cho 2 cột × 3 hàng; ô tướng rộng hơn hẳn. DOM đã xếp hàng trước rồi hàng sau nên
+     chỉ cần `display: contents` cho cột để các ô thành ô lưới trực tiếp, và ẩn tiêu đề cột.
+     Bàn đội địch nằm TRÊN vạch "VS" nên phải đảo hàng sau lên trên: hàng trước hai bên mới sát vạch
+     giữa và đối diện nhau, khớp đúng sân đấu ở màn hình dọc. (`.pvp-duel .pvp-board` viết kèm để đè
+     được quy tắc chia 3 hàng đều của bàn trong modal khiêu chiến ở màn rộng.) */
+  .pvp-board, .pvp-duel .pvp-board { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto; gap: 6px; }
+  .pvp-col { display: contents; }
+  .pvp-col-title { display: none; }
+  .pvp-board.foe .pvp-cell.back { order: -1; }
   /* Chân modal Chuẩn bị khiêu chiến: gợi ý nằm riêng một dòng, nút GIÃN ĐỀU hết bề ngang
      (trước đây flex-wrap để nút tự co theo chữ nên nút chỗ to chỗ nhỏ, nhìn vỡ layout). */
   .pvp-rulebar { flex-direction: column; align-items: stretch; gap: 8px; }

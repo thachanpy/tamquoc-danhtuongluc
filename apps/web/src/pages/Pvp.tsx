@@ -35,7 +35,6 @@ import { arenaLayoutFor, createArena, type ArenaHandle, type ArenaLayout, type A
 import type { FxKind } from '../pixi/skillsfx.ts';
 import { toast } from '../ui.ts';
 import { playSfx, setSfxNeeded, sfxPrefs, stopAllSfx, toggleSfx, type SfxName } from '../sfx.ts';
-import { holdMusic } from '../music.ts';
 
 /**
  * Đấu trường PvP (mục 6.7 — PVP.md).
@@ -411,6 +410,8 @@ function UnitCell(props: {
         static: !interactive(),
         dragging: !!props.dragging,
         'drop-target': !!props.dropTarget,
+        // Hàng sau (slot 4–6): màn hẹp cần biết ô nào thuộc hàng nào để xếp lại thứ tự hàng.
+        back: props.slot > 3,
       }}
       data-slot={props.slot}
       role={interactive() ? 'button' : undefined}
@@ -548,8 +549,8 @@ function TeamBoard(props: {
     if (!suppressClick) props.onSlot?.(s);
   };
 
-  const col = (slots: number[], title: string) => (
-    <div class="pvp-col">
+  const col = (slots: number[], title: string, front: boolean) => (
+    <div class="pvp-col" classList={{ 'pvp-col-front': front }}>
       <div class="pvp-col-title">{title}</div>
       <For each={slots}>
         {(s) => (
@@ -578,8 +579,12 @@ function TeamBoard(props: {
   };
   return (
     <>
+      {/* DOM luôn xếp hàng trước (1-2-3) rồi hàng sau (4-5-6): màn hẹp dàn thành 3 cột × 2 hàng đúng
+          thứ tự đó; màn rộng đẩy cột hàng trước sang phải (xem `.pvp-col-front` trong theme.css) nên
+          bàn của mình vẫn là "Hàng sau | Hàng trước" và bàn địch vẫn lật ngược cho đối xứng. */}
       <div class="pvp-board" classList={{ foe: props.foe, dragging: dragFrom() !== null }}>
-        {props.foe ? [col(FRONT, 'Hàng trước'), col(BACK, 'Hàng sau')] : [col(BACK, 'Hàng sau'), col(FRONT, 'Hàng trước')]}
+        {col(FRONT, 'Hàng trước', true)}
+        {col(BACK, 'Hàng sau', false)}
       </div>
       <Show when={ghost()}>
         {(g) => (
@@ -1773,13 +1778,11 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   }
   /**
    * Chỉ giữ thiết bị âm thanh khi ĐANG phát lại trận và tiếng trận đang bật. Trên iOS Safari, để thiết
-   * bị âm thanh hoạt động lúc có tiếng phát ra là trang bị hạ xuống 30 FPS (xem `sfx.ts`); tạm nhường
-   * luôn cả nhạc nền trong lúc xem trận (chỉ trên mobile) để không bị hạ nặng thêm.
+   * bị âm thanh hoạt động lúc có tiếng phát ra là trang bị hạ xuống 30 FPS (xem `sfx.ts`). Nhạc nền vẫn
+   * phát bình thường trong lúc chiến đấu.
    */
   createEffect(() => {
-    const on = playing() && sfxPrefs().on && sfxPrefs().volume > 0;
-    setSfxNeeded(on);
-    holdMusic(on);
+    setSfxNeeded(playing() && sfxPrefs().on && sfxPrefs().volume > 0);
   });
   function toEnd() {
     pause();
@@ -1842,9 +1845,8 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     disposed = true;
     clearTimeout(timer);
     stopAllSfx();
-    // Rời màn xem trận: nhả thiết bị âm thanh và phát lại nhạc nền như trước khi vào.
+    // Rời màn xem trận: nhả thiết bị âm thanh (nhạc nền giữ nguyên).
     setSfxNeeded(false);
-    holdMusic(false);
     arena?.destroy();
   });
   // Canvas PixiJS dựng bất đồng bộ; xong thì đẩy trạng thái đầu trận rồi tự phát lại

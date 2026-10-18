@@ -72,17 +72,6 @@ function pickNext(): string {
 const prefs = loadPrefs();
 let audio: HTMLAudioElement | null = null;
 let unlocked = false;
-/**
- * Tạm nhường thiết bị âm thanh cho màn xem trận (`holdMusic`). Chỉ áp dụng trên thiết bị cảm ứng
- * (điện thoại/máy tính bảng): ở đó nhạc nền phát song song với tiếng trận làm trang bị hạ khung hình
- * nặng thêm (xem `sfx.ts`); máy tính để nguyên như cũ.
- */
-let held = false;
-const isTouch =
-  typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0);
-
-/** Nhạc có được phép phát ngay bây giờ không (đang bật, còn âm lượng, và không bị tạm nhường). */
-const shouldPlay = () => prefs.on && prefs.volume > 0 && !held;
 
 function getAudio(): HTMLAudioElement {
   if (!audio) {
@@ -93,14 +82,14 @@ function getAudio(): HTMLAudioElement {
     audio.addEventListener('ended', () => {
       const a = audio!;
       a.src = pickNext();
-      if (shouldPlay()) void a.play().catch(() => {});
+      if (prefs.on && prefs.volume > 0) void a.play().catch(() => {});
     });
     // Bài lỗi/không tải được: thử bài khác (tránh vòng lặp vô hạn nếu chỉ có 1 bài)
     audio.addEventListener('error', () => {
       if (TRACKS.length < 2) return;
       const a = audio!;
       a.src = pickNext();
-      if (shouldPlay()) void a.play().catch(() => {});
+      if (prefs.on && prefs.volume > 0) void a.play().catch(() => {});
     });
   }
   return audio;
@@ -110,21 +99,8 @@ function sync() {
   if (!unlocked) return;
   const a = getAudio();
   a.volume = prefs.volume;
-  if (shouldPlay()) void a.play().catch(() => {});
+  if (prefs.on && prefs.volume > 0) void a.play().catch(() => {});
   else a.pause();
-}
-
-/**
- * Tạm dừng / phát lại nhạc nền khi mở-đóng màn xem trận (chỉ trên thiết bị cảm ứng).
- * Không đổi tuỳ chọn bật/tắt hay âm lượng của người chơi — chỉ tạm nhường thiết bị âm thanh.
- */
-export function holdMusic(on: boolean) {
-  const next = on && isTouch;
-  if (held === next) return;
-  held = next;
-  if (!audio) return;
-  if (held) audio.pause();
-  else if (unlocked && shouldPlay()) void audio.play().catch(() => {});
 }
 
 /** Gọi 1 lần khi khởi động: chờ tương tác đầu tiên rồi mới phát. */

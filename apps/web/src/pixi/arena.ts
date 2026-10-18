@@ -308,8 +308,9 @@ function seedOf(s: string): number {
 /**
  * Toạ độ ô tướng theo bố cục.
  * - `landscape`: bên mình ở nửa trái, hàng trước (slot 1–3) luôn sát vạch giữa; slot 4–6 ra ngoài.
- * - `portrait`: mỗi đội là 3 cột (slot 1–3 / 4–6 theo thứ tự trái→phải) × 2 hàng; đội mình ở TRÊN,
- *   hàng trước sát vạch giữa — khớp sơ đồ `4 5 6 / 1 2 3 — VS — 1 2 3 / 4 5 6`.
+ * - `portrait`: mỗi đội là 3 cột (slot 1–3 / 4–6 theo thứ tự trái→phải) × 2 hàng; đội MÌNH ở DƯỚI,
+ *   đội ĐỊCH ở TRÊN, hàng trước (slot 1–3) luôn sát vạch giữa — khớp sơ đồ
+ *   `4 5 6 / 1 2 3 — VS — 1 2 3 / 4 5 6`.
  */
 function tilePos(side: PvpSide, slot: number, mySide: PvpSide, layout: ArenaLayout) {
   const mine = side === mySide;
@@ -319,7 +320,8 @@ function tilePos(side: PvpSide, slot: number, mySide: PvpSide, layout: ArenaLayo
     return { x: mine ? colXLeft(col) : colXRight(col), y: ROW_Y0 + idx * (TILE_H + ROW_GAP) };
   }
   const front = slot <= 3;
-  const row = mine ? (front ? 1 : 0) : front ? 2 : 3;
+  // Mình (nửa dưới): hàng trước ở trên, hàng sau ở dưới. Địch (nửa trên): lật lại để hàng trước sát vạch giữa.
+  const row = mine ? (front ? 2 : 3) : front ? 1 : 0;
   return {
     x: PAD + idx * (COL_W + COL_GAP),
     y: ROW_Y0 + row * (TILE_H + ROW_GAP) + (row >= 2 ? PORT_DIV_GAP : 0),
@@ -1125,7 +1127,7 @@ class Arena implements ArenaHandle {
     let px: number;
     let py: number;
     if (this.layout === 'portrait') {
-      // Bố cục dọc: vạch NGANG nằm đúng giữa hai hàng trước (đội mình ở trên, đội địch ở dưới)
+      // Bố cục dọc: vạch NGANG nằm đúng giữa hai hàng trước (đội địch ở trên, đội mình ở dưới)
       const top = ROW_Y0 + 2 * TILE_H + ROW_GAP;
       const bottom = ROW_Y0 + 2 * (TILE_H + ROW_GAP) + PORT_DIV_GAP;
       px = this.W / 2;
