@@ -448,6 +448,8 @@ class Tile {
   /** Hàng chip hiệu ứng trạng thái ở góc trên phải ô: icon chỉ số + giá trị tăng/giảm. */
   private readonly fxC = new Container();
   private readonly chips: { c: Container; bg: Graphics; ico: Graphics; t: Text; w: number; icoKey: string }[] = [];
+  /** Chữ ký nội dung hàng chip — trùng thì bỏ qua toàn bộ việc dựng lại (đỡ vẽ lại nền/kéo chữ mỗi sự kiện). */
+  private chipSig = '\u0000';
   private readonly stunFx = new Container();
   private readonly stunRing = new Graphics();
   private readonly stars: Text[] = [];
@@ -781,6 +783,10 @@ class Tile {
    * rồi xuống dòng (tối đa 2 hàng) để không bao giờ tràn ra ngoài ô.
    */
   private setChips(items: { icon?: IconId; text: string; color: number }[]): void {
+    // Nội dung y hệt lần trước (đa số sự kiện chỉ đổi máu, không đổi hiệu ứng) → giữ nguyên, khỏi dựng lại.
+    const sig = items.map((it) => `${it.icon ?? '-'}:${it.color}:${it.text}`).join('|');
+    if (sig === this.chipSig) return;
+    this.chipSig = sig;
     while (this.chips.length < items.length) {
       const bg = new Graphics();
       const ico = new Graphics();
@@ -890,7 +896,8 @@ class Tile {
     }
   }
 
-  update(dt: number, time: number): void {
+  /** Cập nhật hoạt ảnh của ô; trả về `true` nếu còn thay đổi hình (để sân biết khi nào ngừng vẽ). */
+  update(dt: number, time: number): boolean {
     let moved = false;
     // Thanh máu chạy mượt về giá trị thật
     if (Math.abs(this.hpShown - this.hpTarget) > 0.002) {
@@ -907,7 +914,13 @@ class Tile {
     if (moved) this.drawBars();
     // Ô của tướng đang ra đòn nhô lên nhẹ
     const ty = this.baseY - (this.actFx.visible ? 3 : 0);
-    this.root.y = Math.abs(this.root.y - ty) > 0.05 ? this.root.y + (ty - this.root.y) * Math.min(1, dt / 70) : ty;
+    if (Math.abs(this.root.y - ty) > 0.05) {
+      this.root.y += (ty - this.root.y) * Math.min(1, dt / 70);
+      moved = true;
+    } else if (this.root.y !== ty) {
+      this.root.y = ty;
+      moved = true;
+    }
     if (this.stunFx.visible) {
       this.stunRing.rotation += dt * 0.0042;
       const r = ART_R + 8;
@@ -915,9 +928,14 @@ class Tile {
         const a = time * 0.0042 + (i * Math.PI * 2) / this.stars.length;
         this.stars[i]!.position.set(Math.cos(a) * r, Math.sin(a) * r);
       }
+      moved = true;
     }
     // Nhãn "Tới lượt" nhấp nháy nhẹ để mắt bắt ngay tướng đang đánh
-    if (this.turnC.visible) this.turnC.alpha = 0.72 + 0.28 * Math.sin(time * 0.007);
+    if (this.turnC.visible) {
+      this.turnC.alpha = 0.72 + 0.28 * Math.sin(time * 0.007);
+      moved = true;
+    }
+    return moved;
   }
 }
 
@@ -963,6 +981,11 @@ class Arena implements ArenaHandle {
   private skillAge = 0;
   private time = 0;
   private dead = false;
+  /**
+   * Có thay đổi cần vẽ lại không. Ta gỡ `render` khỏi ticker và TỰ gọi `render` khi cần:
+   * sân đứng yên (hết hoạt ảnh) thì không vẽ nữa — đỡ đốt GPU/CPU liên tục (nguồn nóng máy → giật trên iPhone).
+   */
+  private dirty = true;
   /** Handler `visibilitychange` (dừng vẽ khi tab ẩn) — giữ lại để gỡ khi dọn sân. */
   private onVis: (() => void) | undefined;
 
@@ -987,6 +1010,9 @@ class Arena implements ArenaHandle {
     // Sân đấu là hoạt ảnh 2D đơn giản: khoá 60fps để trên máy tần số quét cao (iPhone ProMotion 120Hz)
     // không phải vẽ gấp đôi mỗi giây — nguồn gây giật chính trên mobile, còn laptop 60Hz giữ nguyên.
     this.app.ticker.maxFPS = 60;
+    // Gỡ `render` tự động khỏi ticker: ta tự gọi `this.app.render()` trong `tick` CHỈ khi sân còn thay đổi
+    // hình. Sân đứng yên mà vẫn vẽ 60fps là nguồn nóng máy → throttle → giật trên mobile.
+    this.app.ticker.remove(this.app.render, this.app);
     // Kích thước do CSS quyết định (`.rp-canvas canvas`): co VỪA KHUNG theo cả bề ngang lẫn chiều cao
     // mà vẫn giữ tỉ lệ 900:560 — nên ép về `auto` để `max-width/max-height: 100%` phát huy tác dụng.
     this.app.canvas.style.width = 'auto';
@@ -1025,7 +1051,11 @@ class Arena implements ArenaHandle {
     // Tab bị ẩn (chuyển app / tắt màn hình trên mobile) thì dừng vẽ — không đốt GPU khi không ai xem.
     this.onVis = () => {
       if (document.visibilityState === 'hidden') this.app.ticker.stop();
-      else this.app.ticker.start();
+      else {
+        // Quay lại tab: nội dung canvas có thể đã bị hệ điều hành xoá → vẽ lại một khung cho chắc.
+        this.dirty = true;
+        this.app.ticker.start();
+      }
     };
     document.addEventListener('visibilitychange', this.onVis);
     // Chân dung nạp nền: sân đấu dùng được ngay, ảnh xong thì gắn vào sau
@@ -1035,6 +1065,7 @@ class Arena implements ArenaHandle {
         const tex = portraitTex.get(u.artKey);
         if (tex) this.tiles.get(u.idx)?.setPortrait(tex);
       }
+      this.dirty = true;
     });
   }
 
@@ -1065,6 +1096,7 @@ class Arena implements ArenaHandle {
 
   sync(s: ArenaSnapshot): void {
     if (this.dead) return;
+    this.dirty = true;
     for (const [idx, t] of this.tiles) {
       const v = s.view[idx];
       if (!v) continue;
@@ -1076,6 +1108,7 @@ class Arena implements ArenaHandle {
 
   /** Hiện tên chiêu đang thi triển trên ô của tướng ra đòn; `null` thì ẩn. */
   private setSkillName(acting: number | null, name: string | null): void {
+    this.dirty = true;
     const tile = acting === null ? undefined : this.tiles.get(acting);
     if (!name || !tile) {
       this.skillC.visible = false;
@@ -1114,6 +1147,7 @@ class Arena implements ArenaHandle {
     if (this.dead) return;
     const t = this.tiles.get(idx);
     if (!t) return;
+    this.dirty = true;
     this.fx.push(new FloatFx(this.fxLayer, this.W, t.centerX, t.topY + 34, parts, crit, tone, this.reduce));
   }
 
@@ -1134,6 +1168,7 @@ class Arena implements ArenaHandle {
   }
 
   private spawn(t: Tile, u: ArenaUnit, kind: FxKind, phase: 'cast' | 'hit'): void {
+    this.dirty = true;
     this.effs.push(
       spawnSkillFx(this.fxLayer, {
         x: t.centerX,
@@ -1149,14 +1184,20 @@ class Arena implements ArenaHandle {
 
   private tick(dt: number): void {
     this.time += dt;
-    for (const t of this.tiles.values()) t.update(dt, this.time);
+    // `active` = còn thứ gì đó đang đổi hình (ô tướng, số bay, hiệu ứng kỹ năng, nhãn tên chiêu).
+    // Chỉ khi `active` (hoặc có thay đổi chờ vẽ) mới gọi `render` — sân đứng yên thì bỏ qua hẳn.
+    let active = false;
+    for (const t of this.tiles.values()) if (t.update(dt, this.time)) active = true;
+    if (this.fx.length) active = true;
     for (let i = this.fx.length - 1; i >= 0; i--) {
       const f = this.fx[i]!;
       if (f.tick(dt)) {
-        f.c.destroy({ children: true });
+        // `context: true` để hủy luôn GraphicsContext của icon trong số bay (tránh rò rỉ context mỗi lần).
+        f.c.destroy({ children: true, context: true });
         this.fx.splice(i, 1);
       }
     }
+    if (this.effs.length) active = true;
     for (let i = this.effs.length - 1; i >= 0; i--) {
       const e = this.effs[i]!;
       if (e.tick(dt)) {
@@ -1166,12 +1207,17 @@ class Arena implements ArenaHandle {
     }
     // Tên chiêu bật nảy: phóng vọt lên rồi co về đúng cỡ, kèm quầng vàng nhấp nháy nhẹ
     if (this.skillC.visible) {
+      active = true;
       this.skillAge += dt;
       const grow = easeOut(Math.min(1, this.skillAge / 150));
       const settle = easeOut(Math.min(1, Math.max(0, (this.skillAge - 150) / 170)));
       this.skillC.scale.set(0.62 + 0.52 * grow - 0.14 * settle);
       this.skillC.alpha = Math.min(1, 0.25 + 1.9 * grow);
       this.skillBg.alpha = 0.94 + 0.06 * Math.sin(this.time * 0.006);
+    }
+    if (active || this.dirty) {
+      this.app.render();
+      this.dirty = false;
     }
   }
 
@@ -1185,7 +1231,8 @@ class Arena implements ArenaHandle {
     for (const e of this.effs) e.destroy();
     this.effs.length = 0;
     try {
-      this.app.destroy(true, { children: true, texture: true });
+      // `context: true` để hủy cả GraphicsContext của mọi Graphics con (ô tướng, icon…) khi đóng sân.
+      this.app.destroy(true, { children: true, texture: true, context: true });
     } catch {
       /* ignore */
     }

@@ -260,7 +260,9 @@ class SkillFx implements Fx {
   }
 
   destroy(): void {
-    this.root.destroy({ children: true });
+    // `context: true` để hủy luôn GraphicsContext của từng Graphics con — mặc định PixiJS chỉ hủy
+    // context khi `options` là `true`/rỗng, nên truyền `{ children: true }` sẽ RÒ RỈ context mỗi hiệu ứng.
+    this.root.destroy({ children: true, context: true });
   }
 }
 

@@ -4,8 +4,13 @@
  *   trong `public/audio/sfx`. Danh sách clip nằm ở `CLIPS`.
  * - Bật/tắt và âm lượng nhớ theo trình duyệt (localStorage) — dùng chung cho mọi trận đấu.
  * - Trình duyệt chặn tự phát âm thanh, nên chỉ phát sau lần chạm/bấm đầu tiên của người chơi.
- * - Mỗi clip có một nhóm Audio nhỏ phát vòng (round-robin) để tiếng nọ không cắt tiếng kia, kèm chống
- *   dội (throttle) theo từng loại: một đòn đánh diện rộng 3 mục tiêu chỉ nghe MỘT tiếng va chạm.
+ * - Chống dội (throttle) theo từng loại: một đòn đánh diện rộng 3 mục tiêu chỉ nghe MỘT tiếng va chạm.
+ *
+ * Phát bằng **Web Audio API** (`AudioBufferSourceNode`) chứ không dùng thẻ `<audio>`:
+ * một trận bắn ra rất nhiều tiếng NGẮN liên tiếp, mà mỗi lần `HTMLAudioElement.play()` trên iOS Safari
+ * đều phải đi qua tầng media của hệ điều hành — vừa trễ tiếng vừa chặn luồng chính, làm giật hoạt ảnh
+ * sân đấu (chỉ thấy rõ trên mobile, máy tính thì không). Web Audio giải mã sẵn file thành buffer rồi
+ * phát tức thì trên luồng âm thanh riêng, không đụng tới luồng vẽ.
  */
 import { createSignal } from 'solid-js';
 
@@ -45,58 +50,95 @@ const CLIPS = {
 
 export type SfxName = keyof typeof CLIPS;
 
-/** Số bản sao mỗi clip (đủ để vài tiếng chồng nhau mà không cắt nhau). */
-const VOICES = 3;
+const NAMES = Object.keys(CLIPS) as SfxName[];
+
 /** Khoảng cách tối thiểu giữa hai lần phát CÙNG một clip (ms) — chống dội khi đánh diện rộng. */
 const THROTTLE_MS = 60;
 
 const prefs = loadPrefs();
-const voices: Partial<Record<SfxName, HTMLAudioElement[]>> = {};
-const next: Partial<Record<SfxName, number>> = {};
-const lastAt: Partial<Record<SfxName, number>> = {};
 let unlocked = false;
 
-/** Nhóm Audio của một clip (tạo lười ở lần phát đầu). */
-function voicesOf(name: SfxName): HTMLAudioElement[] {
-  let list = voices[name];
-  if (!list) {
-    list = Array.from({ length: VOICES }, () => {
-      const a = new Audio(CLIPS[name]);
-      a.preload = 'auto';
-      a.volume = prefs.volume;
-      return a;
-    });
-    voices[name] = list;
+/** Ngữ cảnh âm thanh + âm lượng tổng; tạo lười ở lần tương tác đầu tiên (iOS bắt buộc trong thao tác người dùng). */
+let ctx: AudioContext | null = null;
+let master: GainNode | null = null;
+/** Buffer đã giải mã của từng clip — phát lại nhiều lần không tốn thêm gì. */
+const buffers: Partial<Record<SfxName, AudioBuffer>> = {};
+const loading = new Set<SfxName>();
+const lastAt: Partial<Record<SfxName, number>> = {};
+/** Các nguồn đang phát (để dừng khi dựng lại trận đấu). */
+const live = new Set<AudioBufferSourceNode>();
+
+function ensureCtx(): AudioContext | null {
+  if (ctx) return ctx;
+  try {
+    ctx = new AudioContext({ latencyHint: 'interactive' });
+    master = ctx.createGain();
+    master.gain.value = prefs.on ? prefs.volume : 0;
+    master.connect(ctx.destination);
+  } catch {
+    ctx = null;
+    master = null;
   }
-  return list;
+  return ctx;
+}
+
+/** Nạp + giải mã một clip (bỏ qua nếu đã có hoặc đang nạp). */
+function load(name: SfxName): void {
+  const c = ctx;
+  if (!c || buffers[name] || loading.has(name)) return;
+  loading.add(name);
+  void fetch(CLIPS[name])
+    .then((r) => r.arrayBuffer())
+    .then((b) => c.decodeAudioData(b))
+    .then((buf) => {
+      buffers[name] = buf;
+    })
+    .catch(() => {
+      /* thiếu file / giải mã lỗi: im lặng bỏ qua, không làm hỏng trận đấu */
+    })
+    .finally(() => loading.delete(name));
+}
+
+/** Nạp trước toàn bộ clip (gọi sau lần tương tác đầu tiên để trận đầu không bị thiếu tiếng). */
+function preload(): void {
+  for (const name of NAMES) load(name);
 }
 
 /** Phát một hiệu ứng. Bỏ qua khi: chưa mở khoá (chưa tương tác), đang tắt, âm lượng 0, hoặc vừa phát cùng clip. */
 export function playSfx(name: SfxName) {
   if (!unlocked || !prefs.on || prefs.volume <= 0) return;
-  const now = Date.now();
+  const c = ctx;
+  const buf = buffers[name];
+  if (!c || !master || !buf || c.state !== 'running') return;
+  const now = performance.now();
   if (now - (lastAt[name] ?? 0) < THROTTLE_MS) return;
   lastAt[name] = now;
-  const list = voicesOf(name);
-  const i = next[name] ?? 0;
-  next[name] = (i + 1) % list.length;
-  const a = list[i]!;
-  a.volume = prefs.volume;
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  src.connect(master);
+  src.onended = () => live.delete(src);
+  live.add(src);
   try {
-    a.currentTime = 0;
+    src.start();
   } catch {
-    /* bỏ qua: một số trình duyệt chưa sẵn sàng để tua */
+    live.delete(src);
   }
-  void a.play().catch(() => {});
 }
 
 /** Dừng mọi hiệu ứng đang phát (dùng khi dựng lại trận đấu). */
 export function stopAllSfx() {
-  for (const list of Object.values(voices)) for (const a of list ?? []) a.pause();
+  for (const src of live) {
+    try {
+      src.stop();
+    } catch {
+      /* bỏ qua: nguồn đã kết thúc */
+    }
+  }
+  live.clear();
 }
 
 function sync() {
-  for (const list of Object.values(voices)) for (const a of list ?? []) a.volume = prefs.volume;
+  if (master) master.gain.value = prefs.on ? prefs.volume : 0;
 }
 
 /** Gọi 1 lần khi khởi động: chờ tương tác đầu tiên rồi mới cho phép phát. */
@@ -105,6 +147,10 @@ export function initSfx() {
     unlocked = true;
     window.removeEventListener('pointerdown', unlock);
     window.removeEventListener('keydown', unlock);
+    const c = ensureCtx();
+    if (!c) return;
+    if (c.state === 'suspended') void c.resume();
+    preload();
   };
   window.addEventListener('pointerdown', unlock);
   window.addEventListener('keydown', unlock);
