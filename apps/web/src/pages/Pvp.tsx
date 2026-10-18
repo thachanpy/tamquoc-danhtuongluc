@@ -34,7 +34,7 @@ import type { IconId } from '../icons.ts';
 import { arenaLayoutFor, createArena, type ArenaHandle, type ArenaLayout, type ArenaUnit, type ArenaView, type FloatPart, type FloatTone } from '../pixi/arena.ts';
 import type { FxKind } from '../pixi/skillsfx.ts';
 import { toast } from '../ui.ts';
-import { playSfx, sfxPrefs, stopAllSfx, toggleSfx, type SfxName } from '../sfx.ts';
+import { ensureSfxOn, playSfx, sfxPrefs, stopAllSfx, toggleSfx, type SfxName } from '../sfx.ts';
 
 /**
  * Đấu trường PvP (mục 6.7 — PVP.md).
@@ -1268,6 +1268,22 @@ function DetailList(props: { rows: DetailRow[]; units: PvpUnitStateDto[]; mySide
   );
 }
 
+/**
+ * Các cột SỐ của bảng tổng kết chỉ số — MỘT nguồn duy nhất cho cả tiêu đề bảng (màn rộng) lẫn nhãn
+ * `data-label` khi bảng xếp lại thành thẻ (màn hẹp), nên hai bên không thể lệch nhãn hay lệch giá trị.
+ */
+const TALLY_COLS: readonly { label: string; cls?: string; get: (t: Tally) => string }[] = [
+  { label: 'Sát thương', cls: 'dmg', get: (t) => num(t.dealt) },
+  { label: 'Đã chịu', cls: 'taken', get: (t) => num(t.taken) },
+  { label: 'Hồi máu', cls: 'heal', get: (t) => num(t.healedAllies + t.healedSelf) },
+  { label: 'Khiên', cls: 'shield', get: (t) => num(t.shielded) },
+  { label: 'Hạ', get: (t) => (t.kills ? String(t.kills) : '—') },
+  { label: 'Choáng', get: (t) => (t.stuns ? String(t.stuns) : '—') },
+  { label: 'Giải choáng', get: (t) => (t.cleanses ? String(t.cleanses) : '—') },
+  { label: 'Thanh tẩy', get: (t) => (t.purifies ? String(t.purifies) : '—') },
+  { label: 'Buff', get: (t) => (t.buffs ? String(t.buffs) : '—') },
+];
+
 /** Bảng kết quả trận đấu: diễn biến chi tiết (có avatar) + tổng kết chỉ số từng tướng. */
 function BattleReport(props: { units: PvpUnitStateDto[]; mySide: PvpSide; analysis: { detail: DetailRow[]; tallies: Map<number, Tally> } }) {
   const [tab, setTab] = createSignal<'summary' | 'detail'>('summary');
@@ -1320,15 +1336,14 @@ function BattleReport(props: { units: PvpUnitStateDto[]; mySide: PvpSide; analys
           </Show>
         </span>
       </td>
-      <td class="rp-t-num dmg">{num(t.dealt)}</td>
-      <td class="rp-t-num taken">{num(t.taken)}</td>
-      <td class="rp-t-num heal">{num(t.healedAllies + t.healedSelf)}</td>
-      <td class="rp-t-num shield">{num(t.shielded)}</td>
-      <td class="rp-t-num">{t.kills || '—'}</td>
-      <td class="rp-t-num">{t.stuns || '—'}</td>
-      <td class="rp-t-num">{t.cleanses || '—'}</td>
-      <td class="rp-t-num">{t.purifies || '—'}</td>
-      <td class="rp-t-num">{t.buffs || '—'}</td>
+      {/* Chỉ số: màn rộng hiện thành từng cột, màn hẹp gom thành thẻ và lấy nhãn từ `data-label`. */}
+      <For each={TALLY_COLS}>
+        {(c) => (
+          <td class={`rp-t-num${c.cls ? ` ${c.cls}` : ''}`} data-label={c.label}>
+            {c.get(t)}
+          </td>
+        )}
+      </For>
       {/* Tình trạng cuối trận của chính tướng này (khác cột "Hạ" = số địch tướng này hạ được). */}
       <td class="rp-t-num rp-t-death">{t.dead ? <span class="rp-t-down">Đã hạ</span> : '—'}</td>
     </tr>
@@ -1353,15 +1368,7 @@ function BattleReport(props: { units: PvpUnitStateDto[]; mySide: PvpSide; analys
             <thead>
               <tr>
                 <th>Tướng</th>
-                <th>Sát thương</th>
-                <th>Đã chịu</th>
-                <th>Hồi máu</th>
-                <th>Khiên</th>
-                <th>Hạ</th>
-                <th>Choáng</th>
-                <th>Giải choáng</th>
-                <th>Thanh tẩy</th>
-                <th>Buff</th>
+                <For each={TALLY_COLS}>{(c) => <th>{c.label}</th>}</For>
                 <th>Tử vong</th>
               </tr>
             </thead>
@@ -1799,10 +1806,6 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     toEnd();
     setReport(true);
   }
-  function stepOnce() {
-    pause();
-    step();
-  }
 
   const me = () => (props.battle.mySide === 'a' ? props.battle.attacker : props.battle.defender);
   const foe = () => (props.battle.mySide === 'a' ? props.battle.defender : props.battle.attacker);
@@ -1866,6 +1869,12 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   onMount(() => {
     document.body.classList.add('battle-open');
     onCleanup(() => document.body.classList.remove('battle-open'));
+  });
+  // Vào trận trên mobile (khung hẹp): BẬT SẴN tiếng chiến đấu để không phải tự bật lại mỗi trận —
+  // trước đây chỉ cần tắt một lần là các trận sau im lặng. Nút "Âm thanh" trong hàng điều khiển vẫn
+  // tắt/mở được cho riêng trận đang xem (và trận mới lại bật sẵn).
+  onMount(() => {
+    if (layout() === 'portrait') ensureSfxOn();
   });
   // Đổi bề rộng qua mốc 640px (xoay màn hình, kéo cửa sổ) thì cập nhật bố cục sân
   onMount(() => {
@@ -1974,14 +1983,8 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
             <button class="btn primary small" onClick={() => (playing() ? pause() : play())}>
               {playing() ? 'Tạm dừng' : 'Phát'}
             </button>
-            <button class="btn ghost small" onClick={stepOnce}>
-              Bước
-            </button>
             <button class="btn ghost small" onClick={reset}>
               Chơi lại
-            </button>
-            <button class="btn ghost small" onClick={toEnd}>
-              Tua nhanh
             </button>
             <span class="rp-speeds">
               <For each={[1, 2, 4]}>

@@ -1199,10 +1199,51 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
   .rp-drow-side { padding: 1px 4px; font-size: 9px; }
   .rp-avatar { width: 34px; height: 34px; font-size: 13px; }
   .rp-side-name { font-size: 13px; }
-  .rp-table th, .rp-table td { padding-left: 5px; padding-right: 5px; }
-  /* Bảng tổng kết có 10 cột số — màn hẹp hạ cỡ xuống 13px (vẫn to hơn chữ bảng 12px) cho khỏi tràn ngang. */
-  .rp-t-num { font-size: 13px; }
-  /* Nhãn "Đã hạ" cũng thu nhỏ theo để không đội cột cao hơn các dòng khác. */
+  /* Bảng tổng kết 11 cột phải cuộn NGANG mới xem hết — rất khó theo dõi trên màn hẹp (và cả khi
+     đóng gói thành app mobile). Nên xếp lại thành THẺ: mỗi tướng một thẻ, đầu thẻ là chân dung +
+     tên + chip, dưới là lưới 3 cột chỉ số. Nhãn từng ô lấy từ `data-label` của chính ô đó (xem
+     `TALLY_COLS` trong Pvp.tsx) nên bảng rộng và thẻ hẹp dùng CHUNG một nguồn nhãn. */
+  .rp-table, .rp-table tbody, .rp-table tr, .rp-table td { display: block; }
+  .rp-table thead { display: none; }
+  .rp-table tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2px 4px;
+    margin-bottom: 6px;
+    padding: 6px 7px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(10, 6, 4, .3);
+  }
+  .rp-table td { padding: 1px 2px; border-bottom: none; }
+  /* Đầu thẻ: chân dung + tên + chuỗi chip, ngăn cách với lưới chỉ số bằng đường mảnh. */
+  .rp-table td.rp-t-name {
+    display: flex;
+    grid-column: 1 / -1;
+    padding-bottom: 4px;
+    margin-bottom: 2px;
+    border-bottom: 1px solid rgba(255, 255, 255, .07);
+  }
+  /* Mỗi chỉ số một dòng: nhãn bên trái (cắt bằng "…" nếu hẹp), số bên phải. */
+  .rp-table td.rp-t-num { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; font-size: 13.5px; }
+  .rp-table td.rp-t-num::before {
+    content: attr(data-label);
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font: 600 10.5px/1.5 var(--num, sans-serif);
+    color: var(--muted);
+  }
+  /* Tử vong = dòng riêng dưới cùng, và CHỈ hiện khi tướng đã gục (sống thì khỏi tốn một dòng "—"). */
+  .rp-table td.rp-t-death { grid-column: 1 / -1; justify-content: center; padding-top: 3px; }
+  .rp-table td.rp-t-death::before { content: none; }
+  .rp-table tr:not(:has(.rp-t-down)) .rp-t-death { display: none; }
+  /* Hàng phân cách hai phe: bỏ khung thẻ, chỉ giữ chữ vàng. */
+  .rp-table tr.rp-t-sep { margin: 0; padding: 2px 0 4px; border: none; background: none; }
+  .rp-table tr.rp-t-sep td { grid-column: 1 / -1; padding: 0; }
+  /* Nhãn "Đã hạ" thu nhỏ để không đội dòng cao hơn các dòng khác. */
   .rp-t-down { height: 17px; padding: 0 5px; font-size: 10px; }
   .rp-close { margin-left: 0; }
 }

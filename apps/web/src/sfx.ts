@@ -190,3 +190,16 @@ export function setSfxVolume(v: number) {
   prefs.volume = Math.min(1, Math.max(0, v));
   apply();
 }
+
+/**
+ * Bật sẵn hiệu ứng âm thanh — gọi khi VÀO trận đấu trên mobile để người chơi không phải tự bật lại
+ * mỗi trận (trận đấu im lặng vì lần trước đã tắt). Âm lượng đang 0 thì đặt lại 50%, nếu không thì
+ * bật công tắc mà vẫn không nghe thấy gì. Nút "Âm thanh" trong hàng điều khiển vẫn tắt/mở được cho
+ * riêng trận đang xem.
+ */
+export function ensureSfxOn() {
+  if (prefs.on && prefs.volume > 0) return;
+  prefs.on = true;
+  if (prefs.volume === 0) prefs.volume = 0.5;
+  apply();
+}
