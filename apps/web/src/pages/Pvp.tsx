@@ -1300,17 +1300,20 @@ function DetailList(props: { rows: DetailRow[]; units: PvpUnitStateDto[]; mySide
 /**
  * Các cột SỐ của bảng tổng kết chỉ số — MỘT nguồn duy nhất cho cả tiêu đề bảng (màn rộng) lẫn nhãn
  * `data-label` khi bảng xếp lại thành thẻ (màn hẹp), nên hai bên không thể lệch nhãn hay lệch giá trị.
+ * `short` là nhãn RÚT GỌN dùng riêng cho thẻ trên màn hẹp: ở đó mỗi thẻ chỉ rộng nửa màn hình mà phải
+ * chứa đủ 9 chỉ số, nhãn đầy đủ ("Sát thương", "Giải choáng") sẽ bị cắt cụt. Nhãn đầy đủ vẫn nằm ở
+ * `title` để rê chuột xem, và ở tiêu đề bảng khi xem trên màn rộng.
  */
-const TALLY_COLS: readonly { label: string; cls?: string; get: (t: Tally) => string }[] = [
-  { label: 'Sát thương', cls: 'dmg', get: (t) => num(t.dealt) },
-  { label: 'Đã chịu', cls: 'taken', get: (t) => num(t.taken) },
-  { label: 'Hồi máu', cls: 'heal', get: (t) => num(t.healedAllies + t.healedSelf) },
-  { label: 'Khiên', cls: 'shield', get: (t) => num(t.shielded) },
-  { label: 'Hạ', get: (t) => (t.kills ? String(t.kills) : '—') },
-  { label: 'Choáng', get: (t) => (t.stuns ? String(t.stuns) : '—') },
-  { label: 'Giải choáng', get: (t) => (t.cleanses ? String(t.cleanses) : '—') },
-  { label: 'Thanh tẩy', get: (t) => (t.purifies ? String(t.purifies) : '—') },
-  { label: 'Buff', get: (t) => (t.buffs ? String(t.buffs) : '—') },
+const TALLY_COLS: readonly { label: string; short: string; cls?: string; get: (t: Tally) => string }[] = [
+  { label: 'Sát thương', short: 'ST', cls: 'dmg', get: (t) => num(t.dealt) },
+  { label: 'Đã chịu', short: 'Nhận', cls: 'taken', get: (t) => num(t.taken) },
+  { label: 'Hồi máu', short: 'Hồi', cls: 'heal', get: (t) => num(t.healedAllies + t.healedSelf) },
+  { label: 'Khiên', short: 'Khiên', cls: 'shield', get: (t) => num(t.shielded) },
+  { label: 'Hạ', short: 'Hạ', get: (t) => (t.kills ? String(t.kills) : '—') },
+  { label: 'Choáng', short: 'Choáng', get: (t) => (t.stuns ? String(t.stuns) : '—') },
+  { label: 'Giải choáng', short: 'Giải', get: (t) => (t.cleanses ? String(t.cleanses) : '—') },
+  { label: 'Thanh tẩy', short: 'Tẩy', get: (t) => (t.purifies ? String(t.purifies) : '—') },
+  { label: 'Buff', short: 'Buff', get: (t) => (t.buffs ? String(t.buffs) : '—') },
 ];
 
 /** Bảng kết quả trận đấu: diễn biến chi tiết (có avatar) + tổng kết chỉ số từng tướng. */
@@ -1365,10 +1368,11 @@ function BattleReport(props: { units: PvpUnitStateDto[]; mySide: PvpSide; analys
           </Show>
         </span>
       </td>
-      {/* Chỉ số: màn rộng hiện thành từng cột, màn hẹp gom thành thẻ và lấy nhãn từ `data-label`. */}
+      {/* Chỉ số: màn rộng hiện thành từng cột, màn hẹp gom thành thẻ và lấy nhãn từ `data-label`
+          (bản đầy đủ) hoặc `data-short` (bản rút gọn cho thẻ hẹp) — xem `TALLY_COLS` và theme.css. */}
       <For each={TALLY_COLS}>
         {(c) => (
-          <td class={`rp-t-num${c.cls ? ` ${c.cls}` : ''}`} data-label={c.label}>
+          <td class={`rp-t-num${c.cls ? ` ${c.cls}` : ''}`} data-label={c.label} data-short={c.short} title={c.label}>
             {c.get(t)}
           </td>
         )}
