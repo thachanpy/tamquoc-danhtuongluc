@@ -351,13 +351,14 @@ export interface FloatPart {
 }
 
 /** Sắc thái màu của số bay lên (khớp quy chuẩn màu hiển thị Combat ở `C`). */
-export type FloatTone = 'damage' | 'heal' | 'burn';
+export type FloatTone = 'damage' | 'heal' | 'burn' | 'kill';
 
 /** Số sát thương/hồi máu bay lên rồi tan. Luôn rõ nét: chỉ mờ ở 20% cuối của hoạt ảnh. */
 class FloatFx {
   readonly c = new Container();
   private readonly y0: number;
-  private readonly crit: boolean;
+  /** Chữ cỡ lớn (chí mạng / đòn kết liễu) — vừa to hơn vừa bay cao hơn đòn thường. */
+  private readonly big: boolean;
   private readonly reduce: boolean;
   private readonly ms: number;
   /** Nửa chiều cao chữ (ở cỡ lớn nhất) — chặn số bay lên khỏi mép trên khung sân. */
@@ -367,18 +368,19 @@ class FloatFx {
   private t = 0;
 
   constructor(parent: Container, w: number, x: number, y: number, parts: FloatPart[], crit: boolean, tone: FloatTone, reduce: boolean) {
-    this.crit = crit;
+    this.big = crit || tone === 'kill';
     this.reduce = reduce;
     this.y0 = y;
-    this.ms = reduce ? 500 : crit ? 1050 : 950;
-    const size = crit ? 50 : 36;
-    // Chí mạng luôn vàng kim; còn lại theo sắc thái: hồi máu/buff xanh lá, thiêu đốt đỏ nhẹ, sát thương xám.
-    const fill = crit ? C.crit : tone === 'heal' ? C.heal : tone === 'burn' ? C.burn : C.dmg;
+    this.ms = reduce ? 500 : this.big ? 1050 : 950;
+    const size = this.big ? 50 : 36;
+    // Đòn kết liễu đỏ chu tước (nhìn là biết ngay vừa lấy mạng); còn lại: chí mạng vàng kim,
+    // hồi máu/buff xanh lá, thiêu đốt đỏ nhẹ, sát thương thường xám.
+    const fill = tone === 'kill' ? C.debuff : crit ? C.crit : tone === 'heal' ? C.heal : tone === 'burn' ? C.burn : C.dmg;
     // Mỗi mảnh là một dòng chữ; mảnh có icon thì icon đứng ngay trước số (cùng cỡ, cùng màu).
     const texts = parts.map((p) => {
       const t = new Text({
         text: p.text,
-        style: { fontFamily: NUM_FONT, fontSize: size, fontWeight: '900', fill, stroke: { color: 0x0C0D0C, width: crit ? 4 : 3 } },
+        style: { fontFamily: NUM_FONT, fontSize: size, fontWeight: '900', fill, stroke: { color: 0x0C0D0C, width: this.big ? 4 : 3 } },
       });
       t.anchor.set(0, 0.5);
       return t;
@@ -400,7 +402,7 @@ class FloatFx {
       this.c.addChild(texts[i]!);
       x0 += texts[i]!.width;
     }
-    this.climb = reduce ? 0 : crit ? 36 : 26;
+    this.climb = reduce ? 0 : this.big ? 36 : 26;
     this.halfH = size / 2;
     // Kẹp NGANG: canh giữa quanh ô tướng nhưng không cho số tràn ra ngoài khung sân
     // (cỡ chữ lớn + tên dài như "HỒI SINH +5000" rất dễ vượt mép trái/phải).
@@ -417,7 +419,7 @@ class FloatFx {
     const grow = easeOut(Math.min(1, p / 0.25));
     // Kẹp DỌC: bay lên nhưng không vượt khỏi mép trên khung sân (hàng tướng trên cùng rất sát mép).
     this.c.y = Math.max(this.halfH + FLOAT_PAD, this.y0 - this.climb * e);
-    this.c.scale.set(this.crit ? 0.75 + 0.25 * grow : 0.9 + 0.1 * grow);
+    this.c.scale.set(this.big ? 0.75 + 0.25 * grow : 0.9 + 0.1 * grow);
     this.c.alpha = p < 0.8 ? 1 : 1 - (p - 0.8) / 0.2;
     return p >= 1;
   }

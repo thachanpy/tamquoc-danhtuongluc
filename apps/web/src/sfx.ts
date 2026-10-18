@@ -110,7 +110,12 @@ export function playSfx(name: SfxName) {
   if (!unlocked || !prefs.on || prefs.volume <= 0) return;
   const c = ctx;
   const buf = buffers[name];
-  if (!c || !master || !buf || c.state !== 'running') return;
+  if (!c || !master || !buf) return;
+  // Ngữ cảnh có thể bị hệ điều hành đẩy sang 'interrupted'/'suspended' — trên iOS điều này xảy ra khi
+  // trình phát NHẠC NỀN bị tạm dừng (hai thứ độc lập về logic nhưng chung phiên âm thanh của máy).
+  // Gặp trường hợp đó thì đánh thức lại rồi phát luôn: trước đây bỏ qua nên tắt nhạc nền là mất luôn
+  // tiếng trận đấu.
+  if (c.state !== 'running') void c.resume().catch(() => {});
   const now = performance.now();
   if (now - (lastAt[name] ?? 0) < THROTTLE_MS) return;
   lastAt[name] = now;
@@ -145,7 +150,8 @@ function sync() {
   if (!c) return;
   try {
     // Giữ ngữ cảnh LUÔN chạy để tiếng bắn ra tức thì ở đầu trận (không phải chờ đánh thức lại).
-    if (c.state === 'suspended') void c.resume();
+    // Gồm cả 'interrupted': tắt nhạc nền trên iOS có thể đẩy ngữ cảnh sang trạng thái này.
+    if (c.state !== 'running') void c.resume().catch(() => {});
   } catch {
     /* bỏ qua: trình duyệt không cho đổi trạng thái ngữ cảnh */
   }
@@ -159,7 +165,12 @@ export function initSfx() {
     window.removeEventListener('keydown', unlock);
     const c = ensureCtx();
     if (!c) return;
-    if (c.state === 'suspended') void c.resume();
+    if (c.state === 'suspended') void c.resume().catch(() => {});
+    // Tự đánh thức ngữ cảnh mỗi khi hệ điều hành đổi trạng thái nó (ví dụ tắt nhạc nền trên iOS):
+    // hiệu ứng trận đấu KHÔNG phụ thuộc vào việc nhạc nền đang bật hay tắt.
+    c.addEventListener('statechange', () => {
+      if (c.state !== 'running') void c.resume().catch(() => {});
+    });
     preload();
     sync();
   };

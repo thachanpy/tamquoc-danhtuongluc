@@ -97,6 +97,22 @@ function sfxOf(ev: PvpEventDto): SfxName | null {
   }
 }
 
+/**
+ * Đòn ở vị trí `at` trong `events` có phải đòn KẾT LIỄU (lấy mạng mục tiêu `idx`) không?
+ * Engine luôn đẩy `down` của chính mục tiêu NGAY SAU đòn lấy mạng, nên chỉ cần nhìn tới trước: gặp
+ * `down` là biết kết quả, gặp đòn sát thương khác là đòn này không giết ai. Riêng đường Thiêu đốt
+ * chèn vài sự kiện Hút máu (`heal`) vào giữa nên bỏ qua chúng (xem `pvp.engine.ts`).
+ */
+function killsNext(events: PvpEventDto[], at: number, idx: number): boolean {
+  for (let i = at + 1; i < events.length && i <= at + 8; i++) {
+    const e = events[i]!;
+    if (e.t === 'down') return e.idx === idx;
+    if (e.t === 'heal') continue;
+    return false;
+  }
+  return false;
+}
+
 /** Chỉ số cơ bản của một tướng để hiển thị ở bước chuẩn bị (server tính, client chỉ hiện). */
 interface UnitStat {
   style: PvpStyle;
@@ -1389,6 +1405,8 @@ function BattleReport(props: { units: PvpUnitStateDto[]; mySide: PvpSide; analys
 
 function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRematch?: (opponentId: number) => void }) {
   const units = props.battle.units;
+  /** Toàn bộ diễn biến trận (server mô phỏng sẵn) — phát lại theo thứ tự, không tính toán thêm. */
+  const events = props.battle.events;
   const byIdx = new Map(units.map((u) => [u.idx, u]));
   const nameOf = (idx: number) => {
     const u = byIdx.get(idx);
@@ -1504,7 +1522,29 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     arena?.impact(idx, kind);
   };
 
-  function apply(ev: PvpEventDto) {
+  /**
+   * Số bay của một ĐÒN GÂY SÁT THƯƠNG (đòn thường / phản kích / thiêu đốt).
+   * - `kill` = đòn này lấy mạng mục tiêu (xem `killsNext`): hiện thêm chữ "HẠ GỤC" ngay trước con số
+   *   sát thương cuối cùng và tô đỏ chu tước, cỡ lớn như chí mạng — nhìn là biết vừa hạ được tướng.
+   * - `lead` = nhãn đứng trước con số (phản kích), `icon` = icon hiệu ứng đi kèm con số.
+   */
+  const hitFloat = (
+    idx: number,
+    amount: number,
+    crit: boolean,
+    kill: boolean,
+    tone: FloatTone = 'damage',
+    opts: { lead?: string; icon?: IconId } = {},
+  ) => {
+    const parts: FloatPart[] = [];
+    if (opts.lead) parts.push({ text: opts.lead });
+    if (kill) parts.push({ text: 'HẠ' });
+    const dmg = `-${num(amount)}`;
+    parts.push(opts.icon ? { icon: opts.icon, text: dmg } : { text: dmg });
+    addFloat(idx, parts, crit, kill ? 'kill' : tone);
+  };
+
+  function apply(ev: PvpEventDto, at: number) {
     builder.add(ev);
     if (!fastForward) setDetail(builder.rows.slice());
     if (!fastForward) {
@@ -1569,14 +1609,14 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
         setActing(ev.from);
         // Khiên hấp thụ bớt phần sát thương `absorbed` (mục 16): trừ khiên rồi mới cập nhật HP.
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp, shields: absorbedOf(s, ev.absorbed) }));
-        addFloat(ev.idx, [{ text: `-${num(ev.amount)}` }], ev.crit);
+        hitFloat(ev.idx, ev.amount, ev.crit, killsNext(events, at, ev.idx));
         addFx(ev.idx, 'damage');
         break;
       case 'counter':
         // Phản kích: `from` đánh trả `idx` (kẻ vừa gây sát thương chủ động cho `from`).
         setActing(ev.from);
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp, shields: absorbedOf(s, ev.absorbed) }));
-        addFloat(ev.idx, [{ text: `-${num(ev.amount)}` }], ev.crit);
+        hitFloat(ev.idx, ev.amount, ev.crit, killsNext(events, at, ev.idx), 'damage', { lead: 'PHẢN' });
         addFx(ev.idx, 'damage');
         break;
       case 'heal':
@@ -1665,7 +1705,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
       case 'burn':
         // Thiêu đốt gây sát thương vào đầu mỗi lượt (có thể ăn chí mạng theo chỉ số người thi triển).
         upd(ev.idx, (s) => ({ ...s, hp: ev.hp, shields: absorbedOf(s, ev.absorbed) }));
-        addFloat(ev.idx, [{ icon: 'burn', text: `-${num(ev.amount)}` }], ev.crit, 'burn');
+        hitFloat(ev.idx, ev.amount, ev.crit, killsNext(events, at, ev.idx), 'burn', { icon: 'burn' });
         addFx(ev.idx, 'burn');
         break;
       case 'shield':
@@ -1734,25 +1774,23 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
   }
 
   function step() {
-    const evs = props.battle.events;
     const c = cursor();
-    if (c >= evs.length) {
+    if (c >= events.length) {
       setDone(true);
       setPlaying(false);
       return;
     }
-    apply(evs[c]!);
+    apply(events[c]!, c);
     setCursor(c + 1);
-    if (cursor() >= evs.length) setDone(true);
+    if (cursor() >= events.length) setDone(true);
   }
 
   function schedule() {
     clearTimeout(timer);
-    const evs = props.battle.events;
     const c = cursor();
-    if (!evs[c] || !playing()) return;
+    if (!events[c] || !playing()) return;
     // Chờ thêm một khoảng nhỏ TRƯỚC mỗi lượt ra chiêu để tách rõ từng tướng (trừ lượt đầu trận).
-    const ms = (EVENT_MS[evs[c]!.t] ?? 250) + (c > 0 && evs[c]!.t === 'act' ? CAST_GAP_MS : 0);
+    const ms = (EVENT_MS[events[c]!.t] ?? 250) + (c > 0 && events[c]!.t === 'act' ? CAST_GAP_MS : 0);
     timer = window.setTimeout(() => {
       if (!playing()) return;
       step();
@@ -1792,7 +1830,7 @@ function BattleReplay(props: { battle: PvpBattleDto; onClose: () => void; onRema
     // Tính trạng thái ở chế độ "tua nhanh" rồi cập nhật sân đấu + diễn biến MỘT LẦN để không bị đơ.
     fastForward = true;
     try {
-      for (let c = cursor(); c < evs.length; c++) apply(evs[c]!);
+      for (let c = cursor(); c < evs.length; c++) apply(evs[c]!, c);
     } finally {
       fastForward = false;
     }
