@@ -72,6 +72,12 @@ const live = new Set<AudioBufferSourceNode>();
 function ensureCtx(): AudioContext | null {
   if (ctx) return ctx;
   try {
+    // Web Audio mặc định rơi vào nhóm âm thanh `ambient` của iOS — nhóm này BỊ CÔNG TẮC IM LẶNG trên
+    // cạnh máy làm câm, trong khi nhạc nền phát bằng thẻ `<audio>` thuộc nhóm `playback` nên vẫn kêu →
+    // đúng hiện tượng "chỉ nghe thấy nhạc nền, tiếng trận đấu im". Đặt `playback` cho tiếng trận đấu
+    // ngang hàng với nhạc nền.
+    const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+    if (session) session.type = 'playback';
     ctx = new AudioContext({ latencyHint: 'interactive' });
     master = ctx.createGain();
     master.gain.value = prefs.on ? prefs.volume : 0;
@@ -114,6 +120,38 @@ function preload(): void {
  */
 export function sharedAudioContext(): AudioContext | null {
   return ensureCtx();
+}
+
+/** Nguồn im lặng giữ phiên (xem `holdSession`) — chỉ tạo một lần cho cả phiên chơi. */
+let hold: AudioBufferSourceNode | null = null;
+
+/**
+ * Giữ phiên âm thanh của trang LUÔN thức bằng một nguồn IM LẶNG lặp vô hạn.
+ *
+ * WebKit cắt phiên âm thanh khi trang không còn phát ra tiếng: người chơi tắt nhạc nền là ngữ cảnh bị
+ * đẩy sang `interrupted` (trạng thái riêng của WebKit, khác `suspended`), mà `resume()` chỉ chạy được
+ * BÊN TRONG một thao tác người dùng — nên tiếng trận đấu câm hẳn dù công tắc vẫn bật, đúng như hiện
+ * tượng "chỉ kêu khi nhạc nền đang phát". Một `AudioBufferSourceNode` lặp mãi (buffer toàn số 0, gain 0)
+ * làm ngữ cảnh luôn có nguồn đang chạy — y hệt lúc nhạc nền phát — nhờ vậy tiếng trận đấu độc lập hẳn
+ * với nhạc nền. Buffer toàn số 0 nên tai không nghe thấy gì.
+ */
+function holdSession(c: AudioContext): void {
+  if (hold) return;
+  try {
+    const frames = Math.max(1, Math.round(c.sampleRate * 0.25)); // 0,25s: đủ dài để không phải lặp dày
+    const buf = c.createBuffer(1, frames, c.sampleRate); // buffer mới sinh ra đã toàn số 0
+    const g = c.createGain();
+    g.gain.value = 0;
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    src.connect(g);
+    g.connect(c.destination);
+    src.start();
+    hold = src;
+  } catch {
+    /* trình duyệt không cho tạo nguồn: bỏ qua, tiếng trận đấu vẫn phát theo đường cũ */
+  }
 }
 
 /** Phát một hiệu ứng. Bỏ qua khi: chưa mở khoá (chưa tương tác), đang tắt, âm lượng 0, hoặc vừa phát cùng clip. */
@@ -159,6 +197,7 @@ function sync() {
   if (!unlocked) return;
   const c = ensureCtx();
   if (!c) return;
+  holdSession(c);
   try {
     // Giữ ngữ cảnh LUÔN chạy để tiếng bắn ra tức thì ở đầu trận (không phải chờ đánh thức lại).
     // Gồm cả 'interrupted': tắt nhạc nền trên iOS có thể đẩy ngữ cảnh sang trạng thái này.
@@ -170,13 +209,18 @@ function sync() {
 
 /** Gọi 1 lần khi khởi động: chờ tương tác đầu tiên rồi mới cho phép phát. */
 export function initSfx() {
-  const unlock = () => {
+  /**
+   * Đánh thức âm thanh. Chạy ở MỖI thao tác người dùng (không gỡ listener sau lần chạm đầu như trước):
+   * iOS chỉ cho `resume()` chạy BÊN TRONG một thao tác người dùng, nên giữ đường hồi phục suốt phiên
+   * chơi — ngữ cảnh bị `interrupted` lúc nào thì cú chạm kế tiếp đánh thức lại ngay.
+   */
+  const wake = () => {
+    const first = !unlocked;
     unlocked = true;
-    window.removeEventListener('pointerdown', unlock);
-    window.removeEventListener('keydown', unlock);
     const c = ensureCtx();
     if (!c) return;
-    if (c.state === 'suspended') void c.resume().catch(() => {});
+    if (c.state !== 'running') void c.resume().catch(() => {});
+    if (!first) return;
     // Tự đánh thức ngữ cảnh mỗi khi hệ điều hành đổi trạng thái nó (ví dụ tắt nhạc nền trên iOS):
     // hiệu ứng trận đấu KHÔNG phụ thuộc vào việc nhạc nền đang bật hay tắt.
     c.addEventListener('statechange', () => {
@@ -185,8 +229,12 @@ export function initSfx() {
     preload();
     sync();
   };
-  window.addEventListener('pointerdown', unlock);
-  window.addEventListener('keydown', unlock);
+  window.addEventListener('pointerdown', wake);
+  window.addEventListener('keydown', wake);
+  // Quay lại tab sau khi bị ẩn (WebKit hay treo ngữ cảnh): thử đánh thức lại ngay.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') wake();
+  });
 }
 
 /** Trạng thái hiệu ứng âm thanh cho UI (reactive): bật/tắt + âm lượng 0–1. */
