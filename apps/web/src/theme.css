@@ -1123,6 +1123,12 @@ button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
   .pvp-cell-stat .row1, .pvp-cell-stat .row2 { display: contents; }
   .pvp-cell-stat .row2 { font-size: inherit; }
   .pvp-cell-stat .pvp-stat { justify-content: center; min-width: 0; gap: 1px; }
+  /* Ô chỉ số hẹp (1/3 bề ngang ô tướng) mà badge "(+x)" của Ngọc cộng thêm có thể xuất hiện ở nhiều
+     chỉ số cùng lúc — để nguyên một dòng thì badge đẩy tràn sang ô bên cạnh, làm vỡ lưới chỉ số. Cho
+     badge xuống dòng ngay TRONG ô chỉ số (cả 3 ô cùng hàng dùng chung chiều cao hàng lưới nên vẫn
+     thẳng hàng nhau), kèm `overflow: hidden` chặn hẳn phần tràn nếu giá trị còn quá dài. */
+  .pvp-cell-stat .pvp-stat { flex-wrap: wrap; overflow: hidden; }
+  .pvp-cell-stat .pvp-stat .pvp-pre { margin-left: 0; font-size: 7.5px; line-height: 1.15; }
   /* Ô tướng hẹp nên icon chỉ số thu nhỏ cho vừa ô, không bị cắt chữ. */
   .pvp-cell-stat svg { width: 8px; height: 8px; }
   /* HP thành THANH MÁU trọn hàng trên cùng (như sân đấu): thanh xanh + số máu canh giữa ngay dưới. */
