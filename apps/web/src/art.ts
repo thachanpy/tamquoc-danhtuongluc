@@ -86,7 +86,7 @@ export const rankIconUrl = (rank: number) => `/theme/rank/r${rank}.png?v=${RANK_
  * Thay artwork = thay file cùng tên. Thiếu ảnh thì thẻ tự rơi về placeholder (glyph phe + chữ viết tắt).
  */
 /** Tăng khi thay bộ chân dung để trình duyệt bỏ bản cũ (nginx cache /generals/ 7 ngày). */
-const PORTRAIT_VERSION = 8;
+const PORTRAIT_VERSION = 9;
 export const portraitUrl = (artKey: string) => `/generals/${encodeURIComponent(artKey)}.webp?v=${PORTRAIT_VERSION}`;
 
 /** Chữ viết tắt cho placeholder artwork (VD: "Gia Cát Lượng" -> "GCL"). Thay bằng ảnh thật theo artKey sau. */
