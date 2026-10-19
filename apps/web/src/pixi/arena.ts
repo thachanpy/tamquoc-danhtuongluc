@@ -61,6 +61,12 @@ const ARENA_SIZE: Record<ArenaLayout, { w: number; h: number }> = {
 /** Vòng chân dung trong ô (56px, khớp ô tướng ở trang chuẩn bị chiến). */
 const ART_R = 28;
 const ART_CY = 14 + ART_R;
+/** Phóng nhẹ chân dung trên sân đấu để MẶT tướng to & rõ hơn (1 = giữ nguyên tỉ lệ gốc). */
+const ART_ZOOM = 1.18;
+/** Tâm vùng cắt chân dung theo tỉ lệ CHIỀU CAO ảnh (0 = mép trên) — nhắm vào phần mặt.
+    Ảnh chân dung là 286×378 (dọc), mặt tướng nằm khoảng 37% chiều cao; khớp với CSS của trang
+    Đấu trường (`transform-origin: 50% 40%` cho ảnh canh mép trên — xem theme.css). */
+const ART_FACE = 0.37;
 /** Thanh máu + số máu + dòng chỉ số trong ô. */
 const HP_W = COL_W - 16;
 const HP_Y = 94;
@@ -402,10 +408,13 @@ class FloatFx {
         const tex = portraitTex.get(parts[i]!.portrait!);
         if (tex) {
           const sp = new Sprite(new Texture({ source: tex.source }));
-          const k = Math.max(portSize / tex.width, portSize / tex.height);
+          const k = Math.max(portSize / tex.width, portSize / tex.height) * ART_ZOOM;
           sp.width = tex.width * k;
           sp.height = tex.height * k;
-          sp.anchor.set(0.5);
+          // Neo vùng cắt vào phần mặt (thay vì dán giữa) để nhìn rõ người kết liễu; kẹp lại để
+          // ảnh luôn phủ kín vòng tròn, không lộ khoảng trống ở mép trên/dưới.
+          const half = portSize / 2 / sp.height;
+          sp.anchor.set(0.5, Math.min(Math.max(ART_FACE, half), 1 - half));
           sp.position.set(x0 + portSize / 2, 0);
           // Cắt tròn như chân dung trên ô tướng: ảnh gốc là chữ nhật, không mask sẽ tràn khỏi dòng chữ.
           const mask = new Graphics().circle(x0 + portSize / 2, 0, portSize / 2).fill({ color: 0xffffff });
@@ -711,10 +720,13 @@ class Tile {
   /** Gắn chân dung sau khi ảnh tải xong (thiếu ảnh thì giữ chữ viết tắt). */
   setPortrait(tex: Texture): void {
     const sp = new Sprite(new Texture({ source: tex.source }));
-    const k = Math.max((ART_R * 2) / tex.width, (ART_R * 2) / tex.height);
+    const k = Math.max((ART_R * 2) / tex.width, (ART_R * 2) / tex.height) * ART_ZOOM;
     sp.width = tex.width * k;
     sp.height = tex.height * k;
-    sp.position.set(-sp.width / 2, -ART_R);
+    // Đặt vùng cắt quanh phần mặt (thay vì dán mép trên) để mặt tướng rõ hơn; kẹp lại để
+    // ảnh luôn phủ kín khung tròn, không lộ khoảng trống ở mép. Ảnh lạ tỉ lệ vẫn an toàn.
+    const cy = Math.min(Math.max(sp.height * ART_FACE, ART_R), sp.height - ART_R);
+    sp.position.set(-sp.width / 2, -cy);
     // Cắt thành hình tròn: ảnh chân dung là chữ nhật, không mask sẽ tràn ra ngoài ô và đè lên tên tướng
     const mask = new Graphics().circle(0, 0, ART_R).fill({ color: 0xffffff });
     sp.mask = mask;

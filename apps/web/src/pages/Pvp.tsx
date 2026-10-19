@@ -620,7 +620,9 @@ function TeamBoard(props: {
       <Show when={ghost()}>
         {(g) => (
           <span class="pvp-drag-ghost" style={{ left: `${g().x}px`, top: `${g().y}px` }}>
-            <img src={portraitUrl(gen(g().unit.generalId).artKey)} alt="" />
+            <span class="pvp-drag-art">
+              <img src={portraitUrl(gen(g().unit.generalId).artKey)} alt="" />
+            </span>
             <b>{gen(g().unit.generalId).name}</b>
           </span>
         )}
