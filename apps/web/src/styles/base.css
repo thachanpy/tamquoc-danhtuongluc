@@ -1,0 +1,42 @@
+/* CSS nền cho bộ khung hybrid (Phaser canvas + DOM overlay).
+   CSS cổ phong chi tiết nằm ở `style.css` (bố cục) và `theme.css` (thẩm mỹ). */
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Sân khấu Phaser: phủ kín màn hình, nằm dưới lớp UI. Canvas trong suốt để lộ nền
+   thủy mặc của body; các Scene cần nền riêng (Đấu trường) tự vẽ nền của chúng. */
+#game-root {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+#game-root canvas {
+  display: block;
+  touch-action: none;
+}
+
+/* Lớp DOM overlay: là vùng cuộn chính của game (thanh trên + tab dính trên cùng). */
+#ui-root {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}

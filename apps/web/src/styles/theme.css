@@ -1,0 +1,1462 @@
+/* =========================================================================
+   Giao diện Tam Quốc: nền thủy mặc (núi, sương, mặt trời đỏ), sơn mài đỏ–đen,
+   viền vàng hoa văn 回 (hồi văn), con dấu son. Ảnh nền/viền ở public/theme/*.svg.
+   File này chỉ ghi đè thẩm mỹ, không đổi bố cục/chức năng của style.css.
+   ========================================================================= */
+:root {
+  --bg: #030712;
+  --panel: rgba(26, 16, 11, 0.84);
+  --panel-2: rgba(44, 29, 20, 0.92);
+  --line: #4d3824;
+  --text: #f1e4c6;
+  --muted: #a8957a;
+  --gold: #d4a84a;
+  --gold-2: #f3d58a;
+  --cinnabar: #b3261e;
+  --cinnabar-2: #d8432f;
+  --serif: 'Noto Serif', 'Times New Roman', Georgia, serif;
+  /* Chữ tiêu đề kiểu khắc bia/Trajan, có đủ dấu tiếng Việt */
+  --display: 'Playfair Display SC', 'Noto Serif', Georgia, serif;
+  /* Số, nút, nhãn level: chữ đứng đậm kiểu UI game */
+  --num: 'Oswald', 'Arial Narrow', system-ui, sans-serif;
+  /* Tên game & dòng kết quả mở thẻ: nét bút lông */
+  --script: 'Charm', 'Noto Serif', serif;
+  --brush: 'Ma Shan Zheng', 'STKaiti', 'KaiTi', 'Kaiti SC', serif;
+}
+
+body {
+  /* Nền chiến trường 4 phe (chủ dự án cung cấp): núi + thành lũy + cờ (SVG) trên các vầng sáng
+     Ngụy xanh dương / Thục xanh lá / Ngô đỏ / Quần vàng và nền tím-đen. */
+  background:
+    url(/theme/landscape.svg) center / cover no-repeat fixed,
+    radial-gradient(circle at 50% 50%, rgba(3, 7, 18, 0.2) 0%, rgba(3, 7, 18, 0.85) 100%) fixed,
+    linear-gradient(to bottom, rgba(3, 7, 18, 0.6) 0%, transparent 40%, transparent 70%, rgba(3, 7, 18, 0.95) 100%) fixed,
+    radial-gradient(circle at 18% 25%, rgba(30, 58, 138, 0.5) 0%, transparent 45%) fixed,
+    radial-gradient(circle at 22% 75%, rgba(20, 83, 45, 0.5) 0%, transparent 45%) fixed,
+    radial-gradient(circle at 82% 75%, rgba(153, 27, 27, 0.65) 0%, transparent 45%) fixed,
+    radial-gradient(circle at 80% 25%, rgba(180, 83, 9, 0.5) 0%, transparent 45%) fixed,
+    radial-gradient(ellipse at center, #1e1b4b 0%, #090d16 100%) fixed,
+    #030712;
+  font-family: var(--serif);
+}
+
+/* Tia lửa 4 màu phe bay lên (tạo trong main.ts), nằm sau nội dung, không bắt chuột */
+.sparks { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.spark { position: absolute; bottom: 0; border-radius: 50%; animation: tq-float-up 6s linear infinite; opacity: 0; }
+@keyframes tq-float-up {
+  0% { transform: translateY(0) scale(.5); opacity: 0; }
+  20% { opacity: .8; }
+  80% { opacity: .6; }
+  100% { transform: translateY(-110vh) scale(1.2); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .sparks { display: none; } }
+/* Đang mở sân đấu: ẩn tia lửa nền. Modal phủ gần kín nên gần như không thấy khác, mà đỡ 40 lớp
+   động phải composite mỗi khung — giúp sân đấu PixiJS mượt hơn trên mobile. */
+body.battle-open .sparks { display: none; }
+h1, h2, h3, .brand, .login h1 { font-family: var(--serif); letter-spacing: .3px; }
+
+/* ---------- tiêu đề panel: thoi son + gạch vàng ---------- */
+.panel > h2, .panel > h3, .coll-head h2 {
+  display: flex; align-items: center; gap: 10px; color: var(--gold-2);
+}
+.panel > h2::before, .panel > h3::before, .coll-head h2::before {
+  content: ''; width: 9px; height: 9px; transform: rotate(45deg); flex: none;
+  background: var(--cinnabar-2); box-shadow: 0 0 0 2px rgba(212, 168, 74, .55);
+}
+.panel > h2::after, .panel > h3::after {
+  content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(212, 168, 74, .55), transparent);
+}
+
+/* ---------- panel sơn mài + 4 góc hồi văn ---------- */
+.panel {
+  position: relative;
+  border: 1px solid rgba(212, 168, 74, .35);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(60, 22, 16, .35), rgba(0, 0, 0, 0) 120px),
+    var(--panel);
+  box-shadow: inset 0 0 0 4px rgba(18, 11, 7, .9), inset 0 0 0 5px rgba(212, 168, 74, .18), 0 10px 30px rgba(0, 0, 0, .45);
+  backdrop-filter: blur(2px);
+}
+.panel::before {
+  content: ''; position: absolute; inset: 3px; pointer-events: none;
+  background:
+    url(/theme/corner-tl.svg) left top / 26px no-repeat,
+    url(/theme/corner-tr.svg) right top / 26px no-repeat,
+    url(/theme/corner-bl.svg) left bottom / 26px no-repeat,
+    url(/theme/corner-br.svg) right bottom / 26px no-repeat;
+  z-index: -1;
+}
+.panel { isolation: isolate; }
+
+/* ---------- thanh trên: sơn mài đỏ + dải hồi văn ---------- */
+.top {
+  background: linear-gradient(180deg, rgba(74, 20, 14, .95), rgba(36, 12, 9, .95));
+  border-bottom: 0;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .5);
+}
+.top::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -10px; height: 10px; pointer-events: none;
+  background: url(/theme/fret.svg) left center / 20px 10px repeat-x, #1a0d09;
+  border-top: 1px solid rgba(212, 168, 74, .5); border-bottom: 1px solid rgba(212, 168, 74, .5);
+}
+.brand { display: flex; align-items: center; gap: 10px; font-size: 19px; color: var(--text); }
+.brand span, .login h1 span { color: var(--gold-2); }
+
+/* Con dấu son 三國 */
+.seal, .brand .seal, .login h1 .seal {
+  display: inline-grid; place-items: center; flex: none;
+  width: 38px; height: 38px; border-radius: 4px;
+  background: radial-gradient(circle at 30% 25%, var(--cinnabar-2), var(--cinnabar) 70%);
+  color: #fbe9c8 !important; font-family: var(--brush); font-size: 15px; line-height: 1; letter-spacing: 0;
+  writing-mode: vertical-rl; text-orientation: upright;
+  box-shadow: inset 0 0 0 2px rgba(251, 233, 200, .75), inset 0 0 0 4px var(--cinnabar), 0 2px 6px rgba(0, 0, 0, .5);
+  transform: rotate(-4deg);
+}
+.seal.big { width: 72px; height: 72px; font-size: 28px; border-radius: 6px; }
+
+.tb { background: rgba(20, 12, 8, .7); border-color: rgba(212, 168, 74, .3); }
+.tb.total, .tb.timer { border-color: rgba(212, 168, 74, .55); }
+
+/* ---------- tab: bảng hiệu treo ---------- */
+.tabs {
+  margin-top: 10px; border-bottom: 1px solid rgba(212, 168, 74, .25); gap: 6px; padding-top: 10px;
+  background: linear-gradient(180deg, rgba(10, 6, 4, .55), rgba(10, 6, 4, .25));
+}
+.tabs a {
+  font-family: var(--serif); font-weight: 700; letter-spacing: .5px; color: var(--muted);
+  border: 1px solid transparent; border-bottom: 0; border-radius: 6px 6px 0 0; padding: 9px 18px;
+}
+.tabs a:hover { color: var(--gold-2); }
+.tabs a.on {
+  color: #fbe9c8; border-color: rgba(212, 168, 74, .6);
+  background: linear-gradient(180deg, var(--cinnabar-2), #7a1610);
+  box-shadow: inset 0 1px 0 rgba(255, 220, 160, .35);
+}
+
+/* ---------- nút ---------- */
+.btn { border-radius: 6px; border-color: rgba(212, 168, 74, .35); background: rgba(44, 29, 20, .9); }
+.btn.primary {
+  background: linear-gradient(180deg, var(--cinnabar-2), #8e1c15);
+  color: #fbe9c8; border: 1px solid var(--gold); letter-spacing: .4px;
+  box-shadow: inset 0 1px 0 rgba(255, 220, 160, .35), 0 2px 8px rgba(0, 0, 0, .4);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .5);
+}
+.btn.primary:hover:not(:disabled) { filter: brightness(1.1); border-color: var(--gold-2); }
+.btn.big { letter-spacing: 1px; }
+
+/* ---------- ô nhập ---------- */
+.filters input, .filters select, .login input, .gift-form input, .combo input {
+  background: rgba(14, 9, 6, .75); border-color: rgba(212, 168, 74, .3); border-radius: 4px; color: var(--text);
+}
+.filters input:focus, .filters select:focus, .login input:focus, .combo input:focus {
+  outline: none; border-color: var(--gold); box-shadow: 0 0 0 2px rgba(212, 168, 74, .2);
+}
+
+/* ---------- vé: thẻ bài tre ---------- */
+.ticket {
+  border-radius: 6px; border-width: 1px; border-color: rgba(212, 168, 74, .25);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--tcol) 18%, transparent), transparent 70%),
+    rgba(22, 14, 10, .85);
+}
+.ticket.on { border-color: var(--tcol); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tcol) 35%, transparent), 0 0 18px color-mix(in srgb, var(--tcol) 30%, transparent); }
+.t-count { font-family: var(--serif); }
+
+/* ---------- nhóm tướng, khối phụ ---------- */
+.gen-group, .quick-box, .odds > div, .slot.empty, .lv-run { border-radius: 6px; }
+.gen-group { background: rgba(30, 20, 14, .8); border-color: rgba(212, 168, 74, .2); }
+.lv-run.ready { border-color: rgba(63, 191, 127, .7); }
+.gift-panel { border-radius: 6px; background: rgba(60, 22, 16, .35); }
+.combo-list { background: #1c120d; border-color: rgba(212, 168, 74, .35); }
+.chip { background: rgba(20, 12, 8, .7); }
+
+/* ---------- đăng nhập ---------- */
+.login { max-width: 420px; margin: 9vh auto; }
+.login .seal.big { margin: 0 auto 14px; display: grid; }
+.login h1 { font-size: 34px; text-shadow: 0 2px 12px rgba(0, 0, 0, .8); }
+.login > p { text-shadow: 0 1px 6px rgba(0, 0, 0, .9); color: #cbb994; }
+
+/* ---------- popup mở thẻ & toast ---------- */
+.stage-overlay { background: radial-gradient(60% 60% at 50% 45%, rgba(90, 24, 14, .55), rgba(6, 4, 3, .92)); }
+.stage-caption { font-family: var(--serif); text-shadow: 0 2px 8px rgba(0, 0, 0, .8); }
+.toast { border-radius: 6px; background: linear-gradient(180deg, #3a1610, #1f0e0a); }
+
+/* Placeholder phe dùng nét bút lông */
+.tq-art .glyph { font-family: var(--brush); }
+
+/* ---------- Typography kiểu game Tam Quốc ----------
+   Playfair Display SC: tiêu đề, tab (chữ khắc bia)
+   Oswald: nút, số vé, Lv., số liệu (đứng, đậm)
+   Charm: tên game, dòng kết quả mở thẻ (bút lông)
+   Ma Shan Zheng: chữ Hán (con dấu, biểu tượng phe)
+   Tất cả đều có đủ dấu tiếng Việt (trừ font chữ Hán). */
+h1, h2, h3, .tabs a, .t-name, .quick-head b, .gen-head b {
+  font-family: var(--display);
+  letter-spacing: .06em;
+}
+.panel > h2, .panel > h3, .coll-head h2 { font-weight: 900; text-shadow: 0 1px 0 #000, 0 0 10px rgba(212, 168, 74, .35); }
+.tabs a { font-weight: 700; font-size: 15px; }
+
+.btn, .t-count, .tb b, .tq-sub .lv, .copy, .run-label, .odds b, .rates td:last-child, .summary {
+  font-family: var(--num);
+}
+.btn { font-weight: 500; letter-spacing: .04em; }
+.btn.primary { font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.btn.big { font-size: 18px; }
+.t-count { font-weight: 700; font-size: 30px; line-height: 1.1; }
+.tb b { font-weight: 600; font-size: 14px; }
+.tq-sub .lv { font-weight: 700; letter-spacing: .03em; }
+
+/* Tên game mạ vàng, nét bút lông */
+.brand, .login h1 { font-family: var(--script); font-weight: 700; letter-spacing: .02em; }
+.brand { font-size: 24px; }
+.brand > span:not(.seal), .login h1 > span,
+.login h1 {
+  background: linear-gradient(180deg, #fff6d6 0%, #f3d58a 38%, #d19a35 62%, #8a5a17 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .85)) drop-shadow(0 0 10px rgba(212, 168, 74, .35));
+}
+.login h1 { font-size: clamp(36px, 8vw, 54px); line-height: 1.25; }
+.stage-caption { font-family: var(--script); font-weight: 700; font-size: clamp(20px, 2.4vw, 28px); }
+
+/* Biểu tượng phe & con dấu dùng nét bút lông chữ Hán */
+.seal, .tq-art .glyph { font-family: var(--brush); }
+
+/* ---------- Popup ngắm thẻ (Bộ sưu tập) ---------- */
+.pick.view { cursor: zoom-in; transition: transform .15s ease; }
+.pick.view:hover { transform: translateY(-3px); }
+.viewer-overlay {
+  /* Canh giữa bằng flex + margin:auto (không dùng place-items): khi nội dung cao hơn màn hình,
+     auto margin co về 0 nên mép trên vẫn với tới được, cuộn là thấy — tránh bị cắt mất phần đầu. */
+  position: fixed; inset: 0; z-index: 55; display: flex; align-items: flex-start; justify-content: center;
+  padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; cursor: zoom-out;
+  /* Nền tối trung tính (không dùng tông đỏ): làm toàn bộ nội dung phía sau chìm xuống. */
+  background: radial-gradient(70% 70% at 50% 40%, rgba(24, 22, 20, .82), rgba(3, 3, 4, .95));
+  backdrop-filter: blur(5px) saturate(.85);
+  animation: viewer-in .18s ease-out; outline: none;
+}
+/* Modal chi tiết mở trên một modal khác (Đấu trường: .pvp-modal z-index 60) */
+.viewer-overlay.above { z-index: 70; }
+.viewer-box { display: grid; justify-items: center; gap: 10px; perspective: 900px; margin: auto; }
+.viewer-tilt { transition: transform .12s ease-out; transform-style: preserve-3d; position: relative; }
+.viewer-tilt::after {
+  content: ''; position: absolute; inset: 6% 9% 8%; border-radius: 8px; pointer-events: none; z-index: 3;
+  background: radial-gradient(circle at var(--sx, 50%) var(--sy, 30%), rgba(255, 240, 200, .22), transparent 45%);
+  mix-blend-mode: screen;
+}
+/* Thẻ trong popup: thu nhỏ để chừa chỗ cho khối kỹ năng/chỉ số bên dưới (không tràn màn hình). */
+.tq-card.viewer-card { --cw: min(280px, 66vw, calc((100vh - 400px) * 0.85)); }
+/* Popup chi tiết đã in tên + cấp ngay BÊN DƯỚI thẻ (khối .viewer-info) => bỏ dòng tên/cấp in đè
+   trên ảnh tướng / trên viên Ngọc để tránh lặp thông tin. Huy hiệu phong cách cũng có dòng riêng
+   trong bảng chi tiết nên bỏ khỏi ảnh cho đỡ rối. */
+.tq-card.viewer-card .tq-meta, .tq-card.viewer-card .tq-role { display: none; }
+/* Ngọc là VIÊN TRÒN nên vệt sáng khi nghiêng thẻ cũng phải tròn (khung chữ nhật của thẻ tướng sẽ lộ góc). */
+.viewer-tilt:has(.gem-face)::after { inset: 0 0 auto; aspect-ratio: 1 / 1; border-radius: 50%; }
+.viewer-info { text-align: center; display: grid; gap: 4px; }
+/* Hàng đầu modal: ảnh đại diện (Đấu trường) đứng cạnh tên + phe/cấp. */
+.viewer-head { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.viewer-titles { display: grid; gap: 3px; }
+.viewer-art { position: relative; display: grid; place-items: center; flex: none; width: 68px; height: 68px;
+  border-radius: 12px; overflow: hidden; border: 2px solid rgba(255, 220, 150, .35);
+  background: linear-gradient(160deg, #2a2112, var(--panel-2)); }
+.viewer-art > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+.viewer-art-ini { font-family: var(--script); font-weight: 800; font-size: 24px; color: var(--gold-2); }
+/* line-height + padding: chữ gradient (background-clip: text) chỉ được tô trong hộp của phần tử, nên
+   đuôi chữ dài (g, ọ của "Ngọc") thò xuống dưới hộp sẽ bị mất màu; nới hộp để đuôi chữ vẫn có màu. */
+.viewer-name { font-family: var(--script); font-weight: 700; font-size: 26px; line-height: 1.35; padding-bottom: 3px;
+  background: linear-gradient(180deg, #fff6d6, #f3d58a 40%, #c98a2c); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .8)); }
+.viewer-sub { font-family: var(--num); font-size: 16px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.viewer-sub .fac.f-wei { color: var(--wei); } .viewer-sub .fac.f-shu { color: var(--shu); }
+.viewer-sub .fac.f-wu { color: var(--wu); } .viewer-sub .fac.f-qun { color: var(--qun); }
+.viewer-sub .dot { color: var(--muted); }
+/* Lực chiến (LC) — đứng ngang hàng với cấp độ trong chuỗi định danh tướng */
+.viewer-lc { color: var(--gold-2); font-weight: 700; }
+.viewer-hint { opacity: .7; }
+/* Kỹ năng + chỉ số chi tiết của tướng trong modal xem thẻ (mục 6.7). */
+.viewer-combat { width: min(560px, 88vw); margin-top: 6px; padding: 10px 12px; display: grid; gap: 7px; text-align: left;
+  border: 1px solid rgba(255, 220, 150, .22); border-radius: 10px; background: rgba(12, 9, 6, .72); }
+.cmb-row { display: grid; grid-template-columns: 84px 1fr; gap: 8px; align-items: baseline; }
+.cmb-key { font-size: 12px; font-weight: 700; color: var(--gold, #e6bf45); }
+.cmb-val { font-size: 12.5px; display: grid; gap: 1px; }
+.cmb-val b { font-size: 13px; }
+/* Phong cách ở khối chi tiết chiến đấu: icon định danh đứng cạnh nhãn chữ */
+.cmb-style { display: inline-flex; align-items: center; gap: 5px; }
+/* Mô tả kỹ năng: mỗi hiệu ứng một dòng, nhãn ngắn bên trái cho dễ đọc */
+.cmb-skillnote { display: grid; gap: 2px; margin-top: 3px; }
+.cmb-note-row { display: grid; grid-template-columns: max-content 1fr; gap: 8px; align-items: baseline; font-size: 11.5px; }
+.cmb-note-row em { font-style: normal; font-weight: 700; font-size: 10.5px; color: var(--gold, #e6bf45); opacity: .8; }
+.cmb-note-row span { color: var(--muted); }
+.cmb-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 5px; margin-top: 2px; }
+.cmb-stat { display: grid; gap: 1px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; background: rgba(10, 6, 4, .5); }
+.cmb-stat i { font-style: normal; font-size: 10.5px; color: var(--muted); }
+.cmb-stat b { font-family: var(--num); font-size: 14px; color: #ffe9a8; }
+.cmb-note { font-style: normal; font-size: 10px; color: var(--muted); }
+.cmb-foot { font-size: 11px; color: var(--muted); }
+@keyframes viewer-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+
+/* ---------- Nhạc nền & hiệu ứng trận đấu: nút bật/tắt + thanh âm lượng ---------- */
+.music-ctl { display: flex; align-items: center; gap: 6px; }
+.music-toggle, .sfx-toggle { min-width: 36px; padding: 4px 8px; line-height: 0; color: var(--gold-2); }
+.music-toggle .mute-slash, .sfx-toggle .mute-slash { display: none; }
+.music-toggle.muted, .sfx-toggle.muted { color: var(--muted); }
+.music-toggle.muted .mute-slash, .sfx-toggle.muted .mute-slash { display: inline; }
+.music-toggle:not(.muted) svg, .sfx-toggle:not(.muted) svg { filter: drop-shadow(0 0 4px rgba(212, 168, 74, .5)); }
+.music-vol, .sfx-vol { -webkit-appearance: none; appearance: none; width: 90px; height: 6px; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(90deg, var(--gold) var(--p, 40%), rgba(212, 168, 74, .2) var(--p, 40%)); }
+.music-vol:disabled, .sfx-vol:disabled { opacity: .4; cursor: default; }
+.music-vol::-webkit-slider-thumb, .sfx-vol::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--gold-2); border: 2px solid #5a3a12; }
+.music-vol::-moz-range-thumb, .sfx-vol::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--gold-2); border: 2px solid #5a3a12; }
+@media (max-width: 640px) { .music-vol, .sfx-vol { width: 64px; } }
+
+/* ---------- Logo game (icon Gia Cát Lượng) ở thanh trên & trang đăng nhập ---------- */
+.logo { width: 42px; height: 42px; flex: none; border-radius: 9px; display: block;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .6)) drop-shadow(0 0 6px rgba(212, 168, 74, .35)); }
+.logo.big { width: 112px; height: 112px; border-radius: 22px; margin: 0 auto 14px; }
+
+/* ===== Đăng ký chờ duyệt & trang Quản trị (mục 3.8) ===== */
+.notice { background: rgba(212,168,74,.12); border: 1px solid rgba(212,168,74,.55); border-radius: 10px; padding: 10px 12px; font-size: 14px; line-height: 1.5; color: var(--text); }
+.notice b { color: var(--gold-2); }
+.tabs .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 999px; background: var(--bad); color: #fff; font: 700 11px/18px var(--num, sans-serif); text-align: center; vertical-align: 1px; }
+.tabs .badge[hidden] { display: none; }
+.sub-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.sub-tabs .btn.on { border-color: var(--gold); color: var(--gold-2); background: rgba(212,168,74,.12); }
+/* Tab Tướng / Ngọc ở Bộ sưu tập & Nâng cấp: phóng to, đậm, đổ bóng để dễ thấy và dễ bấm (nhất là trên mobile). */
+.sub-tabs.lg { gap: 10px; margin-bottom: 16px; }
+.sub-tabs.lg .btn { padding: 10px 30px; font-size: 17px; font-weight: 700; border-radius: 12px; letter-spacing: .3px; }
+.sub-tabs.lg .btn.on { box-shadow: 0 0 14px rgba(212,168,74,.35); }
+.adm-summary { margin: 2px 0 8px; }
+.adm-msg:empty { display: none; }
+.adm-msg { margin-bottom: 8px; }
+.warn-text { color: #f0b04a; }
+.tag.warn-tag { border-color: #f0b04a; color: #f0b04a; }
+.adm-head, .adm-row { display: grid; grid-template-columns: minmax(150px, 1.3fr) 90px minmax(160px, 1.6fr) 120px minmax(190px, 1.5fr); gap: 10px; align-items: center; }
+.adm-head { padding: 0 10px 6px; border-bottom: 1px solid var(--line); }
+.adm-row { padding: 10px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.adm-row.pending { background: rgba(240,176,74,.06); }
+.adm-tix { display: flex; flex-wrap: wrap; gap: 4px; }
+.adm-tix .tb { font-size: 12px; padding: 1px 8px; }
+.adm-act { display: flex; flex-wrap: wrap; gap: 6px; }
+.grant-form { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; align-items: end; padding: 10px; border: 1px dashed var(--gold); border-radius: 10px; background: rgba(212,168,74,.06); }
+.grant-form label { display: grid; gap: 4px; font-size: 13px; }
+.grant-form select, .grant-form input { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.grant-form input { width: 110px; }
+.adm-grid { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 22px 30px; padding: 12px 14px; }
+.adm-grid .pick { width: 100%; }
+.adm-grid .owner { text-align: center; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1000px) {
+  .adm-head { display: none; }
+  .adm-row { grid-template-columns: 1fr auto; }
+  .adm-tix, .adm-cards, .adm-act { grid-column: 1 / -1; }
+}
+
+/* ===== Giftcode (mục 3.9) ===== */
+.gc-panel { margin-bottom: 16px; }
+.gc-form { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.gc-form input { flex: 1 1 220px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font: 600 18px/1 var(--num, sans-serif); letter-spacing: 2px; text-transform: uppercase; }
+.gc-msg > * { margin-top: 10px; }
+.gc-code { font-family: var(--num, monospace); letter-spacing: 1.5px; color: var(--gold-2); }
+.gc-item { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.gc-item .btn, .gc-item .tag { margin-left: auto; }
+.gc-item.done { opacity: .6; }
+.gc-redeemed { display: grid; gap: 4px; }
+.gc-levels { display: flex; flex-wrap: wrap; gap: 6px; }
+.gc-levels .chip { display: inline-flex; align-items: center; }
+.gc-best { display: flex; flex-wrap: wrap; gap: 14px 12px; padding: 8px 4px; }
+.gc-best .tq-card.small { --cw: 100px; }
+.gc-popup { position: fixed; inset: 0; z-index: 60; background: rgba(5,5,8,.78); display: grid; place-items: center; padding: 16px; }
+.gc-popup-box { max-width: 440px; width: 100%; }
+.gc-popup-box ul { padding-left: 18px; line-height: 1.9; }
+.gc-popup-box .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.gc-create { display: grid; gap: 10px; padding-bottom: 16px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.gc-create label { display: grid; gap: 4px; font-size: 13px; }
+.gc-create label.check { display: flex; align-items: center; gap: 8px; }
+.gc-create input:not([type=checkbox]) { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; max-width: 320px; }
+.gc-create .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.gc-rewards { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.gc-rewards input { width: 100%; }
+.gc-rewards .t-shu { color: var(--shu); } .gc-rewards .t-wei { color: var(--wei); } .gc-rewards .t-wu { color: var(--wu); } .gc-rewards .t-qun { color: var(--qun); }
+.gc-row { display: grid; grid-template-columns: minmax(150px, 1.2fr) minmax(160px, 1.6fr) 150px 90px 90px 60px; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+@media (max-width: 860px) { .gc-row { grid-template-columns: 1fr 1fr; } }
+
+.adm-setting { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); font-size: 14px; cursor: pointer; }
+.adm-setting input { width: 18px; height: 18px; accent-color: var(--gold); }
+.adm-setting-state { margin-left: auto; }
+
+/* ---------- thanh trên + tab luôn dính trên cùng ---------- */
+.app-head { position: sticky; top: 0; z-index: 30; background: rgba(6, 5, 8, .92); backdrop-filter: blur(8px); }
+.app-head .top { position: relative; top: auto; }
+.upgrade-layout .side { top: calc(var(--head-h, 120px) + 12px); }
+
+/* =====================================================================
+   Mobile web (≤ 640px): thanh trên gọn, tab cuộn ngang, chạm dễ, form full-width,
+   khung "Đã chọn" (Nâng cấp) và khung tặng thẻ (Bộ sưu tập) dính màn hình khi đang chọn.
+   ===================================================================== */
+button, .btn, .tabs a, .pick, .ticket, .chip { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.stage-box { width: min(1040px, 100%, calc((100dvh - 130px) * 520 / 460)); }
+.tq-card.viewer-card { --cw: min(280px, 66vw, calc((100dvh - 400px) * 0.85)); }
+.stage-actions { flex-wrap: wrap; }
+.brand-sep { font-style: normal; }
+.stage-extra { display: contents; } /* nút "Quay tiếp" xếp chung hàng/xuống dòng với nút Đóng */
+.toast { bottom: calc(20px + env(safe-area-inset-bottom)); }
+
+@media (max-width: 640px) {
+  /* Thanh trên: hàng 1 = logo + nhạc + đăng xuất, hàng 2 = vé cuộn ngang */
+  .top { gap: 6px 10px; padding: 6px 10px 8px; padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); }
+  .brand { font-size: 18px; gap: 8px; min-width: 0; white-space: nowrap; }
+  .brand > span:not(.seal), .brand-sep { display: none; } /* mobile: chỉ logo + "Tam Quốc" */
+  .logo { width: 32px; height: 32px; border-radius: 7px; }
+  .user { gap: 6px; }
+  .user > span { display: none; } /* tên tài khoản: ẩn trên mobile */
+  .music-vol, .sfx-vol { display: none; } /* điện thoại chỉnh âm lượng bằng phím cứng */
+  .tickets-bar { order: 3; flex: 1 0 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 5px; margin: 0 -10px; padding: 0 10px; }
+  .tickets-bar::-webkit-scrollbar, .tabs::-webkit-scrollbar { display: none; }
+  .tb { flex: none; padding: 2px 8px; font-size: 12px; }
+  .tb b { font-size: 13px; }
+  /* Tab cuộn ngang, không xuống dòng */
+  .tabs { margin-top: 10px; padding: 6px 8px 0; gap: 2px; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .tabs a { padding: 9px 12px; font-size: 14px; }
+
+  main { padding: 10px 8px calc(16px + env(safe-area-inset-bottom)); gap: 10px; }
+  .panel { padding: 12px 10px; }
+  h2 { font-size: 20px; } h3 { font-size: 17px; }
+
+  /* Ô nhập >= 16px để iOS không tự phóng to; form chiếm hết bề ngang */
+  input, select, textarea { font-size: 16px !important; }
+  .filters { gap: 6px; }
+  .filters input { flex: 1 1 100%; }
+  .filters select { flex: 1 1 calc(50% - 3px); min-width: 0; }
+  .btn { min-height: 40px; }
+  .btn.small { min-height: 34px; padding: 4px 10px; }
+
+  /* Quay thẻ: lưới vé 3 cột gọn; 2 nút quay chia đôi bề ngang */
+  .ticket-picker { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .ticket { padding: 8px 10px; border-radius: 10px; }
+  .t-count { font-size: 22px; }
+  .t-pool { font-size: 11px; }
+  .draw-row { gap: 8px; margin-top: 12px; }
+  .draw-btns { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .draw-btns .btn { width: 100%; }
+  .pool { max-height: 180px; }
+
+  /* Lưới thẻ: 3 cột trên điện thoại */
+  .grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px 8px; }
+  .tq-name { font-size: 11px; }
+  .tq-sub { font-size: 9.5px; }
+  .tq-meta { padding: 14px 5px 4px; }
+  .gen-group { padding: 8px; }
+  .gen-runs { gap: 8px; }
+  .run-cards { gap: 10px 8px; padding: 6px 4px 8px; }
+  .run-cards .pick { width: 86px; }
+  .run-cards .pick:has(.tq-card.tier-6, .tq-card.tier-7, .tq-card.tier-8, .tq-card.tier-9, .tq-card.tier-10) { margin: 0 10px; }
+
+  /* Nâng cấp: khi đang chọn thẻ, khung "Đã chọn" dính đáy màn hình (bottom sheet) */
+  .upgrade-layout .side.has-sel {
+    position: sticky; bottom: 0; z-index: 25; max-height: 62dvh; overflow-y: auto; overscroll-behavior: contain;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, .6); background: #24100c;
+  }
+  .upgrade-layout .side h3 { margin: 0 0 4px; }
+  .sel-slots { gap: 14px; padding: 8px 18px 6px; max-width: 300px; margin: 0 auto; }
+  .side.has-sel .sel-slots { max-width: 230px; gap: 18px; } /* bottom sheet: thẻ nhỏ để còn chỗ cho tỷ lệ + nút */
+  .side.has-sel .rates { font-size: 13px; }
+  .odds b { font-size: 18px !important; }
+  .quick-head .btn { width: 100%; }
+  .quick-confirm, .quick-confirm .rates { width: 100%; }
+
+  /* Bộ sưu tập: khung tặng thẻ dính dưới thanh trên khi bật chế độ tặng */
+  .gift-panel:not([hidden]) { position: sticky; top: var(--head-h, 0); z-index: 25; max-height: 60dvh; overflow-y: auto; box-shadow: 0 8px 24px rgba(0, 0, 0, .6); background: #2a120d; }
+  .gift-form { gap: 8px; }
+  .gift-form .combo, .combo input, .gift-form input { width: 100%; min-width: 0; }
+  .gift-form .combo { flex: 1 1 100%; }
+  .gift-form [data-send] { flex: 1; }
+
+  /* Lịch sử + giftcode + quản trị */
+  .h-row { font-size: 13px; gap: 6px; }
+  .gc-form { flex-wrap: wrap; }
+  .gc-form input { flex: 1 1 100%; min-width: 0; font-size: 18px !important; }
+  .gc-form .btn { flex: 1 1 100%; }
+  .gc-row { grid-template-columns: 1fr; }
+  .adm-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 16px 14px; padding: 8px; }
+  .sub-tabs { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  /* Mobile: hai tab chia đều bề ngang, không phải cuộn ngang. */
+  .sub-tabs.lg { overflow: visible; }
+  .sub-tabs.lg .btn { flex: 1 1 0; padding: 10px 12px; }
+
+  /* Popup mở thẻ / ngắm thẻ */
+  .stage-overlay { padding: 10px 6px calc(10px + env(safe-area-inset-bottom)); }
+  .stage-box { width: min(100%, calc((100dvh - 170px) * 520 / 460)); }
+  .stage-actions .btn, .stage-extra .btn { flex: 1 1 40%; }
+  .viewer-name { font-size: 22px; }
+  .viewer-art { width: 56px; height: 56px; }
+  .tq-card.viewer-card { --cw: min(176px, 44vw, calc((100dvh - 430px) * 0.85)); }
+  .viewer-combat { width: min(560px, 92vw); padding: 8px 10px; gap: 6px; }
+  .gc-popup-box .row .btn { flex: 1 1 100%; }
+}
+
+@media (max-width: 380px) {
+  .brand { font-size: 16px; }
+  .tabs a { padding: 8px 10px; font-size: 13px; }
+  .run-cards .pick { width: 78px; }
+  .grid, .adm-grid { grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); }
+}
+
+/* ---------- Bảng xếp hạng (mục 6.6) ---------- */
+.lb-panel { --lb-row: 60px; }
+.lb-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.lb-head h2 { margin: 0; }
+.lb-rule { margin: 6px 0 12px; }
+.lb-me-box { display: grid; gap: 6px; justify-items: start; margin-top: 12px; padding: 10px 12px; border: 1px solid rgba(212, 168, 74, .45); border-radius: 8px; background: rgba(212, 168, 74, .07); }
+.lb-me-box .lb-row { width: 100%; border: 0; padding: 0; height: auto; background: none; }
+/* Khung danh sách cao vừa đúng top 10; cuộn trong khung để xem tới top 100 */
+.lb-list { position: relative; max-height: calc(var(--lb-row) * 10 + 4px); overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 8px; background: rgba(10, 6, 4, .35); }
+.lb-row { position: relative; display: grid; grid-template-columns: 50px minmax(0, 1fr) auto minmax(64px, auto) 18px; align-items: center; gap: 10px; height: var(--lb-row); box-sizing: border-box; padding: 4px 12px; border-bottom: 1px solid rgba(212, 168, 74, .12); }
+.lb-row.clickable { cursor: pointer; }
+.lb-row.clickable:hover { background: rgba(212, 168, 74, .08); }
+.lb-row.clickable:focus-visible { outline: 2px solid var(--gold-2); outline-offset: -2px; }
+/* Biểu tượng khiêu chiến: chỉ hiện khi rê chuột (bấm cả hàng để mở Đấu trường) */
+.lb-fight { text-align: center; font-size: 16px; color: var(--gold-2); opacity: 0; transition: opacity .15s; }
+.lb-row.clickable:hover .lb-fight, .lb-row.clickable:focus-visible .lb-fight { opacity: .9; }
+.lb-row:last-child { border-bottom: 0; }
+.lb-row.me { background: rgba(192, 57, 43, .22); box-shadow: inset 3px 0 0 var(--gold-2); }
+.lb-row.podium { background: linear-gradient(90deg, rgba(212, 168, 74, .14), transparent 70%); }
+.lb-row.podium.me { background: linear-gradient(90deg, rgba(212, 168, 74, .22), rgba(192, 57, 43, .22)); }
+/* Huy hiệu hạng: ảnh trống /theme/rank/r1..r4.png (r4 cho hạng 4+); số hạng ghi giữa mặt huy hiệu */
+.lb-rank { position: relative; display: inline-grid; place-items: center; width: 44px; height: 44px; font: 700 15px/1 var(--num, sans-serif); color: var(--muted); }
+.lb-rank.none { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); }
+.lb-rank img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .6)); }
+.lb-rank.rk-1 { width: 50px; height: 50px; }
+.lb-rank.rk-1 img { filter: drop-shadow(0 0 6px rgba(255, 150, 40, .55)); }
+.lb-rank-no { position: absolute; left: 0; right: 0; top: 47%; transform: translateY(-50%); text-align: center; font: 700 18px/1 var(--num, sans-serif); letter-spacing: -.02em;
+  background: var(--rk-ink); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .85)) drop-shadow(0 0 2px rgba(0, 0, 0, .8)); }
+.lb-rank.rk-1 .lb-rank-no { top: 54%; font-size: 21px; --rk-ink: linear-gradient(#d7372a, #8c140c 60%, #5a0a05); filter: drop-shadow(0 1px 0 rgba(255, 236, 170, .9)) drop-shadow(0 0 1px rgba(90, 30, 0, .8)); }
+.lb-rank.rk-2 .lb-rank-no { top: 47%; --rk-ink: linear-gradient(#ffffff, #cfd8e3 50%, #8392a6); }
+.lb-rank.rk-3 .lb-rank-no { top: 46%; --rk-ink: linear-gradient(#ffe2c2, #d58a4e 50%, #8a4a22); }
+.lb-rank.rk-4 .lb-rank-no { top: 46%; --rk-ink: linear-gradient(#f4f1ec, #bdb6ad 55%, #7c746a); }
+.lb-rank-no.d3 { font-size: 14px; }
+.lb-rank-no.d4 { font-size: 11px; }
+.lb-name { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 700; line-height: 1.25; }
+/* Ảnh đại diện + tên hiển thị (mục 3.11); tên dài thì cắt bằng dấu ba chấm.
+   Cỡ ảnh lớn gần bằng huy hiệu hạng (44px) cho cân đối. */
+.lb-avatar { width: 44px; height: 44px; font-size: 16px; }
+.lb-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.podium.p1 .lb-name { color: var(--gold-2); font-size: 17px; }
+.lb-you { flex: none; font: 600 11px/1 var(--num, sans-serif); color: #fbe9c8; background: var(--cinnabar, #c0392b); border-radius: 999px; padding: 2px 7px; }
+.lb-power { font: 600 17px/1 var(--num, sans-serif); color: var(--gold-2); text-align: right; font-variant-numeric: tabular-nums; }
+.lb-divider { position: sticky; top: 0; z-index: 1; padding: 6px 12px; font-size: 12px; color: var(--muted); text-align: center; background: #1d0e0a; border-bottom: 1px solid rgba(212, 168, 74, .25); }
+.lb-foot { margin-top: 8px; }
+@media (max-width: 640px) {
+  .lb-panel { --lb-row: 70px; }
+  .lb-row { grid-template-columns: 42px minmax(0, 1fr) auto; grid-template-areas: 'rank name power'; row-gap: 2px; column-gap: 8px; padding: 6px 10px; }
+  .lb-rank { grid-area: rank; width: 40px; height: 40px; font-size: 14px; }
+  .lb-rank.rk-1 { width: 44px; height: 44px; }
+  .lb-rank.none { width: 30px; height: 30px; }
+  .lb-name { grid-area: name; }
+  .lb-avatar { width: 40px; height: 40px; font-size: 15px; }
+  .podium.p1 .lb-name { font-size: 16px; }
+  .lb-power { grid-area: power; font-size: 16px; }
+  .lb-list { max-height: min(calc(var(--lb-row) * 10 + 4px), 62dvh); }
+}
+
+/* ---------- Nhiệm vụ & thành tựu (mục 3.10) ---------- */
+.q-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.q-head h2 { margin: 0; }
+.q-panel .sub-tabs { margin: 12px 0 8px; }
+.q-dot { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--bad); color: #fff; font: 700 11px/18px var(--num, sans-serif); text-align: center; }
+.q-msg:not(:empty) { margin-bottom: 8px; }
+.q-reset { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; align-items: center; padding: 10px 12px; border: 1px solid rgba(212, 168, 74, .4); border-radius: 8px; background: rgba(212, 168, 74, .07); }
+.q-reset [data-cd] { font-family: var(--num, sans-serif); color: var(--gold-2); font-variant-numeric: tabular-nums; }
+.q-list { display: grid; gap: 6px; }
+.q-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 92px; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: rgba(10, 6, 4, .35); }
+.q-row.claimable { border-color: var(--ok); box-shadow: 0 0 0 1px rgba(63, 191, 127, .25) inset; }
+.q-row.claimed { opacity: .6; }
+.q-info { display: grid; gap: 2px; min-width: 0; }
+.q-bar { height: 6px; margin-top: 4px; border-radius: 999px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.q-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--gold), var(--gold-2)); }
+.q-row.claimable .q-bar i, .q-row.claimed .q-bar i { background: var(--ok); }
+.q-reward { white-space: nowrap; }
+.q-act { text-align: right; }
+.q-act .btn { width: 100%; }
+.q-done { color: var(--ok); font-size: 13px; white-space: nowrap; }
+.q-factions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.q-faction { border-left: 3px solid var(--fc2, var(--line)); padding-left: 10px; }
+.q-faction.f-wei { --fc2: var(--wei); } .q-faction.f-shu { --fc2: var(--shu); } .q-faction.f-wu { --fc2: var(--wu); } .q-faction.f-qun { --fc2: var(--qun); }
+.q-ftitle { font-weight: 700; margin-bottom: 6px; color: var(--fc2); }
+.q-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.q-day { display: grid; gap: 2px; justify-items: center; padding: 8px 4px; border: 1px solid var(--line); border-radius: 8px; background: rgba(10, 6, 4, .35); color: var(--text); font: inherit; }
+.q-day b { font: 600 18px/1.1 var(--num, sans-serif); color: var(--gold-2); }
+.q-dnum, .q-dlabel { font-size: 11px; color: var(--muted); }
+.q-day.claimable { cursor: pointer; border-color: var(--ok); background: rgba(63, 191, 127, .1); }
+.q-day.claimable .q-dlabel { color: var(--ok); font-weight: 700; }
+.q-day.claimed { border-color: rgba(63, 191, 127, .4); }
+.q-day.claimed .q-dlabel { color: var(--ok); }
+.q-day.missed { opacity: .4; }
+.q-day.future { opacity: .7; border-style: dashed; }
+.q-day.today { box-shadow: 0 0 0 2px var(--gold-2) inset; }
+.q-achs { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.q-ach { display: grid; gap: 6px; align-content: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: rgba(10, 6, 4, .35); }
+.q-ach.has-claim { border-color: var(--ok); }
+.q-ach-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.q-val { color: var(--gold-2); font-family: var(--num, sans-serif); }
+.q-next { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.q-ms summary { cursor: pointer; }
+.q-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.q-chip { font: 12px/1.6 var(--num, sans-serif); padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+.q-chip.claimable { border-color: var(--ok); color: var(--ok); }
+.q-chip.claimed { border-color: rgba(63, 191, 127, .35); color: var(--ok); opacity: .6; text-decoration: line-through; }
+@media (max-width: 760px) { .q-factions { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .q-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'info info' 'reward act'; gap: 6px 10px; padding: 8px 10px; }
+  .q-info { grid-area: info; } .q-reward { grid-area: reward; justify-self: start; } .q-act { grid-area: act; min-width: 92px; }
+  .q-cal { gap: 4px; }
+  .q-day { padding: 6px 2px; }
+  .q-day b { font-size: 15px; }
+  .q-dnum { font-size: 10px; }
+  .q-head .btn { width: 100%; }
+}
+
+/* Trần vé hồi (500/loại): loại đã đầy có viền vàng sáng; khi cả 5 loại đầy thì đồng hồ thành "Vé hồi đã đầy" */
+.tb.full { box-shadow: 0 0 0 1px var(--gold-2) inset, 0 0 6px rgba(212, 168, 74, .45); }
+.tb.full b { color: var(--gold-2); }
+.tb.full::after { content: 'MAX'; margin-left: 4px; font: 700 9px/1 var(--num, sans-serif); letter-spacing: .5px; color: #1a0d09; background: var(--gold-2); border-radius: 3px; padding: 1px 3px; vertical-align: 2px; }
+.tb.timer.full::after { content: none; }
+/* Số vé dạng "510 / 500": phần "/ trần" nhỏ, mờ */
+.tb-cap { margin-left: 1px; font: 500 11px/1 var(--num, sans-serif); color: var(--muted); }
+.tb.full .tb-cap { color: var(--gold-2); opacity: .85; }
+.t-cap { font-size: 13px; font-weight: 500; color: var(--muted); }
+.t-count.full { color: var(--gold-2); }
+.t-count.full .t-cap { color: var(--gold-2); opacity: .8; }
+
+/* Nút "Mở tất cả" ở trang Quay thẻ: mobile chiếm cả hàng dưới 2 nút quay */
+@media (max-width: 640px) { .draw-btns .open-all { grid-column: 1 / -1; } }
+
+/* ---------- Đấu trường PvP (mục 6.7 — PVP.md) ---------- */
+.pvp-panel { display: grid; gap: 14px; }
+.pvp-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.pvp-head h2 { margin: 0; }
+.pvp-record { display: flex; gap: 8px; flex-wrap: wrap; }
+.pvp-record .rec { font: 600 13px/1 var(--num, sans-serif); padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, .04); }
+.pvp-record .rec.win { color: var(--ok); border-color: rgba(63, 191, 127, .5); }
+.pvp-record .rec.loss { color: var(--bad); border-color: rgba(239, 91, 91, .5); }
+.pvp-record .rec.draw { color: var(--muted); }
+.pvp-rule { margin: 0; }
+
+/* ---------- Nút "Quy tắc đội hình": gom quy tắc Vị trí · Phong cách · Cùng phe vào popup cho gọn ---------- */
+.pvp-rulebar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.pvp-rules { position: relative; }
+.pvp-rules-btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+  border: 1px solid rgba(212, 168, 74, .35); border-radius: 999px;
+  background: rgba(212, 168, 74, .08); color: var(--gold-2);
+  font: 600 11.5px/1.5 var(--num, sans-serif); cursor: pointer;
+}
+.pvp-rules-btn:hover, .pvp-rules-btn.on { background: rgba(212, 168, 74, .2); border-color: var(--gold); }
+.pvp-rules-pop {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30;
+  width: min(390px, 88vw); padding: 10px 12px;
+  border: 1px solid rgba(212, 168, 74, .35); border-radius: 6px;
+  background: var(--panel-2); box-shadow: 0 12px 30px rgba(0, 0, 0, .55);
+}
+/* Trong modal khiêu chiến (nút nằm sát đáy) thì bung ngược lên cho khỏi bị cắt */
+.pvp-rules.up .pvp-rules-pop { top: auto; bottom: calc(100% + 6px); }
+.pvp-rules-sec { margin: 0; color: var(--gold-2); font: 600 12px/1.6 var(--num, sans-serif); }
+.pvp-rules-sec:not(:first-child) { margin-top: 8px; }
+.pvp-rules-list { margin: 2px 0 0; padding-left: 17px; font-size: 12.5px; line-height: 1.55; }
+.pvp-rules-list li + li { margin-top: 2px; }
+.pvp-rules-list svg { vertical-align: -1px; }
+.pvp-rules-note { margin: 8px 0 0; }
+
+/* Mỗi khối (đội mình / đối thủ / lịch sử) ngăn cách bằng đường kẻ vàng mảnh */
+.pvp-myteam, .pvp-opp, .pvp-hist { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid rgba(212, 168, 74, .18); }
+.pvp-myteam h3, .pvp-opp h3, .pvp-hist h3 { margin: 0; }
+.pvp-team-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.pvp-power { font: 600 15px/1 var(--num, sans-serif); color: var(--gold-2); }
+.pvp-team-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* Bàn đội hình 3×2: cột "Hàng sau | Hàng trước"; đội địch hiển thị lật cột cho đối xứng.
+   Hai cột dùng `subgrid` cho HÀNG nên ô vị trí 1-2-3 của hàng trước luôn thẳng hàng với ô 4-5-6
+   của hàng sau, dù tên tướng / số chỉ số dài ngắn khác nhau (không bị lệch hàng). */
+.pvp-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto repeat(3, auto); gap: 6px 10px; }
+.pvp-col { display: grid; grid-template-rows: subgrid; grid-row: 1 / -1; gap: 6px; }
+/* DOM của bàn đội mình xếp hàng trước rồi hàng sau (để màn hẹp dàn 3×2 đúng thứ tự 1-2-3 / 4-5-6).
+   Màn rộng vẫn giữ nguyên cột "Hàng sau | Hàng trước" như cũ bằng cách đẩy cột hàng trước sang phải;
+   bàn địch không đổi (hàng trước bên trái) nên hai bàn vẫn lật ngược nhau cho đối xứng. */
+.pvp-board:not(.foe) .pvp-col-front { order: 2; }
+/* Chuẩn bị khiêu chiến: đội mình và đội địch là HAI bàn riêng nên `subgrid` chỉ khớp hàng trong từng
+   bàn — ô hàng 1 của bên này vẫn có thể cao/thấp hơn bên kia (tên và chip xuống dòng khác nhau).
+   Cho bàn giãn kín chiều cao khung đấu (hai khung luôn cao bằng nhau) và chia đều 3 hàng tướng,
+   nhờ vậy hàng 1-2-3 của hai bên thẳng hàng ngang và các ô đều nhau. */
+.pvp-duel .pvp-board { grid-template-rows: auto repeat(3, minmax(0, 1fr)); flex: 1 1 auto; }
+/* Ô tướng hai bên tuy cao bằng nhau nhưng các hàng BÊN TRONG ô vẫn lệch: tên/chip xuống dòng khác
+   nhau, số chỉ số dài ngắn khác nhau => avatar và các dòng chỉ số của ta với địch không ngang hàng.
+   Cố định hàng avatar (60px) và neo khối chỉ số xuống ĐÁY ô với hai hàng chỉ số cao bằng nhau
+   (tối thiểu 30px/28px) => avatar, hàng chỉ số 1 và hàng chỉ số 2 của hai bên luôn ngang hàng.
+   Chỉ áp dụng khi 2 đội nằm cạnh nhau (màn hẹp xếp dọc thì không cần đối chiếu hàng). */
+@media (min-width: 641px) {
+  .pvp-duel .pvp-cell { grid-template-rows: 60px auto auto 1fr; }
+  .pvp-duel .pvp-cell-stat:not(.loading) { display: grid; grid-template-rows: minmax(30px, auto) minmax(28px, auto); align-self: end; width: 100%; }
+  .pvp-duel .pvp-cell-stat .row1, .pvp-duel .pvp-cell-stat .row2 { align-content: center; }
+}
+.pvp-col-title { font: 600 12px/1 var(--num, sans-serif); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); text-align: center; }
+.pvp-cell { position: relative; display: grid; grid-template-rows: 1fr auto auto auto; gap: 2px; align-items: center; justify-items: center; min-height: 104px; padding: 8px 6px 6px; border: 1px solid var(--line); border-radius: 10px; background: rgba(10, 6, 4, .4); color: var(--text); font: inherit; cursor: pointer; overflow: hidden; transition: border-color .15s, background .15s; }
+.pvp-cell.empty { border-style: dashed; background: rgba(10, 6, 4, .22); color: var(--muted); }
+.pvp-cell.empty .pvp-empty { font-size: 22px; opacity: .55; }
+.pvp-cell.static { cursor: default; }
+.pvp-cell:not(.static):hover { border-color: var(--gold); background: rgba(212, 168, 74, .08); }
+.pvp-cell:focus-visible { outline: 2px solid var(--gold-2); outline-offset: -2px; }
+.pvp-board.foe .pvp-cell { border-color: rgba(217, 83, 79, .35); }
+.pvp-slot { position: absolute; top: 3px; left: 5px; font: 700 10px/1 var(--num, sans-serif); color: var(--muted); }
+.pvp-art { position: relative; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; overflow: hidden; background: linear-gradient(160deg, #2a2112, var(--panel-2)); border: 1px solid var(--line); }
+/* Ảnh đại diện trên bàn đội hình là nút mở chi tiết tướng (kỹ năng + chỉ số) */
+.pvp-art[role='button'] { cursor: zoom-in; transition: border-color .15s, box-shadow .15s, transform .15s; }
+.pvp-art[role='button']:hover { border-color: var(--gold-2); box-shadow: 0 0 0 2px rgba(243, 213, 138, .45); transform: scale(1.05); }
+.pvp-art[role='button']:focus-visible { outline: 2px solid var(--gold-2); outline-offset: 2px; }
+.pvp-art > img { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+.pvp-ini { font-weight: 800; color: var(--gold-2); }
+.pvp-cell-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 700; }
+/* Hàng chip cấp độ + phe + phong cách trên ô tướng (ô hẹp thì tự xuống dòng, không tràn ra ngoài) */
+.pvp-cell-tags { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px; max-width: 100%; }
+/* Cấp độ · phe · phong cách · LC: CÙNG chiều cao để các chip trông đều nhau (cấp và phe cùng bề rộng,
+   phong cách chỉ ôm vừa icon nên không kéo dài) */
+.pvp-cell-lv, .pvp-cell-faction, .pvp-cell-style, .pvp-cell-lc { display: inline-flex; align-items: center; justify-content: center; height: 20px; box-sizing: border-box; border: 1px solid currentColor; border-radius: 999px; font: 600 10.5px/1 var(--num, sans-serif); opacity: .92; }
+.pvp-cell-lv, .pvp-cell-faction { min-width: 46px; padding: 0 8px; }
+.pvp-cell-lv { border-color: var(--line); background: rgba(255, 255, 255, .04); }
+/* Chip phong cách chỉ có icon: cùng kiểu với chip ở bảng chọn tướng */
+.pvp-cell-style { padding: 0 5px; }
+/* Chip lực chiến: tông vàng, cùng chiều cao với các chip định danh khác */
+.pvp-cell-lc { padding: 0 8px; color: var(--gold-2); }
+
+/* Chỉ số cơ bản của tướng hiện dưới mỗi ô (bước chuẩn bị khiêu chiến) */
+.pvp-cell-stat { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 6px; max-width: 100%; font: 600 10.5px/1.35 var(--num, sans-serif); color: var(--muted); }
+.pvp-cell-stat.loading { opacity: .55; }
+.pvp-cell-num { color: var(--text); }
+/* Huy hiệu Chỉ số Nền Ra Trận: phần (+X) cộng thêm so với chỉ số gốc, tooltip hiện chi tiết % nguồn cộng.
+   Tông BÍCH NGỌC #6FBE73 — đúng nhóm "buff có lợi" của quy chuẩn màu Combat (mục 6.7), dùng chung cho
+   cả bảng đội hình lẫn modal Chuẩn bị khiêu chiến vì cả hai đều đang cộng thêm chỉ số. */
+.pvp-cell-num .pvp-pre { margin-left: 2px; font-style: normal; font-weight: 700; color: #6FBE73; cursor: help; }
+/* Giá trị một chỉ số (xem `StatVal`): màn rộng bày số nền rồi badge "(+x)". `.pvp-base` dùng
+   `display: contents` để số và badge vẫn là hai phần tử con trực tiếp của `.pvp-stat` — bố cục y hệt
+   như khi không bọc. Bản "cộng thẳng" của màn hẹp (`.pvp-total`) ẩn đi. */
+.pvp-stat .pvp-base { display: contents; }
+.pvp-stat .pvp-total { display: none; }
+/* Hai hàng chỉ số trong ô, mỗi hàng đúng 5 chỉ số để luôn ngang hàng nhau: hàng 1 (sát thương ·
+   HP · phòng thủ · xuyên giáp · giảm ST nhận) và hàng 2 (chí mạng · ST chí mạng · chính xác ·
+   né tránh · hút máu). Mỗi chỉ số là một khối riêng nên ô hẹp thì tự xuống dòng,
+   không tràn/cắt mất chữ và không làm ô cao thấp khác nhau giữa hàng trước và hàng sau. */
+.pvp-cell-stat .row1, .pvp-cell-stat .row2 { display: flex; flex-wrap: wrap; justify-content: center; gap: 1px 7px; white-space: normal; }
+.pvp-cell-stat .row1 { flex: 1 1 auto; min-width: 0; }
+.pvp-cell-stat .row2 { flex: 1 1 100%; font-size: 10px; }
+.pvp-cell-stat .pvp-stat { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+
+/* Kéo-thả đổi vị trí tướng trong đội (chuột + cảm ứng) */
+.pvp-cell { touch-action: none; }
+.pvp-cell.dragging { opacity: .45; border-style: dashed; }
+.pvp-cell.drop-target { border-color: var(--gold); background: rgba(212, 168, 74, .16); box-shadow: 0 0 0 2px rgba(212, 168, 74, .5) inset; }
+.pvp-board.dragging .pvp-cell { cursor: grabbing; }
+.pvp-drag-ghost { position: fixed; z-index: 80; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 10px; border: 1px solid var(--gold); border-radius: 10px; background: rgba(13, 8, 5, .95); pointer-events: none; box-shadow: 0 8px 24px rgba(0, 0, 0, .5); }
+.pvp-drag-art { position: relative; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: linear-gradient(160deg, #2a2112, var(--panel-2)); }
+.pvp-drag-art > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+.pvp-drag-ghost > b { font-size: 12px; }
+
+/* Khối đối thủ: danh sách gợi ý (người vừa đánh gần nhất trước, bù thêm từ bảng xếp hạng);
+   chi tiết 2 đội nằm trong modal chuẩn bị khiêu chiến. */
+.pvp-opp-list { display: grid; gap: 6px; }
+.pvp-opp-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(10, 6, 4, .3); }
+/* Dòng đang mở trong modal chuẩn bị khiêu chiến (đối thủ đang chọn) */
+.pvp-opp-row.current { border-color: var(--gold); background: rgba(212, 168, 74, .1); }
+.pvp-opp-row-info { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pvp-opp-row-info b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Nút không được co theo bề ngang: chữ dài ("Chuẩn bị khiêu chiến") xuống dòng sẽ làm vỡ nút.
+   Tên đối thủ dài đã có ellipsis nên luôn là bên nhường chỗ. */
+.pvp-opp-row .btn { flex: none; white-space: nowrap; }
+/* Modal rộng hơn để ô tướng đủ chỗ cho hàng chỉ số (chí mạng · ST chí mạng · chính xác · né tránh).
+   Cùng cỡ với modal phát lại trận (`.rp-box`) để hai màn hình chiến đấu trông đồng nhất. */
+.pvp-challenge { display: flex; flex-direction: column; gap: 12px; width: min(1240px, 100%); max-height: min(920px, 92dvh); overflow-y: auto; }
+.pvp-challenge-hint { margin: 0; }
+/* Modal chuẩn bị khiêu chiến: hai khối đội (mình · địch) cao BẰNG NHAU (lưới stretch) và mọi hàng
+   trong ô tướng (avatar · cấp · phe · phong cách · LC · chỉ số) thẳng hàng nhau. Cách làm: khối đội là
+   flex dọc, bàn đội hình giãn kín phần chiều cao còn lại và chia đều 3 hàng tướng (rule ở .pvp-board)
+   → hàng 1-2-3 của hai bên luôn ngang nhau; dải Ngọc vẫn neo đáy khối đội. */
+.pvp-duel { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: stretch; }
+.pvp-duel-side { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid rgba(212, 168, 74, .18); border-radius: 12px; background: rgba(10, 6, 4, .3); }
+.pvp-duel-side.foe { border-color: rgba(217, 83, 79, .28); }
+/* Phần tử cuối khối đội (dải Ngọc) neo đáy; khoảng trống dư (nếu có) nằm ở trên nó. */
+.pvp-duel-side > :last-child { margin-top: auto; }
+/* Phần đầu khối đội cao cố định để hai bên chia đều khoảng trống cho bàn đội như nhau
+   (tên đội địch có thêm hậu tố "· đội gợi ý" nên phải cắt bằng ellipsis, không được xuống dòng). */
+.pvp-duel-head { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 48px; }
+.pvp-duel-head > div { min-width: 0; }
+.pvp-duel-head b, .pvp-duel-head .muted { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pvp-duel-vs { align-self: center; font: 800 15px/1 var(--num, sans-serif); letter-spacing: .06em; color: var(--gold-2); }
+.pvp-opp-avatar { width: 48px; height: 48px; font-size: 18px; }
+
+/* Lịch sử trận đấu */
+.pvp-hist-list { display: grid; gap: 6px; max-height: 320px; overflow-y: auto; }
+.pvp-hist-row { display: grid; grid-template-columns: 62px 72px 32px minmax(0, 1fr) auto auto; align-items: center; gap: 10px; width: 100%; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: rgba(10, 6, 4, .35); color: var(--text); font: inherit; cursor: pointer; text-align: left; }
+.pvp-hist-row:hover { border-color: var(--gold); background: rgba(212, 168, 74, .08); }
+.pvp-hist-row:focus-visible { outline: 2px solid var(--gold-2); outline-offset: -2px; }
+.hist-res { font: 800 15px/1 var(--num, sans-serif); letter-spacing: .02em; text-align: center; }
+.hist-res.win { color: #7fe0a8; text-shadow: 0 0 10px rgba(63, 191, 127, .5); }
+.hist-res.loss { color: #ff8a86; text-shadow: 0 0 10px rgba(217, 83, 79, .5); }
+.hist-res.draw { color: var(--gold-2); text-shadow: 0 0 10px rgba(255, 215, 94, .45); }
+.hist-role { font-size: 12px; color: var(--muted); }
+.hist-avatar { width: 32px; height: 32px; font-size: 13px; }
+.hist-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.hist-power, .hist-time { white-space: nowrap; }
+
+/* Modal chung (chọn tướng + phát lại trận) */
+.pvp-modal { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(3, 7, 18, .8); backdrop-filter: blur(3px); overflow-y: auto; }
+
+/* Bảng chọn tướng cho một vị trí */
+.pvp-picker { display: flex; flex-direction: column; gap: 10px; width: min(680px, 100%); max-height: 86dvh; }
+.pvp-picker-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pvp-picker-head h3 { margin: 0; font-size: 15px; }
+.pvp-picker-tools { display: flex; gap: 10px; flex-wrap: wrap; }
+.pvp-picker-tools input { flex: 1 1 200px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.pvp-picker-list { display: grid; gap: 4px; overflow-y: auto; max-height: 52dvh; }
+/* Bộ lọc phe / phong cách chiến đấu ở bảng chọn tướng */
+.pvp-filters { display: grid; gap: 6px; }
+.pvp-filter-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.pvp-chip { padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255, 255, 255, .04); color: var(--muted); font: 600 11px/1.6 var(--num, sans-serif); cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
+.pvp-chip:hover { color: var(--text); border-color: var(--gold); }
+.pvp-chip.on { color: #0d0805; background: var(--chip, var(--gold)); border-color: var(--chip, var(--gold)); font-weight: 800; }
+.pvp-chip.attack { --chip: #ef6f6a; }
+.pvp-chip.defense { --chip: #5aa2ff; }
+.pvp-chip.support { --chip: #3fbf7f; }
+.pvp-pick-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(10, 6, 4, .35); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, background .15s; }
+.pvp-pick-row:hover { border-color: var(--gold); background: rgba(212, 168, 74, .08); }
+.pvp-pick-row:focus-visible { outline: 2px solid var(--gold-2); outline-offset: -2px; }
+.pvp-pick-row.taken { border-color: rgba(63, 191, 127, .55); background: rgba(63, 191, 127, .07); }
+/* Dòng chọn Ngọc: loại chưa sở hữu hoặc đã đủ số loại thì mờ đi và không bấm được. */
+.pvp-pick-row.locked { opacity: .45; cursor: not-allowed; }
+.pvp-pick-row.locked:hover { border-color: var(--line); background: rgba(10, 6, 4, .35); }
+/* Ảnh Ngọc trong dòng chọn Ngọc (bản tròn của `.pvp-pick-art` bên tướng). */
+.gem-pick-art { flex: 0 0 auto; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; border: 1px solid var(--line); background: rgba(10, 6, 4, .6); }
+.gem-pick-art > img { width: 100%; height: 100%; object-fit: cover; }
+/* Cụm ảnh + cấp độ: cấp đứng ngay cạnh ảnh cho dễ nhìn */
+.pvp-pick-id { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+.pvp-pick-art { position: relative; flex: 0 0 auto; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: linear-gradient(160deg, #2a2112, var(--panel-2)); border: 1px solid var(--line); }
+/* Ảnh đại diện là nút mở chi tiết tướng */
+.pvp-pick-art[role='button'] { cursor: zoom-in; transition: border-color .15s, box-shadow .15s, transform .15s; }
+.pvp-pick-art[role='button']:hover { border-color: var(--gold-2); box-shadow: 0 0 0 2px rgba(243, 213, 138, .45); transform: scale(1.05); }
+.pvp-pick-art[role='button']:focus-visible { outline: 2px solid var(--gold-2); outline-offset: 2px; }
+.pvp-pick-art > img { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+.pvp-pick-meta { flex: 1 1 auto; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pvp-pick-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.pvp-pick-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.pvp-pick-faction { padding: 0 7px; border: 1px solid currentColor; border-radius: 999px; font: 600 10.5px/1.7 var(--num, sans-serif); opacity: .9; }
+/* Chip lực chiến (LC) ở dòng chọn tướng — cùng chuỗi định danh với cấp · phe · phong cách */
+.pvp-pick-lc { padding: 0 7px; border: 1px solid currentColor; border-radius: 999px; font: 600 10.5px/1.7 var(--num, sans-serif); opacity: .9; color: var(--gold-2); }
+.pvp-pick-style { display: inline-flex; align-items: center; padding: 1px 5px; border: 1px solid currentColor; border-radius: 999px; line-height: 0; opacity: .9; }
+.pvp-pick-style.attack { color: #ef6f6a; }
+.pvp-pick-style.defense { color: #5aa2ff; }
+.pvp-pick-style.support { color: #3fbf7f; }
+.pvp-pick-stat-num { font: 600 10.5px/1.7 var(--num, sans-serif); color: #ffe8a8; opacity: .95; }
+.pvp-pick-inteam { padding: 0 7px; border: 1px solid rgba(63, 191, 127, .6); border-radius: 999px; font: 600 10.5px/1.7 var(--num, sans-serif); color: var(--ok); }
+.lv-chip { flex: 0 0 auto; padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255, 255, 255, .04); font: 600 12px/1.6 var(--num, sans-serif); cursor: pointer; }
+.lv-chip:hover { background: rgba(255, 255, 255, .12); }
+
+/* Modal chiến đấu (phát lại trận): rộng rãi nhưng không choán hết màn hình */
+.pvp-modal.rp-modal { padding: 14px; }
+/* Phát lại trận đấu: 4 cột (A-Sau | A-Trước | B-Trước | B-Sau) — cùng cỡ với modal Chuẩn bị khiêu chiến */
+.rp-box { display: flex; flex-direction: column; gap: 10px; width: min(1240px, 100%); height: min(920px, 100%); max-height: 100%; overflow: hidden; }
+.rp-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+.rp-side { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rp-side.foe { justify-content: flex-end; }
+.rp-side-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.rp-avatar { width: 40px; height: 40px; font-size: 15px; }
+.rp-mid { display: grid; justify-items: center; gap: 2px; }
+.rp-round { font: 600 13px/1 var(--num, sans-serif); color: var(--muted); }
+/* Kết quả trận: cỡ lớn, có quầng sáng để nhìn là thấy ngay Thắng/Hòa/Thua */
+.rp-result { font: 900 30px/1.05 var(--num, sans-serif); letter-spacing: .06em; padding: 1px 14px; border-radius: 10px; animation: rp-result-pop .4s ease-out both; }
+.rp-result.win { color: #7fe0a8; text-shadow: 0 2px 0 #04221a, 0 0 18px rgba(63, 191, 127, .85); }
+.rp-result.loss { color: #ff8a86; text-shadow: 0 2px 0 #2a0808, 0 0 18px rgba(217, 83, 79, .85); }
+.rp-result.draw { color: #ffd75e; text-shadow: 0 2px 0 #2a1e00, 0 0 18px rgba(255, 215, 94, .85); }
+@keyframes rp-result-pop {
+  0% { transform: scale(.6); opacity: .3; }
+  60% { transform: scale(1.12); }
+  100% { transform: scale(1); opacity: 1; }
+}
+/* Sân đấu vẽ bằng PixiJS (pixi/arena.ts): canvas co vừa khung, luôn giữ đúng tỉ lệ khung vẽ
+   (900:560 ở bố cục ngang, 640:768 ở bố cục dọc cho màn hẹp) */
+.rp-live { display: flex; flex-direction: column; gap: 10px; min-height: 0; flex: 1 1 auto; }
+.rp-live[hidden] { display: none; }
+.rp-canvas { position: relative; width: 100%; flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; border-radius: 12px; overflow: hidden; }
+.rp-canvas canvas { display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; }
+/* Bảng tên kỹ năng đang thi triển */
+.rp-cast { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 38px; padding: 5px 16px; border: 1px solid rgba(212, 168, 74, .28); border-radius: 999px; background: rgba(10, 6, 4, .55); transition: border-color .2s, box-shadow .2s, background .2s; }
+.rp-cast.on { border-color: var(--gold-2); background: rgba(28, 15, 5, .9); box-shadow: 0 0 18px rgba(255, 214, 106, .5), inset 0 0 14px rgba(212, 168, 74, .22); }
+.rp-cast-hint { color: var(--muted); font: 600 12px/1 var(--num, sans-serif); }
+.rp-cast-who { font-weight: 800; font-size: 15px; color: var(--gold-2); text-shadow: 0 1px 3px rgba(0, 0, 0, .8); }
+.rp-cast-tag { color: var(--muted); font-size: 12px; }
+.rp-cast-skill { font: 900 17px/1 var(--num, sans-serif); letter-spacing: .05em; text-transform: uppercase; color: #fff4d2; }
+/* Tên chiêu bật nảy + quầng vàng khi vừa xuất chiêu để mắt bắt ngay */
+.rp-cast.on .rp-cast-skill { animation: rpCastPop .4s cubic-bezier(.2, 1.3, .4, 1) both; text-shadow: 0 0 10px rgba(255, 214, 106, .9), 0 0 24px rgba(255, 176, 60, .55), 0 2px 4px rgba(0, 0, 0, .9); }
+@keyframes rpCastPop {
+  0% { transform: scale(.72); opacity: .2; }
+  55% { transform: scale(1.14); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.rp-progress { height: 4px; border-radius: 999px; background: rgba(255, 255, 255, .1); overflow: hidden; }
+.rp-progress i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--gold), var(--gold-2)); transition: width .2s; }
+.rp-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rp-speeds { display: flex; gap: 4px; }
+.rp-controls .btn.on { border-color: var(--gold); color: var(--gold-2); background: rgba(212, 168, 74, .12); }
+.rp-sfx { display: inline-flex; align-items: center; gap: 5px; }
+/* Nút Phát/Tạm dừng chỉ bày icon nên phải canh icon vào giữa nút (nút chữ thường dựa vào dòng chữ).
+   Hai hình nằm sẵn trong SVG, class `playing` quyết định hình nào hiện (xem nút trong Pvp.tsx). */
+.rp-play { display: inline-flex; align-items: center; justify-content: center; }
+.rp-play .rp-ic-pause { display: none; }
+.rp-play.playing .rp-ic-play { display: none; }
+.rp-play.playing .rp-ic-pause { display: inline; }
+.rp-sfx .mute-slash { display: none; }
+.rp-sfx.muted { color: var(--muted); }
+.rp-sfx.muted .mute-slash { display: inline; }
+.rp-close { margin-left: auto; }
+
+/* Bảng kết quả trận: tab Tổng kết chỉ số / Diễn biến chi tiết */
+.rp-report-wrap { flex: 1 1 auto; min-height: 180px; overflow-y: auto; overflow-x: auto; }
+.rp-report { display: grid; gap: 6px; }
+.rp-report-tabs { position: sticky; top: 0; z-index: 2; display: flex; gap: 6px; flex-wrap: wrap; padding-bottom: 6px; background: var(--panel); }
+.rp-report-tabs .btn.on { border-color: var(--gold); color: var(--gold-2); background: rgba(212, 168, 74, .12); }
+.rp-report-body { display: grid; gap: 3px; align-content: start; }
+.rp-table { width: 100%; border-collapse: collapse; font: 600 12px/1.4 var(--num, sans-serif); }
+.rp-table th { position: sticky; top: 34px; z-index: 1; padding: 6px 8px; text-align: right; font: 600 10.5px/1.3 var(--num, sans-serif); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--panel); border-bottom: 1px solid rgba(212, 168, 74, .25); }
+.rp-table th:first-child { text-align: left; }
+.rp-table td { padding: 5px 8px; border-bottom: 1px solid rgba(255, 255, 255, .06); }
+.rp-t-name { display: flex; align-items: center; gap: 7px; font-weight: 700; }
+/* Bốn chip cấp độ · phe · phong cách · LC cạnh tên tướng trong bảng tổng kết trận (thứ tự cấp → phe → phong cách → LC) */
+.rp-t-tags { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+/* Cấp độ · phe · phong cách · LC: CÙNG chiều cao để các chip trông đều nhau */
+.rp-t-lv, .rp-t-faction, .rp-t-style, .rp-t-lc { display: inline-flex; align-items: center; justify-content: center; height: 19px; box-sizing: border-box; border: 1px solid currentColor; border-radius: 999px; font: 600 10px/1 var(--num, sans-serif); opacity: .9; }
+.rp-t-lv, .rp-t-faction { min-width: 40px; padding: 0 6px; }
+.rp-t-lv { border-color: var(--line); }
+/* Chip phong cách chỉ có icon: ôm vừa icon (không kéo dài) — cùng kiểu với chip ở bảng chọn tướng */
+.rp-t-style { padding: 0 5px; }
+/* Chip lực chiến: tông vàng, cùng chiều cao với các chip định danh khác */
+.rp-t-lc { padding: 0 6px; color: var(--gold-2); }
+/* Cột số trong bảng tổng kết chỉ số — cùng QUY CHUẨN màu hiển thị Combat với dòng diễn biến ở trên:
+   sát thương thường #E0D8C3 (bạch ngân) · hồi máu / khiên #6FBE73 (bích ngọc).
+   Con số cho TO hơn chữ thường của bảng (12px) để đọc nhanh kết quả trận. */
+.rp-t-num { text-align: right; white-space: nowrap; font: 700 15px/1.35 var(--num, sans-serif); }
+.rp-t-num.dmg { color: #e0d8c3; }
+.rp-t-num.taken { color: #e0d8c3; }
+.rp-t-num.heal { color: #6FBE73; }
+.rp-t-num.shield { color: #6FBE73; }
+/* Tên tướng + avatar ở cột đầu bảng tổng kết: cho TO hơn chữ bảng (12px / avatar 26px) để cân với
+   cỡ số 15px bên phải. Chỉ áp trong `.rp-table` nên không đụng tới avatar nhỏ ở dòng diễn biến. */
+.rp-table .rp-t-name { font-size: 15px; }
+.rp-table .rp-mini { width: 40px; height: 40px; }
+.rp-table .rp-mini-ini { font-size: 12px; }
+.rp-t-sep td { padding-top: 12px; font-weight: 700; letter-spacing: .04em; color: var(--gold-2); border-bottom: none; }
+/* Tướng gục ở cuối trận: làm mờ tên + avatar (ảnh xám) để nhìn phát biết ngay ai còn ai mất.
+   Riêng ô "Tử vong" giữ nguyên độ nét vì nó chính là dấu hiệu nhận biết. */
+.rp-table tr.rp-t-dead .rp-t-name,
+.rp-table tr.rp-t-dead .rp-t-num:not(.rp-t-death) { opacity: .5; }
+.rp-table tr.rp-t-dead .rp-mini { filter: grayscale(1); }
+/* Nhãn "Đã hạ" ở cột Tử vong — tông Xích Hỏa, cao bằng chip định danh cho hàng không so le. */
+.rp-t-down { display: inline-flex; align-items: center; height: 19px; padding: 0 6px; border: 1px solid rgba(216, 67, 47, .55); border-radius: 999px; font: 700 11px/1 var(--num, sans-serif); color: var(--cinnabar-2); }
+/* Avatar nhỏ trong bảng kết quả (cả bảng tổng kết lẫn diễn biến) */
+.rp-mini { position: relative; flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; overflow: hidden; background: linear-gradient(160deg, #2a2112, var(--panel-2)); border: 1px solid var(--line); }
+.rp-mini.foe { border-color: rgba(217, 83, 79, .45); }
+.rp-mini-ini { font: 800 10px/1 var(--num, sans-serif); color: var(--gold-2); }
+.rp-mini > img { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+/* =========================================================================
+   ZOOM CHÂN DUNG TƯỚNG (Đấu trường + Chợ thẻ)
+   Ô tướng ở Đấu trường và avatar ở Chợ khá nhỏ nên ảnh gốc (286×378) bị thu bé, mặt tướng khó nhìn.
+   Phóng nhẹ ảnh BÊN TRONG khung (khung vẫn cắt tròn như cũ) quanh đúng vị trí vùng mặt:
+   vì ảnh dọc 286×378 canh mép trên (object-position: 50% 0), mặt tướng nằm khoảng 40%
+   chiều cao ô nên lấy gốc biến đổi ở đó — mặt to & rõ hơn mà vẫn giữ nguyên trong khung.
+   Chỉ áp cho các lớp ảnh chân dung của hai trang này, không đụng tới trang khác. */
+.viewer-art > img,
+.pvp-art > img,
+.pvp-pick-art > img,
+.pvp-drag-art > img,
+.rp-mini > img,
+.mkt-art > img { transform: scale(1.18); transform-origin: 50% 40%; }
+/* Dòng diễn biến chi tiết.
+   Màu theo QUY CHUẨN màu hiển thị Combat (khớp palette `C` ở pixi/arena.ts + `KIND_COLOR` ở skillsfx.ts):
+   sát thương thường #E0D8C3 (bạch ngân / trắng ngà) · chí mạng #FFB300 (hoàng kim) · thiêu đốt #FF772E (xích hỏa)
+   · buff có lợi / hồi máu / khiên / choáng #6FBE73 (bích ngọc) · debuff / xóa buff #DB5151 (chu tước). */
+.rp-drow { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 8px; font-size: 13.5px; }
+.rp-drow.round { justify-content: center; margin-top: 5px; border-top: 1px solid rgba(212, 168, 74, .18); border-radius: 0; }
+.rp-dround { font: 700 12px/1 var(--num, sans-serif); letter-spacing: .04em; color: var(--gold-2); }
+/* Nhãn "Ta"/"Địch" để biết dòng diễn biến là của bên nào */
+.rp-drow-side { flex: 0 0 auto; padding: 1px 6px; border-radius: 999px; color: var(--gold-2); background: rgba(212, 168, 74, .16); border: 1px solid rgba(212, 168, 74, .35); font: 800 10px/1.6 var(--num, sans-serif); text-transform: uppercase; letter-spacing: .04em; }
+.rp-drow-side.foe { color: #ffb3ae; background: rgba(217, 83, 79, .16); border-color: rgba(217, 83, 79, .4); }
+.rp-drow.act { background: rgba(212, 168, 74, .07); }
+.rp-drow.skip { background: rgba(198, 40, 40, .07); color: var(--muted); }
+.rp-drow.damage { background: rgba(224, 216, 195, .06); }
+.rp-drow.heal { background: rgba(46, 125, 50, .12); }
+.rp-drow.stun { background: rgba(125, 125, 125, 0.09); }
+.rp-drow.cleanse { background: rgba(46, 125, 50, .12); }
+.rp-drow.buff { background: rgba(46, 125, 50, .09); }
+.rp-drow.debuff { background: rgba(198, 40, 40, .08); }
+.rp-drow.burn { background: rgba(230, 81, 0, .10); }
+.rp-drow.dispel { background: rgba(198, 40, 40, .06); }
+/* Khiên (mục 16) là hiệu ứng có lợi nên tông bích ngọc; Xóa Khiên (mục 17) là debuff nên tông chu tước */
+.rp-drow.shield { background: rgba(46, 125, 50, .12); }
+.rp-drow.shieldBreak { background: rgba(198, 40, 40, .08); }
+.rp-drow.purify { background: rgba(46, 125, 50, .12); }
+.rp-drow.down { background: rgba(198, 40, 40, .14); font-weight: 700; }
+.rp-drow-text { flex: 1 1 auto; min-width: 0; }
+.rp-drow-arrow { flex: 0 0 auto; color: var(--muted); }
+.rp-drow-amt { flex: 0 0 auto; font: 900 18px/1 var(--num, sans-serif); color: #e0d8c3; white-space: nowrap; }
+.rp-drow-amt.heal { color: #6FBE73; }
+.rp-drow-amt.burn { color: #FF772E; }
+.rp-drow-amt.crit { color: #ffb300; text-shadow: 0 0 10px rgba(255, 179, 0, .75); }
+/* Nhãn chí mạng: chip nhỏ đi kèm con số (không phình theo cỡ số chí mạng) */
+.rp-drow-crit { display: inline-block; margin-left: 4px; padding: 1px 4px; border: 1px solid rgba(255, 179, 0, .45); border-radius: 999px; background: rgba(255, 179, 0, .14); color: #ffb300; font: 800 10px/1.4 var(--num, sans-serif); letter-spacing: .04em; vertical-align: 1px; }
+/* Khung cuộn của danh sách diễn biến khi ĐANG ĐÁNH (bảng kết quả dùng khung cuộn của chính nó) */
+.rp-drows { display: grid; gap: 3px; align-content: start; }
+.rp-drows.scroll { height: 156px; overflow-y: auto; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: rgba(10, 6, 4, .4); }
+/* Khối diễn biến: THANH VIỀN vừa là tay nắm ẩn/hiện (bấm vào là thu/mở), không cần nút riêng.
+   Mặc định xếp dọc (màn hẹp): thanh nắm nằm TRÊN danh sách. */
+.rp-detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.rp-detail-handle { display: flex; align-items: center; justify-content: center; width: 100%; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: rgba(10, 6, 4, .4); color: var(--muted); cursor: pointer; transition: color .15s, background .15s, border-color .15s; }
+.rp-detail-handle:hover { color: var(--gold-2); border-color: rgba(212, 168, 74, .55); background: rgba(212, 168, 74, .14); }
+.rp-detail-chev { display: inline-block; font: 900 15px/1 var(--num, sans-serif); transform: rotate(90deg); }
+/* Khi mở: thanh nắm và danh sách nối liền thành MỘT khối (bỏ cạnh chung giữa hai phần) */
+.rp-detail.has-list .rp-detail-handle { border-radius: 8px 8px 0 0; border-bottom: none; }
+.rp-detail.has-list .rp-drows.scroll { border-top: none; border-radius: 0 0 8px 8px; }
+/* Màn rộng: diễn biến dời sang CỘT PHẢI để sân đấu chiếm trọn chiều cao còn lại (sân to hơn hẳn).
+   Tay nắm lúc này là THANH DỌC ở bên trái danh sách. */
+@media (min-width: 1000px) {
+  .rp-live {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: 'cast cast' 'canvas detail' 'progress progress';
+  }
+  .rp-live > .rp-cast { grid-area: cast; }
+  .rp-live > .rp-canvas { grid-area: canvas; }
+  .rp-live > .rp-detail { grid-area: detail; flex-direction: row; }
+  .rp-live > .rp-progress { grid-area: progress; }
+  .rp-detail-chev { transform: none; }
+  .rp-detail-handle { width: 22px; height: auto; align-self: stretch; min-height: 34px; }
+  .rp-detail.has-list .rp-detail-handle { border-radius: 8px 0 0 8px; border-bottom: 1px solid var(--line); border-right: none; }
+  .rp-detail .rp-drows.scroll { flex: 1 1 auto; min-width: 0; min-height: 0; height: auto; }
+  .rp-detail.has-list .rp-drows.scroll { border-radius: 0 8px 8px 0; border-top: 1px solid var(--line); border-left: none; }
+  /* Thu gọn: cột phải co còn đúng thanh nắm, sân đấu nới rộng hết phần còn lại */
+  .rp-live.no-detail { grid-template-columns: minmax(0, 1fr) auto; }
+}
+
+/* ===== Ngọc Ngũ Hành (tab Ngọc ở Nâng cấp & Bộ sưu tập) ===== */
+/* Ngọc là vật phẩm rời (loại + cấp). Màu viên Ngọc theo Ngũ Hành: Kim/Mộc/Thủy/Hỏa/Thổ. */
+/* Thẻ Ngọc là HÌNH TRÒN (viên Ngọc) — KHÔNG dùng khung chữ nhật đứng của thẻ tướng: ảnh Ngọc nằm
+   trong ô vuông bo tròn hoàn toàn, viền + hào quang theo màu cấp; tên + cấp là dòng chú thích bên dưới. */
+.gem-face { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.gem-face .tq-body {
+  width: 100%; aspect-ratio: 1 / 1; border-radius: 50%; overflow: hidden;
+  border: 2px solid var(--tc, #444);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--tc, #444) 45%, transparent), 0 4px 14px rgba(0, 0, 0, .35);
+}
+/* Ảnh Ngọc phủ kín ô tròn (bỏ tỉ lệ dọc 286/378 của thẻ tướng). */
+.gem-face .tq-art { position: absolute; inset: 0; aspect-ratio: auto; border-radius: 50%; background: radial-gradient(circle at 50% 38%, #1a1410, #0a0705); }
+.gem-face .gem-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Tên + cấp là chú thích NGOÀI vòng tròn (không đè lên viên Ngọc nên không bị vòng tròn cắt chữ). */
+.gem-face .tq-meta { position: static; padding: 0; background: none; text-align: center; }
+.gem-face .tq-name { font-size: 11.5px; }
+.gem-face .tq-sub { justify-content: center; gap: 8px; }
+/* Khung nhóm Ngọc: viền trái lấy màu Ngũ Hành (giống viền phe của nhóm tướng). */
+.gen-group.e-kim { --gc: #cbb26a; } .gen-group.e-moc { --gc: #63b95e; }
+.gen-group.e-thuy { --gc: #4f9de0; } .gen-group.e-hoa { --gc: #ef6b3a; } .gen-group.e-tho { --gc: #c9963f; }
+/* Nút "Chi tiết" ở đầu khung nhóm Ngọc (Bộ sưu tập) đẩy về cuối hàng. */
+.gen-head .btn { margin-left: auto; }
+.gem-cards { display: flex; flex-wrap: wrap; gap: 10px; }
+/* Dải Ngọc ở khối đội hình (Đấu trường): ô Ngọc bấm được để gắn/bỏ gắn cho đội mình. */
+.gem-pill { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 4px 14px 4px 6px; border: 1px solid rgba(255, 255, 255, .34); border-radius: 999px; background: rgba(10, 6, 4, .55); font: 700 14px/1.5 var(--num, sans-serif); color: var(--text); cursor: pointer; transition: border-color .15s, background .15s, box-shadow .15s; }
+button.gem-pill:disabled { opacity: .4; cursor: not-allowed; }
+button.gem-pill:not(:disabled):hover { border-color: var(--gold-2); }
+.gem-pill.on { border-color: var(--gold); background: rgba(212, 175, 55, .18); box-shadow: inset 0 0 0 1px var(--gold), 0 0 12px rgba(212, 175, 55, .3); }
+.gem-dot { width: 46px; height: 46px; border-radius: 50%; flex: none; object-fit: cover; border: 1px solid rgba(255, 255, 255, .28); }
+.gem-pill b { color: var(--gold-2); }
+/* Ô Ngọc trống (chưa sở hữu loại đó) — giữ đúng nhịp của các ô Ngọc. */
+.gem-slot-empty { width: 46px; height: 46px; border-radius: 50%; border: 1px dashed rgba(255, 255, 255, .22); flex: none; }
+/* Ô Ngọc trống chỉ có vòng nét đứt nên bỏ padding phải cho cân với các ô có Ngọc. */
+.gem-pill.empty { padding: 4px; }
+/* Dấu + trong ô Ngọc trống để thấy rõ là bấm được (mở bảng chọn Ngọc). */
+.gem-pill.empty .gem-slot-empty { display: grid; place-items: center; color: rgba(255, 255, 255, .38); font-size: 20px; line-height: 1; }
+.gem-pill.empty:hover .gem-slot-empty { color: var(--gold-2); border-color: var(--gold-2); }
+/* Tooltip chỉ số Ngọc: hiện khi rê chuột lên viên Ngọc (chỉ hiển thị, không bấm được). */
+.gem-tip { display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 40; min-width: 160px; padding: 8px 10px; border: 1px solid var(--gold); border-radius: 10px; background: rgba(13, 8, 5, .97); box-shadow: 0 8px 24px rgba(0, 0, 0, .55); pointer-events: none; }
+.gem-pill:hover .gem-tip { display: block; }
+.gem-tip-head { margin-bottom: 4px; font: 700 12.5px/1.4 var(--num, sans-serif); color: var(--gold-2); white-space: nowrap; }
+.gem-tip-row { display: flex; justify-content: space-between; gap: 14px; font: 600 12.5px/1.6 var(--num, sans-serif); color: var(--muted); }
+/* Chỉ số Ngọc cộng thêm trong tooltip — cùng tông bích ngọc với huy hiệu (+X) ở bảng đội hình. */
+.gem-tip-row b { color: #6FBE73; }
+.pvp-gems { display: flex; flex-direction: column; gap: 6px; }
+/* Dải Ngọc ở khối đội hình (trang Đấu trường) căn giữa. */
+.pvp-myteam .pvp-gems, .pvp-opp .pvp-gems { align-items: center; }
+/* Dải Ngọc trong modal chuẩn bị khiêu chiến: một hàng ngang, không xuống dòng.
+   Chiều cao cố định để dải Ngọc hai bên luôn bằng nhau (mỗi bên 3 ô). */
+.pvp-duel .pvp-gems { align-items: center; justify-content: center; min-height: 48px; }
+.pvp-duel .gem-cards { flex-wrap: nowrap; gap: 6px; }
+.pvp-duel .gem-pill { padding: 3px 9px 3px 4px; font-size: 13px; }
+/* Ô Ngọc đã ẩn tên hệ (nhìn màu viên là biết hệ) nên bớt lề phải cho cân với lề trái. */
+.pvp-duel .gem-pill.compact { padding-right: 6px; }
+.pvp-duel .gem-pill.empty { padding: 3px; }
+.pvp-duel .gem-dot { width: 40px; height: 40px; }
+.pvp-duel .gem-slot-empty { width: 40px; height: 40px; }
+
+@media (max-width: 640px) {
+  /* Mobile: bỏ làm mờ nền modal đấu trường. `backdrop-filter` phủ quanh canvas WebGL đang cập nhật
+     liên tục khiến iOS Safari phải blur lại mỗi frame — rất nặng. Nền vốn đã tối sẵn nên gần như
+     không thấy khác về hình, nhưng mượt hơn hẳn. */
+  .pvp-modal { padding: 10px; backdrop-filter: none; }
+  /* Khung panel của sân đấu cũng dính `backdrop-filter` (kế thừa từ `.panel`) và nó là TỔ TIÊN TRỰC
+     TIẾP của canvas WebGL. Trên iOS Safari, một tổ tiên có `backdrop-filter` buộc cả nhánh phải dựng
+     lại lớp đệm mỗi khung hình — đúng lúc canvas đang vẽ 60fps nên sân đấu giật dù chỉ vẽ vài ô tướng.
+     Nền panel vốn đục 84% nên bỏ đi gần như không thấy khác. */
+  .pvp-modal .panel { backdrop-filter: none; }
+  /* Khung canvas WebGL: bỏ bo góc + `overflow: hidden`. Trên iOS Safari, một khung CẮT nội dung
+     bo góc bao quanh canvas WebGL buộc compositor dựng lớp mask mỗi khung hình → giật. Canvas nền
+     trong suốt và luôn nằm gọn trong khung nên bỏ đi không đổi hình. */
+  .rp-canvas { border-radius: 0; overflow: visible; }
+  /* Ô tướng (Đội hình + Chuẩn bị khiêu chiến) trên màn hẹp: dựng lại ĐÚNG kiểu ô tướng trong sân
+     đấu (PixiJS) nhưng thu nhỏ — bốn chip định danh (cấp → phe → phong cách → LC) xếp LƯỚI 2×2 bên
+     trái, chân dung tròn + tên ở giữa, rồi thanh máu và BA hàng chỉ số (mỗi hàng đúng 3 chỉ số) ở dưới.
+     Chỉ đổi cách bày trên màn hẹp; nội dung và hình ở màn rộng giữ nguyên. */
+  .pvp-cell {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    grid-template-areas: 'tags art' 'tags name' 'stat stat';
+    column-gap: 2px;
+    row-gap: 1px;
+    min-height: 0;
+    padding: 2px;
+    align-items: center;
+    justify-items: stretch;
+  }
+  /* Ô trống: bỏ lưới 3 vùng, chỉ canh giữa dấu "＋". */
+  .pvp-cell.empty { grid-template-columns: minmax(0, 1fr); grid-template-areas: none; place-items: center; }
+  /* Số thứ tự ô dời sang góc phải trên để không đè lên cột chip (cột chip nằm ở góc trái). */
+  .pvp-slot { left: auto; right: 4px; }
+  /* Bốn chip định danh xếp thành LƯỚI 2×2 (chip LC trải hết hàng cuối) thay vì 4 hàng dọc: cột chip
+     chỉ còn ~21px cao, THẤP HƠN chân dung + tên (~35px) nên KHÔNG tốn thêm chiều cao ô, mà cột chip
+     cũng hẹp lại (~40px) nhường chỗ cho tên tướng. */
+  .pvp-cell-tags { grid-area: tags; display: grid; grid-template-columns: repeat(2, auto); gap: 1px; align-self: center; justify-content: center; }
+  .pvp-cell-lv, .pvp-cell-faction, .pvp-cell-style, .pvp-cell-lc { height: 10px; font-size: 7px; }
+  .pvp-cell-lv, .pvp-cell-faction { min-width: 20px; padding: 0 2px; }
+  .pvp-cell-style { padding: 0 1px; }
+  .pvp-cell-lc { grid-column: 1 / -1; padding: 0 2px; }
+  .pvp-art { grid-area: art; justify-self: center; width: 22px; height: 22px; }
+  .pvp-cell-name { grid-area: name; justify-self: center; font-size: 9px; }
+  /* Ba hàng chỉ số, mỗi hàng đúng 3 chỉ số như ô tướng sân đấu. Hai hàng cũ dùng `display: contents`
+     để 10 chỉ số trở thành ô lưới trực tiếp; `order` xếp lại cho khớp THỨ TỰ sân đấu:
+     [sát thương · phòng thủ · xuyên giáp] / [chí mạng · ST chí mạng · chính xác] / [né tránh · hút máu · giảm ST nhận]. */
+  /* Chỉ số trong ô: hàng mảnh (`line-height` 1.15) — khối chỉ số là phần cao nhất của ô nên siết
+     dòng ở đây là cách giảm chiều cao ô hiệu quả nhất. */
+  .pvp-cell-stat { grid-area: stat; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; font-size: 7px; line-height: 1.15; }
+  .pvp-cell-stat .row1, .pvp-cell-stat .row2 { display: contents; }
+  .pvp-cell-stat .row2 { font-size: inherit; }
+  /* Ô tướng hẹp mà một tướng có thể được cộng nhiều chỉ số cùng lúc → bỏ badge "(+x)" (nguồn gây vỡ
+     lưới chỉ số), thay bằng CỘNG THẲNG phần cộng vào số và tô xanh lá để biết chỉ số đang được cộng.
+     Số vẫn `overflow: hidden` để giá trị quá dài không tràn sang ô bên cạnh. */
+  .pvp-cell-stat .pvp-stat { justify-content: center; min-width: 0; gap: 1px; overflow: hidden; }
+  .pvp-cell-stat .pvp-base { display: none; }
+  .pvp-cell-stat .pvp-total { display: inline; }
+  .pvp-cell-stat .pvp-total.up { color: #6FBE73; }
+  /* Ô tướng hẹp nên icon chỉ số thu nhỏ cho vừa ô, không bị cắt chữ. */
+  .pvp-cell-stat svg { width: 7px; height: 7px; }
+  /* HP thành THANH MÁU trọn hàng trên cùng (như sân đấu): thanh xanh + số máu canh giữa ngay dưới. */
+  .pvp-cell-stat .pvp-stat-hp { grid-column: 1 / -1; order: -1; position: relative; padding-top: 6px; }
+  .pvp-cell-stat .pvp-stat-hp::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; border-radius: 2px; background: linear-gradient(90deg, #3f8f4a, #6FBE73); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); }
+  /* "Giảm ST nhận" đẩy xuống cuối hàng 3 — đúng thứ tự ô tướng sân đấu. */
+  .pvp-cell-stat .row1 .pvp-stat:nth-child(5) { order: 9; }
+  .pvp-pick-art { width: 34px; height: 34px; }
+  .pvp-pick-row { padding: 5px 8px; gap: 8px; }
+  /* Màn hẹp: hàng đối thủ xuống 2 dòng — tên được trọn bề ngang, nút "Chuẩn bị khiêu chiến"
+     nằm riêng một dòng và giãn hết cỡ (nếu để chung dòng, bề ngang còn quá ít cho cả hai). */
+  .pvp-opp-row { flex-wrap: wrap; }
+  .pvp-opp-row .btn { flex: 1 1 100%; }
+  /* Màn hẹp: 2 đội xếp dọc thay vì trái/phải. Đội ĐỊCH lên TRÊN, đội MÌNH xuống DƯỚI cho khớp sân
+     đấu (hàng trước hai bên đối diện nhau qua vạch "VS"). */
+  .pvp-duel { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .pvp-duel-side.foe { order: 1; }
+  .pvp-duel-vs { order: 2; justify-self: center; }
+  .pvp-duel-side.mine { order: 3; }
+  .pvp-duel-side { padding: 4px; gap: 3px; }
+  /* Bàn đội hình ở màn hẹp: dàn thành 3 CỘT × 2 HÀNG — hàng trước (1-2-3) ở TRÊN, hàng sau (4-5-6)
+     ở dưới — thay cho 2 cột × 3 hàng; ô tướng rộng hơn hẳn. DOM đã xếp hàng trước rồi hàng sau nên
+     chỉ cần `display: contents` cho cột để các ô thành ô lưới trực tiếp, và ẩn tiêu đề cột.
+     Bàn đội địch nằm TRÊN vạch "VS" nên phải đảo hàng sau lên trên: hàng trước hai bên mới sát vạch
+     giữa và đối diện nhau, khớp đúng sân đấu ở màn hình dọc. (`.pvp-duel .pvp-board` viết kèm để đè
+     được quy tắc chia 3 hàng đều của bàn trong modal khiêu chiến ở màn rộng.) */
+  .pvp-board, .pvp-duel .pvp-board { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto; gap: 4px; }
+  .pvp-col { display: contents; }
+  .pvp-col-title { display: none; }
+  .pvp-board.foe .pvp-cell.back { order: -1; }
+  /* Chân modal Chuẩn bị khiêu chiến ở màn hẹp: gộp gợi ý + nút XÁC NHẬN về MỘT hàng để tiết kiệm
+     chiều cao — mục tiêu là thấy trọn nút "Khiêu chiến" mà không phải cuộn. Dòng gợi ý (đã có sẵn
+     tooltip quy tắc đội hình) ẩn đi vì chỉ chiếm chỗ. */
+  .pvp-rulebar { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
+  .pvp-challenge-hint { display: none; }
+  .pvp-team-actions { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
+  .pvp-rulebar .muted, .pvp-team-actions .muted { text-align: left; }
+  .pvp-rules { align-self: auto; }
+  .pvp-rules-btn { width: auto; }
+  .pvp-team-actions .btn { width: auto; flex: none; }
+  /* Màn hẹp: nút ở trang Đấu trường và modal Chuẩn bị khiêu chiến nhỏ gọn hơn để nhìn được nhiều
+     nội dung hơn trong một màn hình (màn phát lại trận giữ nguyên cỡ nút để dễ bấm). */
+  .pvp-panel .btn, .pvp-challenge .btn { min-height: 30px; padding: 3px 9px; font-size: 12.5px; }
+  .pvp-panel .btn.small, .pvp-challenge .btn.small { min-height: 26px; padding: 2px 8px; font-size: 12px; }
+  /* Dải Ngọc thu nhỏ trên màn hẹp: viên Ngọc 30px và nhãn gọn lại (gồm cả dải trong modal khiêu chiến). */
+  .gem-cards { gap: 6px; }
+  .gem-pill, .pvp-duel .gem-pill { padding: 2px 8px 2px 3px; font-size: 12px; gap: 5px; }
+  .gem-pill.empty, .pvp-duel .gem-pill.empty { padding: 2px; }
+  .gem-dot, .pvp-duel .gem-dot { width: 30px; height: 30px; }
+  .gem-slot-empty, .pvp-duel .gem-slot-empty { width: 30px; height: 30px; }
+  .gem-pill.empty .gem-slot-empty, .pvp-duel .gem-pill.empty .gem-slot-empty { font-size: 15px; }
+  /* Dải Ngọc trong modal khiêu chiến: viên + dải thu nhỏ riêng (không đụng dải Ngọc ngoài trang
+     Đội hình) để hai khối đội thấp lại — modal còn chỗ cho hai bàn đấu 12 ô. */
+  .pvp-duel .pvp-gems { min-height: 26px; }
+  .pvp-duel .gem-dot, .pvp-duel .gem-slot-empty { width: 26px; height: 26px; }
+  /* Modal chuẩn bị khiêu chiến: siết khoảng cách + thu gọn đầu modal để vừa một màn hình dọc.
+     Trên điện thoại hai đội xếp DỌC nên tổng chiều cao = 2 khối đội + đầu modal + hàng quy tắc + nút
+     "Khiêu chiến": mọi thứ đã thu nhỏ (ô tướng ~80px, dải Ngọc 26px, chân dung 22px) để cả modal lọt
+     trọn MỘT màn hình, không phải cuộn. Vùng hai bàn đấu vẫn giữ `min-height: 0` + `overflow-y` chỉ
+     làm lưới an toàn cho máy màn hình quá thấp — bình thường không thấy thanh cuộn. */
+  .pvp-challenge { gap: 5px; padding: 6px; max-height: calc(100dvh - 12px); }
+  .pvp-duel { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .pvp-picker-head h3 { font-size: 12px; }
+  .pvp-duel-head { min-height: 0; gap: 5px; }
+  .pvp-duel-head .muted { font-size: 9px; }
+  .pvp-duel-vs { font-size: 10px; }
+  .pvp-opp-avatar { width: 24px; height: 24px; font-size: 11px; }
+  .pvp-hist-row { grid-template-columns: 52px 30px minmax(0, 1fr) auto; grid-template-areas: 'res role name name' 'res av power time'; row-gap: 4px; column-gap: 8px; }
+  .hist-res { grid-area: res; }
+  .hist-role { grid-area: role; }
+  .hist-avatar { grid-area: av; }
+  .hist-name { grid-area: name; }
+  .hist-power { grid-area: power; }
+  .hist-time { grid-area: time; }
+  .rp-cast { min-height: 24px; padding: 2px 10px; gap: 6px; }
+  .rp-cast-skill { font-size: 12px; }
+  .rp-drows.scroll { height: 112px; font-size: 12.5px; }
+  .rp-drow { padding: 4px 6px; gap: 5px; font-size: 12.5px; }
+  .rp-drow-amt { font-size: 16px; }
+  .rp-drow-side { padding: 1px 4px; font-size: 9px; }
+  .rp-avatar { width: 30px; height: 30px; font-size: 13px; }
+  .rp-side-name { font-size: 12.5px; }
+  /* Khung modal phát lại trận: GHIM đúng chiều cao màn hình (trừ lề) thay vì để khung tự nở theo nội
+     dung. `.rp-box` đặt `height: min(920px, 100%)` nhưng nó là ô lưới trong hàng `auto` của
+     `.pvp-modal` — phần trăm không có mốc để quy chiếu nên hoá thành `auto`: khung cao theo nội dung
+     và cả modal phải cuộn. Dùng `max-height` theo `dvh` thì khung luôn vừa một màn hình, sân đấu tự co
+     lại (`.rp-live` và `.rp-canvas` đều đã `min-height: 0`) nên không phải cuộn ngang/dọc. */
+  .pvp-modal.rp-modal { padding: 8px; }
+  .rp-box { height: auto; max-height: calc(100dvh - 16px); gap: 8px; }
+  .rp-head { gap: 8px; }
+  .rp-result { font-size: 20px; padding: 0 10px; }
+  .rp-live { gap: 8px; }
+  /* Hàng điều khiển phát lại trận trên màn hẹp: GHIM đúng MỘT HÀNG (`nowrap`) để mọi nút luôn nằm
+     trong tầm mắt — không tốn thêm chiều cao khung. Nút Phát/Tạm dừng đã chuyển thành icon và nút
+     bấm siết đệm/cỡ chữ nên tổng bề ngang vừa một màn hình điện thoại. */
+  .rp-controls { flex-wrap: nowrap; gap: 4px; }
+  .rp-controls .btn { min-height: 28px; padding: 2px 7px; font-size: 12px; white-space: nowrap; }
+  .rp-speeds { gap: 3px; }
+  .rp-report-wrap { min-height: 0; overflow-x: hidden; }
+  /* Bảng tổng kết 11 cột phải cuộn NGANG mới xem hết — rất khó theo dõi trên màn hẹp (và cả khi
+     đóng gói thành app mobile). Nên xếp lại thành THẺ: mỗi tướng một thẻ, đầu thẻ là chân dung +
+     tên + chip, dưới là lưới 3 cột chỉ số. Nhãn từng ô lấy từ `data-label` của chính ô đó (xem
+     `TALLY_COLS` trong Pvp.tsx) nên bảng rộng và thẻ hẹp dùng CHUNG một nguồn nhãn.
+     Thẻ xếp 2 CỘT: 12 tướng (6 ta + 6 địch) còn 6 hàng, nhờ vậy xem trọn bảng trong một khung. */
+  .rp-table, .rp-table thead, .rp-table tr, .rp-table td { display: block; }
+  .rp-table thead { display: none; }
+  .rp-table tbody { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; align-content: start; }
+  .rp-table tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px 3px;
+    padding: 5px 6px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(10, 6, 4, .3);
+  }
+  .rp-table td { padding: 1px 2px; border-bottom: none; }
+  /* Đầu thẻ: chân dung + tên + chuỗi chip, ngăn cách với lưới chỉ số bằng đường mảnh. */
+  .rp-table td.rp-t-name {
+    display: flex;
+    grid-column: 1 / -1;
+    gap: 5px;
+    padding-bottom: 4px;
+    margin-bottom: 2px;
+    border-bottom: 1px solid rgba(255, 255, 255, .07);
+  }
+  .rp-table .rp-t-name { font-size: 12.5px; }
+  .rp-table .rp-mini { width: 24px; height: 24px; }
+  .rp-table .rp-mini-ini { font-size: 9px; }
+  .rp-t-tags { gap: 3px; }
+  .rp-t-lv, .rp-t-faction, .rp-t-style, .rp-t-lc { height: 15px; font-size: 8.5px; }
+  .rp-t-lv, .rp-t-faction { min-width: 28px; padding: 0 4px; }
+  .rp-t-lc { padding: 0 4px; }
+  /* Mỗi chỉ số một ô: nhãn rút gọn bên trái (xem `short` ở `TALLY_COLS`), số bên phải. */
+  .rp-table td.rp-t-num { display: flex; align-items: baseline; justify-content: space-between; gap: 3px; font-size: 12.5px; }
+  .rp-table td.rp-t-num::before {
+    content: attr(data-short);
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font: 600 9.5px/1.5 var(--num, sans-serif);
+    color: var(--muted);
+  }
+  /* Tử vong = dòng riêng dưới cùng, và CHỈ hiện khi tướng đã gục (sống thì khỏi tốn một dòng "—"). */
+  .rp-table td.rp-t-death { grid-column: 1 / -1; justify-content: center; padding-top: 3px; }
+  .rp-table td.rp-t-death::before { content: none; }
+  .rp-table tr:not(:has(.rp-t-down)) .rp-t-death { display: none; }
+  /* Hàng phân cách hai phe: bỏ khung thẻ, chỉ giữ chữ vàng, trải hết bề ngang lưới 2 cột. */
+  .rp-table tr.rp-t-sep { grid-column: 1 / -1; display: block; padding: 2px 0 4px; border: none; background: none; }
+  .rp-table tr.rp-t-sep td { padding: 0; }
+  .rp-t-down { height: 16px; padding: 0 5px; font-size: 9.5px; }
+  .rp-close { margin-left: 0; }
+}
+
+/* =========================================================================
+   CẤU HÌNH PVP (trang Quản trị): Tướng & Ngọc Ngũ Hành
+   ========================================================================= */
+
+/* Khung modal nhập liệu: nền tối trung tính + làm mờ, bấm vùng nền để đóng. */
+.cfg-modal { position: fixed; inset: 0; z-index: 65; display: flex; align-items: flex-start; justify-content: center;
+  padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain;
+  background: radial-gradient(70% 70% at 50% 40%, rgba(24, 22, 20, .82), rgba(3, 3, 4, .95));
+  backdrop-filter: blur(5px) saturate(.85); animation: viewer-in .18s ease-out; }
+.cfg-box { width: min(720px, 100%); margin: auto; display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.cfg-box.wide { width: min(1080px, 100%); }
+.cfg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cfg-head h3 { margin: 0; font-size: 16px; }
+
+.cfg-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.cfg-form { display: flex; flex-direction: column; gap: 8px; }
+.cfg-form h4 { margin: 6px 0 0; font-size: 14px; color: var(--gold-2); }
+.cfg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 12px; }
+.cfg-field { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+.cfg-field > span { color: var(--muted); }
+.cfg-field input, .cfg-field select, .cfg-field textarea {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font: inherit; }
+.cfg-field input:focus, .cfg-field select:focus, .cfg-field textarea:focus { border-color: var(--gold); outline: none; }
+.cfg-field textarea { resize: vertical; }
+.cfg-field-full { grid-column: 1 / -1; }
+.cfg-check { flex-direction: row; align-items: center; gap: 8px; }
+.cfg-check input { width: 17px; height: 17px; accent-color: var(--gold); }
+.cfg-help { line-height: 1.5; }
+
+/* Ảnh thu nhỏ (chân dung tướng / viên Ngọc): chữ viết tắt làm nền, ảnh thật phủ lên khi có. */
+.cfg-thumb { position: relative; display: inline-grid; place-items: center; flex: none; overflow: hidden;
+  width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--line); background: linear-gradient(160deg, #2a2112, var(--panel-2)); }
+.cfg-thumb.hero { border-radius: 50%; }
+.cfg-thumb.big { width: 64px; height: 64px; font-size: 20px; }
+.cfg-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+.cfg-thumb.gem img { object-fit: contain; padding: 2px; }
+.cfg-thumb-ini { font-weight: 800; color: var(--gold-2); font-size: 12px; letter-spacing: .5px; }
+
+/* Danh sách Tướng PvP: bảng 6 cột, thu gọn trên màn hẹp. */
+.cfg-hero-head, .cfg-hero-row { display: grid; gap: 10px; align-items: center;
+  grid-template-columns: minmax(140px, 1.2fr) 76px minmax(150px, 1.3fr) minmax(150px, 1.2fr) minmax(190px, 1.6fr) minmax(150px, 1fr); }
+.cfg-hero-head { padding: 0 10px 6px; border-bottom: 1px solid var(--line); }
+.cfg-hero-row { padding: 10px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.cfg-name { display: flex; align-items: center; gap: 9px; }
+.cfg-name-txt { min-width: 0; }
+.cfg-name b { font-size: 14.5px; }
+.cfg-hero-preview { display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: rgba(10, 6, 4, .45); }
+.cfg-hero-preview-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cfg-hero-preview-txt b { font-size: 16px; }
+.cfg-style { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.cfg-fac { font-weight: 700; }
+.cfg-fac.f-wei { color: var(--wei); } .cfg-fac.f-shu { color: var(--shu); }
+.cfg-fac.f-wu { color: var(--wu); } .cfg-fac.f-qun { color: var(--qun); }
+.cfg-fac.e-kim { color: #cbb26a; } .cfg-fac.e-moc { color: #63b95e; }
+.cfg-fac.e-thuy { color: #4f9de0; } .cfg-fac.e-hoa { color: #ef6b3a; } .cfg-fac.e-tho { color: #c9963f; }
+.cfg-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Skill Effects Builder: mỗi hiệu ứng một khối, lưới field tự co. */
+.cfg-effects { display: flex; flex-direction: column; gap: 10px; }
+.cfg-effect { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 12px;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(10, 6, 4, .45); }
+.cfg-effect .cfg-field-full { grid-column: 1 / -1; }
+.cfg-effect-actions { display: flex; align-items: flex-end; }
+
+/* Bảng Ngọc Ngũ Hành: mỗi hệ một khối, 2 chỉ số × (Cấp 1, Cấp 10). */
+.cfg-gems { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+.cfg-gem { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(10, 6, 4, .4); }
+.cfg-gem-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cfg-gem-head b { font-size: 15px; }
+.cfg-gem-head .btn { margin-left: auto; }
+.cfg-gem-art { display: flex; align-items: center; gap: 4px; }
+.cfg-gem-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 12px; align-items: end; }
+
+@media (max-width: 640px) {
+  .cfg-box, .cfg-box.wide { padding: 12px; }
+  .cfg-hero-head { display: none; }
+  .cfg-hero-row { grid-template-columns: 1fr auto; }
+  .cfg-hero-row .cfg-style, .cfg-hero-row .cfg-actions { grid-column: 1 / -1; }
+}
+
+/* =========================================================================
+   CHỢ THẺ TƯỚNG (trang riêng)
+   Mỗi tin là một Ô NHỎ trong lưới (avatar tướng + tên + phe · cấp + giá);
+   mọi thao tác ghi đều qua modal (.mkt-modal).
+   ========================================================================= */
+
+/* Lưới ô tin: canh trái, khoảng cách đều; số cột tự co theo bề rộng khả dụng. */
+.mkt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 10px; }
+.mkt-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); text-align: center; }
+/* Avatar tròn của tướng: viền theo bậc cấp (--tc), nền mờ theo phe (--fc). */
+.mkt-art { position: relative; display: grid; place-items: center; width: 64px; height: 64px; flex: none;
+  border-radius: 50%; overflow: hidden; border: 2px solid var(--tc, var(--line));
+  background: linear-gradient(160deg, rgba(42, 33, 18, .95), var(--panel-2)); }
+.mkt-art.big { width: 84px; height: 84px; }
+.mkt-art-ini { font-family: var(--script); font-weight: 800; font-size: 22px; color: var(--gold-2); }
+.mkt-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; }
+.mkt-art.view { cursor: zoom-in; transition: transform .15s ease, box-shadow .15s ease; }
+.mkt-art.view:hover { transform: scale(1.05); box-shadow: 0 0 0 2px rgba(243, 213, 138, .45); }
+.mkt-art.view:focus-visible { outline: 2px solid var(--gold-2); outline-offset: 2px; }
+
+.mkt-cell-name { font-weight: 700; font-size: 14px; line-height: 1.3; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mkt-cell-sub { display: flex; align-items: center; justify-content: center; gap: 5px; font-family: var(--num); font-size: 12.5px; }
+.mkt-cell-sub .dot { color: var(--muted); }
+/* Tô màu phe trong ô tin (các quy tắc `.fac.f-*` sẵn có chỉ áp dụng trong phạm vi popup chi tiết). */
+.mkt-cell-sub .f-wei { color: var(--wei); } .mkt-cell-sub .f-shu { color: var(--shu); }
+.mkt-cell-sub .f-wu { color: var(--wu); } .mkt-cell-sub .f-qun { color: var(--qun); }
+.mkt-cell-price { color: var(--gold-2); font-weight: 700; font-size: 14px; }
+.mkt-cell-seller { color: var(--muted); font-size: 11.5px; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Khe hành động: nút hành động cùng hàng với mốc thời gian, luôn chạm đáy ô cho thẳng hàng. */
+.mkt-cell-act { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+.mkt-cell-time { font-size: 11px; }
+.mkt-buy { min-width: 72px; }
+.mkt-pager { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 0 4px; flex-wrap: wrap; }
+
+/* Modal thao tác: nền tối trung tính + làm mờ, canh giữa; bấm vùng nền để đóng. */
+.mkt-modal { position: fixed; inset: 0; z-index: 65; display: flex; align-items: center; justify-content: center;
+  padding: 16px; background: radial-gradient(70% 70% at 50% 40%, rgba(24, 22, 20, .82), rgba(3, 3, 4, .95));
+  backdrop-filter: blur(5px) saturate(.85); animation: viewer-in .18s ease-out; outline: none; }
+.mkt-modal-box { width: min(420px, 92vw); display: grid; gap: 12px; padding: 16px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: 0 18px 48px rgba(0, 0, 0, .55); }
+.mkt-modal-head { font-family: var(--script); font-size: 20px; font-weight: 700; text-align: center; color: var(--gold-2); }
+.mkt-modal-body { display: flex; align-items: center; gap: 14px; }
+.mkt-modal-info { display: grid; gap: 4px; min-width: 0; }
+.mkt-modal-name { font-family: var(--script); font-size: 20px; font-weight: 700; display: flex; align-items: baseline; gap: 8px; }
+.mkt-modal-lv { font-family: var(--num); font-size: 15px; }
+.mkt-modal-price { color: var(--gold-2); font-weight: 700; font-size: 15px; }
+.mkt-modal-note { margin: 0; }
+.mkt-modal-act { display: flex; justify-content: flex-end; gap: 8px; }
+
+@media (max-width: 640px) {
+  .mkt-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
+  .mkt-cell { padding: 8px 6px; }
+  .mkt-art { width: 52px; height: 52px; }
+  .mkt-art.big { width: 68px; height: 68px; }
+  .mkt-cell-name { font-size: 13px; }
+  .mkt-modal { padding: 12px; backdrop-filter: none; }
+  .mkt-modal-box { padding: 12px; gap: 10px; }
+  .mkt-modal-head { font-size: 18px; }
+  .mkt-modal-name { font-size: 18px; }
+}

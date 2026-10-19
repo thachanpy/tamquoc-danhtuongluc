@@ -2,20 +2,30 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#2a0f0c" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Vô Song" />
+    <meta name="description" content="Tam Quốc: Vô Song — game sưu tầm thẻ tướng Tam Quốc." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;700;800&family=Playfair+Display+SC:wght@700;900&family=Oswald:wght@500;600;700&family=Charm:wght@700&family=Ma+Shan+Zheng&display=swap&subset=vietnamese" rel="stylesheet" />
-    <meta name="theme-color" content="#2a0f0c" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.webmanifest" />
     <title>Tam Quốc: Vô Song</title>
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <!-- Canvas Phaser (sân khấu game, hiệu ứng) -->
+    <div id="game-root"></div>
+    <!-- Lớp DOM overlay cho UI hybrid (Login, Chợ, Bộ sưu tập…) đè lên canvas -->
+    <div id="ui-root"></div>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
